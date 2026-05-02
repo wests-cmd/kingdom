@@ -1,21 +1,60 @@
-MIT License
+CYA License
 
 Copyright (c) 2026 wests-cmd
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+of this software and associated documentation files (the "Software"), to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software for personal, noncommercial use, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. Personal Noncommercial Use
+   - Individuals may use, modify, and distribute the Software for personal,
+     educational, research, or other noncommercial purposes without payment.
+   - Any public distribution of modified or unmodified Software for noncommercial
+     purposes must include the copyright notice and this license text and must
+     credit the original author as specified in the Attribution section below.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. Commercial Use
+   - Commercial use of the Software, or use of the Software by an entity that
+     uses the Software in connection with a business, commercial product,
+     service, or revenue generating activity, requires a paid commercial license
+     from the copyright holder (wests-cmd).
+   - Commercial use includes, but is not limited to: embedding the Software in a
+     product sold to customers, using the Software to provide paid services,
+     deploying the Software in production for a business, or redistributing the
+     Software as part of a commercial offering.
+   - To obtain a commercial license, contact the copyright holder as described
+     in COMMERCIAL_USE.md included with this repository.
+
+3. Attribution
+   - All copies or substantial portions of the Software, whether distributed
+     for personal or commercial purposes, must include the following attribution
+     notice in a prominent place (for example, in a NOTICE file, README, or
+     about page):
+       "This software includes code from Kingdom by wests-cmd. Copyright (c) 2026 wests-cmd."
+
+4. No Warranty
+   - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+     IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+     FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+     AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+5. Limitation of Liability and Indemnity
+   - The copyright holder is not responsible for any direct, indirect, incidental,
+     special, exemplary, or consequential damages arising in any way out of the
+     use of the Software. Commercial licensees may be required to accept additional
+     indemnity terms as part of their commercial license agreement.
+
+6. Enforcement and Changes
+   - The copyright holder reserves the right to update or change commercial
+     licensing terms. Changes to this license text will not affect prior
+     agreements for which a commercial license was already granted.
+
+7. Governing Law
+   - Any disputes arising under this license shall be governed by the laws of
+     the jurisdiction of the copyright holder, unless otherwise agreed in writing.
+
+For commercial licensing inquiries, see COMMERCIAL_USE.md.
+
