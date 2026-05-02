@@ -1,0 +1,11 @@
+[Unit]
+Description=Kingdom 4 Knight Agent
+After=network.target
+
+[Service]
+WorkingDirectory=/path/to/kingdom4
+ExecStart=/path/to/kingdom4/venv/bin/python3 /path/to/kingdom4/knight/knight_agent.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
