@@ -1,19 +1,35 @@
-from system.swarm_debate import SwarmDebate
-from system.task_market import TaskMarket
+from system.swarm import Swarm
+from system.debate import Debate
+from system.market import Market
+from system.memory import Memory
+from system.timeline import Timeline
 
-debate = SwarmDebate()
-market = TaskMarket()
+class Orchestrator:
+    def __init__(self, queue):
+        self.queue = queue
+        self.swarm = Swarm()
+        self.debate = Debate()
+        self.market = Market()
+        self.memory = Memory()
+        self.timeline = Timeline()
 
-def run(task, knights):
-    swarm = knights[:3]
+    def process(self, task, knights):
+        swarm = self.swarm.form(knights)
 
-    plans = debate.generate(task, swarm)
-    best_plan = debate.select(plans)
+        plans = self.debate.generate(task, swarm)
+        best_plan = self.debate.select(plans)
 
-    bids = [market.bid(k) for k in swarm]
-    winner = market.choose(bids)
+        bids = self.market.collect(swarm, task)
+        winner = self.market.select(bids)
 
-    return {
-        "plan": best_plan,
-        "winner": winner
-    }
+        self.timeline.record(task, winner)
+
+        return {
+            "task": task,
+            "plan": best_plan,
+            "assigned": winner
+        }
+
+    def handle_result(self, data):
+        self.memory.store(data)
+        self.timeline.update(data)
