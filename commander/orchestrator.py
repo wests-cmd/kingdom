@@ -3,16 +3,18 @@ from system.debate import Debate
 from system.market import Market
 from system.memory import Memory
 from system.timeline import Timeline
+from system.intelligence import IntelligenceLayer
 
 class Orchestrator:
-    def __init__(self, queue):
+    def __init__(self, queue, config):
         self.queue = queue
         self.swarm = Swarm()
         self.debate = Debate()
         self.market = Market()
         self.memory = Memory()
         self.timeline = Timeline()
-
+        self.intel = IntelligenceLayer(config)
+    
     def process(self, task, knights):
         swarm = self.swarm.form(knights)
 
