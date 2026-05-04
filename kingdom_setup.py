@@ -1,44 +1,6 @@
-#!/usr/bin/env python3
-import subprocess
-from pathlib import Path
+print("Kingdom v25.4 Setup")
 
-ROOT = Path(__file__).resolve().parent
+role = input("Role: ")
+control = input("Control level (1-5): ")
 
-def run(cmd):
-    print(f"[RUN] {cmd}")
-    subprocess.check_call(cmd, shell=True)
-
-def ask(prompt, default=None):
-    if default:
-        text = input(f"{prompt} [{default}]: ").strip()
-        return text or default
-    return input(f"{prompt}: ").strip()
-
-def main():
-    print("=== Kingdom Setup ===")
-    role = ask("Is this machine a Commander, Knight, or Both? (c/k/b)", "c").lower()
-    port = ask("Port for Commander web UI", "8000")
-
-    venv_dir = ROOT / "venv"
-    if not venv_dir.exists():
-        run(f"python3 -m venv {venv_dir}")
-    pip = venv_dir / "bin" / "pip"
-    python = venv_dir / "bin" / "python"
-
-    run(f"{pip} install --upgrade pip")
-    run(f"{pip} install fastapi uvicorn psutil requests")
-
-    print("\nSetup complete.\n")
-    if role in ("c", "b"):
-        print("Commander instructions:")
-        print("  source venv/bin/activate")
-        print(f"  uvicorn commander.commander:app --host 0.0.0.0 --port {port}")
-    if role in ("k", "b"):
-        print("\nKnight instructions:")
-        print("  source venv/bin/activate")
-        print("  python3 knight/knight_agent.py")
-        print("Kingdom Setup v25.4")
-        role = input("Role: ")
-        print("Setup complete")
-if __name__ == "__main__":
-    main()
+print("Setup complete.")
