@@ -15,7 +15,7 @@ def ask(prompt, default=None):
     return input(f"{prompt}: ").strip()
 
 def main():
-    print("=== Kingdom 4 Setup ===")
+    print("=== Kingdom Setup ===")
     role = ask("Is this machine a Commander, Knight, or Both? (c/k/b)", "c").lower()
     port = ask("Port for Commander web UI", "8000")
 
@@ -37,6 +37,8 @@ def main():
         print("\nKnight instructions:")
         print("  source venv/bin/activate")
         print("  python3 knight/knight_agent.py")
-
+        print("Kingdom Setup v25.4")
+        role = input("Role: ")
+        print("Setup complete")
 if __name__ == "__main__":
     main()
