@@ -1,4 +1,4 @@
-# Kingdom v25.4
+# Kingdom
 
 Kingdom is a self-organizing, multi-agent AI system designed to start simple
 and evolve into a distributed intelligence network.
