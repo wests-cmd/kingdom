@@ -1,6 +1,8 @@
 import socket
 import requests
 from modules.ilmfit import ILMFit
+import platform
+import requests
 
 def get_commander_ip():
     print("Knight setup: please enter Commander IP or hostname.")
@@ -18,6 +20,10 @@ def main():
         "capabilities": caps
         # "requested_level": 2  # uncomment to request a specific level
     }
+def main():
+    url = input("Commander URL: ")
+    payload = {"name": platform.node()}
+    requests.post(f"{url}/register", json=payload)
 
     print(f"[INFO] Registering with Commander at {url}")
     r = requests.post(url, json=payload, timeout=10)
