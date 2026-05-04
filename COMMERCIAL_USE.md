@@ -1,25 +1,38 @@
-COMMERCIAL USE AND LICENSING
+# Commercial Use Policy
 
-This repository is licensed under the CYA License. Personal, noncommercial use is free.
-Commercial use requires a paid license from the copyright holder.
+Kingdom is free for personal and non-commercial use.
 
-What counts as commercial use
-- Using the software in a product or service that is sold or monetized.
-- Deploying the software in production for a business or organization.
-- Redistributing the software as part of a commercial offering.
+## Commercial Use Requires Approval
 
-How to obtain a commercial license
-- Contact: westd613gmail.com
-- Provide: organization name, intended use, deployment scale, and contact information.
-- The copyright holder will provide a commercial license agreement and pricing.
+If you intend to use Kingdom in any commercial capacity, you must obtain
+explicit approval from the creator.
 
-Attribution requirements
-- All distributions, modified or unmodified, must include the following attribution:
-  "This software includes code from Kingdom by wests-cmd. Copyright (c) 2026 wests-cmd."
+This includes:
 
-Privacy and liability
-- The software is provided as-is with no warranty. Commercial licensees may be required
-  to accept additional indemnity and liability terms.
+- SaaS platforms
+- Paid tools or integrations
+- Internal business automation
+- Trading systems generating profit
+- AI agent services for clients
 
-Questions
-- For questions about licensing, contact westd613@gmail.com
+## How to Request Approval
+
+Contact:
+👉 https://github.com/wests-cmd
+
+Include:
+
+- Description of your use case
+- Revenue model
+- Scale of deployment
+
+## Unauthorized Use
+
+Using Kingdom commercially without approval is a violation of the license
+and may result in legal action.
+
+## Philosophy
+
+Kingdom is designed to empower builders. Commercial access is allowed,
+but must be controlled to prevent abuse, reselling, or exploitation
+without contribution or agreement.
