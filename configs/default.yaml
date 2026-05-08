@@ -1,0 +1,8 @@
+system_name: kingdom
+version: 40.1
+
+logging:
+  level: INFO
+
+runtime:
+  default_mode: adaptive
