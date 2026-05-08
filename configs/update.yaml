@@ -1,0 +1,4 @@
+auto_update: false
+channel: stable
+backup_before_update: true
+rollback_enabled: true
