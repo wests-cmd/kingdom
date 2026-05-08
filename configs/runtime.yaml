@@ -1,0 +1,8 @@
+modes:
+  - persistent
+  - adaptive
+  - burst
+  - scheduled
+
+session_timeout_hours: 24
+auto_connect: true
