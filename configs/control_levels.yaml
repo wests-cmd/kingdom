@@ -1,0 +1,6 @@
+levels:
+  1: observer
+  2: limited_control
+  3: standard_control
+  4: advanced_control
+  5: system_control
