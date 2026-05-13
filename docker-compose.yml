@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+
+  kingdom-backend:
+    build: .
+    container_name: kingdom-backend
+    ports:
+      - "8000:8000"
+
+  kingdom-ui:
+    image: node:20
+    working_dir: /app/frontend
+    volumes:
+      - .:/app
+    command: sh -c "npm install && npm run dev -- --host"
+    ports:
+      - "5173:5173"
