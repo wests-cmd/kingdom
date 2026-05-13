@@ -1,0 +1,41 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #111;
+  color: white;
+}
+
+.layout {
+  display: flex;
+}
+
+.sidebar {
+  width: 240px;
+  background: #1a1a1a;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.content {
+  flex: 1;
+  padding: 20px;
+}
+
+.statusbar {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+button {
+  padding: 10px 16px;
+  margin-right: 10px;
+  border: none;
+  cursor: pointer;
+}
+
+.card {
+  background: #1f1f1f;
+  padding: 16px;
+  margin-top: 12px;
+}
