@@ -1,59 +1,126 @@
-# Kingdom
+# 👑 Kingdom v40.1
 
-Kingdom is a self-organizing, multi-agent AI system designed to start simple
-and evolve into a distributed intelligence network.
-
-It is built around three core roles:
-
-- Commander (control + orchestration)
-- Knights (worker agents)
-- System Core (debate, market, memory, validation)
-
-Everything lives in a single repository so you can clone once, answer a few
-questions, and have a working system.
+Kingdom is a distributed AI runtime platform designed for:
+- swarm intelligence
+- adaptive task routing
+- graph memory
+- AI map sharing
+- distributed execution
+- model orchestration
+- live runtime visualization
 
 ---
 
-## Core Capabilities
+# Features
 
-### Dynamic Swarm Formation
-Knights automatically group into temporary teams based on task needs.
-They dissolve after execution and reform based on success patterns.
+## Runtime Modes
+- persistent
+- adaptive
+- burst
+- scheduled
 
-### Swarm Debate Engine
-Before executing a task, Knights generate competing plans, evaluate each
-other, and select the best strategy.
+## Swarm System
+- adaptive topology
+- knight specialization
+- distributed execution
+- workload balancing
 
-### Task Market System
-Knights bid on tasks using cost, time, and confidence.
-The system selects the most efficient executor.
+## Memory System
+- graph memory
+- weighted intelligence
+- AI map exchange
+- timeline persistence
 
-### Minds Loop (Memory System)
-The system learns from successful executions and adapts over time.
-Low-confidence results are ignored to prevent bad learning.
+## Security
+- zero trust validation
+- prompt firewall
+- injection detection
+- approval system
 
-### Validation Layer
-Multiple agents or models verify outputs before final execution.
-
-### System Control Levels (1–5)
-Defines how autonomous the system is, from manual control to full autonomy.
-
----
-
-## AI Integration
-
-Kingdom supports:
-
-- Local models via Ollama
-- Claude Code integration
-- OpenClaw-style system control
-- Hybrid mode (local + cloud)
+## UI
+- live swarm graph
+- AI map graph
+- routing visualization
+- runtime controls
 
 ---
 
-## Setup
+# Install
+
+## Backend
 
 ```bash
-git clone https://github.com/wests-cmd/kingdom
-cd kingdom
-python kingdom_setup.py
+pip install -r requirements.txt
+```
+
+## Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Start Backend
+
+```bash
+uvicorn backend.main:app --reload
+```
+
+---
+
+# Docker
+
+```bash
+docker compose up
+```
+
+---
+
+# API
+
+## Status
+
+```http
+GET /status
+```
+
+## Start Runtime
+
+```http
+POST /start
+```
+
+## Stop Runtime
+
+```http
+POST /stop
+```
+
+---
+
+# AI Maps
+
+AI Maps are portable intelligence graphs that allow:
+- shared learning
+- transferable memory
+- swarm knowledge distribution
+
+---
+
+# Runtime Philosophy
+
+Kingdom is designed as:
+- modular
+- distributed
+- observable
+- recoverable
+- swarm-oriented
+- graph-intelligent
+
+---
+
+# Version
+
+Current Version:
+- v40.1
