@@ -77,3 +77,8 @@ def cancel_task(task_id: str):
 @router.get("/events")
 def event_history(limit: int = Query(default=50, ge=1, le=200)):
     return engine.events.history(limit)
+
+
+@router.get("/knights")
+def knights():
+    return engine.swarm.status()

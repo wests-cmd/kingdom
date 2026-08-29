@@ -17,11 +17,25 @@ class RuntimeCoreTests(unittest.IsolatedAsyncioTestCase):
         completed = engine.tasks.get(task["id"])
         self.assertIsNotNone(completed)
         self.assertEqual(completed["status"], "completed")
-        self.assertEqual(completed["result"]["assigned_to"], "researcher")
+        self.assertEqual(completed["result"]["results"][0]["knight"], "researcher")
         self.assertTrue(engine.status()["running"])
         self.assertEqual(engine.events.history(10)[-1]["type"], "task.completed")
         await engine.stop()
         self.assertFalse(engine.status()["running"])
+
+    async def test_swarm_decomposes_and_executes_subtasks(self):
+        engine = RuntimeEngine()
+        task = engine.submit_task("coordinate", {"subtasks": ["code a test", "research an option"]})
+        await engine.start()
+        await asyncio.sleep(0.15)
+
+        completed = engine.tasks.get(task["id"])
+        self.assertEqual(completed["status"], "completed")
+        self.assertEqual([result["knight"] for result in completed["result"]["results"]], ["coder", "researcher"])
+        event_types = [event["type"] for event in engine.events.history(20)]
+        self.assertIn("swarm.planned", event_types)
+        self.assertIn("knight.completed", event_types)
+        await engine.stop()
 
     async def test_only_queued_tasks_can_be_cancelled(self):
         engine = RuntimeEngine()
@@ -65,6 +79,11 @@ class RuntimeApiTests(unittest.TestCase):
         client = TestClient(app)
         self.assertEqual(client.put("/mode", json={"mode": "burst"}).json(), {"mode": "burst"})
         self.assertEqual(client.put("/mode", json={"mode": "unknown"}).status_code, 422)
+
+    def test_knights_api_exposes_live_registry(self):
+        response = TestClient(app).get("/knights")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["knights"][0]["name"], "planner")
 
 
 if __name__ == "__main__":

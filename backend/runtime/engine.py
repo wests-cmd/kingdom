@@ -9,14 +9,14 @@ from backend.runtime.scheduler import Scheduler
 from backend.runtime.tasks import TaskManager
 from backend.runtime.modes import MODES
 from backend.state import STATE
-from backend.swarm.engine import SwarmEngine
+from backend.swarm.manager import SwarmManager
 
 
 class RuntimeEngine:
     def __init__(self) -> None:
         self.events = EventBus()
         self.tasks = TaskManager()
-        self.swarm = SwarmEngine()
+        self.swarm = SwarmManager(self.events.publish)
         self.scheduler = Scheduler(self._process_next_task)
 
     async def initialize(self) -> dict[str, Any]:
@@ -66,8 +66,8 @@ class RuntimeEngine:
             return
         self.events.publish("task.running", task)
         try:
-            self.swarm.submit_task(task["prompt"])
-            completed = self.tasks.complete(task["id"], self.swarm.process() or {})
+            result = await self.swarm.execute(task)
+            completed = self.tasks.complete(task["id"], result)
             self.events.publish("task.completed", completed)
         except Exception as exc:
             recovered = self.tasks.retry_or_fail(task["id"], str(exc))
