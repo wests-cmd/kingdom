@@ -1,6 +1,7 @@
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.runtime.engine import RuntimeEngine
@@ -16,6 +17,12 @@ class TaskRequest(BaseModel):
 
 class ModeRequest(BaseModel):
     mode: str
+
+
+class ModelRequest(BaseModel):
+    prompt: str = Field(min_length=1, max_length=10_000)
+    model: str | None = None
+    provider: str | None = None
 
 
 @router.get("/status")
@@ -82,3 +89,29 @@ def event_history(limit: int = Query(default=50, ge=1, le=200)):
 @router.get("/knights")
 def knights():
     return engine.swarm.status()
+
+
+@router.get("/models")
+async def model_health():
+    return await engine.models.health()
+
+
+@router.post("/models/generate")
+async def generate(request: ModelRequest):
+    try:
+        return await engine.models.generate(request.prompt, request.model, request.provider)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/models/stream")
+async def stream(request: ModelRequest):
+    provider = request.provider or engine.models.default_provider
+    if provider != "ollama":
+        raise HTTPException(status_code=503, detail="Streaming currently requires the Ollama provider")
+
+    async def events():
+        async for token in engine.models.stream(request.prompt, request.model, provider):
+            yield f"data: {token}\n\n"
+
+    return StreamingResponse(events(), media_type="text/event-stream")

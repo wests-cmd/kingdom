@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from backend.events.event_bus import EventBus
+from backend.models.service import ModelService
 from backend.runtime.scheduler import Scheduler
 from backend.runtime.tasks import TaskManager
 from backend.runtime.modes import MODES
@@ -17,6 +18,7 @@ class RuntimeEngine:
         self.events = EventBus()
         self.tasks = TaskManager()
         self.swarm = SwarmManager(self.events.publish)
+        self.models = ModelService()
         self.scheduler = Scheduler(self._process_next_task)
 
     async def initialize(self) -> dict[str, Any]:
@@ -67,6 +69,11 @@ class RuntimeEngine:
         self.events.publish("task.running", task)
         try:
             result = await self.swarm.execute(task)
+            provider = task["metadata"].get("model_provider")
+            if provider:
+                model_result = await self.models.generate(task["prompt"], task["metadata"].get("model"), provider)
+                result["model"] = model_result
+                self.events.publish("model.completed", {"task_id": task["id"], **model_result})
             completed = self.tasks.complete(task["id"], result)
             self.events.publish("task.completed", completed)
         except Exception as exc:

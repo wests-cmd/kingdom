@@ -85,6 +85,13 @@ class RuntimeApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["knights"][0]["name"], "planner")
 
+    def test_model_api_is_explicit_when_no_provider_is_configured(self):
+        client = TestClient(app)
+        response = client.post("/models/generate", json={"prompt": "hello"})
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("No model provider", response.json()["detail"])
+        self.assertEqual(client.post("/models/stream", json={"prompt": "hello"}).status_code, 503)
+
 
 if __name__ == "__main__":
     unittest.main()
