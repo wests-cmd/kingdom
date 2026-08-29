@@ -7,6 +7,7 @@ from typing import Any
 from backend.events.event_bus import EventBus
 from backend.runtime.scheduler import Scheduler
 from backend.runtime.tasks import TaskManager
+from backend.runtime.modes import MODES
 from backend.state import STATE
 from backend.swarm.engine import SwarmEngine
 
@@ -41,6 +42,14 @@ class RuntimeEngine:
     def get_mode(self) -> str:
         return STATE["mode"]
 
+    def set_mode(self, mode: str) -> dict[str, Any]:
+        if mode not in MODES:
+            raise ValueError(f"Unsupported runtime mode: {mode}")
+        previous = STATE["mode"]
+        STATE["mode"] = mode
+        self.events.publish("runtime.mode_changed", {"previous": previous, "mode": mode})
+        return {"mode": mode}
+
     def submit_task(self, prompt: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
         task = self.tasks.create(prompt, metadata)
         self.events.publish("task.queued", task)
@@ -61,5 +70,6 @@ class RuntimeEngine:
             completed = self.tasks.complete(task["id"], self.swarm.process() or {})
             self.events.publish("task.completed", completed)
         except Exception as exc:
-            failed = self.tasks.fail(task["id"], str(exc))
-            self.events.publish("task.failed", failed)
+            recovered = self.tasks.retry_or_fail(task["id"], str(exc))
+            event_type = "task.requeued" if recovered["status"] == "queued" else "task.failed"
+            self.events.publish(event_type, recovered)

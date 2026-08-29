@@ -30,6 +30,20 @@ class RuntimeCoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cancelled["status"], "cancelled")
         self.assertEqual(engine.tasks.counts()["cancelled"], 1)
 
+    async def test_failed_task_is_requeued_until_its_attempt_limit(self):
+        engine = RuntimeEngine()
+        task = engine.submit_task("retry this", {"max_attempts": 2})
+        running = engine.tasks.claim_next()
+
+        requeued = engine.tasks.retry_or_fail(running["id"], "temporary failure")
+        self.assertEqual(requeued["status"], "queued")
+        self.assertEqual(requeued["attempt"], 1)
+
+        running = engine.tasks.claim_next()
+        failed = engine.tasks.retry_or_fail(running["id"], "permanent failure")
+        self.assertEqual(failed["status"], "failed")
+        self.assertEqual(failed["attempt"], 2)
+
 
 class RuntimeApiTests(unittest.TestCase):
     def test_task_api_and_websocket_snapshot(self):
@@ -46,6 +60,11 @@ class RuntimeApiTests(unittest.TestCase):
             self.assertEqual(websocket.receive_json()["type"], "runtime.snapshot")
         finally:
             websocket.__exit__(None, None, None)
+
+    def test_mode_api_rejects_unknown_modes(self):
+        client = TestClient(app)
+        self.assertEqual(client.put("/mode", json={"mode": "burst"}).json(), {"mode": "burst"})
+        self.assertEqual(client.put("/mode", json={"mode": "unknown"}).status_code, 422)
 
 
 if __name__ == "__main__":

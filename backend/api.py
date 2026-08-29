@@ -14,6 +14,10 @@ class TaskRequest(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class ModeRequest(BaseModel):
+    mode: str
+
+
 @router.get("/status")
 def runtime_status():
     return engine.status()
@@ -32,6 +36,14 @@ async def stop():
 @router.get("/mode")
 def mode():
     return {"mode": engine.get_mode()}
+
+
+@router.put("/mode")
+def set_mode(request: ModeRequest):
+    try:
+        return engine.set_mode(request.mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/tasks", status_code=status.HTTP_201_CREATED)

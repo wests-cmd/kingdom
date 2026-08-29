@@ -21,7 +21,11 @@ class TaskManager:
         self._queue: deque[str] = deque()
 
     def create(self, prompt: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
-        task = {"id": str(uuid4()), "prompt": prompt, "metadata": metadata or {}, "status": "queued", "created_at": _timestamp(), "started_at": None, "completed_at": None, "result": None, "error": None}
+        metadata = metadata or {}
+        max_attempts = metadata.get("max_attempts", 1)
+        if not isinstance(max_attempts, int) or max_attempts < 1 or max_attempts > 5:
+            raise ValueError("max_attempts must be an integer from 1 through 5")
+        task = {"id": str(uuid4()), "execution_id": str(uuid4()), "prompt": prompt, "metadata": metadata, "status": "queued", "created_at": _timestamp(), "started_at": None, "completed_at": None, "result": None, "error": None, "attempt": 0, "max_attempts": max_attempts}
         self._tasks[task["id"]] = task
         self._queue.append(task["id"])
         return task.copy()
@@ -38,7 +42,7 @@ class TaskManager:
         while self._queue:
             task = self._tasks[self._queue.popleft()]
             if task["status"] == "queued":
-                task.update(status="running", started_at=_timestamp())
+                task.update(status="running", started_at=_timestamp(), attempt=task["attempt"] + 1)
                 return task.copy()
         return None
 
@@ -50,6 +54,15 @@ class TaskManager:
     def fail(self, task_id: str, error: str) -> dict[str, Any]:
         task = self._require_running(task_id)
         task.update(status="failed", error=error, completed_at=_timestamp())
+        return task.copy()
+
+    def retry_or_fail(self, task_id: str, error: str) -> dict[str, Any]:
+        task = self._require_running(task_id)
+        if task["attempt"] < task["max_attempts"]:
+            task.update(status="queued", error=error, started_at=None)
+            self._queue.append(task_id)
+        else:
+            task.update(status="failed", error=error, completed_at=_timestamp())
         return task.copy()
 
     def cancel(self, task_id: str) -> dict[str, Any]:
