@@ -1,9 +1,11 @@
 import asyncio
+import tempfile
 import unittest
 
 from fastapi.testclient import TestClient
 
 from backend.main import app
+from backend.memory.service import MemoryService
 from backend.runtime.engine import RuntimeEngine
 
 
@@ -91,6 +93,17 @@ class RuntimeApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertIn("No model provider", response.json()["detail"])
         self.assertEqual(client.post("/models/stream", json={"prompt": "hello"}).status_code, 503)
+
+
+class MemoryServiceTests(unittest.TestCase):
+    def test_memory_persists_graph_and_searches(self):
+        with tempfile.TemporaryDirectory() as directory:
+            memory = MemoryService(directory)
+            entry = memory.add("resilient distributed runtime", {"source": "test"})
+            restored = MemoryService(directory)
+
+            self.assertEqual(restored.search("distributed")[0]["id"], entry["id"])
+            self.assertEqual(restored.graph()["nodes"][0]["id"], entry["id"])
 
 
 if __name__ == "__main__":

@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from backend.events.event_bus import EventBus
+from backend.intelligence.ai_map import AIMap
+from backend.memory.service import MemoryService
 from backend.models.service import ModelService
 from backend.runtime.scheduler import Scheduler
 from backend.runtime.tasks import TaskManager
@@ -19,6 +21,8 @@ class RuntimeEngine:
         self.tasks = TaskManager()
         self.swarm = SwarmManager(self.events.publish)
         self.models = ModelService()
+        self.memory = MemoryService()
+        self.maps = AIMap()
         self.scheduler = Scheduler(self._process_next_task)
 
     async def initialize(self) -> dict[str, Any]:
@@ -75,8 +79,11 @@ class RuntimeEngine:
                 result["model"] = model_result
                 self.events.publish("model.completed", {"task_id": task["id"], **model_result})
             completed = self.tasks.complete(task["id"], result)
+            self.memory.record_task(completed)
             self.events.publish("task.completed", completed)
         except Exception as exc:
             recovered = self.tasks.retry_or_fail(task["id"], str(exc))
+            if recovered["status"] == "failed":
+                self.memory.record_task(recovered)
             event_type = "task.requeued" if recovered["status"] == "queued" else "task.failed"
             self.events.publish(event_type, recovered)
