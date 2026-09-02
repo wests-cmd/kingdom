@@ -9,7 +9,9 @@ from backend.security.capabilities import ALL_CAPABILITIES, DEFAULT_KNIGHT_CAPAB
 from backend.security.risk import CAPABILITY_RISK_MAP
 
 router = APIRouter()
-engine = RuntimeEngine()
+zero_trust = ZeroTrust()
+
+# --- RUNTIME ENDPOINTS ---
 
 
 class TaskRequest(BaseModel):

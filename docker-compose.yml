@@ -1,18 +1,28 @@
-version: "3.9"
+version: "3.8"
 
 services:
-
   kingdom-backend:
     build: .
     container_name: kingdom-backend
     ports:
       - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/status')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   kingdom-ui:
-    image: node:20
+    image: node:20-slim
+    container_name: kingdom-ui
     working_dir: /app/frontend
     volumes:
       - .:/app
-    command: sh -c "npm install && npm run dev -- --host"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
     ports:
       - "5173:5173"
+    depends_on:
+      kingdom-backend:
+        condition: service_healthy
