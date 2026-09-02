@@ -6,12 +6,3 @@ logging:
 
 runtime:
   default_mode: adaptive
-
-security:
-  enabled: true
-  mode: zero_trust
-  default_policy: deny
-  prompt_firewall: true
-  require_approval_for_high_risk: true
-  audit_logging: true
-  sanitize_secrets: true

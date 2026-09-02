@@ -1,318 +1,307 @@
-from typing import Any
-
-from fastapi import APIRouter, HTTPException, Query, status
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
-
-from backend.runtime.engine import RuntimeEngine
-from backend.security.capabilities import ALL_CAPABILITIES, DEFAULT_KNIGHT_CAPABILITIES, PRIVILEGED_CAPABILITIES
-from backend.security.risk import CAPABILITY_RISK_MAP
+from typing import Optional, Dict, Any, List
+from fastapi import APIRouter, HTTPException, Query, Body
+from backend.runtime.engine import runtime_engine
+from backend.cluster.node_registry import node_registry
+from backend.events.event_bus import event_bus
+from backend.memory.persistence import memory_store
+from backend.security.permissions import permission_manager, CAPABILITIES
+from backend.security.zero_trust import ZeroTrust
+from backend.security.approval_engine import approval_engine
+from backend.security.audit_log import audit_logger
+from backend.skills.skill_engine import skill_engine, DEPARTMENTS
 
 router = APIRouter()
 zero_trust = ZeroTrust()
 
 # --- RUNTIME ENDPOINTS ---
 
-
-class TaskRequest(BaseModel):
-    prompt: str = Field(min_length=1, max_length=10_000)
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class ModeRequest(BaseModel):
-    mode: str
-
-
-class ModelRequest(BaseModel):
-    prompt: str = Field(min_length=1, max_length=10_000)
-    model: str | None = None
-    provider: str | None = None
-
-
-class MemoryRequest(BaseModel):
-    content: str = Field(min_length=1, max_length=10_000)
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    weight: float = Field(default=1.0, ge=0)
-
-
-class MapRequest(BaseModel):
-    graph: dict[str, Any]
-
-
-class SecurityAuthorizeRequest(BaseModel):
-    actor_id: str = "system"
-    capability: str
-    operation: str
-    prompt: str | None = None
-    token: str | None = None
-    approval_id: str | None = None
-    parameters: dict[str, Any] = Field(default_factory=dict)
-
-
-class SecurityApprovalCreateRequest(BaseModel):
-    capability: str
-    operation: str
-    reason: str = ""
-    requesting_actor: str = "system"
-    risk_level: str = "HIGH"
-    parameters: dict[str, Any] = Field(default_factory=dict)
-
-
-class SecurityApprovalDecisionRequest(BaseModel):
-    reason: str = "Administrator decision"
-    approver: str = "admin"
-
-
 @router.get("/status")
-def runtime_status():
-    return engine.status()
-
+def status():
+    return runtime_engine.status()
 
 @router.post("/start")
-async def start():
-    return await engine.start()
-
+def start():
+    return runtime_engine.start()
 
 @router.post("/stop")
-async def stop():
-    return await engine.stop()
-
+def stop():
+    return runtime_engine.stop()
 
 @router.get("/mode")
 def mode():
-    return {"mode": engine.get_mode()}
+    return runtime_engine.get_mode()
 
+# --- TASK ENDPOINTS ---
 
-@router.put("/mode")
-def set_mode(request: ModeRequest):
-    try:
-        return engine.set_mode(request.mode)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+@router.post("/tasks")
+def create_task(payload: Dict[str, Any] = Body(...)):
+    task_type = payload.get("type", "generic")
+    input_data = payload.get("input", {})
+    actor = payload.get("actor")
 
+    if not isinstance(input_data, (dict, list, str, int, float, bool)):
+        raise HTTPException(status_code=400, detail="Invalid input payload")
 
-@router.post("/tasks", status_code=status.HTTP_201_CREATED)
-def create_task(request: TaskRequest):
-    try:
-        return engine.submit_task(request.prompt, request.metadata)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+    task = runtime_engine.create_task(task_type, input_data, actor=actor)
+    return task
 
 @router.get("/tasks")
-def list_tasks(task_status: str | None = Query(default=None, alias="status")):
-    return engine.tasks.list(task_status)
-
+def list_tasks(status: Optional[str] = Query(None), limit: int = Query(100, ge=1, le=1000)):
+    return runtime_engine.list_tasks(status=status, limit=limit)
 
 @router.get("/tasks/{task_id}")
 def get_task(task_id: str):
-    task = engine.tasks.get(task_id)
-    if task is None:
+    task = runtime_engine.get_task(task_id)
+    if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
 
-
 @router.post("/tasks/{task_id}/cancel")
 def cancel_task(task_id: str):
-    try:
-        return engine.cancel_task(task_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Task not found") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    task = runtime_engine.cancel_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
 
-
-@router.get("/events")
-def event_history(limit: int = Query(default=50, ge=1, le=200)):
-    return engine.events.history(limit)
-
+# --- KNIGHT ENDPOINTS ---
 
 @router.get("/knights")
-def knights():
-    return engine.swarm.status()
+def list_knights():
+    return node_registry.list_knights()
 
+@router.get("/knights/{knight_id}")
+def get_knight(knight_id: str):
+    knight = node_registry.get_knight(knight_id)
+    if not knight:
+        raise HTTPException(status_code=404, detail="Knight not found")
+    return knight
 
-@router.get("/models")
-async def model_health():
-    return await engine.models.health()
+# --- EVENT HISTORY ENDPOINTS ---
 
+@router.get("/events")
+def get_events(
+    task_id: Optional[str] = Query(None),
+    event_type: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=1000)
+):
+    return event_bus.get_events(task_id=task_id, event_type=event_type, limit=limit)
 
-@router.post("/models/generate")
-async def generate(request: ModelRequest):
-    try:
-        return await engine.models.generate(request.prompt, request.model, request.provider)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+# --- MEMORY ENDPOINTS ---
 
+@router.post("/memory")
+def add_memory(payload: Dict[str, Any] = Body(...)):
+    content = payload.get("content")
+    if not content:
+        raise HTTPException(status_code=400, detail="'content' field is required")
 
-@router.post("/models/stream")
-async def stream(request: ModelRequest):
-    provider = request.provider or engine.models.default_provider
-    if provider != "ollama":
-        raise HTTPException(status_code=503, detail="Streaming currently requires the Ollama provider")
+    metadata = payload.get("metadata", {})
+    source = payload.get("source", "user")
+    trust = payload.get("trust", 1.0)
 
-    async def events():
-        async for token in engine.models.stream(request.prompt, request.model, provider):
-            yield f"data: {token}\n\n"
-
-    return StreamingResponse(events(), media_type="text/event-stream")
-
-
-@router.get("/memory")
-def memory_entries(limit: int = Query(default=100, ge=1, le=500)):
-    return engine.memory.entries(limit)
-
-
-@router.post("/memory", status_code=status.HTTP_201_CREATED)
-def add_memory(request: MemoryRequest):
-    entry = engine.memory.add(request.content, request.metadata, request.weight)
-    engine.events.publish("memory.recorded", {"entry_id": entry["id"]})
-    return entry
-
+    return memory_store.add_memory(content=content, metadata=metadata, source=source, trust=trust)
 
 @router.get("/memory/search")
-def search_memory(query: str = Query(min_length=1), limit: int = Query(default=5, ge=1, le=50)):
-    return engine.memory.search(query, limit)
+def search_memory(query: Optional[str] = Query(None), limit: int = Query(50, ge=1, le=500)):
+    return memory_store.search_memory(query=query, limit=limit)
 
+# --- SKILL MAP & BUNDLE ENDPOINTS ---
 
-@router.get("/memory/graph")
-def memory_graph():
-    return engine.memory.graph()
+@router.get("/skills")
+def list_skills():
+    return skill_engine.list_skills()
 
+@router.get("/skills/departments")
+def list_departments():
+    return DEPARTMENTS
 
-@router.post("/memory/snapshot", status_code=status.HTTP_201_CREATED)
-def memory_snapshot():
-    return {"path": engine.memory.snapshot()}
+@router.get("/skills/bundles")
+def list_bundles():
+    return skill_engine.list_bundles()
 
+@router.post("/skills/bundles")
+def create_bundle(payload: Dict[str, Any] = Body(...)):
+    name = payload.get("name")
+    if not name:
+        raise HTTPException(status_code=400, detail="'name' is required")
+    description = payload.get("description", "")
+    skill_ids = payload.get("skill_ids", [])
+    return skill_engine.create_bundle(name=name, description=description, skill_ids=skill_ids)
 
-@router.get("/maps")
-def list_maps():
-    return engine.maps.list()
+@router.delete("/skills/bundles/{bundle_id}")
+def delete_bundle(bundle_id: str):
+    skill_engine.repo.delete_bundle(bundle_id)
+    return {"status": "deleted", "bundle_id": bundle_id}
 
+@router.get("/skills/{skill_id}")
+def get_skill(skill_id: str):
+    sk = skill_engine.get_skill(skill_id)
+    if not sk:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    return sk
 
-@router.post("/maps/{name}", status_code=status.HTTP_201_CREATED)
-def export_map(name: str, request: MapRequest):
-    try:
-        return {"path": engine.maps.export(name, request.graph)}
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+@router.post("/skills")
+def save_skill(payload: Dict[str, Any] = Body(...)):
+    if not payload.get("name"):
+        raise HTTPException(status_code=400, detail="'name' is required")
+    return skill_engine.save_skill(payload)
 
+@router.get("/skills/{skill_id}/dependencies")
+def resolve_skill_dependencies(skill_id: str, chosen_departments: Optional[str] = Query(None)):
+    depts = [d.strip() for d in chosen_departments.split(",")] if chosen_departments else None
+    return skill_engine.resolve_dependencies(skill_id, chosen_departments=depts)
 
-@router.get("/maps/{name}")
-def import_map(name: str):
-    try:
-        return engine.maps.load(name)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+@router.post("/skills/{skill_id}/install")
+def install_skill(skill_id: str, payload: Optional[Dict[str, Any]] = Body(None)):
+    chosen_depts = (payload or {}).get("chosen_departments")
+    res = skill_engine.install_skill(skill_id, chosen_departments=chosen_depts)
+    if "error" in res:
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
 
+@router.post("/skills/{skill_id}/activate")
+def activate_skill(skill_id: str):
+    res = skill_engine.activate_skill(skill_id)
+    if "error" in res:
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
 
-# --- Security API Endpoints ---
+@router.post("/skills/{skill_id}/deactivate")
+def deactivate_skill(skill_id: str):
+    res = skill_engine.deactivate_skill(skill_id)
+    if "error" in res:
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
 
+@router.delete("/skills/{skill_id}")
+def delete_skill(skill_id: str):
+    skill_engine.repo.delete_skill(skill_id)
+    return {"status": "deleted", "skill_id": skill_id}
+
+# --- SECURITY ENDPOINTS ---
 
 @router.get("/security/status")
 def security_status():
-    pending_approvals = engine.security.approvals.list_requests(status="pending")
+    pending = len(approval_engine.list_requests(status="pending"))
+    events = len(audit_logger.get_events(limit=1000))
     return {
-        "enabled": True,
-        "mode": "zero_trust",
-        "registered_nodes": len(engine.security.nodes.list_nodes()),
-        "pending_approvals_count": len(pending_approvals),
-        "audit_logs_count": len(engine.security.audit.history(limit=1000)),
+        "status": "active",
+        "zero_trust": True,
+        "deny_by_default": True,
+        "capabilities_count": len(CAPABILITIES),
+        "pending_approvals": pending,
+        "audit_events_count": events
     }
-
 
 @router.get("/security/policies")
 def security_policies():
     return {
-        "all_capabilities": sorted(list(ALL_CAPABILITIES)),
-        "default_knight_capabilities": sorted(list(DEFAULT_KNIGHT_CAPABILITIES)),
-        "privileged_capabilities": sorted(list(PRIVILEGED_CAPABILITIES)),
-        "risk_mapping": {cap: risk.value for cap, risk in CAPABILITY_RISK_MAP.items()},
+        "capabilities": CAPABILITIES,
+        "roles": permission_manager.roles,
+        "deny_by_default": True
     }
-
 
 @router.get("/security/permissions")
 def security_permissions():
-    nodes = engine.security.nodes.list_nodes()
-    return {"nodes": nodes}
-
+    return {
+        "capabilities": CAPABILITIES,
+        "roles": permission_manager.roles
+    }
 
 @router.post("/security/authorize")
-def security_authorize(request: SecurityAuthorizeRequest):
-    return engine.security.authorize(
-        actor_id=request.actor_id,
-        capability=request.capability,
-        operation=request.operation,
-        prompt=request.prompt,
-        token=request.token,
-        parameters=request.parameters,
-        approval_id=request.approval_id,
-    )
+def security_authorize(payload: Dict[str, Any] = Body(...)):
+    actor = payload.get("actor")
+    capability = payload.get("capability")
+    if not actor or not capability:
+        raise HTTPException(status_code=400, detail="'actor' and 'capability' fields are required")
 
+    result = zero_trust.validate(actor, required_capability=capability)
+    audit_logger.log_event(
+        actor=actor.get("id") if isinstance(actor, dict) else str(actor),
+        node="api",
+        operation="authorize_check",
+        capability=capability,
+        decision="authorized" if result.get("authorized") else "denied",
+        reason=result.get("reason", "")
+    )
+    return result
 
 @router.get("/security/approvals")
-def security_list_approvals(approval_status: str | None = Query(default=None, alias="status")):
-    return engine.security.approvals.list_requests(status=approval_status)
+def get_approvals(status: Optional[str] = Query(None)):
+    return approval_engine.list_requests(status=status)
 
+@router.post("/security/approvals")
+def create_approval(payload: Dict[str, Any] = Body(...)):
+    node = payload.get("requesting_node", "api_client")
+    component = payload.get("component", "user")
+    capability = payload.get("requested_capability", "process.execute")
+    action = payload.get("action", "custom_action")
+    reason = payload.get("reason", "Requested via API")
+    risk = payload.get("risk_level")
+    params = payload.get("parameters", {})
 
-@router.post("/security/approvals", status_code=status.HTTP_201_CREATED)
-def security_create_approval(request: SecurityApprovalCreateRequest):
-    return engine.security.approvals.create_request(
-        capability=request.capability,
-        operation=request.operation,
-        reason=request.reason,
-        requesting_actor=request.requesting_actor,
-        risk_level=request.risk_level,
-        parameters=request.parameters,
+    req = approval_engine.create_request(
+        requesting_node=node,
+        component=component,
+        requested_capability=capability,
+        action=action,
+        reason=reason,
+        risk_level=risk,
+        parameters=params
     )
 
+    audit_logger.log_event(
+        actor=node,
+        node=node,
+        operation=action,
+        capability=capability,
+        decision="approval_requested",
+        reason=reason,
+        approval_id=req["approval_id"]
+    )
+
+    return req
 
 @router.post("/security/approvals/{approval_id}/approve")
-def security_approve(approval_id: str, request: SecurityApprovalDecisionRequest | None = None):
-    approver = request.approver if request else "admin"
-    try:
-        req = engine.security.approvals.approve(approval_id, approver=approver)
-        engine.security.audit.record(
-            actor=approver,
-            operation="approve",
-            capability=req["capability"],
-            decision="ALLOWED",
-            reason="Human approval granted",
-            approval_id=approval_id,
-        )
-        return req
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+def approve_request(approval_id: str, payload: Optional[Dict[str, Any]] = Body(None)):
+    approving_identity = (payload or {}).get("approving_identity", "admin")
+    res = approval_engine.approve(approval_id, approving_identity=approving_identity)
+    if "error" in res:
+        raise HTTPException(status_code=400, detail=res["error"])
 
+    audit_logger.log_event(
+        actor=approving_identity,
+        node="api",
+        operation="approve",
+        capability=res.get("requested_capability", "approval"),
+        decision="approved",
+        reason="Human admin approved request",
+        approval_id=approval_id
+    )
+    return res
 
 @router.post("/security/approvals/{approval_id}/deny")
-def security_deny(approval_id: str, request: SecurityApprovalDecisionRequest | None = None):
-    denier = request.approver if request else "admin"
-    reason = request.reason if request else "Denied by administrator"
-    try:
-        req = engine.security.approvals.deny(approval_id, reason=reason, denier=denier)
-        engine.security.audit.record(
-            actor=denier,
-            operation="deny",
-            capability=req["capability"],
-            decision="DENIED",
-            reason=f"Human approval denied: {reason}",
-            approval_id=approval_id,
-        )
-        return req
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+def deny_request(approval_id: str, payload: Optional[Dict[str, Any]] = Body(None)):
+    denying_identity = (payload or {}).get("denying_identity", "admin")
+    reason = (payload or {}).get("reason", "Denied by administrator")
+    res = approval_engine.deny(approval_id, denying_identity=denying_identity, reason=reason)
+    if "error" in res:
+        raise HTTPException(status_code=400, detail=res["error"])
 
+    audit_logger.log_event(
+        actor=denying_identity,
+        node="api",
+        operation="deny",
+        capability=res.get("requested_capability", "approval"),
+        decision="denied",
+        reason=reason,
+        approval_id=approval_id
+    )
+    return res
 
 @router.get("/security/audit")
-def security_audit(
-    limit: int = Query(default=100, ge=1, le=1000),
-    actor: str | None = Query(default=None),
-    decision: str | None = Query(default=None),
-    capability: str | None = Query(default=None),
+def get_audit_log(
+    limit: int = Query(100, ge=1, le=1000),
+    decision: Optional[str] = Query(None),
+    actor: Optional[str] = Query(None)
 ):
-    return engine.security.audit.history(limit=limit, actor=actor, decision=decision, capability=capability)
+    return audit_logger.get_events(limit=limit, decision=decision, actor=actor)

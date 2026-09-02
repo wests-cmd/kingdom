@@ -1,15 +1,5 @@
-#!/bin/bash
+#!/bin/sh
+set -e
 
-echo "Installing Kingdom v40.1"
-
-python -m venv venv
-
-source venv/bin/activate
-
-pip install -r requirements.txt
-
-cd frontend
-
-npm install
-
-echo "Installation Complete"
+echo "Starting Kingdom Installer..."
+python3 scripts/kingdom_setup.py
