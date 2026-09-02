@@ -8,9 +8,10 @@ from backend.events.event_bus import EventBus
 from backend.intelligence.ai_map import AIMap
 from backend.memory.service import MemoryService
 from backend.models.service import ModelService
+from backend.runtime.modes import MODES
 from backend.runtime.scheduler import Scheduler
 from backend.runtime.tasks import TaskManager
-from backend.runtime.modes import MODES
+from backend.security.zero_trust import ZeroTrust
 from backend.state import STATE
 from backend.swarm.manager import SwarmManager
 
@@ -18,8 +19,9 @@ from backend.swarm.manager import SwarmManager
 class RuntimeEngine:
     def __init__(self) -> None:
         self.events = EventBus()
+        self.security = ZeroTrust()
         self.tasks = TaskManager()
-        self.swarm = SwarmManager(self.events.publish)
+        self.swarm = SwarmManager(self.events.publish, security=self.security)
         self.models = ModelService()
         self.memory = MemoryService()
         self.maps = AIMap()
@@ -57,7 +59,25 @@ class RuntimeEngine:
         return {"mode": mode}
 
     def submit_task(self, prompt: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
-        task = self.tasks.create(prompt, metadata)
+        meta = metadata or {}
+        actor = meta.get("actor", "system")
+        cap = meta.get("capability", "node.execute")
+
+        # Prompt firewall check on task creation
+        try:
+            self.security.firewall.inspect(prompt)
+        except Exception as exc:
+            self.security.audit.record(
+                actor=actor,
+                operation="submit_task",
+                capability=cap,
+                decision="DENIED",
+                reason=f"Task rejected by security firewall: {exc}",
+                metadata={"prompt_snippet": prompt[:100]},
+            )
+            raise ValueError(f"Task rejected by security firewall: {exc}") from exc
+
+        task = self.tasks.create(prompt, meta)
         self.events.publish("task.queued", task)
         return task
 
@@ -72,6 +92,22 @@ class RuntimeEngine:
             return
         self.events.publish("task.running", task)
         try:
+            actor = task["metadata"].get("actor", "system")
+            capability = task["metadata"].get("capability", "node.execute")
+            approval_id = task["metadata"].get("approval_id")
+
+            # Zero-trust policy check before executing task
+            auth_res = self.security.authorize(
+                actor_id=actor,
+                capability=capability,
+                operation=f"Execute task {task['id']}",
+                prompt=task["prompt"],
+                approval_id=approval_id,
+                parameters=task["metadata"],
+            )
+            if not auth_res["authorized"]:
+                raise PermissionError(f"Security policy denied task execution: {auth_res['reason']}")
+
             result = await self.swarm.execute(task)
             provider = task["metadata"].get("model_provider")
             if provider:
