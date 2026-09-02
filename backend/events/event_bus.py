@@ -1,54 +1,38 @@
-import time
-import uuid
-from typing import Callable, List, Dict, Any, Optional
-from backend.storage.repository import event_repo
-from backend.security.audit_log import sanitize_data
+"""A small in-process event bus used by the runtime and WebSocket API."""
+
+from __future__ import annotations
+
+import asyncio
+from collections import deque
+from datetime import datetime, timezone
+from typing import Any
+from uuid import uuid4
+
 
 class EventBus:
+    """Publish runtime events to connected consumers and retain recent history."""
 
-    def __init__(self, repository=None):
-        self.repo = repository or event_repo
-        self.subscribers: List[Callable[[Dict[str, Any]], None]] = []
+    def __init__(self, history_size: int = 200) -> None:
+        self._history: deque[dict[str, Any]] = deque(maxlen=history_size)
+        self._subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
 
-    def subscribe(self, callback: Callable[[Dict[str, Any]], None]):
-        if callback not in self.subscribers:
-            self.subscribers.append(callback)
-
-    def unsubscribe(self, callback: Callable[[Dict[str, Any]], None]):
-        if callback in self.subscribers:
-            self.subscribers.remove(callback)
-
-    def publish(
-        self,
-        event_type: str,
-        payload: Dict[str, Any],
-        source: str = "system",
-        task_id: Optional[str] = None
-    ) -> Dict[str, Any]:
-        event_id = str(uuid.uuid4())
-        event = {
-            "event_id": event_id,
-            "event_type": event_type,
-            "timestamp": time.time(),
-            "source": source,
-            "task_id": task_id,
-            "payload": sanitize_data(payload) if isinstance(payload, dict) else {"data": sanitize_data(payload)}
-        }
-
-        # Persist event
-        self.repo.save(event)
-
-        # Notify active in-process subscribers
-        for sub in list(self.subscribers):
+    def publish(self, event_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
+        event = {"id": str(uuid4()), "type": event_type, "timestamp": datetime.now(timezone.utc).isoformat(), "data": data or {}}
+        self._history.append(event)
+        for queue in tuple(self._subscribers):
             try:
-                sub(event)
-            except Exception:
+                queue.put_nowait(event)
+            except asyncio.QueueFull:
                 pass
-
         return event
 
-    def get_events(self, task_id: Optional[str] = None, event_type: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
-        return self.repo.query(task_id=task_id, event_type=event_type, limit=limit)
+    def subscribe(self, max_queue_size: int = 100) -> asyncio.Queue[dict[str, Any]]:
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=max_queue_size)
+        self._subscribers.add(queue)
+        return queue
 
-# Global EventBus instance
-event_bus = EventBus()
+    def unsubscribe(self, queue: asyncio.Queue[dict[str, Any]]) -> None:
+        self._subscribers.discard(queue)
+
+    def history(self, limit: int = 50) -> list[dict[str, Any]]:
+        return list(self._history)[-limit:] if limit > 0 else []

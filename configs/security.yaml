@@ -1,0 +1,37 @@
+# Kingdom Security & Policy Configuration
+
+security:
+  enabled: true
+  model: zero_trust
+  default_policy: deny
+
+policy:
+  deny_by_default: true
+  require_approval_for_high_risk: true
+  prompt_injection_firewall: true
+  sanitize_secrets_in_logs: true
+
+approval:
+  default_ttl_seconds: 3600
+  auto_approve_low_risk: true
+  auto_approve_medium_risk: true
+  auto_approve_high_risk: false
+
+risk_classification:
+  LOW:
+    - filesystem.read
+    - memory.read
+    - ai_map.read
+  MEDIUM:
+    - model.inference
+    - memory.write
+    - ai_map.write
+    - filesystem.write
+    - node.execute
+  HIGH:
+    - filesystem.delete
+    - process.execute
+    - docker.execute
+    - network.access
+    - node.register
+    - system.admin

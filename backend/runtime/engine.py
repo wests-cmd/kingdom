@@ -1,85 +1,125 @@
-import asyncio
-import time
-import uuid
-from typing import Optional, Dict, Any, List
-from backend.state import STATE
-from backend.storage.repository import task_repo, knight_repo, event_repo
-from backend.events.event_bus import event_bus
+"""The runnable Kingdom runtime core."""
 
-VALID_STATES = {"queued", "assigned", "running", "completed", "failed", "cancelled"}
+from __future__ import annotations
+
+from typing import Any
+
+from backend.events.event_bus import EventBus
+from backend.intelligence.ai_map import AIMap
+from backend.memory.service import MemoryService
+from backend.models.service import ModelService
+from backend.runtime.modes import MODES
+from backend.runtime.scheduler import Scheduler
+from backend.runtime.tasks import TaskManager
+from backend.security.zero_trust import ZeroTrust
+from backend.state import STATE
+from backend.swarm.manager import SwarmManager
+
 
 class RuntimeEngine:
+    def __init__(self) -> None:
+        self.events = EventBus()
+        self.security = ZeroTrust()
+        self.tasks = TaskManager()
+        self.swarm = SwarmManager(self.events.publish, security=self.security)
+        self.models = ModelService()
+        self.memory = MemoryService()
+        self.maps = AIMap()
+        self.scheduler = Scheduler(self._process_next_task)
 
-    def __init__(self):
-        self._supervisor_task: Optional[asyncio.Task] = None
+    async def initialize(self) -> dict[str, Any]:
+        return await self.start()
 
-    def initialize(self):
-        STATE["running"] = True
+    async def start(self) -> dict[str, Any]:
+        started = await self.scheduler.start()
+        STATE["running"] = self.scheduler.running
+        if started:
+            self.events.publish("runtime.started", {"mode": STATE["mode"]})
+        return {"status": "started" if started else "already_running", **self.status()}
 
-    def start(self):
-        STATE["running"] = True
-        event_bus.publish("runtime.started", {"mode": STATE["mode"]}, source="runtime")
-        return {"status": "started"}
+    async def stop(self) -> dict[str, Any]:
+        stopped = await self.scheduler.stop()
+        STATE["running"] = self.scheduler.running
+        if stopped:
+            self.events.publish("runtime.stopped", {"mode": STATE["mode"]})
+        return {"status": "stopped" if stopped else "already_stopped", **self.status()}
 
-    def stop(self):
-        STATE["running"] = False
-        event_bus.publish("runtime.stopped", {"mode": STATE["mode"]}, source="runtime")
-        return {"status": "stopped"}
+    def status(self) -> dict[str, Any]:
+        return {**STATE, "scheduler_running": self.scheduler.running, "tasks": self.tasks.counts()}
 
-    def status(self):
-        return {
-            "running": STATE["running"],
-            "mode": STATE["mode"],
-            "version": STATE["version"]
-        }
-
-    def get_mode(self):
+    def get_mode(self) -> str:
         return STATE["mode"]
 
-    # --- TASK API METHODS ---
+    def set_mode(self, mode: str) -> dict[str, Any]:
+        if mode not in MODES:
+            raise ValueError(f"Unsupported runtime mode: {mode}")
+        previous = STATE["mode"]
+        STATE["mode"] = mode
+        self.events.publish("runtime.mode_changed", {"previous": previous, "mode": mode})
+        return {"mode": mode}
 
-    def create_task(self, task_type: str, input_data: Any, actor: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        task_id = str(uuid.uuid4())
-        now = time.time()
+    def submit_task(self, prompt: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+        meta = metadata or {}
+        actor = meta.get("actor", "system")
+        cap = meta.get("capability", "node.execute")
 
-        task = {
-            "id": task_id,
-            "type": task_type or "generic",
-            "status": "queued",
-            "input": input_data or {},
-            "assigned_knight": None,
-            "result": None,
-            "error": None,
-            "cancellation_requested": False,
-            "created_at": now,
-            "updated_at": now
-        }
+        # Prompt firewall check on task creation
+        try:
+            self.security.firewall.inspect(prompt)
+        except Exception as exc:
+            self.security.audit.record(
+                actor=actor,
+                operation="submit_task",
+                capability=cap,
+                decision="DENIED",
+                reason=f"Task rejected by security firewall: {exc}",
+                metadata={"prompt_snippet": prompt[:100]},
+            )
+            raise ValueError(f"Task rejected by security firewall: {exc}") from exc
 
-        task_repo.save(task)
-        event_bus.publish("task.created", task, source="task_api", task_id=task_id)
+        task = self.tasks.create(prompt, meta)
+        self.events.publish("task.queued", task)
         return task
 
-    def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
-        return task_repo.get(task_id)
-
-    def list_tasks(self, status: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
-        return task_repo.list_all(status=status, limit=limit)
-
-    def cancel_task(self, task_id: str) -> Optional[Dict[str, Any]]:
-        task = task_repo.get(task_id)
-        if not task:
-            return None
-
-        if task["status"] in ["completed", "failed", "cancelled"]:
-            return task
-
-        task["cancellation_requested"] = True
-        task["status"] = "cancelled"
-        task["updated_at"] = time.time()
-        task_repo.save(task)
-
-        event_bus.publish("task.cancelled", task, source="task_api", task_id=task_id)
+    def cancel_task(self, task_id: str) -> dict[str, Any]:
+        task = self.tasks.cancel(task_id)
+        self.events.publish("task.cancelled", task)
         return task
 
-# Global runtime engine instance
-runtime_engine = RuntimeEngine()
+    async def _process_next_task(self) -> None:
+        task = self.tasks.claim_next()
+        if task is None:
+            return
+        self.events.publish("task.running", task)
+        try:
+            actor = task["metadata"].get("actor", "system")
+            capability = task["metadata"].get("capability", "node.execute")
+            approval_id = task["metadata"].get("approval_id")
+
+            # Zero-trust policy check before executing task
+            auth_res = self.security.authorize(
+                actor_id=actor,
+                capability=capability,
+                operation=f"Execute task {task['id']}",
+                prompt=task["prompt"],
+                approval_id=approval_id,
+                parameters=task["metadata"],
+            )
+            if not auth_res["authorized"]:
+                raise PermissionError(f"Security policy denied task execution: {auth_res['reason']}")
+
+            result = await self.swarm.execute(task)
+            provider = task["metadata"].get("model_provider")
+            if provider:
+                model_result = await self.models.generate(task["prompt"], task["metadata"].get("model"), provider)
+                result["model"] = model_result
+                self.events.publish("model.completed", {"task_id": task["id"], **model_result})
+            completed = self.tasks.complete(task["id"], result)
+            self.memory.record_task(completed)
+            self.events.publish("task.completed", completed)
+        except Exception as exc:
+            recovered = self.tasks.retry_or_fail(task["id"], str(exc))
+            if recovered["status"] == "failed":
+                self.memory.record_task(recovered)
+            event_type = "task.requeued" if recovered["status"] == "queued" else "task.failed"
+            self.events.publish(event_type, recovered)
