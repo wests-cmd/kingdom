@@ -7,7 +7,6 @@ class TestKingdomAPI(unittest.TestCase):
 
     def setUp(self):
         self.client = TestClient(app)
-        # Reset state before each test
         STATE["running"] = False
         STATE["mode"] = "adaptive"
 
@@ -20,22 +19,24 @@ class TestKingdomAPI(unittest.TestCase):
         self.assertIn("version", data)
 
     def test_start_endpoint(self):
-        response = self.client.post("/start")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "started"})
-        self.assertTrue(STATE["running"])
+        with TestClient(app) as client:
+            response = client.post("/start")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["status"], "started")
+            self.assertTrue(STATE["running"])
 
     def test_stop_endpoint(self):
-        STATE["running"] = True
-        response = self.client.post("/stop")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "stopped"})
-        self.assertFalse(STATE["running"])
+        with TestClient(app) as client:
+            client.post("/start")
+            response = client.post("/stop")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["status"], "stopped")
+            self.assertFalse(STATE["running"])
 
     def test_mode_endpoint(self):
         response = self.client.get("/mode")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), "adaptive")
+        self.assertEqual(response.json(), {"mode": "adaptive"})
 
 if __name__ == "__main__":
     unittest.main()

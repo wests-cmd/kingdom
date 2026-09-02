@@ -6,12 +6,14 @@ import asyncio
 
 from backend.knights.registry import KnightRegistry
 from backend.routing.complexity_router import ComplexityRouter
+from backend.security.zero_trust import ZeroTrust
 from backend.swarm.workload_balancer import WorkloadBalancer
 
 
 class SwarmManager:
-    def __init__(self, event_publisher):
+    def __init__(self, event_publisher, security: ZeroTrust | None = None):
         self._publish = event_publisher
+        self.security = security or ZeroTrust()
         self.registry = KnightRegistry()
         self._balancer = WorkloadBalancer()
         self._complexity = ComplexityRouter()
@@ -23,7 +25,11 @@ class SwarmManager:
     async def execute(self, task):
         subtasks = self._decompose(task["prompt"], task["metadata"].get("subtasks"))
         assignments = [self._balancer.select_knight(subtask) for subtask in subtasks]
-        plan = {"task_id": task["id"], "complexity": self._complexity.classify(task["prompt"]), "subtasks": [{"prompt": subtask, "knight": knight} for subtask, knight in zip(subtasks, assignments)]}
+        plan = {
+            "task_id": task["id"],
+            "complexity": self._complexity.classify(task["prompt"]),
+            "subtasks": [{"prompt": subtask, "knight": knight} for subtask, knight in zip(subtasks, assignments)],
+        }
         self._publish("swarm.planned", plan)
         results = await asyncio.gather(*(self._run(knight, subtask, task["id"]) for subtask, knight in zip(subtasks, assignments)))
         return {"plan": plan, "results": results}
@@ -40,6 +46,17 @@ class SwarmManager:
         knight = self.registry.get(knight_name)
         if knight is None:
             raise RuntimeError(f"No registered knight named {knight_name}")
+
+        # Zero-trust knight execution permission check
+        auth_res = self.security.authorize(
+            actor_id=knight_name,
+            capability="node.execute",
+            operation=f"Knight '{knight_name}' execution for task '{task_id}'",
+            prompt=prompt,
+        )
+        if not auth_res["authorized"]:
+            raise PermissionError(f"Security policy denied knight execution: {auth_res['reason']}")
+
         self.registry.begin(knight_name)
         self._publish("knight.started", {"task_id": task_id, "knight": knight_name})
         try:
