@@ -222,3 +222,7 @@ __pycache__/
 *.pyc
 .env
 kingdom.db
+**/node_modules/
+**/dist/
+data/
+data/logs/
