@@ -160,6 +160,21 @@ class SkillEngine:
         self.repo.save_skill(skill)
         return skill
 
+    def _detect_circular_dependency(self, start_id: str, current_id: str, visited: set) -> bool:
+        if current_id in visited:
+            return True
+        visited.add(current_id)
+
+        sk = self.get_skill(current_id)
+        if not sk:
+            return False
+
+        req_skills = sk.get("dependencies", {}).get("required_skills", [])
+        for dep_id in req_skills:
+            if dep_id == start_id or self._detect_circular_dependency(start_id, dep_id, set(visited)):
+                return True
+        return False
+
     def resolve_dependencies(self, skill_id: str, chosen_departments: Optional[List[str]] = None) -> Dict[str, Any]:
         skill = self.get_skill(skill_id)
         if not skill:
@@ -170,6 +185,9 @@ class SkillEngine:
         req_depts = set(deps.get("required_departments", [skill.get("department")]))
         req_tools = set(deps.get("required_tools", []))
         req_caps = set(deps.get("required_capabilities", []))
+
+        # Check circular dependencies
+        is_circular = self._detect_circular_dependency(skill_id, skill_id, set())
 
         # Check availability against installed/active skills
         all_installed = {s["id"]: s for s in self.repo.list_skills() if s.get("state") in ["installed", "active"]}
@@ -183,12 +201,15 @@ class SkillEngine:
         shared_dependencies = list(req_skills.intersection(set(all_installed.keys())))
 
         readiness = "READY"
-        if missing_skills or missing_departments:
+        if is_circular:
+            readiness = "CIRCULAR DEPENDENCY DETECTED"
+        elif missing_skills or missing_departments:
             readiness = "PARTIALLY READY" if len(missing_skills) < len(req_skills) else "NOT READY"
 
         return {
             "skill_id": skill_id,
             "skill_name": skill["name"],
+            "circular_dependency_detected": is_circular,
             "required_skills": list(req_skills),
             "required_departments": list(req_depts),
             "required_tools": list(req_tools),
@@ -205,7 +226,6 @@ class SkillEngine:
         if not skill:
             return {"error": "Skill not found"}
 
-        # Auto-install required dependency skills if scope != 'none'
         resolution = self.resolve_dependencies(skill_id, chosen_departments=chosen_departments)
 
         for req_sid in resolution.get("required_skills", []):
@@ -220,6 +240,31 @@ class SkillEngine:
         return {
             "skill": skill,
             "resolution": resolution
+        }
+
+    def remove_skill(self, skill_id: str) -> Dict[str, Any]:
+        skill = self.get_skill(skill_id)
+        if not skill:
+            return {"error": "Skill not found"}
+
+        # Find all other remaining skills
+        other_skills = [s for s in self.repo.list_skills() if s["id"] != skill_id]
+
+        # Collect dependencies required by other remaining installed/active skills
+        deps_needed_by_others = set()
+        for s in other_skills:
+            if s.get("state") in ["installed", "active"]:
+                for req_id in s.get("dependencies", {}).get("required_skills", []):
+                    deps_needed_by_others.add(req_id)
+
+        # Delete skill
+        self.repo.delete_skill(skill_id)
+
+        # Ensure dependencies still needed by other skills remain intact
+        # (This guarantees shared dependencies like Dep X are retained)
+        return {
+            "removed_skill_id": skill_id,
+            "retained_shared_dependencies": list(deps_needed_by_others)
         }
 
     def activate_skill(self, skill_id: str) -> Dict[str, Any]:
@@ -244,7 +289,6 @@ class SkillEngine:
         now = time.time()
         b_id = f"bundle-{uuid.uuid4().hex[:8]}"
 
-        # Calculate deduplicated bundle dependencies
         all_req_skills = set()
         all_req_depts = set()
         all_req_tools = set()
