@@ -41,36 +41,44 @@ class ApprovalEngine:
         requesting_actor: str = "system",
         requesting_node: str | None = None,
         requesting_tool: str | None = None,
+        requested_capability: str | None = None,
+        action: str | None = None,
         risk_level: RiskLevel | str = RiskLevel.HIGH,
         parameters: dict[str, Any] | None = None,
         ttl_seconds: int | None = None,
-        **kwargs: Any,
     ) -> dict[str, Any]:
-        # Handle flexible positional signatures:
-        # 1. create_request(capability, operation, reason, requesting_actor, ...)
-        # 2. create_request(requesting_node, component, requested_capability, action, reason)
         req_node = requesting_node
         req_actor = requesting_actor
-        cap = capability or kwargs.get("requested_capability")
-        op = operation or kwargs.get("action")
+        cap = capability or requested_capability
+        op = operation or action
         reas = reason
 
         if args:
-            if len(args) == 5 and ("filesystem." in str(args[2]) or "process." in str(args[2]) or "model." in str(args[2])):
+            if len(args) == 5:
+                # Signature: create_request(requesting_node, component, requested_capability, action, reason)
                 req_node = args[0]
                 req_actor = args[1]
                 cap = args[2]
                 op = args[3]
                 reas = args[4]
-            elif len(args) >= 1:
-                if not cap:
-                    cap = args[0]
-                if len(args) >= 2 and not op:
-                    op = args[1]
-                if len(args) >= 3 and not reas:
-                    reas = args[2]
-                if len(args) >= 4 and requesting_actor == "system":
-                    req_actor = args[3]
+            elif len(args) == 4:
+                # Signature: create_request(capability, operation, reason, requesting_actor)
+                cap = args[0]
+                op = args[1]
+                reas = args[2]
+                req_actor = args[3]
+            elif len(args) == 3:
+                # Signature: create_request(capability, operation, reason)
+                cap = args[0]
+                op = args[1]
+                reas = args[2]
+            elif len(args) == 2:
+                # Signature: create_request(capability, operation)
+                cap = args[0]
+                op = args[1]
+            elif len(args) == 1:
+                # Signature: create_request(capability)
+                cap = args[0]
 
         cap = cap or "system.default"
         op = op or "execute"
