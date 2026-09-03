@@ -45,6 +45,10 @@ Kingdom is a distributed AI runtime platform designed for:
 
 ---
 
+# Prerequisites
+- Python 3.12+
+- Node.js 24+
+
 # Install
 
 ## Backend
