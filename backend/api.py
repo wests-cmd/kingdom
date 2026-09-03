@@ -1,5 +1,4 @@
-from typing import Any
-
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -8,38 +7,69 @@ from backend.runtime.engine import RuntimeEngine
 from backend.security.capabilities import ALL_CAPABILITIES, DEFAULT_KNIGHT_CAPABILITIES, PRIVILEGED_CAPABILITIES
 from backend.security.risk import CAPABILITY_RISK_MAP
 from backend.security.zero_trust import ZeroTrust
+from backend.skills.models import Skill, SkillTrustLevel, SkillLifecycleState, SkillDependency, SkillRequirement
+from backend.skills.lifecycle import SkillLifecycleManager, SkillLifecycleError
+from backend.skills.bundles import SkillBundle, SkillBundleManager
+from backend.learning.collector import LearningCollector
+from backend.learning.evaluator import LearningEvaluator
+from backend.learning.experiment import LearningExperimentRunner
 
 router = APIRouter()
 engine = RuntimeEngine()
 zero_trust = engine.security
 
-# --- RUNTIME ENDPOINTS ---
+# Skills & Learning Managers Setup
+sample_skill = Skill(
+    id="skill-web-research",
+    name="Web Research",
+    version="1.0.0",
+    description="Automated web research and document analysis",
+    department="Research",
+    trust_level=SkillTrustLevel.VERIFIED,
+    state=SkillLifecycleState.ACTIVE,
+    permissions=["network.outbound"],
+    dependencies=SkillDependency(
+        required_tools=["http_client"],
+        required_capabilities=["model.inference"],
+        required_models=["gpt-4o"]
+    )
+)
 
+lifecycle_manager = SkillLifecycleManager(
+    available_tools=["http_client", "pdf_parser"],
+    available_capabilities=["model.inference", "python.exec"],
+    available_models=["gpt-4o"],
+    granted_permissions=["network.outbound", "filesystem.read"]
+)
+lifecycle_manager.save(sample_skill)
+lifecycle_manager.install(sample_skill.id)
+lifecycle_manager.activate(sample_skill.id, governance_approved=True)
 
+bundle_manager = SkillBundleManager(available_skills=[sample_skill])
+learning_collector = LearningCollector()
+learning_evaluator = LearningEvaluator(learning_collector)
+learning_runner = LearningExperimentRunner(learning_collector)
+
+# Request Models
 class TaskRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=10_000)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
-
 class ModeRequest(BaseModel):
     mode: str
-
 
 class ModelRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=10_000)
     model: str | None = None
     provider: str | None = None
 
-
 class MemoryRequest(BaseModel):
     content: str = Field(min_length=1, max_length=10_000)
     metadata: dict[str, Any] = Field(default_factory=dict)
     weight: float = Field(default=1.0, ge=0)
 
-
 class MapRequest(BaseModel):
     graph: dict[str, Any]
-
 
 class SecurityAuthorizeRequest(BaseModel):
     actor_id: str = "system"
@@ -50,7 +80,6 @@ class SecurityAuthorizeRequest(BaseModel):
     approval_id: str | None = None
     parameters: dict[str, Any] = Field(default_factory=dict)
 
-
 class SecurityApprovalCreateRequest(BaseModel):
     capability: str
     operation: str
@@ -59,31 +88,35 @@ class SecurityApprovalCreateRequest(BaseModel):
     risk_level: str = "HIGH"
     parameters: dict[str, Any] = Field(default_factory=dict)
 
-
 class SecurityApprovalDecisionRequest(BaseModel):
     reason: str = "Administrator decision"
     approver: str = "admin"
 
+class PromoteProposalRequest(BaseModel):
+    experiment_id: str
+
+class RollbackSkillRequest(BaseModel):
+    from_version: str
+    to_version: str
+    reason: str = "Administrator requested rollback"
+
+# --- RUNTIME ENDPOINTS ---
 
 @router.get("/status")
 def runtime_status():
     return engine.status()
 
-
 @router.post("/start")
 async def start():
     return await engine.start()
-
 
 @router.post("/stop")
 async def stop():
     return await engine.stop()
 
-
 @router.get("/mode")
 def mode():
     return {"mode": engine.get_mode()}
-
 
 @router.put("/mode")
 def set_mode(request: ModeRequest):
@@ -92,7 +125,6 @@ def set_mode(request: ModeRequest):
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-
 @router.post("/tasks", status_code=status.HTTP_201_CREATED)
 def create_task(request: TaskRequest):
     try:
@@ -100,11 +132,9 @@ def create_task(request: TaskRequest):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-
 @router.get("/tasks")
 def list_tasks(task_status: str | None = Query(default=None, alias="status")):
     return engine.tasks.list(task_status)
-
 
 @router.get("/tasks/{task_id}")
 def get_task(task_id: str):
@@ -112,7 +142,6 @@ def get_task(task_id: str):
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
-
 
 @router.post("/tasks/{task_id}/cancel")
 def cancel_task(task_id: str):
@@ -123,21 +152,17 @@ def cancel_task(task_id: str):
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-
 @router.get("/events")
 def event_history(limit: int = Query(default=50, ge=1, le=200)):
     return engine.events.history(limit)
-
 
 @router.get("/knights")
 def knights():
     return engine.swarm.status()
 
-
 @router.get("/models")
 async def model_health():
     return await engine.models.health()
-
 
 @router.post("/models/generate")
 async def generate(request: ModelRequest):
@@ -145,7 +170,6 @@ async def generate(request: ModelRequest):
         return await engine.models.generate(request.prompt, request.model, request.provider)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-
 
 @router.post("/models/stream")
 async def stream(request: ModelRequest):
@@ -159,11 +183,9 @@ async def stream(request: ModelRequest):
 
     return StreamingResponse(events(), media_type="text/event-stream")
 
-
 @router.get("/memory")
 def memory_entries(limit: int = Query(default=100, ge=1, le=500)):
     return engine.memory.entries(limit)
-
 
 @router.post("/memory", status_code=status.HTTP_201_CREATED)
 def add_memory(request: MemoryRequest):
@@ -171,26 +193,21 @@ def add_memory(request: MemoryRequest):
     engine.events.publish("memory.recorded", {"entry_id": entry["id"]})
     return entry
 
-
 @router.get("/memory/search")
 def search_memory(query: str = Query(min_length=1), limit: int = Query(default=5, ge=1, le=50)):
     return engine.memory.search(query, limit)
-
 
 @router.get("/memory/graph")
 def memory_graph():
     return engine.memory.graph()
 
-
 @router.post("/memory/snapshot", status_code=status.HTTP_201_CREATED)
 def memory_snapshot():
     return {"path": engine.memory.snapshot()}
 
-
 @router.get("/maps")
 def list_maps():
     return engine.maps.list()
-
 
 @router.post("/maps/{name}", status_code=status.HTTP_201_CREATED)
 def export_map(name: str, request: MapRequest):
@@ -199,7 +216,6 @@ def export_map(name: str, request: MapRequest):
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-
 @router.get("/maps/{name}")
 def import_map(name: str):
     try:
@@ -207,9 +223,99 @@ def import_map(name: str):
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+# --- SKILLS API ENDPOINTS ---
 
-# --- Security API Endpoints ---
+@router.get("/skills")
+def list_skills():
+    return [s.model_dump() for s in lifecycle_manager.skills.values()]
 
+@router.get("/skills/map")
+def get_skill_map():
+    return lifecycle_manager.skill_map.get_map_structure()
+
+@router.get("/skills/{skill_id}/readiness")
+def check_skill_readiness(skill_id: str):
+    skill = lifecycle_manager.skills.get(skill_id)
+    if not skill:
+        raise HTTPException(status_code=404, detail=f"Skill '{skill_id}' not found.")
+    return lifecycle_manager.skill_map.check_readiness(
+        skill=skill,
+        available_tools=lifecycle_manager.available_tools,
+        available_capabilities=lifecycle_manager.available_capabilities,
+        available_models=lifecycle_manager.available_models,
+        granted_permissions=lifecycle_manager.granted_permissions
+    )
+
+@router.post("/skills", status_code=status.HTTP_201_CREATED)
+def save_skill(skill: Skill):
+    return lifecycle_manager.save(skill).model_dump()
+
+@router.post("/skills/{skill_id}/install")
+def install_skill(skill_id: str):
+    try:
+        return lifecycle_manager.install(skill_id).model_dump()
+    except SkillLifecycleError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@router.post("/skills/{skill_id}/activate")
+def activate_skill(skill_id: str, governance_approved: bool = True):
+    try:
+        return lifecycle_manager.activate(skill_id, governance_approved=governance_approved).model_dump()
+    except SkillLifecycleError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@router.post("/skills/{skill_id}/deactivate")
+def deactivate_skill(skill_id: str):
+    try:
+        return lifecycle_manager.deactivate(skill_id).model_dump()
+    except SkillLifecycleError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@router.delete("/skills/{skill_id}")
+def remove_skill(skill_id: str):
+    try:
+        return lifecycle_manager.remove(skill_id).model_dump()
+    except SkillLifecycleError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+# --- LEARNING API ENDPOINTS ---
+
+@router.get("/learning/activity")
+def get_learning_activity():
+    return {
+        "proposals": [p.model_dump() for p in learning_evaluator.proposals],
+        "experiments": [e.model_dump() for e in learning_runner.experiments.values()],
+        "promotions": [p.model_dump() for p in learning_runner.promotions],
+        "rollbacks": [r.model_dump() for r in learning_runner.rollbacks]
+    }
+
+@router.post("/learning/proposals/{proposal_id}/promote")
+def promote_learning_proposal(proposal_id: str, request: PromoteProposalRequest):
+    proposal = next((p for p in learning_evaluator.proposals if p.id == proposal_id), None)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Improvement proposal not found")
+    try:
+        rec = learning_runner.promote_candidate(
+            experiment_id=request.experiment_id,
+            proposal=proposal,
+            promoter="admin",
+            governance_level=3
+        )
+        return rec.model_dump()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@router.post("/learning/skills/{skill_id}/rollback")
+def rollback_skill(skill_id: str, request: RollbackSkillRequest):
+    rec = learning_runner.trigger_rollback(
+        skill_id=skill_id,
+        from_version=request.from_version,
+        to_version=request.to_version,
+        reason=request.reason
+    )
+    return rec.model_dump()
+
+# --- SECURITY API ENDPOINTS ---
 
 @router.get("/security/status")
 def security_status():
@@ -222,7 +328,6 @@ def security_status():
         "audit_logs_count": len(engine.security.audit.history(limit=1000)),
     }
 
-
 @router.get("/security/policies")
 def security_policies():
     return {
@@ -232,12 +337,10 @@ def security_policies():
         "risk_mapping": {cap: risk.value for cap, risk in CAPABILITY_RISK_MAP.items()},
     }
 
-
 @router.get("/security/permissions")
 def security_permissions():
     nodes = engine.security.nodes.list_nodes()
     return {"nodes": nodes}
-
 
 @router.post("/security/authorize")
 def security_authorize(request: SecurityAuthorizeRequest):
@@ -251,11 +354,9 @@ def security_authorize(request: SecurityAuthorizeRequest):
         approval_id=request.approval_id,
     )
 
-
 @router.get("/security/approvals")
 def security_list_approvals(approval_status: str | None = Query(default=None, alias="status")):
     return engine.security.approvals.list_requests(status=approval_status)
-
 
 @router.post("/security/approvals", status_code=status.HTTP_201_CREATED)
 def security_create_approval(request: SecurityApprovalCreateRequest):
@@ -267,7 +368,6 @@ def security_create_approval(request: SecurityApprovalCreateRequest):
         risk_level=request.risk_level,
         parameters=request.parameters,
     )
-
 
 @router.post("/security/approvals/{approval_id}/approve")
 def security_approve(approval_id: str, request: SecurityApprovalDecisionRequest | None = None):
@@ -288,7 +388,6 @@ def security_approve(approval_id: str, request: SecurityApprovalDecisionRequest 
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-
 @router.post("/security/approvals/{approval_id}/deny")
 def security_deny(approval_id: str, request: SecurityApprovalDecisionRequest | None = None):
     denier = request.approver if request else "admin"
@@ -308,7 +407,6 @@ def security_deny(approval_id: str, request: SecurityApprovalDecisionRequest | N
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
 
 @router.get("/security/audit")
 def security_audit(
