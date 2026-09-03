@@ -15,7 +15,7 @@ services:
       retries: 3
 
   kingdom-ui:
-    image: node:20-slim
+    image: node:24-slim
     container_name: kingdom-ui
     working_dir: /app/frontend
     volumes:

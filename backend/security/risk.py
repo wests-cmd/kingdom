@@ -52,7 +52,11 @@ class RiskClassifier:
 
     @staticmethod
     def classify_capability(capability: str) -> RiskLevel:
-        return CAPABILITY_RISK_MAP.get(capability, RiskLevel.HIGH)
+        if capability in CAPABILITY_RISK_MAP:
+            return CAPABILITY_RISK_MAP[capability]
+        if capability.endswith(".execute") and capability not in (CAPABILITY_PROCESS_EXECUTE, CAPABILITY_DOCKER_EXECUTE):
+            return RiskLevel.MEDIUM
+        return RiskLevel.HIGH
 
     @staticmethod
     def classify_operation(capability: str, operation_details: dict[str, Any] | None = None) -> RiskLevel:

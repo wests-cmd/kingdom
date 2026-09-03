@@ -7,9 +7,11 @@ from pydantic import BaseModel, Field
 from backend.runtime.engine import RuntimeEngine
 from backend.security.capabilities import ALL_CAPABILITIES, DEFAULT_KNIGHT_CAPABILITIES, PRIVILEGED_CAPABILITIES
 from backend.security.risk import CAPABILITY_RISK_MAP
+from backend.security.zero_trust import ZeroTrust
 
 router = APIRouter()
-zero_trust = ZeroTrust()
+engine = RuntimeEngine()
+zero_trust = engine.security
 
 # --- RUNTIME ENDPOINTS ---
 

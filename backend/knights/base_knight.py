@@ -71,7 +71,7 @@ class BaseKnight:
 
         # Simulate execution
         result = {
-            "knight": self.id,
+            "knight": self.name,
             "task": task,
             "status": "completed",
             "executed_at": time.time()

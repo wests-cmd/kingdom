@@ -58,6 +58,14 @@ class RuntimeEngine:
         self.events.publish("runtime.mode_changed", {"previous": previous, "mode": mode})
         return {"mode": mode}
 
+    def create_task(self, task_type: str = "generic", payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        meta = {"type": task_type, "payload": payload or {}}
+        prompt = payload.get("query") if isinstance(payload, dict) else str(payload)
+        return self.submit_task(prompt or task_type, meta)
+
+    def get_task(self, task_id: str) -> dict[str, Any] | None:
+        return self.tasks.get(task_id)
+
     def submit_task(self, prompt: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
         meta = metadata or {}
         actor = meta.get("actor", "system")

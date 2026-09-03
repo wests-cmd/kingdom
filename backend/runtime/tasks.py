@@ -25,7 +25,7 @@ class TaskManager:
         max_attempts = metadata.get("max_attempts", 1)
         if not isinstance(max_attempts, int) or max_attempts < 1 or max_attempts > 5:
             raise ValueError("max_attempts must be an integer from 1 through 5")
-        task = {"id": str(uuid4()), "execution_id": str(uuid4()), "prompt": prompt, "metadata": metadata, "status": "queued", "created_at": _timestamp(), "started_at": None, "completed_at": None, "result": None, "error": None, "attempt": 0, "max_attempts": max_attempts}
+        task = {"id": str(uuid4()), "execution_id": str(uuid4()), "prompt": prompt, "metadata": metadata, "status": "queued", "cancellation_requested": False, "created_at": _timestamp(), "started_at": None, "completed_at": None, "result": None, "error": None, "attempt": 0, "max_attempts": max_attempts}
         self._tasks[task["id"]] = task
         self._queue.append(task["id"])
         return task.copy()
@@ -71,7 +71,7 @@ class TaskManager:
             raise KeyError(task_id)
         if task["status"] != "queued":
             raise ValueError("Only queued tasks can be cancelled")
-        task.update(status="cancelled", completed_at=_timestamp())
+        task.update(status="cancelled", cancellation_requested=True, completed_at=_timestamp())
         return task.copy()
 
     def counts(self) -> dict[str, int]:

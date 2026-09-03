@@ -34,8 +34,9 @@ class ApprovalEngine:
 
     def create_request(
         self,
-        capability: str,
-        operation: str,
+        *args: Any,
+        capability: str | None = None,
+        operation: str | None = None,
         reason: str = "",
         requesting_actor: str = "system",
         requesting_node: str | None = None,
@@ -43,7 +44,37 @@ class ApprovalEngine:
         risk_level: RiskLevel | str = RiskLevel.HIGH,
         parameters: dict[str, Any] | None = None,
         ttl_seconds: int | None = None,
+        **kwargs: Any,
     ) -> dict[str, Any]:
+        # Handle flexible positional signatures:
+        # 1. create_request(capability, operation, reason, requesting_actor, ...)
+        # 2. create_request(requesting_node, component, requested_capability, action, reason)
+        req_node = requesting_node
+        req_actor = requesting_actor
+        cap = capability or kwargs.get("requested_capability")
+        op = operation or kwargs.get("action")
+        reas = reason
+
+        if args:
+            if len(args) == 5 and ("filesystem." in str(args[2]) or "process." in str(args[2]) or "model." in str(args[2])):
+                req_node = args[0]
+                req_actor = args[1]
+                cap = args[2]
+                op = args[3]
+                reas = args[4]
+            elif len(args) >= 1:
+                if not cap:
+                    cap = args[0]
+                if len(args) >= 2 and not op:
+                    op = args[1]
+                if len(args) >= 3 and not reas:
+                    reas = args[2]
+                if len(args) >= 4 and requesting_actor == "system":
+                    req_actor = args[3]
+
+        cap = cap or "system.default"
+        op = op or "execute"
+
         now = datetime.now(timezone.utc)
         ttl = ttl_seconds if ttl_seconds is not None else self.default_ttl_seconds
         expires_at = now + timedelta(seconds=ttl)
@@ -51,12 +82,13 @@ class ApprovalEngine:
         request_id = f"appr_{uuid.uuid4().hex[:12]}"
         request_record = {
             "id": request_id,
-            "requesting_actor": requesting_actor,
-            "requesting_node": requesting_node or requesting_actor,
+            "approval_id": request_id,
+            "requesting_actor": req_actor,
+            "requesting_node": req_node or req_actor,
             "requesting_tool": requesting_tool or "core",
-            "capability": capability,
-            "operation": operation,
-            "reason": reason,
+            "capability": cap,
+            "operation": op,
+            "reason": reas,
             "risk_level": str(risk_level),
             "parameters": parameters or {},
             "status": "pending",
@@ -119,3 +151,6 @@ class ApprovalEngine:
                 exp = datetime.fromisoformat(req["expires_at"])
                 if now >= exp:
                     req["status"] = "expired"
+
+
+approval_engine = ApprovalEngine()

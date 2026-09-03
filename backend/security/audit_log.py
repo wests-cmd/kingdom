@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 logging.basicConfig(level=logging.INFO)
-audit_logger = logging.getLogger("kingdom.audit")
+_logger = logging.getLogger("kingdom.audit")
 
 SECRET_KEY_RE = re.compile(
     r"(?i)(api[_-]?key|secret|password|token|bearer|auth|credentials)\s*[:=]\s*['\"]?([^'\"\s,#]+)['\"]?"
@@ -55,11 +55,31 @@ class AuditLogger:
 
         log_msg = f"[AUDIT] decision={decision} actor={record['actor']} cap={capability} op={record['operation']} reason={record['reason']}"
         if decision == "DENIED":
-            audit_logger.warning(log_msg)
+            _logger.warning(log_msg)
         else:
-            audit_logger.info(log_msg)
+            _logger.info(log_msg)
 
         return record
+
+    def log_event(
+        self,
+        actor: str,
+        operation: str,
+        capability: str,
+        decision: str,
+        reason: str,
+        node: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        return self.record(
+            actor=actor,
+            operation=operation,
+            capability=capability,
+            decision=decision.upper(),
+            reason=reason,
+            node=node,
+            **kwargs,
+        )
 
     def history(
         self,
@@ -101,3 +121,4 @@ class AuditLogger:
 
 # Global singleton instance for system audit logging
 audit_log = AuditLogger()
+audit_logger = audit_log
