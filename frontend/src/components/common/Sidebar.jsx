@@ -9,6 +9,8 @@ export default function Sidebar({ currentPage, setCurrentPage }) {
     { id: "Memory", label: "Memory" },
     { id: "Routing", label: "Routing" },
     { id: "Governance", label: "Governance" },
+    { id: "Skills", label: "Skills" },
+    { id: "Learning", label: "Learning Center" },
     { id: "Security", label: "Security" },
     { id: "Logs", label: "Logs & Activity" }
   ]
@@ -16,7 +18,7 @@ export default function Sidebar({ currentPage, setCurrentPage }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        KINGDOM <span>v40.1</span>
+        KINGDOM <span>v40.2</span>
       </div>
       <ul className="sidebar-nav">
         {navItems.map(item => (
