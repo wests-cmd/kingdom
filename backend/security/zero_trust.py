@@ -15,19 +15,33 @@ from backend.security.risk import RiskClassifier, RiskLevel
 class ZeroTrust:
     """Unified zero-trust policy engine enforcing authentication, permissions, approvals, and injection checks."""
 
-    def __init__(self) -> None:
+    def __init__(self, manager: Any = None) -> None:
         self.approvals = ApprovalEngine()
         self.nodes = NodeSecurityManager()
         self.firewall = PromptFirewall()
         self.evaluator = CapabilityEvaluator()
         self.risk_classifier = RiskClassifier()
         self.audit = audit_log
+        self.manager = manager
 
-    def validate(self, actor: str) -> dict[str, Any]:
+    def validate(self, actor: Any, required_capability: str | None = None) -> dict[str, Any]:
         """Backward compatible validator method."""
-        node = self.nodes.get_node(actor)
+        actor_id = actor.get("id", "guest") if isinstance(actor, dict) else str(actor)
+        if required_capability:
+            auth_res = self.authorize(
+                actor_id=actor_id,
+                capability=required_capability,
+                operation=f"Validate capability {required_capability}",
+            )
+            return {
+                "actor": actor_id,
+                "authorized": auth_res["authorized"],
+                "trusted": auth_res["authorized"],
+                "reason": auth_res.get("reason", ""),
+            }
+        node = self.nodes.get_node(actor_id)
         trusted = node is not None and node.get("active", False)
-        return {"actor": actor, "trusted": trusted}
+        return {"actor": actor_id, "authorized": trusted, "trusted": trusted}
 
     def authorize(
         self,

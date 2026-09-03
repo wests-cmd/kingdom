@@ -18,6 +18,8 @@ class NodeSecurityManager:
         self._init_default_knights()
 
     def _init_default_knights(self) -> None:
+        from backend.security.capabilities import ALL_CAPABILITIES
+
         default_identities = ["planner", "coder", "researcher", "memory", "security", "system"]
         for actor in default_identities:
             token = f"kingdom-internal-{actor}-token"
@@ -27,6 +29,12 @@ class NodeSecurityManager:
                 capabilities=set(DEFAULT_KNIGHT_CAPABILITIES),
                 token=token,
             )
+        self.register_node(
+            node_id="admin",
+            name="Identity (Admin)",
+            capabilities=set(ALL_CAPABILITIES),
+            token="kingdom-internal-admin-token",
+        )
 
     def register_node(
         self,
