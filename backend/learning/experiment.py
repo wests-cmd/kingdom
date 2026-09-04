@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from backend.learning.models import (
     ImprovementProposal,
     Experiment,
@@ -9,6 +9,7 @@ from backend.learning.models import (
     SkillMetrics
 )
 from backend.learning.collector import LearningCollector
+from backend.skills.models import Skill, SkillLifecycleState
 
 
 class LearningDefenseError(Exception):
@@ -36,8 +37,9 @@ class LearningPoisoningDefense:
 
 class LearningExperimentRunner:
 
-    def __init__(self, collector: LearningCollector):
+    def __init__(self, collector: LearningCollector, lifecycle_manager: Optional[Any] = None):
         self.collector = collector
+        self.lifecycle_manager = lifecycle_manager
         self.experiments: Dict[str, Experiment] = {}
         self.promotions: List[PromotionRecord] = []
         self.rollbacks: List[RollbackRecord] = []
@@ -102,6 +104,13 @@ class LearningExperimentRunner:
         if governance_level < 2:
             raise ValueError("Governance Level 0/1 cannot promote skill improvements.")
 
+        # Mutate active skill version in lifecycle_manager if attached
+        if self.lifecycle_manager and hasattr(self.lifecycle_manager, "skills"):
+            active_skill = self.lifecycle_manager.skills.get(proposal.skill_id)
+            if active_skill:
+                active_skill.version = proposal.proposed_version
+                active_skill.state = SkillLifecycleState.ACTIVE
+
         rec = PromotionRecord(
             proposal_id=proposal.id,
             skill_id=proposal.skill_id,
@@ -122,6 +131,13 @@ class LearningExperimentRunner:
         reason: str
     ) -> RollbackRecord:
         metrics = self.collector.compute_metrics(skill_id, from_version)
+
+        # Mutate active skill version back to to_version in lifecycle_manager if attached
+        if self.lifecycle_manager and hasattr(self.lifecycle_manager, "skills"):
+            active_skill = self.lifecycle_manager.skills.get(skill_id)
+            if active_skill:
+                active_skill.version = to_version
+
         rec = RollbackRecord(
             skill_id=skill_id,
             from_version=from_version,

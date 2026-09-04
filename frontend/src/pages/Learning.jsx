@@ -74,27 +74,63 @@ export default function Learning() {
           <div className="text-sm text-neutral-500 italic">No active improvement proposals recorded.</div>
         ) : (
           <div className="space-y-3">
-            {activity.proposals.map((prop) => (
-              <div key={prop.id} className="bg-neutral-950 border border-neutral-800 p-4 rounded text-sm space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-white">{prop.skill_id} ({prop.current_version} &rarr; {prop.proposed_version})</span>
-                  <span className="px-2 py-0.5 rounded text-xs bg-amber-950 text-amber-400 border border-amber-800/50">{prop.status}</span>
+            {activity.proposals.map((prop) => {
+              const exp = activity?.experiments?.find(e => e.proposal_id === prop.id);
+              return (
+                <div key={prop.id} className="bg-neutral-950 border border-neutral-800 p-4 rounded text-sm space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-white">{prop.skill_id} ({prop.current_version} &rarr; {prop.proposed_version})</span>
+                    <span className="px-2 py-0.5 rounded text-xs bg-amber-950 text-amber-400 border border-amber-800/50">{prop.status}</span>
+                  </div>
+                  <div className="text-neutral-400">
+                    <div><strong>What was wrong:</strong> {prop.what_was_wrong}</div>
+                    <div><strong>What Kingdom learned:</strong> {prop.what_kingdom_learned}</div>
+                    <div><strong>Proposed Change:</strong> {prop.proposed_change}</div>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-neutral-900">
+                    <div className="flex items-center space-x-4 text-xs text-neutral-500">
+                      <span>Sample Count: {prop.sample_size}</span>
+                      <span>Confidence: {(prop.confidence * 100).toFixed(0)}%</span>
+                      <span>Risk: {prop.regression_risk}</span>
+                    </div>
+                    {exp && exp.status === "PASSED" && prop.status !== "PROMOTED" && (
+                      <button
+                        onClick={() => handlePromote(prop.id, exp.id)}
+                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold"
+                      >
+                        PROMOTE IMPROVEMENT
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="text-neutral-400">
-                  <div><strong>What was wrong:</strong> {prop.what_was_wrong}</div>
-                  <div><strong>What Kingdom learned:</strong> {prop.what_kingdom_learned}</div>
-                  <div><strong>Proposed Change:</strong> {prop.proposed_change}</div>
-                </div>
-                <div className="flex items-center space-x-4 text-xs text-neutral-500 pt-2 border-t border-neutral-900">
-                  <span>Sample Count: {prop.sample_size}</span>
-                  <span>Confidence: {(prop.confidence * 100).toFixed(0)}%</span>
-                  <span>Risk: {prop.regression_risk}</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
+
+      {/* Promoted Improvements & Rollback Controls */}
+      {activity?.promotions && activity.promotions.length > 0 && (
+        <section className="bg-neutral-900 border border-neutral-800 rounded-lg p-5 space-y-4">
+          <h2 className="text-lg font-semibold text-white">Promoted Improvements</h2>
+          <div className="space-y-2">
+            {activity.promotions.map((promo) => (
+              <div key={promo.id} className="flex justify-between items-center bg-neutral-950 border border-neutral-800 p-3 rounded text-sm">
+                <div>
+                  <span className="font-bold text-white">{promo.skill_id}</span>
+                  <span className="text-xs text-neutral-400 ml-2">Promoted to v{promo.promoted_version} by {promo.promoter}</span>
+                </div>
+                <button
+                  onClick={() => handleRollback(promo.skill_id, promo.promoted_version, promo.old_version)}
+                  className="px-2 py-1 bg-rose-900/60 border border-rose-700/50 text-rose-300 hover:bg-rose-800 rounded text-xs"
+                >
+                  ROLLBACK
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

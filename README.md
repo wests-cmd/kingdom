@@ -1,7 +1,7 @@
 # KINGDOM v40.2 — Distributed AI Runtime & Orchestration Infrastructure
 
 [![Backend CI](https://github.com/wests-cmd/kingdom/actions/workflows/ci.yml/badge.svg)](https://github.com/wests-cmd/kingdom/actions)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![License: CYA v2.0](https://img.shields.io/badge/License-CYA_v2.0-red.svg)](LICENSE)
 [![Python Version](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](requirements.txt)
 [![Node Version](https://img.shields.io/badge/node-20%20%7C%2024-green)](frontend/package.json)
 
@@ -34,11 +34,11 @@ Kingdom (`wests-cmd/kingdom`) is the core distributed runtime and infrastructure
 
 This table describes the current repository state verified by executable code and test suites:
 
-| Component | Status | What it does | How it is started |
+| Component | Status | Purpose | How it is started |
 |---|---|---|---|
-| **Backend API** | ✅ Installed | Serves state, tasks, security, skills, learning & WebSocket streams | `uvicorn backend.main:app` |
+| **Commander / Backend API** | ✅ Installed | Serves state, tasks, security, skills, learning & WebSocket streams | `uvicorn backend.main:app` |
 | **Frontend UI** | ✅ Installed | Provides operational dashboard, swarm visualizer, skills & learning center | `cd frontend && npm run dev` |
-| **Swarm Engine** | ✅ Installed | Manages task queueing, knight assignment, zero-trust checks & scoring | Integrated into backend engine |
+| **Knight Swarm Engine** | ✅ Installed | Manages task queueing, knight assignment, zero-trust checks & scoring | Integrated into backend engine |
 | **Security Engine** | ✅ Installed | Enforces zero-trust capability checks, approvals & audit logging | Integrated into backend engine |
 | **Memory Graph** | ✅ Installed | SQLite/JSON persistent timeline, vector search stub & snapshots | Integrated into backend engine |
 | **Skills Platform** | ✅ Installed | Typed skill lifecycle management, dependency resolution & readiness checks | Integrated into backend engine |
@@ -83,7 +83,7 @@ If you are new to software setup, follow these step-by-step instructions:
    ```bash
    bash scripts/install.sh
    ```
-   *What this does*: It creates a isolated Python virtual environment (`venv`), installs required Python dependencies, installs frontend Node packages, and builds the UI bundle.
+   *What this does*: It creates an isolated Python virtual environment (`venv`), installs required Python dependencies, installs frontend Node packages, and builds the UI bundle.
 4. **Start the System**:
    - Terminal 1 (Backend): `source venv/bin/activate && uvicorn backend.main:app --port 8000`
    - Terminal 2 (Frontend): `cd frontend && npm run dev`
@@ -195,6 +195,14 @@ Imported Skill Maps must **never** automatically receive elevated execution priv
 3. Readiness Check ("DO I HAVE EVERYTHING?")
 4. Governance Approval
 
+### Kingdom AI Skill Map Packet
+Official example specification manifests and guidelines are provided in [`skills/kingdom-ai-skill-map-packet/`](skills/kingdom-ai-skill-map-packet/).
+
+### Safe Upload & Review Guidelines
+- Skill Maps must **never** contain API keys, passwords, tokens, private memory dumps, or destructive payloads.
+- Users may upload Skill Maps to ChatGPT or AI assistants for structural/security review before importing.
+- AI review does **not** grant execution trust; all imported skills remain subject to Kingdom zero-trust sandbox boundaries.
+
 ### Community & Review
 Join the Kingdom Skill Map Community on Discord for sharing and reviewing Skill Maps:
 👉 **[Kingdom Discord Community](https://discord.gg/hNQFcVreg)**
@@ -219,8 +227,12 @@ Join the Kingdom Skill Map Community on Discord for sharing and reviewing Skill 
 
 ---
 
-## 11. LICENSE & POLICIES
+## 11. OFFICIAL LICENSE & COMMERCIAL USE POLICY
 
-Kingdom is licensed under the **Apache License 2.0**. See the [LICENSE](LICENSE) file for complete license terms.
+Kingdom is distributed under the custom **CYA License v2.0** ([Kingdom License](./LICENSE)).
 
-Commercial and enterprise usage guidelines are detailed in [COMMERCIAL_USE.md](COMMERCIAL_USE.md).
+### Key License Provisions:
+1. **Personal & Educational Grant**: Permission is granted to use, copy, modify, and distribute the Software for personal, educational, and non-commercial purposes.
+2. **Commercial Restrictions**: Commercial use (selling, sublicensing, paid products/services, revenue-generating systems) is strictly prohibited without prior written approval.
+3. **Commercial Approval**: To request commercial licensing approval, contact the copyright holder via GitHub (`https://github.com/wests-cmd`).
+4. **Authoritative Terms**: Read the complete, authoritative legal terms in the root [LICENSE](./LICENSE) file and commercial policy guidelines in [COMMERCIAL_USE.md](./COMMERCIAL_USE.md).

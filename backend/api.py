@@ -48,7 +48,10 @@ lifecycle_manager.activate(sample_skill.id, governance_approved=True)
 bundle_manager = SkillBundleManager(available_skills=[sample_skill])
 learning_collector = LearningCollector()
 learning_evaluator = LearningEvaluator(learning_collector)
-learning_runner = LearningExperimentRunner(learning_collector)
+learning_runner = LearningExperimentRunner(learning_collector, lifecycle_manager=lifecycle_manager)
+
+# Attach skills_manager to runtime engine for MCP server discovery
+engine.skills_manager = lifecycle_manager
 
 # Request Models
 class TaskRequest(BaseModel):

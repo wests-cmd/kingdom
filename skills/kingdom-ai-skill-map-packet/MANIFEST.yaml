@@ -1,0 +1,18 @@
+name: research-skill-map
+version: 1.0.0
+description: Example Research Department AI Skill Map
+author: wests-cmd
+license: CYA-v2.0
+kingdom_version: ">=40.2"
+capabilities:
+  - model.inference
+  - python.exec
+permissions:
+  - network.outbound
+  - filesystem.read
+tools:
+  - http_client
+  - pdf_parser
+dependencies: []
+risk_level: MEDIUM
+provenance: verified_repository
