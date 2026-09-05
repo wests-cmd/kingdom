@@ -42,9 +42,7 @@ class MCPServer:
 
         if name == "submit_task":
             prompt = args.get("prompt", "")
-            if hasattr(self.engine, "submit_task"):
-                return self.engine.submit_task(prompt)
-            return self.engine.create_task(prompt)
+            return self.engine.submit_task(prompt)
         elif name == "discover_skills":
             skills = getattr(self.engine, "skills_manager", None)
             if skills:
