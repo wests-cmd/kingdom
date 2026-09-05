@@ -49,7 +49,8 @@ def match_constraint(version: str, constraint: str) -> bool:
     elif op == "==":
         return v_num == req_num
     else:
-        return v_num >= req_num
+        # Default exact match when no operator provided
+        return v_num == req_num
 
 
 class SkillDependencyEngine:

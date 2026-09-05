@@ -81,7 +81,9 @@ export default function Skills() {
                     <h2 className="text-xl font-bold text-white">{selectedSkill.name}</h2>
                     <p className="text-xs text-neutral-400 mt-0.5">ID: {selectedSkill.id} | Version: {selectedSkill.version} | Trust: {selectedSkill.trust_level}</p>
                   </div>
-                  <span className="px-2 py-1 rounded text-xs font-bold bg-neutral-800 border border-neutral-700 text-white uppercase">{selectedSkill.state}</span>
+                  <div className="flex items-center space-x-2">
+                    <span className="px-2 py-1 rounded text-xs font-bold bg-neutral-800 border border-neutral-700 text-white uppercase">{selectedSkill.state}</span>
+                  </div>
                 </div>
               </div>
 
