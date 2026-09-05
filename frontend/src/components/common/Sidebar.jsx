@@ -11,6 +11,7 @@ export default function Sidebar({ currentPage, setCurrentPage }) {
     { id: "Governance", label: "Governance" },
     { id: "Skills", label: "Skills" },
     { id: "Learning", label: "Learning Center" },
+    { id: "Nodes", label: "Nodes & Cluster" },
     { id: "Security", label: "Security" },
     { id: "Logs", label: "Logs & Activity" }
   ]

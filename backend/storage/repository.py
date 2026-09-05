@@ -84,30 +84,49 @@ class KnightRepository:
         knight_id = knight["id"]
         now = time.time()
         caps_json = json.dumps(knight.get("capabilities", []))
+        granted_caps_json = json.dumps(knight.get("granted_capabilities", []))
+        pub_ident_json = json.dumps(knight.get("public_identity")) if knight.get("public_identity") else None
+        conn_meta_json = json.dumps(knight.get("connection_metadata", {}))
 
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-            INSERT INTO knights (id, role, status, capabilities_json, current_task, health, is_local, last_heartbeat, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO knights (
+                id, role, status, node_state, capabilities_json, granted_capabilities_json,
+                current_task, health, is_local, last_heartbeat, public_identity_json,
+                fingerprint, kingdom_id, connection_metadata_json, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 role=excluded.role,
                 status=excluded.status,
+                node_state=excluded.node_state,
                 capabilities_json=excluded.capabilities_json,
+                granted_capabilities_json=excluded.granted_capabilities_json,
                 current_task=excluded.current_task,
                 health=excluded.health,
                 is_local=excluded.is_local,
                 last_heartbeat=excluded.last_heartbeat,
+                public_identity_json=excluded.public_identity_json,
+                fingerprint=excluded.fingerprint,
+                kingdom_id=excluded.kingdom_id,
+                connection_metadata_json=excluded.connection_metadata_json,
                 updated_at=excluded.updated_at
             """, (
                 knight_id,
                 knight.get("role", "knight"),
                 knight.get("status", "idle"),
+                knight.get("node_state", "CONNECTED"),
                 caps_json,
+                granted_caps_json,
                 knight.get("current_task"),
                 knight.get("health", "healthy"),
                 1 if knight.get("is_local", True) else 0,
                 knight.get("last_heartbeat", now),
+                pub_ident_json,
+                knight.get("fingerprint"),
+                knight.get("kingdom_id"),
+                conn_meta_json,
                 knight.get("created_at", now),
                 now
             ))
@@ -134,11 +153,17 @@ class KnightRepository:
             "id": row["id"],
             "role": row["role"],
             "status": row["status"],
+            "node_state": row["node_state"] if "node_state" in row.keys() else "CONNECTED",
             "capabilities": json.loads(row["capabilities_json"]) if row["capabilities_json"] else [],
+            "granted_capabilities": json.loads(row["granted_capabilities_json"]) if "granted_capabilities_json" in row.keys() and row["granted_capabilities_json"] else [],
             "current_task": row["current_task"],
             "health": row["health"],
             "is_local": bool(row["is_local"]),
             "last_heartbeat": row["last_heartbeat"],
+            "public_identity": json.loads(row["public_identity_json"]) if "public_identity_json" in row.keys() and row["public_identity_json"] else None,
+            "fingerprint": row["fingerprint"] if "fingerprint" in row.keys() else None,
+            "kingdom_id": row["kingdom_id"] if "kingdom_id" in row.keys() else None,
+            "connection_metadata": json.loads(row["connection_metadata_json"]) if "connection_metadata_json" in row.keys() and row["connection_metadata_json"] else {},
             "created_at": row["created_at"],
             "updated_at": row["updated_at"]
         }

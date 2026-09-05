@@ -9,56 +9,42 @@ Kingdom (`wests-cmd/kingdom`) is the core distributed runtime and infrastructure
 
 > **Architectural Separation:** Sledge sits above Kingdom as the user-facing agent layer. Kingdom operates strictly as the underlying runtime infrastructure, providing security boundaries, execution sandboxing, and node coordination.
 
-Kingdom (`wests-cmd/kingdom`) is the core distributed runtime and infrastructure layer for the Centipede ecosystem. It provides distributed task execution, swarm orchestration, zero-trust capability security, persistent memory, typed AI skill intelligence, continuous learning, and live operational APIs.
+---
 
-## 1. IMPLEMENTATION STATUS
+## 1. INSTALL KINGDOM
 
-| Feature / Subsystem | Status | Description |
+Kingdom is designed so normal users can run Kingdom from a graphical desktop application without opening a terminal.
+
+### 🔵 Recommended — Kingdom Desktop App (In Development)
+
+> **Status: Planned / In Active Development**
+> *The Desktop App installer wrapper (`Kingdom-Setup.exe` / `.dmg` / AppImage) is currently under active development. Developers can use the Developer Installation instructions below.*
+
+**Intended Normal User Experience:**
+1. Download the Kingdom Desktop Installer for your operating system.
+2. Run the graphical installation wizard.
+3. Launch **Kingdom** from your desktop or application menu.
+4. Kingdom automatically starts local backend runtime services and loads the Command Center.
+5. Complete first-run setup in the graphical wizard.
+
+| Platform | Installer Format | Status |
 |---|---|---|
-| **FastAPI Core Runtime** | ✅ Implemented | Live REST endpoints (`/status`, `/tasks`, `/security`, `/skills`, `/learning`) & `/ws` WebSocket stream |
-| **Command Center UI** | ✅ Implemented | React/Vite web interface (`frontend/`) with dark graphite theme, live topology, Skills, & Learning pages |
-| **Zero-Trust Security Engine** | ✅ Implemented | Capability-based authorizations, prompt firewall, risk classification, & human approval workflows |
-| **AI Skill Intelligence** | ✅ Implemented | Typed/versioned `Skill` models, trust levels, lifecycle states (`SAVED`, `INSTALLED`, `ACTIVE`, `DISABLED`), & readiness reporting |
-| **Skill Dependency Engine** | ✅ Implemented | Deterministic dependency resolution, constraint matching, circular dependency detection, & lock file manifests |
-| **Skill Bundles & Map** | ✅ Implemented | Bundle validation, dependency deduplication, and structured intelligence graph mapping |
-| **Kingdom Learning Engine** | ✅ Implemented | Outcome evidence collection, pattern evaluator, proposal generator, offline sandbox experiments, & auto-rollback |
-| **Learning Poisoning Defense** | ✅ Implemented | Provenance verification, sample thresholds, and duplicate flood anomaly detection |
-| **Agent Integration Boundary** | ✅ Implemented | Model Context Protocol (MCP) server interface (`backend/integrations/mcp_server.py`) & Python SDK (`sdk/kingdom_sdk.py`) |
-| **Swarm & Routing Learning** | ✅ Implemented | `HybridRouter` incorporates historical learning evidence safely within policy constraints |
-| **Installer** | ✅ Implemented | Hardened `scripts/install.sh` supporting Linux, macOS, Windows/WSL2, & Docker |
-| **Multi-Node Clustering** | 🟡 Partial | In-memory registry with node auth stubs; multi-node RPC transport is experimental |
+| **Windows** | `Kingdom-Setup.exe` | 🔵 In Development |
+| **macOS** | `Kingdom.dmg` | 🔵 In Development |
+| **Linux** | `Kingdom.AppImage` | 🔵 In Development |
 
 ---
 
-## 2. WHAT IS ACTUALLY INSTALLED?
+### 🛠️ Developer Installation
 
-This table describes the current repository state verified by executable code and test suites:
-
-| Component | Status | Purpose | How it is started |
-|---|---|---|---|
-| **Commander / Backend API** | ✅ Installed | Serves state, tasks, security, skills, learning & WebSocket streams | `uvicorn backend.main:app` |
-| **Frontend UI** | ✅ Installed | Provides operational dashboard, swarm visualizer, skills & learning center | `cd frontend && npm run dev` |
-| **Knight Swarm Engine** | ✅ Installed | Manages task queueing, knight assignment, zero-trust checks & scoring | Integrated into backend engine |
-| **Security Engine** | ✅ Installed | Enforces zero-trust capability checks, approvals & audit logging | Integrated into backend engine |
-| **Memory Graph** | ✅ Installed | SQLite/JSON persistent timeline, vector search stub & snapshots | Integrated into backend engine |
-| **Skills Platform** | ✅ Installed | Typed skill lifecycle management, dependency resolution & readiness checks | Integrated into backend engine |
-| **Learning Engine** | ✅ Installed | Evidence collection, proposal scoring, sandbox experiments & rollback | Integrated into backend engine |
-| **MCP Server** | ✅ Installed | Exposes Model Context Protocol tool interfaces for external agents | Imported via `backend/integrations/mcp_server.py` |
-| **Python SDK** | ✅ Installed | Client library for agent-to-Kingdom HTTP/REST interactions | `from sdk.kingdom_sdk import KingdomSDK` |
-| **Docker Container** | ✅ Installed | Launches backend & frontend in isolated containerized environments | `docker-compose up --build` |
-
----
-
-## 3. QUICK START
-
-The shortest verified path from a fresh computer to a running Kingdom instance:
+*This method is intended for software developers and contributors working directly with the source code.*
 
 ```bash
 # 1. Clone repository
 git clone https://github.com/wests-cmd/kingdom.git
 cd kingdom
 
-# 2. Run automated installer
+# 2. Run automated setup script
 ./scripts/install.sh
 
 # 3. Start backend runtime
@@ -69,55 +55,30 @@ uvicorn backend.main:app --reload --port 8000 &
 cd frontend && npm run dev
 ```
 
-Open `http://localhost:3000` in your browser to access the Kingdom Command Center.
-
 ---
 
-## 4. BEGINNER INSTALLATION GUIDE
+### 💻 Advanced / Server Installation
 
-If you are new to software setup, follow these step-by-step instructions:
-
-1. **Prerequisites**: Install [Python 3.11/3.12](https://www.python.org/downloads/) and [Node.js 20+](https://nodejs.org/).
-2. **Open Terminal / Command Prompt**: Navigate to the directory where you want Kingdom installed.
-3. **Run the Installer Script**:
-   ```bash
-   bash scripts/install.sh
-   ```
-   *What this does*: It creates an isolated Python virtual environment (`venv`), installs required Python dependencies, installs frontend Node packages, and builds the UI bundle.
-4. **Start the System**:
-   - Terminal 1 (Backend): `source venv/bin/activate && uvicorn backend.main:app --port 8000`
-   - Terminal 2 (Frontend): `cd frontend && npm run dev`
-5. **Verify**: Open `http://localhost:8000/status` in your browser. You should receive a JSON response confirming runtime status.
-
----
-
-## 5. DETAILED INSTALLATION PATHS
-
-### Method A: Automated Installer
 ```bash
-./scripts/install.sh
-```
-
-### Method B: Manual Installation
-```bash
-# 1. Create Python virtual environment
+# Manual Python Virtual Environment Setup
 python3 -m venv venv
 source venv/bin/activate
-
-# 2. Install backend dependencies
 pip install -r requirements.txt
 
-# 3. Install frontend dependencies and build
+# Production Frontend Build
 cd frontend
 npm install
 npm run build
 cd ..
 
-# 4. Verify installation
+# Verify Installation
 python3 -m pytest
 ```
 
-### Method C: Docker & Docker Compose
+---
+
+### 🐳 Docker / Container Installation
+
 ```bash
 # Build and launch backend & frontend containers
 docker-compose up --build -d
@@ -131,7 +92,58 @@ docker-compose down
 
 ---
 
-## 6. CONFIGURATION
+## 2. WHAT GETS INSTALLED?
+
+| Component | Purpose | Installed by default? | Status |
+|---|---|---|---|
+| **Kingdom Desktop** | Graphical desktop launcher & process manager | Planned | 🔵 In Development |
+| **Command Center UI** | Operational web dashboard & visualizer (`frontend/`) | Yes | ✅ Implemented |
+| **Commander / Backend API** | FastAPI core runtime & REST/WS endpoints | Yes | ✅ Implemented |
+| **Knight Swarm Engine** | Task queueing, knight specialization & execution | Yes | ✅ Implemented |
+| **Zero-Trust Security** | Capability authorizations, approvals & prompt firewall | Yes | ✅ Implemented |
+| **Memory Graph** | Timeline persistence, vector search & snapshots | Yes | ✅ Implemented |
+| **Skills Platform** | Typed skill lifecycle, dependencies & readiness engine | Yes | ✅ Implemented |
+| **Learning Engine** | Evidence collection, proposals, experiments & rollback | Yes | ✅ Implemented |
+| **MCP Server** | Model Context Protocol tool contracts for external agents | Yes | ✅ Implemented |
+| **Python SDK** | Client library for agent-to-Kingdom HTTP/REST calls | Yes | ✅ Implemented |
+
+---
+
+## 3. IMPLEMENTATION STATUS
+
+| Feature / Subsystem | Status | Description |
+|---|---|---|
+| **FastAPI Core Runtime** | ✅ Implemented | Live REST endpoints (`/status`, `/tasks`, `/security`, `/skills`, `/learning`) & `/ws` WebSocket stream |
+| **Command Center UI** | ✅ Implemented | React/Vite web interface (`frontend/`) with dark graphite theme, live topology, Skills, & Learning pages |
+| **Zero-Trust Security Engine** | ✅ Implemented | Capability-based authorizations, prompt firewall, risk classification, & human approval workflows |
+| **AI Skill Intelligence** | ✅ Implemented | Typed/versioned `Skill` models, trust levels, lifecycle states (`SAVED`, `INSTALLED`, `ACTIVE`, `DISABLED`), & readiness reporting |
+| **Skill Dependency Engine** | ✅ Implemented | Deterministic dependency resolution, constraint matching, circular dependency detection, & lock file manifests |
+| **Skill Bundles & Map** | ✅ Implemented | Bundle validation, dependency deduplication, and structured intelligence graph mapping |
+| **Kingdom Learning Engine** | ✅ Implemented | Outcome evidence collection, pattern evaluator, proposal generator, offline sandbox experiments, & auto-rollback |
+| **Learning Poisoning Defense** | ✅ Implemented | Provenance verification, sample thresholds, and duplicate flood anomaly detection |
+| **Agent Integration Boundary** | ✅ Implemented | Model Context Protocol (MCP) server interface (`backend/integrations/mcp_server.py`) & Python SDK (`sdk/kingdom_sdk.py`) |
+| **Swarm & Routing Learning** | ✅ Implemented | `HybridRouter` incorporates historical learning evidence safely within policy constraints |
+| **Installer Script** | ✅ Implemented | Hardened `scripts/install.sh` supporting Linux, macOS, Windows/WSL2, & Docker |
+| **Desktop Installer Wrapper** | 🔵 Planned | Self-contained desktop app bundler launching local backend & web view automatically |
+| **Multi-Node Clustering & Node Federation** | 🟢 Implemented | Ed25519 identity keypairs, persistent node registry, single-use pairing codes & QR codes, mutual authentication, signed RPC transport, capability-based authorization, node revocation, health engine, and Command Center Nodes UI |
+
+---
+
+## 4. DESKTOP ROADMAP
+
+1. **Phase 1 — Desktop Launcher**: Self-contained application launcher process.
+2. **Phase 2 — Bundled Runtime**: Single-package distribution bundling Python & Node runtimes.
+3. **Phase 3 — Automatic Lifecycle**: Automated background startup and clean process shutdown.
+4. **Phase 4 — Graphical Setup**: First-run configuration wizard in UI.
+5. **Phase 5 — Native Installers**: One-click installers for Windows (`.exe`), macOS (`.dmg`), and Linux (`AppImage`).
+6. **Phase 6 — Auto Updates**: Background update checks for core runtime assets.
+7. **Phase 7 — System Tray**: Menu bar indicator and service controls.
+8. **Phase 8 — Graphical Skill Management**: Drag-and-drop Skill Map package installer in Command Center.
+9. **Phase 9 — Visual Trust Review**: Permission review UI for imported Skill Maps.
+
+---
+
+## 5. CONFIGURATION
 
 Kingdom reads configuration from `configs/` and environment variables.
 
@@ -144,7 +156,7 @@ Kingdom reads configuration from `configs/` and environment variables.
 
 ---
 
-## 7. SECURITY & GOVERNANCE AUTHORITY HIERARCHY
+## 6. SECURITY & GOVERNANCE AUTHORITY HIERARCHY
 
 Kingdom strictly enforces human authority over model execution:
 
@@ -173,7 +185,7 @@ RETRIEVED / UNTRUSTED CONTEXT
 
 ---
 
-## 8. AI MAPS & SKILL INTELLIGENCE
+## 7. AI MAPS & SKILL INTELLIGENCE
 
 ### What is an AI Map?
 An AI Map is a structured intelligence graph representing learned relationships, workflows, capability requirements, and routing outcomes across Kingdom subsystems.
@@ -205,11 +217,11 @@ Official example specification manifests and guidelines are provided in [`skills
 
 ### Community & Review
 Join the Kingdom Skill Map Community on Discord for sharing and reviewing Skill Maps:
-👉 **[Kingdom Discord Community](https://discord.gg/hNQFcVreg)**
+👉 **[Kingdom Discord](https://discord.gg/hNQFcVreg)**
 
 ---
 
-## 9. COMMAND REFERENCE
+## 8. COMMAND REFERENCE
 
 - **Start Backend**: `uvicorn backend.main:app --port 8000`
 - **Start Frontend**: `cd frontend && npm run dev`
@@ -219,7 +231,7 @@ Join the Kingdom Skill Map Community on Discord for sharing and reviewing Skill 
 
 ---
 
-## 10. TROUBLESHOOTING
+## 9. TROUBLESHOOTING
 
 - **Backend fails to start (`ModuleNotFoundError`)**: Ensure virtual environment is activated (`source venv/bin/activate`) and `pip install -r requirements.txt` was run.
 - **Frontend build fails (`vite: not found`)**: Run `cd frontend && npm install` to install local build tooling.
@@ -227,7 +239,7 @@ Join the Kingdom Skill Map Community on Discord for sharing and reviewing Skill 
 
 ---
 
-## 11. OFFICIAL LICENSE & COMMERCIAL USE POLICY
+## 10. OFFICIAL LICENSE & COMMERCIAL USE POLICY
 
 Kingdom is distributed under the custom **CYA License v2.0** ([Kingdom License](./LICENSE)).
 

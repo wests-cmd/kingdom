@@ -43,15 +43,37 @@ class Database:
                 id TEXT PRIMARY KEY,
                 role TEXT NOT NULL,
                 status TEXT NOT NULL,
+                node_state TEXT DEFAULT 'CONNECTED',
                 capabilities_json TEXT,
+                granted_capabilities_json TEXT,
                 current_task TEXT,
                 health TEXT NOT NULL,
                 is_local INTEGER DEFAULT 1,
                 last_heartbeat REAL NOT NULL,
+                public_identity_json TEXT,
+                fingerprint TEXT,
+                kingdom_id TEXT,
+                connection_metadata_json TEXT,
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL
             )
             """)
+
+            # Schema migration check for knights columns
+            cursor.execute("PRAGMA table_info(knights)")
+            columns = [column[1] for column in cursor.fetchall()]
+            if "node_state" not in columns:
+                cursor.execute("ALTER TABLE knights ADD COLUMN node_state TEXT DEFAULT 'CONNECTED'")
+            if "granted_capabilities_json" not in columns:
+                cursor.execute("ALTER TABLE knights ADD COLUMN granted_capabilities_json TEXT")
+            if "public_identity_json" not in columns:
+                cursor.execute("ALTER TABLE knights ADD COLUMN public_identity_json TEXT")
+            if "fingerprint" not in columns:
+                cursor.execute("ALTER TABLE knights ADD COLUMN fingerprint TEXT")
+            if "kingdom_id" not in columns:
+                cursor.execute("ALTER TABLE knights ADD COLUMN kingdom_id TEXT")
+            if "connection_metadata_json" not in columns:
+                cursor.execute("ALTER TABLE knights ADD COLUMN connection_metadata_json TEXT")
 
             # Events table
             cursor.execute("""

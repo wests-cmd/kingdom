@@ -14,6 +14,13 @@ from backend.learning.collector import LearningCollector
 from backend.learning.evaluator import LearningEvaluator
 from backend.learning.experiment import LearningExperimentRunner
 
+from backend.cluster.identity import KingdomIdentity, KnightIdentity
+from backend.cluster.node_registry import node_registry, NodeState
+from backend.cluster.pairing import pairing_manager
+from backend.cluster.capabilities import capability_authorizer
+from backend.cluster.heartbeat import heartbeat_manager
+from backend.cluster.audit import audit_logger
+
 router = APIRouter()
 engine = RuntimeEngine()
 zero_trust = engine.security
@@ -102,6 +109,22 @@ class RollbackSkillRequest(BaseModel):
     from_version: str
     to_version: str
     reason: str = "Administrator requested rollback"
+
+class NodePairRequest(BaseModel):
+    code: str
+    knight_public_identity: dict[str, Any]
+    requested_capabilities: list[str] = Field(default_factory=list)
+    signature: str | None = None
+    is_local: bool = False
+
+class NodeApproveRequest(BaseModel):
+    granted_capabilities: list[str] = Field(default_factory=list)
+
+class NodeRejectRequest(BaseModel):
+    reason: str = "Rejected by administrator"
+
+class NodeCapabilitiesRequest(BaseModel):
+    granted_capabilities: list[str]
 
 # --- RUNTIME ENDPOINTS ---
 
@@ -419,3 +442,111 @@ def security_audit(
     capability: str | None = Query(default=None),
 ):
     return engine.security.audit.history(limit=limit, actor=actor, decision=decision, capability=capability)
+
+# --- CLUSTER / MULTI-NODE ENDPOINTS ---
+
+@router.get("/nodes/identity")
+def get_kingdom_identity():
+    k_identity = KingdomIdentity.get_or_create()
+    return k_identity.get_public_identity()
+
+@router.get("/nodes")
+def list_cluster_nodes(node_state: str | None = Query(default=None)):
+    state_filter = NodeState(node_state) if node_state else None
+    return node_registry.list_nodes(state=state_filter)
+
+@router.get("/nodes/pending")
+def list_pending_nodes():
+    return node_registry.list_nodes(state=NodeState.PENDING_APPROVAL)
+
+@router.get("/nodes/{node_id}")
+def get_cluster_node(node_id: str):
+    node = node_registry.get_node(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found in cluster registry")
+    return node
+
+@router.post("/nodes/invitation", status_code=status.HTTP_201_CREATED)
+def create_pairing_invitation(ttl_seconds: int = Query(default=600, ge=60, le=3600)):
+    return pairing_manager.create_invitation(ttl_seconds=ttl_seconds)
+
+@router.post("/nodes/pair")
+def process_node_pairing(request: NodePairRequest):
+    k_identity = KingdomIdentity.get_or_create()
+    req_payload = {
+        "code": request.code,
+        "expected_kingdom_id": k_identity.node_id,
+        "knight_public_identity": request.knight_public_identity,
+        "requested_capabilities": request.requested_capabilities,
+        "signature": request.signature,
+        "is_local": request.is_local
+    }
+    res = pairing_manager.process_pairing_request(req_payload)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    audit_logger.log_event("pairing_requested", res["node_id"], k_identity.node_id, req_payload)
+    return res
+
+@router.post("/nodes/{node_id}/approve")
+def approve_cluster_node(node_id: str, request: NodeApproveRequest):
+    k_identity = KingdomIdentity.get_or_create()
+    node = capability_authorizer.approve_node_and_capabilities(node_id, request.granted_capabilities)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    audit_logger.log_event("node_approved", node_id, k_identity.node_id, {"granted": request.granted_capabilities})
+    return node
+
+@router.post("/nodes/{node_id}/reject")
+def reject_cluster_node(node_id: str, request: NodeRejectRequest):
+    k_identity = KingdomIdentity.get_or_create()
+    node = node_registry.update_node_state(node_id, NodeState.REJECTED, reason=request.reason)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    audit_logger.log_event("node_rejected", node_id, k_identity.node_id, {"reason": request.reason})
+    return node
+
+@router.post("/nodes/{node_id}/revoke")
+def revoke_cluster_node(node_id: str, reason: str = Query(default="Administrator revoked node")):
+    k_identity = KingdomIdentity.get_or_create()
+    node = capability_authorizer.revoke_node(node_id, reason=reason)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    audit_logger.log_event("node_revoked", node_id, k_identity.node_id, {"reason": reason})
+    return node
+
+@router.post("/nodes/{node_id}/reconnect")
+def reconnect_cluster_node(node_id: str):
+    node = node_registry.get_node(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    res = heartbeat_manager.ping(node_id)
+    return res
+
+@router.get("/nodes/{node_id}/health")
+def check_node_health(node_id: str):
+    node = node_registry.get_node(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    return {
+        "id": node_id,
+        "health": node.get("health", "unknown"),
+        "node_state": node.get("node_state"),
+        "last_heartbeat": node.get("last_heartbeat")
+    }
+
+@router.get("/nodes/{node_id}/capabilities")
+def get_node_capabilities(node_id: str):
+    node = node_registry.get_node(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    return {
+        "requested_capabilities": node.get("capabilities", []),
+        "granted_capabilities": node.get("granted_capabilities", [])
+    }
+
+@router.post("/nodes/{node_id}/capabilities")
+def update_node_capabilities(node_id: str, request: NodeCapabilitiesRequest):
+    node = capability_authorizer.update_capabilities(node_id, request.granted_capabilities)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    return node
