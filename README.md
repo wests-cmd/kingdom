@@ -9,7 +9,7 @@ Kingdom (`wests-cmd/kingdom`) is the core distributed runtime and infrastructure
 
 > **Architectural Separation:** Sledge sits above Kingdom as the user-facing agent layer. Kingdom operates strictly as the underlying runtime infrastructure, providing security boundaries, execution sandboxing, and node coordination.
 
----
+Kingdom (`wests-cmd/kingdom`) is the core distributed runtime and infrastructure layer for the Centipede ecosystem. It provides distributed task execution, swarm orchestration, zero-trust capability security, persistent memory, typed AI skill intelligence, continuous learning, and live operational APIs.
 
 ## 1. IMPLEMENTATION STATUS
 
