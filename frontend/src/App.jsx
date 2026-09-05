@@ -7,6 +7,8 @@ import AIMap from "./pages/AIMap"
 import Memory from "./pages/Memory"
 import Routing from "./pages/Routing"
 import Governance from "./pages/Governance"
+import Skills from "./pages/Skills"
+import Learning from "./pages/Learning"
 import Settings from "./pages/Settings"
 import Logs from "./pages/Logs"
 import { realtime } from "./websocket"
@@ -31,6 +33,8 @@ export default function App() {
       case "Memory": return <Memory />
       case "Routing": return <Routing />
       case "Governance": return <Governance />
+      case "Skills": return <Skills />
+      case "Learning": return <Learning />
       case "Security": return <Settings />
       case "Logs": return <Logs />
       default: return <Dashboard />
