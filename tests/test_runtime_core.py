@@ -9,14 +9,23 @@ from backend.memory.service import MemoryService
 from backend.runtime.engine import RuntimeEngine
 
 
+async def wait_for_task_completion(engine: RuntimeEngine, task_id: str, timeout: float = 5.0) -> dict:
+    start_time = asyncio.get_running_loop().time()
+    while asyncio.get_running_loop().time() - start_time < timeout:
+        task = engine.tasks.get(task_id)
+        if task and task.get("status") in ["completed", "failed", "cancelled"]:
+            return task
+        await asyncio.sleep(0.01)
+    raise TimeoutError(f"Task {task_id} did not complete within {timeout}s timeout")
+
+
 class RuntimeCoreTests(unittest.IsolatedAsyncioTestCase):
     async def test_lifecycle_and_task_completion_emit_events(self):
         engine = RuntimeEngine()
         task = engine.submit_task("research resilient distributed systems", {"source": "test"})
         self.assertEqual(task["status"], "queued")
         await engine.start()
-        await asyncio.sleep(0.15)
-        completed = engine.tasks.get(task["id"])
+        completed = await wait_for_task_completion(engine, task["id"], timeout=5.0)
         self.assertIsNotNone(completed)
         self.assertEqual(completed["status"], "completed")
         self.assertEqual(completed["result"]["results"][0]["knight"], "researcher")
@@ -29,9 +38,8 @@ class RuntimeCoreTests(unittest.IsolatedAsyncioTestCase):
         engine = RuntimeEngine()
         task = engine.submit_task("coordinate", {"subtasks": ["code a test", "research an option"]})
         await engine.start()
-        await asyncio.sleep(0.15)
 
-        completed = engine.tasks.get(task["id"])
+        completed = await wait_for_task_completion(engine, task["id"], timeout=5.0)
         self.assertEqual(completed["status"], "completed")
         self.assertEqual([result["knight"] for result in completed["result"]["results"]], ["coder", "researcher"])
         event_types = [event["type"] for event in engine.events.history(20)]
