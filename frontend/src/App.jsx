@@ -10,6 +10,7 @@ import Governance from "./pages/Governance"
 import Skills from "./pages/Skills"
 import Learning from "./pages/Learning"
 import { Nodes } from "./pages/Nodes"
+import { MobileGateway } from "./pages/MobileGateway"
 import Settings from "./pages/Settings"
 import Logs from "./pages/Logs"
 import { realtime } from "./websocket"
@@ -37,6 +38,7 @@ export default function App() {
       case "Skills": return <Skills />
       case "Learning": return <Learning />
       case "Nodes": return <Nodes />
+      case "Mobile": return <MobileGateway />
       case "Security": return <Settings />
       case "Logs": return <Logs />
       default: return <Dashboard />

@@ -22,6 +22,11 @@ from backend.cluster.pairing import pairing_manager
 from backend.cluster.capabilities import capability_authorizer
 from backend.cluster.heartbeat import heartbeat_manager
 from backend.cluster.audit import audit_logger
+from backend.cluster.mobile_pairing import mobile_pairing_manager
+from backend.memory.ingestion import knowledge_ingestor
+from backend.memory.knowledge_domains import knowledge_domain_manager
+from backend.skills.learning_engine import skill_learning_engine
+from backend.integrations.financial import financial_engine
 from backend.storage.db import db
 from backend.state import STATE
 
@@ -129,6 +134,35 @@ class NodeRejectRequest(BaseModel):
 
 class NodeCapabilitiesRequest(BaseModel):
     granted_capabilities: list[str]
+
+class MobilePairRequest(BaseModel):
+    code: str
+    device_id: str
+    device_name: str
+    device_public_key_hex: str
+    signature: str
+
+class TeachSkillRequest(BaseModel):
+    name: str
+    description: str
+    examples: list[str] = Field(default_factory=list)
+    department: str = "Workflows"
+
+class UploadKnowledgeRequest(BaseModel):
+    content: str
+    filename: str = "input.txt"
+    domain: str = "General"
+    is_source_of_truth: bool = False
+
+class FinancialConnectRequest(BaseModel):
+    provider: str
+    oauth_token: str
+
+class FinancialOrderRequest(BaseModel):
+    symbol: str
+    action: str
+    shares: int = Field(ge=1)
+    limit_price: float = Field(gt=0)
 
 # --- SYSTEM VERSION ENDPOINT ---
 
@@ -683,3 +717,88 @@ def update_node_capabilities(node_id: str, request: NodeCapabilitiesRequest):
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
     return node
+
+# --- MOBILE GATEWAY ENDPOINTS ---
+
+@router.post("/mobile/challenge", status_code=status.HTTP_201_CREATED)
+def create_mobile_pairing_challenge(ttl_seconds: int = Query(default=300, ge=60, le=1800)):
+    return mobile_pairing_manager.create_pairing_challenge(ttl_seconds=ttl_seconds)
+
+@router.post("/mobile/pair")
+def process_mobile_pairing(request: MobilePairRequest):
+    res = mobile_pairing_manager.process_mobile_pairing(request.model_dump())
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+# --- GOVERNED FINANCIAL ENDPOINTS ---
+
+@router.post("/financial/connect")
+def connect_broker(request: FinancialConnectRequest):
+    return financial_engine.connect_broker_account(request.provider, request.oauth_token)
+
+@router.get("/financial/research")
+def research_financial_market(query: str = Query(min_length=1)):
+    return financial_engine.research_market_and_dividends(query)
+
+@router.post("/financial/order/draft")
+def draft_financial_order(request: FinancialOrderRequest):
+    res = financial_engine.draft_order_preview(request.symbol, request.action, request.shares, request.limit_price)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+@router.post("/financial/order/{approval_id}/execute")
+def execute_financial_order(approval_id: str):
+    res = financial_engine.execute_approved_order(approval_id)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+@router.post("/mobile/{device_id}/approve")
+def approve_mobile_device(device_id: str):
+    success = mobile_pairing_manager.approve_mobile_device(device_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Device not found")
+    return {"status": "approved", "device_id": device_id}
+
+@router.post("/mobile/{device_id}/revoke")
+def revoke_mobile_device(device_id: str, reason: str = Query(default="Remote user revocation")):
+    success = mobile_pairing_manager.revoke_mobile_device(device_id, reason=reason)
+    if not success:
+        raise HTTPException(status_code=404, detail="Device not found")
+    return {"status": "revoked", "device_id": device_id, "reason": reason}
+
+# --- KNOWLEDGE & SKILL TEACHING ENDPOINTS ---
+
+@router.post("/knowledge/upload", status_code=status.HTTP_201_CREATED)
+def upload_knowledge(request: UploadKnowledgeRequest):
+    extracted = knowledge_ingestor.process_file_or_text(
+        raw_content=request.content,
+        filename=request.filename,
+        source="user_upload"
+    )
+    res = knowledge_domain_manager.add_knowledge_item({
+        "content": extracted["full_text"],
+        "domain": request.domain or extracted["intent"]["domain"],
+        "is_source_of_truth": request.is_source_of_truth or extracted["intent"]["is_source_of_truth"],
+        "provenance": request.filename
+    })
+    return {"extracted": extracted, "saved_knowledge": res}
+
+@router.post("/skills/teach", status_code=status.HTTP_201_CREATED)
+def teach_new_skill(request: TeachSkillRequest):
+    res = skill_learning_engine.learn_skill_from_examples(
+        skill_name=request.name,
+        description=request.description,
+        example_texts=request.examples,
+        department=request.department
+    )
+    return res
+
+@router.post("/skills/{skill_id}/promote")
+def promote_learned_skill(skill_id: str, governance_approved: bool = True):
+    res = skill_learning_engine.test_and_promote_skill(skill_id, governance_approved=governance_approved)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res

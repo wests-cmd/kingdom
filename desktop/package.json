@@ -1,0 +1,33 @@
+{
+  "name": "kingdom-desktop",
+  "private": true,
+  "version": "40.2.0",
+  "description": "Kingdom Native Desktop Application Shell",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --dir"
+  },
+  "dependencies": {
+    "electron": "^31.0.0"
+  },
+  "devDependencies": {
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.wests-cmd.kingdom",
+    "productName": "Kingdom",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": ["nsis"]
+    },
+    "mac": {
+      "target": ["dmg"]
+    },
+    "linux": {
+      "target": ["AppImage", "deb"]
+    }
+  }
+}
