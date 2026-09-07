@@ -163,3 +163,59 @@ def test_cluster_subsystems_wiring():
     topo = topo_sync.sync()
     assert topo["commander"] == "KG-MASTER-01"
     assert len(topo["knights"]) > 0
+
+def test_multi_kingdom_matrix_isolation():
+    # Instantiate Kingdom A and Kingdom B with distinct keypairs
+    kingdom_a = KingdomIdentity(kingdom_id="KG-ALPHA-01", display_name="Kingdom Alpha")
+    kingdom_b = KingdomIdentity(kingdom_id="KG-BETA-02", display_name="Kingdom Beta")
+    assert kingdom_a.node_id != kingdom_b.node_id
+    assert kingdom_a.fingerprint != kingdom_b.fingerprint
+
+    # Instantiate Knight A and Knight B with unique test IDs
+    knight_a = KnightIdentity.get_or_create("kn-matrix-alpha", "Knight Workstation")
+    knight_b = KnightIdentity.get_or_create("kn-matrix-beta", "Knight Workstation") # Same display name!
+
+    # Create Pairing invitation 1 on Kingdom A (for cross-kingdom test)
+    inv_cross = pairing_manager.create_invitation(ttl_seconds=300)
+
+    # 1. Knight A attempts to pair with Kingdom B using invitation from Kingdom A -> DENIED
+    msg_b = f"{inv_cross['code']}:{knight_a.node_id}:{kingdom_b.node_id}".encode("utf-8")
+    sig_b = knight_a.sign_message(msg_b).hex()
+    req_cross = {
+        "code": inv_cross["code"],
+        "expected_kingdom_id": kingdom_b.node_id, # Target mismatch!
+        "knight_public_identity": knight_a.get_public_identity(),
+        "signature": sig_b
+    }
+    res_cross = pairing_manager.process_pairing_request(req_cross)
+    assert res_cross["success"] is False
+    assert "Cross-Kingdom mismatch" in res_cross["error"]
+
+    # Create Pairing invitation 2 on Kingdom A (since inv_cross code failed validation but was unused)
+    inv_legit = pairing_manager.create_invitation(ttl_seconds=300)
+
+    # 2. Knight A pairs with Kingdom A legitimately
+    msg_a = f"{inv_legit['code']}:{knight_a.node_id}:{pairing_manager.kingdom_identity.node_id}".encode("utf-8")
+    sig_a = knight_a.sign_message(msg_a).hex()
+    req_legit = {
+        "code": inv_legit["code"],
+        "expected_kingdom_id": pairing_manager.kingdom_identity.node_id,
+        "knight_public_identity": knight_a.get_public_identity(),
+        "signature": sig_a
+    }
+    res_legit = pairing_manager.process_pairing_request(req_legit)
+    assert res_legit["success"] is True
+    assert res_legit["status"] == NodeState.PENDING_APPROVAL.value
+
+    # 3. Approve Knight A on Kingdom A
+    capability_authorizer.approve_node_and_capabilities(knight_a.node_id, ["compute"])
+
+    # 4. RPC from Knight A to Kingdom B transport -> DENIED
+    transport_b = RPCSecureTransport(kingdom_b)
+    transport_a_client = RPCSecureTransport(knight_a)
+    msg_rpc = transport_a_client.create_signed_message(kingdom_b.node_id, "EXEC", {"cmd": "test"})
+
+        # Verification at Kingdom B fails because Kingdom B rejects Knight A belonging to Kingdom A
+    v_b = transport_b.verify_and_unwrap_message(msg_rpc)
+    assert v_b["valid"] is False
+    assert "Cross-Kingdom RPC blocked" in v_b["error"] or "Unknown or unauthenticated sender" in v_b["error"]
