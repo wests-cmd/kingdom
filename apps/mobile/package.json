@@ -1,0 +1,13 @@
+{
+  "name": "kingdom-mobile",
+  "private": true,
+  "version": "40.2.0",
+  "description": "Kingdom Bounded Mobile Interface & Gateway",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.5"
+  }
+}

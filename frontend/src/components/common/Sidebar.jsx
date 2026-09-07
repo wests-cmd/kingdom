@@ -24,6 +24,7 @@ export default function Sidebar({ currentPage, setCurrentPage }) {
     { id: "Skills", label: "Skills" },
     { id: "Learning", label: "Learning Center" },
     { id: "Nodes", label: "Nodes & Cluster" },
+    { id: "Mobile", label: "Mobile Gateway & Knowledge" },
     { id: "Security", label: "Security" },
     { id: "Logs", label: "Logs & Activity" }
   ]
