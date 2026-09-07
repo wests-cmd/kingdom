@@ -89,9 +89,17 @@ class RPCSecureTransport:
         pub_identity = sender_node.get("public_identity") if sender_node else None
         pub_key_hex = pub_identity.get("public_key_hex") if pub_identity else None
 
+        if not pub_key_hex:
+            return {"valid": False, "error": f"Unknown or unauthenticated sender node {sender_id}. Public identity missing."}
+
         sig_hex = message_dict.get("signature")
         if not sig_hex:
             return {"valid": False, "error": "Missing signature in RPC message."}
+
+        try:
+            sig_bytes = bytes.fromhex(sig_hex)
+        except ValueError:
+            return {"valid": False, "error": "Invalid signature hex format."}
 
         # Construct canonical RPCMessage
         msg = RPCMessage(
@@ -104,11 +112,10 @@ class RPCSecureTransport:
         )
         canonical = msg.get_canonical_bytes()
 
-        if pub_key_hex:
-            valid_sig = BaseNodeIdentity.verify_signature(pub_key_hex, canonical, bytes.fromhex(sig_hex))
-            if not valid_sig:
-                event_bus.publish("security.rpc_invalid_signature", {"sender_id": sender_id, "msg_id": msg_id}, source="rpc_transport")
-                return {"valid": False, "error": "Invalid cryptographic signature."}
+        valid_sig = BaseNodeIdentity.verify_signature(pub_key_hex, canonical, sig_bytes)
+        if not valid_sig:
+            event_bus.publish("security.rpc_invalid_signature", {"sender_id": sender_id, "msg_id": msg_id}, source="rpc_transport")
+            return {"valid": False, "error": "Invalid cryptographic signature."}
 
         # Cache msg_id to prevent replay attacks
         self._processed_msg_ids.add(msg_id)
