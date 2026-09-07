@@ -609,7 +609,11 @@ def approve_cluster_node(node_id: str, request: NodeApproveRequest):
 @router.post("/nodes/{node_id}/reject")
 def reject_cluster_node(node_id: str, request: NodeRejectRequest):
     k_identity = KingdomIdentity.get_or_create()
-    node = node_registry.update_node_state(node_id, NodeState.REJECTED, reason=request.reason)
+    try:
+        node = node_registry.update_node_state(node_id, NodeState.REJECTED, reason=request.reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
     audit_logger.log_event("node_rejected", node_id, k_identity.node_id, {"reason": request.reason})
@@ -618,7 +622,11 @@ def reject_cluster_node(node_id: str, request: NodeRejectRequest):
 @router.post("/nodes/{node_id}/revoke")
 def revoke_cluster_node(node_id: str, reason: str = Query(default="Administrator revoked node")):
     k_identity = KingdomIdentity.get_or_create()
-    node = capability_authorizer.revoke_node(node_id, reason=reason)
+    try:
+        node = capability_authorizer.revoke_node(node_id, reason=reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
     audit_logger.log_event("node_revoked", node_id, k_identity.node_id, {"reason": reason})

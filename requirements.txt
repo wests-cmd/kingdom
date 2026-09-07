@@ -6,3 +6,4 @@ websockets
 httpx
 asyncio
 cryptography
+psutil
