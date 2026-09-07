@@ -164,6 +164,56 @@ def test_cluster_subsystems_wiring():
     assert topo["commander"] == "KG-MASTER-01"
     assert len(topo["knights"]) > 0
 
+def test_full_node_lifecycle_and_unauthorized_capability_denial():
+    # 1. Fresh Kingdom & Knight Identities
+    k_commander = KingdomIdentity.get_or_create()
+    kn = KnightIdentity.get_or_create("kn-lifecycle-e2e", "E2E Lifecycle Knight")
+
+    # 2. Kingdom issues single-use pairing invitation
+    inv = pairing_manager.create_invitation(ttl_seconds=300)
+    code = inv["code"]
+
+    # 3. Knight requests pairing with valid proof-of-possession signature
+    msg = f"{code}:{kn.node_id}:{k_commander.node_id}".encode("utf-8")
+    sig = kn.sign_message(msg).hex()
+    req = {
+        "code": code,
+        "expected_kingdom_id": k_commander.node_id,
+        "knight_public_identity": kn.get_public_identity(),
+        "requested_capabilities": ["compute", "gpu", "storage_write"],
+        "signature": sig
+    }
+    res_pair = pairing_manager.process_pairing_request(req)
+    assert res_pair["success"] is True
+    assert res_pair["status"] == NodeState.PENDING_APPROVAL.value
+
+    # 4. Default deny check before human approval
+    assert capability_authorizer.is_capability_granted(kn.node_id, "compute") is False
+
+    # 5. Commander approves Knight with restricted capabilities (compute + gpu, NOT storage_write)
+    capability_authorizer.approve_node_and_capabilities(kn.node_id, ["compute", "gpu"])
+    assert capability_authorizer.is_capability_granted(kn.node_id, "compute") is True
+    assert capability_authorizer.is_capability_granted(kn.node_id, "gpu") is True
+    assert capability_authorizer.is_capability_granted(kn.node_id, "storage_write") is False # Denied!
+
+    # 6. Execute signed RPC with granted capability -> Success
+    kn_transport = RPCSecureTransport(kn)
+    k_transport = RPCSecureTransport(k_commander)
+    rpc_msg = kn_transport.create_signed_message(k_commander.node_id, "COMPUTE_EXEC", {"task": "matrix_mult"})
+    v_rpc = k_transport.verify_and_unwrap_message(rpc_msg)
+    assert v_rpc["valid"] is True
+
+    # 7. Revoke Knight -> Immediate trust loss
+    capability_authorizer.revoke_node(kn.node_id, reason="Lifecycle E2E Revocation")
+    assert capability_authorizer.is_capability_granted(kn.node_id, "compute") is False
+    assert node_registry.get_node(kn.node_id)["node_state"] == NodeState.REVOKED.value
+
+    # 8. RPC from Revoked Knight -> Denied
+    rpc_revoked = kn_transport.create_signed_message(k_commander.node_id, "COMPUTE_EXEC", {"task": "matrix_mult_2"})
+    v_revoked = k_transport.verify_and_unwrap_message(rpc_revoked)
+    assert v_revoked["valid"] is False
+    assert "revoked or restricted state" in v_revoked["error"]
+
 def test_multi_kingdom_matrix_isolation():
     # Instantiate Kingdom A and Kingdom B with distinct keypairs
     kingdom_a = KingdomIdentity(kingdom_id="KG-ALPHA-01", display_name="Kingdom Alpha")
