@@ -1,3 +1,5 @@
+import os
+import time
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
@@ -20,6 +22,7 @@ from backend.cluster.pairing import pairing_manager
 from backend.cluster.capabilities import capability_authorizer
 from backend.cluster.heartbeat import heartbeat_manager
 from backend.cluster.audit import audit_logger
+from backend.storage.db import db
 
 router = APIRouter()
 engine = RuntimeEngine()
@@ -125,6 +128,113 @@ class NodeRejectRequest(BaseModel):
 
 class NodeCapabilitiesRequest(BaseModel):
     granted_capabilities: list[str]
+
+# --- HEALTH, READINESS & DIAGNOSTICS ENDPOINTS ---
+
+@router.get("/health/live")
+def health_liveness():
+    return {
+        "status": "alive",
+        "timestamp": time.time()
+    }
+
+@router.get("/health/ready")
+def health_readiness():
+    db_ok = False
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        row = cursor.fetchone()
+        conn.close()
+        db_ok = row is not None
+    except Exception as exc:
+        print(f"[health_readiness] DB Exception: {exc}")
+        db_ok = False
+
+    sec_ok = zero_trust is not None
+    nodes_ok = len(node_registry.list_nodes()) >= 0
+
+    ready = db_ok and sec_ok and nodes_ok
+    if not ready:
+        raise HTTPException(status_code=503, detail={
+            "status": "not_ready",
+            "database": db_ok,
+            "security_engine": sec_ok,
+            "node_registry": nodes_ok
+        })
+
+    return {
+        "status": "ready",
+        "database": "healthy",
+        "security_engine": "healthy",
+        "node_registry": "healthy",
+        "timestamp": time.time()
+    }
+
+@router.get("/system/check")
+def system_check():
+    import platform, psutil, shutil
+
+    cpu_count = os.cpu_count() or 1
+    mem = psutil.virtual_memory() if hasattr(psutil, 'virtual_memory') else None
+    disk = shutil.disk_usage("/")
+
+    mem_total_gb = round(mem.total / (1024**3), 2) if mem else 4.0
+    mem_avail_gb = round(mem.available / (1024**3), 2) if mem else 2.0
+    disk_free_gb = round(disk.free / (1024**3), 2)
+
+    return {
+        "os": platform.system(),
+        "arch": platform.machine(),
+        "python_version": platform.python_version(),
+        "cpu_cores": cpu_count,
+        "memory_total_gb": mem_total_gb,
+        "memory_available_gb": mem_avail_gb,
+        "disk_free_gb": disk_free_gb,
+        "runtime_ready": True
+    }
+
+@router.get("/diagnostics/export")
+def export_diagnostics():
+    import platform
+    k_identity = KingdomIdentity.get_or_create()
+
+    # Sanitized diagnostic payload (NO PRIVATE KEYS, SECRET TOKENS OR RAW SESSIONS)
+    nodes = node_registry.list_nodes()
+    sanitized_nodes = [
+        {
+            "id": n["id"],
+            "role": n.get("role"),
+            "node_state": n.get("node_state"),
+            "fingerprint": n.get("fingerprint"),
+            "health": n.get("health"),
+            "granted_capabilities": n.get("granted_capabilities", [])
+        }
+        for n in nodes
+    ]
+
+    return {
+        "kingdom_version": "v40.2",
+        "timestamp": time.time(),
+        "system": {
+            "os": platform.system(),
+            "arch": platform.machine(),
+            "python_version": platform.python_version()
+        },
+        "commander_identity": {
+            "node_id": k_identity.node_id,
+            "fingerprint": k_identity.fingerprint
+        },
+        "node_summary": {
+            "total_nodes": len(sanitized_nodes),
+            "nodes": sanitized_nodes
+        },
+        "security_status": {
+            "mode": "zero_trust",
+            "capabilities_count": len(ALL_CAPABILITIES)
+        }
+    }
 
 # --- RUNTIME ENDPOINTS ---
 

@@ -1,6 +1,8 @@
 # KINGDOM SUBSYSTEM IMPLEMENTATION STATUS (v40.2)
 
 ## IMPLEMENTED & WORKING
+- **Desktop Application Launcher**: Local backend process management, readiness polling (`/health/ready`), and Command Center UI window launch (`desktop/launcher.js`).
+- **Production Health & Diagnostics**: Liveness (`/health/live`), readiness (`/health/ready`), system check (`/system/check`), and sanitized diagnostic exporter (`/diagnostics/export`).
 - **Multi-Node Clustering & Node Federation**: Persistent cryptographic Ed25519 identity keypairs (`backend/cluster/identity.py`), persistent SQLite node registry with explicit node state machine (`backend/cluster/node_registry.py`), single-use pairing invitations and QR codes (`backend/cluster/pairing.py`), cryptographic RPC signed transport with protocol versioning and replay protection (`backend/cluster/transport.py`), default-deny capability authorization and revocation (`backend/cluster/capabilities.py`), multi-state heartbeat manager (`backend/cluster/heartbeat.py`), transport abstraction (`backend/cluster/transport_abstraction.py`), cluster audit logging (`backend/cluster/audit.py`), cluster API endpoints (`backend/api.py`), and reactive Node Command Center UI (`frontend/src/pages/Nodes.jsx`).
 - **AI Skill Intelligence**: Typed/versioned `Skill` models (`backend/skills/models.py`), trust levels, lifecycle states (`SAVED`, `INSTALLED`, `ACTIVE`, `DISABLED`, `INCOMPATIBLE`, `QUARANTINED`), and explicit operation isolation.
 - **Skill Dependency Engine**: Deterministic resolution (`backend/skills/dependency.py`), semver/constraint matching, circular dependency detection, and lock file manifest generation.
