@@ -23,6 +23,7 @@ from backend.cluster.capabilities import capability_authorizer
 from backend.cluster.heartbeat import heartbeat_manager
 from backend.cluster.audit import audit_logger
 from backend.storage.db import db
+from backend.state import STATE
 
 router = APIRouter()
 engine = RuntimeEngine()
@@ -129,6 +130,21 @@ class NodeRejectRequest(BaseModel):
 class NodeCapabilitiesRequest(BaseModel):
     granted_capabilities: list[str]
 
+# --- SYSTEM VERSION ENDPOINT ---
+
+@router.get("/api/system/version")
+def get_system_version():
+    import platform
+    return {
+        "name": "Kingdom",
+        "version": STATE.get("version", "40.2.0"),
+        "release_channel": "stable",
+        "environment": "production",
+        "python_version": platform.python_version(),
+        "architecture": platform.machine(),
+        "os": platform.system()
+    }
+
 # --- HEALTH, READINESS & DIAGNOSTICS ENDPOINTS ---
 
 @router.get("/health/live")
@@ -142,12 +158,11 @@ def health_liveness():
 def health_readiness():
     db_ok = False
     try:
-        conn = db.get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1")
-        row = cursor.fetchone()
-        conn.close()
-        db_ok = row is not None
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            row = cursor.fetchone()
+            db_ok = row is not None
     except Exception as exc:
         print(f"[health_readiness] DB Exception: {exc}")
         db_ok = False

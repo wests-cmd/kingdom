@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.api import router
 from backend.websocket import ws_router
 
-app = FastAPI(title="Kingdom v40.1")
+app = FastAPI(title="Kingdom v40.2.0")
 
 app.add_middleware(
     CORSMiddleware,

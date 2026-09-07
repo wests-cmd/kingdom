@@ -1,6 +1,18 @@
-import React from "react"
+import React, { useState, useEffect } from "react"
+import { api } from "../../api"
 
 export default function Sidebar({ currentPage, setCurrentPage }) {
+  const [runningVersion, setRunningVersion] = useState("v40.2.0")
+
+  useEffect(() => {
+    api.getSystemVersion()
+      .then(data => {
+        if (data && data.version) {
+          setRunningVersion(`v${data.version}`)
+        }
+      })
+      .catch(() => {})
+  }, [])
   const navItems = [
     { id: "Dashboard", label: "Dashboard" },
     { id: "Swarm", label: "Swarm" },
@@ -19,7 +31,7 @@ export default function Sidebar({ currentPage, setCurrentPage }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        KINGDOM <span>v40.2</span>
+        KINGDOM <span>{runningVersion}</span>
       </div>
       <ul className="sidebar-nav">
         {navItems.map(item => (

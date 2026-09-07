@@ -34,6 +34,11 @@ export async function triggerRollback(skillId, fromVersion, toVersion, reason) {
   return res.data;
 }
 
+export async function getSystemVersion() {
+  const res = await api.get("/api/system/version");
+  return res.data;
+}
+
 export async function getKingdomIdentity() {
   const res = await api.get("/nodes/identity");
   return res.data;
@@ -75,6 +80,7 @@ export async function revokeNode(nodeId, reason = "Administrator revoked node") 
 }
 
 export const apiHelper = {
+  getSystemVersion,
   getKingdomIdentity,
   listClusterNodes,
   listPendingNodes,
