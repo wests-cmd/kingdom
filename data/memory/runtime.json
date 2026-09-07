@@ -1256,6 +1256,286 @@
       },
       "weight": 1.0,
       "created_at": "2026-09-07T15:47:43.878827+00:00"
+    },
+    {
+      "id": "7748eeb8-d50c-4da2-af68-f8bd3ee5d373",
+      "content": "research resilient distributed systems",
+      "metadata": {
+        "task_id": "afde4112-d3ea-4c2a-94ee-7892bb5b4c00",
+        "status": "completed",
+        "result": {
+          "plan": {
+            "task_id": "afde4112-d3ea-4c2a-94ee-7892bb5b4c00",
+            "complexity": "simple",
+            "subtasks": [
+              {
+                "prompt": "research resilient distributed systems",
+                "knight": "researcher"
+              }
+            ]
+          },
+          "results": [
+            {
+              "knight": "researcher",
+              "task": "research resilient distributed systems",
+              "status": "completed",
+              "executed_at": 1788797309.5848682
+            }
+          ]
+        }
+      },
+      "weight": 1.0,
+      "created_at": "2026-09-07T16:08:29.594966+00:00"
+    },
+    {
+      "id": "6e819c6b-3dc9-4376-9d62-259d0af9559d",
+      "content": "coordinate",
+      "metadata": {
+        "task_id": "93bcb601-1b7c-4c97-b7b5-e75449b42f02",
+        "status": "completed",
+        "result": {
+          "plan": {
+            "task_id": "93bcb601-1b7c-4c97-b7b5-e75449b42f02",
+            "complexity": "simple",
+            "subtasks": [
+              {
+                "prompt": "code a test",
+                "knight": "coder"
+              },
+              {
+                "prompt": "research an option",
+                "knight": "researcher"
+              }
+            ]
+          },
+          "results": [
+            {
+              "knight": "coder",
+              "task": "code a test",
+              "status": "completed",
+              "executed_at": 1788797309.7853153
+            },
+            {
+              "knight": "researcher",
+              "task": "research an option",
+              "status": "completed",
+              "executed_at": 1788797309.811641
+            }
+          ]
+        }
+      },
+      "weight": 1.0,
+      "created_at": "2026-09-07T16:08:29.820070+00:00"
+    },
+    {
+      "id": "6ee50a0e-5c52-4ab5-8a8b-27059a227822",
+      "content": "research resilient distributed systems",
+      "metadata": {
+        "task_id": "b8cc7c09-66bc-4619-8f3c-4d224e61c69d",
+        "status": "completed",
+        "result": {
+          "plan": {
+            "task_id": "b8cc7c09-66bc-4619-8f3c-4d224e61c69d",
+            "complexity": "simple",
+            "subtasks": [
+              {
+                "prompt": "research resilient distributed systems",
+                "knight": "researcher"
+              }
+            ]
+          },
+          "results": [
+            {
+              "knight": "researcher",
+              "task": "research resilient distributed systems",
+              "status": "completed",
+              "executed_at": 1788797438.6837776
+            }
+          ]
+        }
+      },
+      "weight": 1.0,
+      "created_at": "2026-09-07T16:10:38.692423+00:00"
+    },
+    {
+      "id": "a1fd60cc-8184-4078-ab8c-e1417832fcb7",
+      "content": "coordinate",
+      "metadata": {
+        "task_id": "81ee83ca-9e33-4191-baa7-8e6a3e79d50d",
+        "status": "completed",
+        "result": {
+          "plan": {
+            "task_id": "81ee83ca-9e33-4191-baa7-8e6a3e79d50d",
+            "complexity": "simple",
+            "subtasks": [
+              {
+                "prompt": "code a test",
+                "knight": "coder"
+              },
+              {
+                "prompt": "research an option",
+                "knight": "researcher"
+              }
+            ]
+          },
+          "results": [
+            {
+              "knight": "coder",
+              "task": "code a test",
+              "status": "completed",
+              "executed_at": 1788797438.8881712
+            },
+            {
+              "knight": "researcher",
+              "task": "research an option",
+              "status": "completed",
+              "executed_at": 1788797438.9091246
+            }
+          ]
+        }
+      },
+      "weight": 1.0,
+      "created_at": "2026-09-07T16:10:38.919173+00:00"
+    },
+    {
+      "id": "13591453-cc0b-4035-9e27-bf7674f62684",
+      "content": "research resilient distributed systems",
+      "metadata": {
+        "task_id": "3f24bcb4-e057-4368-b91d-c2d83c5f996b",
+        "status": "completed",
+        "result": {
+          "plan": {
+            "task_id": "3f24bcb4-e057-4368-b91d-c2d83c5f996b",
+            "complexity": "simple",
+            "subtasks": [
+              {
+                "prompt": "research resilient distributed systems",
+                "knight": "researcher"
+              }
+            ]
+          },
+          "results": [
+            {
+              "knight": "researcher",
+              "task": "research resilient distributed systems",
+              "status": "completed",
+              "executed_at": 1788797508.7430494
+            }
+          ]
+        }
+      },
+      "weight": 1.0,
+      "created_at": "2026-09-07T16:11:48.753349+00:00"
+    },
+    {
+      "id": "65004bea-9016-4611-b8f2-b48c061978b6",
+      "content": "coordinate",
+      "metadata": {
+        "task_id": "31d7555e-4efa-45c9-a23a-d37d25e9fdb2",
+        "status": "completed",
+        "result": {
+          "plan": {
+            "task_id": "31d7555e-4efa-45c9-a23a-d37d25e9fdb2",
+            "complexity": "simple",
+            "subtasks": [
+              {
+                "prompt": "code a test",
+                "knight": "coder"
+              },
+              {
+                "prompt": "research an option",
+                "knight": "researcher"
+              }
+            ]
+          },
+          "results": [
+            {
+              "knight": "coder",
+              "task": "code a test",
+              "status": "completed",
+              "executed_at": 1788797508.9451652
+            },
+            {
+              "knight": "researcher",
+              "task": "research an option",
+              "status": "completed",
+              "executed_at": 1788797508.9667304
+            }
+          ]
+        }
+      },
+      "weight": 1.0,
+      "created_at": "2026-09-07T16:11:48.986527+00:00"
+    },
+    {
+      "id": "57952429-6046-4561-be9d-d3a2f231c3a3",
+      "content": "research resilient distributed systems",
+      "metadata": {
+        "task_id": "b7745904-ddc5-472e-9637-96fc5f751fc8",
+        "status": "completed",
+        "result": {
+          "plan": {
+            "task_id": "b7745904-ddc5-472e-9637-96fc5f751fc8",
+            "complexity": "simple",
+            "subtasks": [
+              {
+                "prompt": "research resilient distributed systems",
+                "knight": "researcher"
+              }
+            ]
+          },
+          "results": [
+            {
+              "knight": "researcher",
+              "task": "research resilient distributed systems",
+              "status": "completed",
+              "executed_at": 1788797716.6974063
+            }
+          ]
+        }
+      },
+      "weight": 1.0,
+      "created_at": "2026-09-07T16:15:16.705106+00:00"
+    },
+    {
+      "id": "52213e68-f4ef-4a7a-9137-412e951fbb27",
+      "content": "coordinate",
+      "metadata": {
+        "task_id": "00fc823b-db0f-4cbf-b42e-5880a45a2cf0",
+        "status": "completed",
+        "result": {
+          "plan": {
+            "task_id": "00fc823b-db0f-4cbf-b42e-5880a45a2cf0",
+            "complexity": "simple",
+            "subtasks": [
+              {
+                "prompt": "code a test",
+                "knight": "coder"
+              },
+              {
+                "prompt": "research an option",
+                "knight": "researcher"
+              }
+            ]
+          },
+          "results": [
+            {
+              "knight": "coder",
+              "task": "code a test",
+              "status": "completed",
+              "executed_at": 1788797716.9137487
+            },
+            {
+              "knight": "researcher",
+              "task": "research an option",
+              "status": "completed",
+              "executed_at": 1788797716.8974805
+            }
+          ]
+        }
+      },
+      "weight": 1.0,
+      "created_at": "2026-09-07T16:15:16.921596+00:00"
     }
   ],
   "timeline": [
@@ -1402,6 +1682,38 @@
     {
       "timestamp": "2026-09-07T15:47:43.878827+00:00",
       "entry_id": "7ace7f5d-8001-427f-aa32-6c3cc4a3eb95"
+    },
+    {
+      "timestamp": "2026-09-07T16:08:29.594966+00:00",
+      "entry_id": "7748eeb8-d50c-4da2-af68-f8bd3ee5d373"
+    },
+    {
+      "timestamp": "2026-09-07T16:08:29.820070+00:00",
+      "entry_id": "6e819c6b-3dc9-4376-9d62-259d0af9559d"
+    },
+    {
+      "timestamp": "2026-09-07T16:10:38.692423+00:00",
+      "entry_id": "6ee50a0e-5c52-4ab5-8a8b-27059a227822"
+    },
+    {
+      "timestamp": "2026-09-07T16:10:38.919173+00:00",
+      "entry_id": "a1fd60cc-8184-4078-ab8c-e1417832fcb7"
+    },
+    {
+      "timestamp": "2026-09-07T16:11:48.753349+00:00",
+      "entry_id": "13591453-cc0b-4035-9e27-bf7674f62684"
+    },
+    {
+      "timestamp": "2026-09-07T16:11:48.986527+00:00",
+      "entry_id": "65004bea-9016-4611-b8f2-b48c061978b6"
+    },
+    {
+      "timestamp": "2026-09-07T16:15:16.705106+00:00",
+      "entry_id": "57952429-6046-4561-be9d-d3a2f231c3a3"
+    },
+    {
+      "timestamp": "2026-09-07T16:15:16.921596+00:00",
+      "entry_id": "52213e68-f4ef-4a7a-9137-412e951fbb27"
     }
   ],
   "graph": {
@@ -1583,6 +1895,46 @@
       },
       {
         "id": "7ace7f5d-8001-427f-aa32-6c3cc4a3eb95",
+        "label": "coordinate",
+        "weight": 1.0
+      },
+      {
+        "id": "7748eeb8-d50c-4da2-af68-f8bd3ee5d373",
+        "label": "research resilient distributed systems",
+        "weight": 1.0
+      },
+      {
+        "id": "6e819c6b-3dc9-4376-9d62-259d0af9559d",
+        "label": "coordinate",
+        "weight": 1.0
+      },
+      {
+        "id": "6ee50a0e-5c52-4ab5-8a8b-27059a227822",
+        "label": "research resilient distributed systems",
+        "weight": 1.0
+      },
+      {
+        "id": "a1fd60cc-8184-4078-ab8c-e1417832fcb7",
+        "label": "coordinate",
+        "weight": 1.0
+      },
+      {
+        "id": "13591453-cc0b-4035-9e27-bf7674f62684",
+        "label": "research resilient distributed systems",
+        "weight": 1.0
+      },
+      {
+        "id": "65004bea-9016-4611-b8f2-b48c061978b6",
+        "label": "coordinate",
+        "weight": 1.0
+      },
+      {
+        "id": "57952429-6046-4561-be9d-d3a2f231c3a3",
+        "label": "research resilient distributed systems",
+        "weight": 1.0
+      },
+      {
+        "id": "52213e68-f4ef-4a7a-9137-412e951fbb27",
         "label": "coordinate",
         "weight": 1.0
       }
