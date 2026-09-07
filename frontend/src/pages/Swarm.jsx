@@ -10,9 +10,10 @@ export default function Swarm() {
   const fetchKnights = () => {
     api.get("/knights")
       .then(res => {
-        setKnights(res.data || [])
-        if (!selectedKnight && res.data && res.data.length > 0) {
-          setSelectedKnight(res.data[0])
+        const list = res.data?.knights || (Array.isArray(res.data) ? res.data : [])
+        setKnights(list)
+        if (!selectedKnight && list.length > 0) {
+          setSelectedKnight(list[0])
         }
       })
       .catch(() => setKnights([]))

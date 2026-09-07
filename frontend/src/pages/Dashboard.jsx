@@ -10,11 +10,25 @@ export default function Dashboard() {
   const [tasks, setTasks] = useState([])
   const [security, setSecurity] = useState({})
 
+  const [connectionState, setConnectionState] = useState("LIVE")
+  const [lastUpdated, setLastUpdated] = useState(null)
+
   const fetchDashboardData = () => {
-    api.get("/status").then(r => setStatus(r.data || {})).catch(() => {})
-    api.get("/knights").then(r => setKnights(r.data || [])).catch(() => {})
-    api.get("/tasks").then(r => setTasks(r.data || [])).catch(() => {})
-    api.get("/security/status").then(r => setSecurity(r.data || {})).catch(() => {})
+    Promise.all([
+      api.get("/status"),
+      api.get("/knights"),
+      api.get("/tasks"),
+      api.get("/security/status")
+    ]).then(([statusRes, knightsRes, tasksRes, secRes]) => {
+      setStatus(statusRes.data || {})
+      setKnights(knightsRes.data?.knights || knightsRes.data || [])
+      setTasks(tasksRes.data || [])
+      setSecurity(secRes.data || {})
+      setConnectionState("LIVE")
+      setLastUpdated(new Date().toLocaleTimeString())
+    }).catch(() => {
+      setConnectionState("OFFLINE")
+    })
   }
 
   useEffect(() => {
@@ -28,6 +42,15 @@ export default function Dashboard() {
 
   return (
     <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", padding: "8px 16px", background: "#141414", border: "1px solid #282828", borderRadius: "6px" }}>
+        <div style={{ fontSize: "12px", color: "#aaa" }}>
+          Runtime Health Stream: <span style={{ fontWeight: "700", color: connectionState === "LIVE" ? "#4ade80" : "#f87171" }}>{connectionState}</span>
+        </div>
+        <div style={{ fontSize: "11px", color: "#666" }}>
+          {lastUpdated ? `Last synchronized at ${lastUpdated}` : "Synchronizing state..."}
+        </div>
+      </div>
+
       <div className="grid-cards">
         <div className="card">
           <div className="card-title">System Status</div>

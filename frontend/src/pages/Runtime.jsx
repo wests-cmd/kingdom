@@ -34,7 +34,7 @@ export default function Runtime() {
 
         <div className="card">
           <div className="card-title">Version</div>
-          <div className="card-value">{status.version || "40.1"}</div>
+          <div className="card-value">{status.version || "40.2.0"}</div>
         </div>
       </div>
 

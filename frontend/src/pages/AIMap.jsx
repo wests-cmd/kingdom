@@ -23,7 +23,7 @@ export default function AIMap() {
 
       <div className="card" style={{ marginBottom: "16px" }}>
         <div className="card-title">Active Map Spec</div>
-        <div style={{ fontSize: "14px", fontWeight: "600" }}>{activeType} (Schema v40.1)</div>
+        <div style={{ fontSize: "14px", fontWeight: "600" }}>{activeType} (Schema v40.2)</div>
         <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
           Structured intelligence graph containing relationships, weights, trust provenance, and cognitive routing outcomes.
         </div>
