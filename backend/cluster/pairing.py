@@ -90,6 +90,20 @@ class PairingManager:
         pub_hex = knight_pub["public_key_hex"]
         computed_fp = compute_fingerprint(bytes.fromhex(pub_hex))
 
+        # Require signature verification to prove key ownership
+        sig_hex = request_payload.get("signature")
+        if not sig_hex:
+            return {"success": False, "error": "Missing proof-of-possession request signature."}
+
+        try:
+            sig_bytes = bytes.fromhex(sig_hex)
+        except ValueError:
+            return {"success": False, "error": "Invalid signature hex format."}
+
+        msg = f"{code}:{node_id}:{expected_k_id}".encode("utf-8")
+        if not KingdomIdentity.verify_signature(pub_hex, msg, sig_bytes):
+            return {"success": False, "error": "Invalid request signature verification."}
+
         # Identity Substitution Protection: Check if node_id exists with different fingerprint
         existing_node = node_registry.get_node(node_id)
         if existing_node and existing_node.get("fingerprint"):
@@ -107,19 +121,6 @@ class PairingManager:
                     "security_alert": True
                 }
 
-        # Require signature verification to prove key ownership
-        sig_hex = request_payload.get("signature")
-        if not sig_hex:
-            return {"success": False, "error": "Missing proof-of-possession request signature."}
-
-        try:
-            sig_bytes = bytes.fromhex(sig_hex)
-        except ValueError:
-            return {"success": False, "error": "Invalid signature hex format."}
-
-        msg = f"{code}:{node_id}:{self.kingdom_identity.node_id}".encode("utf-8")
-        if not KingdomIdentity.verify_signature(pub_hex, msg, sig_bytes):
-            return {"success": False, "error": "Invalid request signature verification."}
 
         # Mark invitation as used
         inv["used"] = True

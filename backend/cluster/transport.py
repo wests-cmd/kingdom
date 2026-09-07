@@ -75,19 +75,25 @@ class RPCSecureTransport:
             return {"valid": False, "error": f"Message addressed to wrong target node {target_id}. Expected {check_target}."}
 
         sender_id = message_dict.get("sender_id")
-        sender_node = node_registry.get_node(sender_id)
-        if not sender_node and sender_id != check_target:
-            # Allow sender if sender_id is Kingdom identity itself during verification
-            pass
 
-        # Check sender node state if node exists in registry
-        if sender_node:
+        # Check if sender is registered in node registry OR matches target's known public identity
+        sender_node = node_registry.get_node(sender_id)
+        if not sender_node and sender_id == self.identity.node_id:
+            pub_identity = self.identity.get_public_identity()
+            pub_key_hex = pub_identity.get("public_key_hex")
+        elif sender_node:
+            # Enforce Kingdom identity matching: Node must belong to this specific Kingdom
+            target_k_id = sender_node.get("kingdom_id")
+            if target_k_id and target_k_id != self.identity.node_id:
+                return {"valid": False, "error": f"Cross-Kingdom RPC blocked: Sender node {sender_id} belongs to Kingdom {target_k_id}, not {self.identity.node_id}."}
+
             state = sender_node.get("node_state")
             if state in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value]:
                 return {"valid": False, "error": f"Sender node {sender_id} is in revoked or restricted state: {state}."}
-
-        pub_identity = sender_node.get("public_identity") if sender_node else None
-        pub_key_hex = pub_identity.get("public_key_hex") if pub_identity else None
+            pub_identity = sender_node.get("public_identity")
+            pub_key_hex = pub_identity.get("public_key_hex") if pub_identity else None
+        else:
+            pub_key_hex = None
 
         if not pub_key_hex:
             return {"valid": False, "error": f"Unknown or unauthenticated sender node {sender_id}. Public identity missing."}
