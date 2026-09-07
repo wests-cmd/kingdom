@@ -5,3 +5,4 @@ pydantic
 websockets
 httpx
 asyncio
+cryptography
