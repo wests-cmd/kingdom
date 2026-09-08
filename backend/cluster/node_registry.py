@@ -84,6 +84,9 @@ class NodeRegistry:
             "public_identity": node_data.get("public_identity"),
             "fingerprint": node_data.get("fingerprint"),
             "kingdom_id": node_data.get("kingdom_id"),
+            "hardware_profile": node_data.get("hardware_profile", {"cpu_cores": 4, "vram_mb": 0}),
+            "software_version": node_data.get("software_version", "40.2.0"),
+            "cluster_membership": node_data.get("cluster_membership", "active_worker"),
             "connection_metadata": node_data.get("connection_metadata", {}),
             "created_at": existing.get("created_at", now) if existing else now
         }
@@ -166,6 +169,16 @@ class NodeRegistry:
                 if (now - k.get("last_heartbeat", 0)) > timeout_seconds:
                     k["node_state"] = NodeState.DISCONNECTED.value
                     k["health"] = "unhealthy"
+
+                    # Reassign active task if unannounced node disappearance occurred
+                    active_task_id = k.get("current_task")
+                    if active_task_id:
+                        k["current_task"] = None
+                        event_bus.publish("cluster.task_reassignment_required", {
+                            "node_id": k["id"],
+                            "task_id": active_task_id
+                        }, source="node_registry")
+
                     self.repo.save(k)
                     event_bus.publish("cluster.node_disconnected", k, source="node_registry")
 

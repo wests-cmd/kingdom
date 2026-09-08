@@ -1,6 +1,7 @@
 # KINGDOM SUBSYSTEM IMPLEMENTATION STATUS (v40.2)
 
 ## IMPLEMENTED & WORKING
+- **Step 7 & 8 Distributed Infrastructure & Intelligence Evolution**: Unannounced node disappearance task reassignment (`backend/cluster/node_registry.py`), deterministic timestamp state conflict resolution (`backend/cluster/sync_engine.py`), Hypothesis Engine with multi-metric sandbox gating (`backend/learning/hypothesis.py`), and master roadmap verification matrix (`docs/implementation/KINGDOM_MASTER_ROADMAP.md`).
 - **Step 6 Complete Architecture**: Mobile Companion Gateway (`apps/mobile/`), Universal Knowledge Ingestion with Prompt Firewall (`backend/memory/ingestion.py`), Source-of-Truth Conflict Detection (`backend/memory/knowledge_domains.py`), Skill Learning Engine from Demonstrations (`backend/skills/learning_engine.py`), and Governed Financial Execution with L4 Human Approval (`backend/integrations/financial.py`).
 - **Desktop Application Launcher**: Local backend process management, readiness polling (`/health/ready`), and Command Center UI window launch (`desktop/launcher.js`).
 - **Production Health & Diagnostics**: Liveness (`/health/live`), readiness (`/health/ready`), system check (`/system/check`), and sanitized diagnostic exporter (`/diagnostics/export`).
