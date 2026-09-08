@@ -124,8 +124,8 @@ docker-compose down
 | **Agent Integration Boundary** | ✅ Implemented | Model Context Protocol (MCP) server interface (`backend/integrations/mcp_server.py`) & Python SDK (`sdk/kingdom_sdk.py`) |
 | **Swarm & Routing Learning** | ✅ Implemented | `HybridRouter` incorporates historical learning evidence safely within policy constraints |
 | **Installer Script** | ✅ Implemented | Hardened `scripts/install.sh` supporting Linux, macOS, Windows/WSL2, & Docker |
-| **Desktop Launcher Foundation** | 🟢 Implemented | `desktop/launcher.js` manages local backend startup, readiness polling (`/health/ready`), and webview window launch |
-| **Multi-Node Clustering & Node Federation** | 🟢 Implemented | Ed25519 identity keypairs, persistent node registry, single-use pairing codes & QR codes, mutual authentication, signed RPC transport, capability-based authorization, node revocation, health engine, and Command Center Nodes UI |
+| **Desktop Launcher Foundation** | ✅ Implemented | `desktop/launcher.js` manages local backend startup, readiness polling (`/health/ready`), and webview window launch |
+| **Multi-Node Clustering & Node Federation** | ✅ Implemented | Ed25519 identity keypairs, persistent node registry, single-use pairing codes & QR codes, mutual authentication, signed RPC transport, capability-based authorization, node revocation, health engine, and Command Center Nodes UI |
 
 ---
 
