@@ -1,7 +1,18 @@
 # KINGDOM SUBSYSTEM IMPLEMENTATION STATUS (v40.2)
 
 ## IMPLEMENTED & WORKING
-- **Step 7 & 8 Distributed Infrastructure & Intelligence Evolution**: Unannounced node disappearance task reassignment (`backend/cluster/node_registry.py`), deterministic timestamp state conflict resolution (`backend/cluster/sync_engine.py`), Hypothesis Engine with multi-metric sandbox gating (`backend/learning/hypothesis.py`), and master roadmap verification matrix (`docs/implementation/KINGDOM_MASTER_ROADMAP.md`).
+- **Step 8 & 9 Extension Platform & Intelligence Evolution**:
+  - Extension Manifest Validation & Schema Engine (`backend/extensions/manifest_validator.py`)
+  - Extension Trust Registry & State Machine (`backend/extensions/registry.py`)
+  - Isolated Extension Execution Sandbox (`backend/extensions/sandbox.py`)
+  - Canonical Extension Tool Registry & Permission Checks (`backend/extensions/tool_registry.py`)
+  - Scoped Extension Event Bus & Rate Limiting (`backend/extensions/event_bus.py`)
+  - Extension Side-by-Side Updates & Rollbacks (`backend/extensions/lifecycle.py`)
+  - Source Authority Weighting & Decay Metrics (`backend/learning/collector.py`)
+  - Multi-Metric Hypothesis Sandbox Gating (`backend/learning/hypothesis.py`)
+  - Governance Permission Escalation Protection (`backend/learning/experiment.py`)
+  - Verification & Adversarial Test Suites (`tests/unit/test_intelligence_lifecycle.py`, `tests/unit/test_extension_platform.py`, `tests/test_adversarial_extension_learning.py`)
+- **Step 7 Distributed Infrastructure**: Unannounced node disappearance task reassignment (`backend/cluster/node_registry.py`), deterministic timestamp state conflict resolution (`backend/cluster/sync_engine.py`), and master roadmap verification matrix (`docs/implementation/KINGDOM_MASTER_ROADMAP.md`).
 - **Step 6 Complete Architecture**: Mobile Companion Gateway (`apps/mobile/`), Universal Knowledge Ingestion with Prompt Firewall (`backend/memory/ingestion.py`), Source-of-Truth Conflict Detection (`backend/memory/knowledge_domains.py`), Skill Learning Engine from Demonstrations (`backend/skills/learning_engine.py`), and Governed Financial Execution with L4 Human Approval (`backend/integrations/financial.py`).
 - **Desktop Application Launcher**: Local backend process management, readiness polling (`/health/ready`), and Command Center UI window launch (`desktop/launcher.js`).
 - **Production Health & Diagnostics**: Liveness (`/health/live`), readiness (`/health/ready`), system check (`/system/check`), and sanitized diagnostic exporter (`/diagnostics/export`).

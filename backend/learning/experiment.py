@@ -104,6 +104,11 @@ class LearningExperimentRunner:
         if governance_level < 2:
             raise ValueError("Governance Level 0/1 cannot promote skill improvements.")
 
+        # Enforce strict governance permission escalation boundary
+        if proposal.requested_permissions or proposal.requested_trust_level or proposal.financial_policy_alteration:
+            if governance_level < 4 or promoter not in ["admin", "commander"]:
+                raise PermissionError("High-risk governance boundary: Requested permissions/trust/financial policy changes require Governance Level 4+ Commander approval.")
+
         # Mutate active skill version in lifecycle_manager if attached
         if self.lifecycle_manager and hasattr(self.lifecycle_manager, "skills"):
             active_skill = self.lifecycle_manager.skills.get(proposal.skill_id)
