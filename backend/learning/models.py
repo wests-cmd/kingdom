@@ -22,6 +22,19 @@ class ExperimentStatus(str, Enum):
     FAILED = "FAILED"
 
 
+SOURCE_AUTHORITY_WEIGHTS: Dict[str, float] = {
+    "explicit_user_instruction": 1.0,
+    "human_supervisor": 1.0,
+    "verified_system_state": 0.95,
+    "trusted_integration": 0.90,
+    "approved_document": 0.85,
+    "execution_engine": 0.80,
+    "previous_experience": 0.70,
+    "model_inference": 0.50,
+    "untrusted_external_content": 0.10,
+}
+
+
 class SkillOutcome(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: float = Field(default_factory=time.time)
@@ -40,6 +53,10 @@ class SkillOutcome(BaseModel):
     provider_used: Optional[str] = None
     knight_id: Optional[str] = None
     provenance: str = "execution_engine"
+    source_authority: str = "execution_engine"
+    authority_weight: float = 0.80
+    decay_weight: float = 1.0
+    valid_until: Optional[float] = None
     audit_id: Optional[str] = None
 
 
@@ -99,6 +116,9 @@ class ImprovementProposal(BaseModel):
     status: ProposalStatus = ProposalStatus.PROPOSED
     governance_approval_required: bool = True
     approved_by: Optional[str] = None
+    requested_permissions: List[str] = Field(default_factory=list)
+    requested_trust_level: Optional[str] = None
+    financial_policy_alteration: bool = False
 
 
 class Experiment(BaseModel):

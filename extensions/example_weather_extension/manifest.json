@@ -1,0 +1,24 @@
+{
+  "extension_id": "ext_weather_service",
+  "name": "Weather Information Extension",
+  "version": "1.0.0",
+  "description": "Provides real-time weather forecasts and climate alerts.",
+  "author": "Kingdom Ecosystem Team",
+  "kingdom_compatibility": ">=40.0.0",
+  "capabilities": ["weather.read", "alerts.read"],
+  "permissions": ["network.http_get"],
+  "subscribed_events": ["system.city_selected"],
+  "tools": [
+    {
+      "tool_id": "tool_get_weather",
+      "name": "Get Weather Forecast",
+      "description": "Fetches current weather for a specified city.",
+      "version": "1.0.0",
+      "input_schema": {
+        "required": ["city"]
+      },
+      "required_permissions": ["network.http_get"],
+      "risk_level": "LOW"
+    }
+  ]
+}
