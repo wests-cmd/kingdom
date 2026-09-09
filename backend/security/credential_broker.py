@@ -7,8 +7,7 @@ from enum import Enum
 from typing import Dict, Any, Optional
 import os
 import secrets
-import hmac
-import hashlib
+import re
 
 class DataClassification(str, Enum):
     PUBLIC = "PUBLIC"
@@ -17,6 +16,13 @@ class DataClassification(str, Enum):
     CREDENTIALS = "CREDENTIALS"
 
 class CredentialBroker:
+    TOKEN_PATTERNS = [
+        re.compile(r"ghp_[A-Za-z0-9_]{16,}"),
+        re.compile(r"github_pat_[A-Za-z0-9_]{16,}"),
+        re.compile(r"sk-[A-Za-z0-9_]{16,}"),
+        re.compile(r"bearer\s+[A-Za-z0-9_\-\.]+", re.IGNORECASE)
+    ]
+
     def __init__(self):
         self._credentials: Dict[str, Dict[str, Any]] = {}
         self._handles: Dict[str, str] = {}
@@ -24,7 +30,7 @@ class CredentialBroker:
 
     def store_credential(self, provider_id: str, credential_data: Dict[str, Any]) -> str:
         """
-        Stores raw credentials in memory and returns a opaque handle string.
+        Stores raw credentials in memory and returns an opaque handle string.
         Raw credentials are never returned to external callers.
         """
         handle = f"cred_handle_{secrets.token_hex(16)}"
@@ -48,18 +54,22 @@ class CredentialBroker:
     def sanitize_payload_for_llm(self, payload: Any) -> Any:
         """
         Recursively scrubs any credential values or token patterns from payloads before LLM ingestion.
+        Supports dicts, lists, tuples, sets, strings, and custom objects.
         """
         if isinstance(payload, dict):
             return {
-                k: "[REDACTED_CREDENTIAL]" if "token" in k.lower() or "secret" in k.lower() or "password" in k.lower() or "key" in k.lower()
+                k: "[REDACTED_CREDENTIAL]" if any(s in k.lower() for s in ["token", "secret", "password", "key", "credential", "auth"])
                 else self.sanitize_payload_for_llm(v)
                 for k, v in payload.items()
             }
-        elif isinstance(payload, list):
-            return [self.sanitize_payload_for_llm(item) for item in payload]
+        elif isinstance(payload, (list, tuple, set)):
+            sanitized_items = [self.sanitize_payload_for_llm(item) for item in payload]
+            return type(payload)(sanitized_items)
         elif isinstance(payload, str):
-            if payload.startswith("ghp_") or payload.startswith("sk-") or payload.startswith("bearer "):
-                return "[REDACTED_BEARER_TOKEN]"
+            res = payload
+            for pattern in self.TOKEN_PATTERNS:
+                res = pattern.sub("[REDACTED_BEARER_TOKEN]", res)
+            return res
         return payload
 
     def revoke_credential(self, handle: str) -> bool:

@@ -20,7 +20,7 @@ class SkillInstaller:
         """
         # Step 1: Verify Trust & Permissions
         if skill.trust_level in [SkillTrustLevel.QUARANTINED, SkillTrustLevel.REVOKED]:
-            return {"status": "BLOCKED", "reason": f"Skill is in prohibited trust state: {skill.trust_level}"}
+            return {"status": "BLOCKED", "reason": f"Skill is in prohibited trust state: {skill.trust_level.value}"}
 
         # Step 2: Validate capability/permission requirements
         for cap in skill.required_capabilities:
@@ -49,3 +49,25 @@ class SkillInstaller:
 
         skill.lifecycle_state = SkillLifecycleState.ACTIVE
         return {"status": "SUCCESS", "skill_id": skill.id, "lifecycle_state": skill.lifecycle_state.value}
+
+    def quarantine_skill(self, skill_id: str, reason: str) -> Dict[str, Any]:
+        skill = self._installed_skills.get(skill_id)
+        if not skill:
+            return {"status": "ERROR", "reason": "Skill not installed"}
+
+        skill.trust_level = SkillTrustLevel.QUARANTINED
+        skill.lifecycle_state = SkillLifecycleState.QUARANTINED
+        return {"status": "SUCCESS", "skill_id": skill.id, "trust_level": skill.trust_level.value, "reason": reason}
+
+    def execute_skill(self, skill_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        skill = self._installed_skills.get(skill_id)
+        if not skill:
+            raise KeyError(f"Skill {skill_id} not installed")
+
+        if skill.trust_level in [SkillTrustLevel.QUARANTINED, SkillTrustLevel.REVOKED]:
+            raise PermissionError(f"Execution blocked: Skill {skill_id} is {skill.trust_level.value}")
+
+        if skill.lifecycle_state != SkillLifecycleState.ACTIVE:
+            raise PermissionError(f"Execution blocked: Skill {skill_id} is not ACTIVE (current state: {skill.lifecycle_state.value})")
+
+        return {"status": "EXECUTED", "skill_id": skill_id, "params": params}
