@@ -30,6 +30,7 @@ class RiskLevel(str, Enum):
 
 
 CAPABILITY_RISK_MAP: dict[str, RiskLevel] = {
+    "data.read": RiskLevel.LOW,
     CAPABILITY_FILESYSTEM_READ: RiskLevel.LOW,
     CAPABILITY_MEMORY_READ: RiskLevel.LOW,
     CAPABILITY_AI_MAP_READ: RiskLevel.LOW,
