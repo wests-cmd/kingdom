@@ -11,6 +11,14 @@ from backend.models.service import ModelService
 from backend.runtime.modes import MODES
 from backend.runtime.scheduler import Scheduler
 from backend.runtime.tasks import TaskManager
+from backend.runtime.resilience import (
+    IdempotencyManager,
+    CircuitBreakerEngine,
+    DeadLetterQueue,
+    ReconciliationEngine,
+    RateLimiterEngine,
+    CircuitState,
+)
 from backend.security.zero_trust import ZeroTrust
 from backend.state import STATE
 from backend.swarm.manager import SwarmManager
@@ -26,6 +34,10 @@ class RuntimeEngine:
         self.memory = MemoryService()
         self.maps = AIMap()
         self.scheduler = Scheduler(self._process_next_task)
+        self.idempotency = IdempotencyManager()
+        self.circuit_breaker = CircuitBreakerEngine()
+        self.dlq = DeadLetterQueue()
+        self.rate_limiter = RateLimiterEngine()
 
     async def initialize(self) -> dict[str, Any]:
         return await self.start()
@@ -129,5 +141,15 @@ class RuntimeEngine:
             recovered = self.tasks.retry_or_fail(task["id"], str(exc))
             if recovered["status"] == "failed":
                 self.memory.record_task(recovered)
+                actor_id = task.get("metadata", {}).get("actor", "system")
+                # Dead letter queue recording for permanently failed task
+                self.dlq.push(
+                    task_id=task["id"],
+                    actor=actor_id,
+                    operation=f"Execute task {task['id']}",
+                    failure_reason=str(exc),
+                    retry_count=recovered.get("retries", 0),
+                    metadata=task.get("metadata", {})
+                )
             event_type = "task.requeued" if recovered["status"] == "queued" else "task.failed"
             self.events.publish(event_type, recovered)
