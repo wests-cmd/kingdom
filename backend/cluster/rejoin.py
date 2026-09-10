@@ -21,7 +21,7 @@ class RejoinManager:
         if not node:
             return {"rejoined": False, "error": f"Node {node_id} not registered"}
 
-        state_val = node.status.value if isinstance(node.status, NodeState) else str(node.status)
+        state_val = node.node_state
         if state_val in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value]:
             return {"rejoined": False, "error": f"Cannot rejoin node in restricted state {state_val}"}
 
