@@ -54,6 +54,7 @@ class Database:
                 fingerprint TEXT,
                 kingdom_id TEXT,
                 connection_metadata_json TEXT,
+                hardware_profile_json TEXT,
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL
             )
@@ -74,6 +75,8 @@ class Database:
                 cursor.execute("ALTER TABLE knights ADD COLUMN kingdom_id TEXT")
             if "connection_metadata_json" not in columns:
                 cursor.execute("ALTER TABLE knights ADD COLUMN connection_metadata_json TEXT")
+            if "hardware_profile_json" not in columns:
+                cursor.execute("ALTER TABLE knights ADD COLUMN hardware_profile_json TEXT")
 
             # Events table
             cursor.execute("""

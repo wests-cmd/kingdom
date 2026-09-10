@@ -87,6 +87,7 @@ class KnightRepository:
         granted_caps_json = json.dumps(knight.get("granted_capabilities", []))
         pub_ident_json = json.dumps(knight.get("public_identity")) if knight.get("public_identity") else None
         conn_meta_json = json.dumps(knight.get("connection_metadata", {}))
+        hw_prof_json = json.dumps(knight.get("hardware_profile", {}))
 
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
@@ -94,9 +95,9 @@ class KnightRepository:
             INSERT INTO knights (
                 id, role, status, node_state, capabilities_json, granted_capabilities_json,
                 current_task, health, is_local, last_heartbeat, public_identity_json,
-                fingerprint, kingdom_id, connection_metadata_json, created_at, updated_at
+                fingerprint, kingdom_id, connection_metadata_json, hardware_profile_json, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 role=excluded.role,
                 status=excluded.status,
@@ -111,6 +112,7 @@ class KnightRepository:
                 fingerprint=excluded.fingerprint,
                 kingdom_id=excluded.kingdom_id,
                 connection_metadata_json=excluded.connection_metadata_json,
+                hardware_profile_json=excluded.hardware_profile_json,
                 updated_at=excluded.updated_at
             """, (
                 knight_id,
@@ -127,6 +129,7 @@ class KnightRepository:
                 knight.get("fingerprint"),
                 knight.get("kingdom_id"),
                 conn_meta_json,
+                hw_prof_json,
                 knight.get("created_at", now),
                 now
             ))
@@ -164,6 +167,7 @@ class KnightRepository:
             "fingerprint": row["fingerprint"] if "fingerprint" in row.keys() else None,
             "kingdom_id": row["kingdom_id"] if "kingdom_id" in row.keys() else None,
             "connection_metadata": json.loads(row["connection_metadata_json"]) if "connection_metadata_json" in row.keys() and row["connection_metadata_json"] else {},
+            "hardware_profile": json.loads(row["hardware_profile_json"]) if "hardware_profile_json" in row.keys() and row["hardware_profile_json"] else {},
             "created_at": row["created_at"],
             "updated_at": row["updated_at"]
         }
