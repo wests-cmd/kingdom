@@ -55,7 +55,17 @@ class NodeInfo:
     hardware_profile: Union[HardwareProfile, Dict[str, Any]] = field(default_factory=HardwareProfile)
     trust_score: float = 1.0
     capabilities: List[str] = field(default_factory=list)
+    granted_capabilities: List[str] = field(default_factory=list)
+    health: str = "healthy"
+    fingerprint: Optional[str] = None
+    kingdom_id: Optional[str] = None
+    public_identity: Optional[Dict[str, Any]] = None
+    last_heartbeat: float = field(default_factory=time.time)
+    software_version: str = "40.2.0"
+    connection_metadata: Dict[str, Any] = field(default_factory=dict)
     is_local: bool = False
+    created_at: float = field(default_factory=time.time)
+    updated_at: float = field(default_factory=time.time)
 
     def to_dict(self) -> Dict[str, Any]:
         hw = asdict(self.hardware_profile) if isinstance(self.hardware_profile, HardwareProfile) else self.hardware_profile
@@ -63,14 +73,25 @@ class NodeInfo:
         status_val = self.status.value if isinstance(self.status, NodeState) else self.status
         return {
             "id": self.node_id,
+            "node_id": self.node_id,
             "hostname": self.hostname,
             "role": role_val,
-            "status": "idle" if status_val in [NodeState.CONNECTED.value, NodeState.APPROVED.value] else "offline",
+            "status": status_val,
             "node_state": status_val,
             "hardware_profile": hw,
             "trust_score": self.trust_score,
             "capabilities": self.capabilities,
-            "is_local": self.is_local
+            "granted_capabilities": self.granted_capabilities,
+            "health": self.health,
+            "fingerprint": self.fingerprint,
+            "kingdom_id": self.kingdom_id,
+            "public_identity": self.public_identity,
+            "last_heartbeat": self.last_heartbeat,
+            "software_version": self.software_version,
+            "connection_metadata": self.connection_metadata,
+            "is_local": self.is_local,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at
         }
 
 # Allowed state transitions
@@ -140,11 +161,11 @@ class NodeRegistry:
             "status": node_data.get("status", "idle"),
             "node_state": node_data.get("node_state", NodeState.CONNECTED.value),
             "capabilities": node_data.get("capabilities", []),
-            "granted_capabilities": node_data.get("granted_capabilities", []),
+            "granted_capabilities": node_data.get("granted_capabilities", node_data.get("capabilities", [])),
             "current_task": None,
-            "health": "healthy",
+            "health": node_data.get("health", "healthy"),
             "is_local": node_data.get("is_local", False),
-            "last_heartbeat": now,
+            "last_heartbeat": node_data.get("last_heartbeat", now),
             "trust_score": node_data.get("trust_score", 1.0),
             "public_identity": node_data.get("public_identity"),
             "fingerprint": node_data.get("fingerprint"),
@@ -206,7 +227,17 @@ class NodeRegistry:
             hardware_profile=data.get("hardware_profile", {}),
             trust_score=data.get("trust_score", 1.0),
             capabilities=data.get("capabilities", []),
-            is_local=data.get("is_local", False)
+            granted_capabilities=data.get("granted_capabilities", []),
+            health=data.get("health", "healthy"),
+            fingerprint=data.get("fingerprint"),
+            kingdom_id=data.get("kingdom_id"),
+            public_identity=data.get("public_identity"),
+            last_heartbeat=data.get("last_heartbeat", time.time()),
+            software_version=data.get("software_version", "40.2.0"),
+            connection_metadata=data.get("connection_metadata", {}),
+            is_local=data.get("is_local", False),
+            created_at=data.get("created_at", time.time()),
+            updated_at=data.get("updated_at", time.time())
         )
 
     def get_knight(self, knight_id: str) -> Optional[Dict[str, Any]]:
@@ -227,7 +258,17 @@ class NodeRegistry:
                 hardware_profile=n.get("hardware_profile", {}),
                 trust_score=n.get("trust_score", 1.0),
                 capabilities=n.get("capabilities", []),
-                is_local=n.get("is_local", False)
+                granted_capabilities=n.get("granted_capabilities", []),
+                health=n.get("health", "healthy"),
+                fingerprint=n.get("fingerprint"),
+                kingdom_id=n.get("kingdom_id"),
+                public_identity=n.get("public_identity"),
+                last_heartbeat=n.get("last_heartbeat", time.time()),
+                software_version=n.get("software_version", "40.2.0"),
+                connection_metadata=n.get("connection_metadata", {}),
+                is_local=n.get("is_local", False),
+                created_at=n.get("created_at", time.time()),
+                updated_at=n.get("updated_at", time.time())
             ))
         return result
 

@@ -22,8 +22,8 @@ class CapabilityAuthorizer:
 
         valid_granted = [cap for cap in granted_capabilities if cap in SUPPORTED_CAPABILITIES or cap.endswith(".execute")]
 
-        node["granted_capabilities"] = valid_granted
-        node_registry.repo.save(node)
+        node.granted_capabilities = valid_granted
+        node_registry.repo.save(node.to_dict())
         updated = node_registry.update_node_state(node_id, NodeState.APPROVED)
 
         event_bus.publish("cluster.node_approved", {
@@ -38,11 +38,11 @@ class CapabilityAuthorizer:
         if not node:
             return False
 
-        state = node.get("node_state")
-        if state not in [NodeState.APPROVED.value, NodeState.CONNECTED.value]:
+        state = node.status
+        if state not in [NodeState.APPROVED.value, NodeState.CONNECTED.value, NodeState.APPROVED, NodeState.CONNECTED]:
             return False
 
-        granted = node.get("granted_capabilities", [])
+        granted = node.granted_capabilities or []
         return capability in granted
 
     @staticmethod
@@ -51,8 +51,8 @@ class CapabilityAuthorizer:
         if not node:
             return None
 
-        node["granted_capabilities"] = []
-        node_registry.repo.save(node)
+        node.granted_capabilities = []
+        node_registry.repo.save(node.to_dict())
         updated = node_registry.update_node_state(node_id, NodeState.REVOKED, reason=reason)
 
         event_bus.publish("cluster.node_revoked", {
@@ -68,13 +68,13 @@ class CapabilityAuthorizer:
             return None
 
         valid_granted = [cap for cap in granted_capabilities if cap in SUPPORTED_CAPABILITIES or cap.endswith(".execute")]
-        node["granted_capabilities"] = valid_granted
-        node_registry.repo.save(node)
+        node.granted_capabilities = valid_granted
+        node_registry.repo.save(node.to_dict())
 
         event_bus.publish("cluster.capabilities_updated", {
             "node_id": node_id,
             "granted_capabilities": valid_granted
         }, source="capability_authorizer")
-        return node
+        return node.to_dict()
 
 capability_authorizer = CapabilityAuthorizer()

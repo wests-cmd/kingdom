@@ -21,12 +21,12 @@ class RejoinManager:
         if not node:
             return {"rejoined": False, "error": f"Node {node_id} not registered"}
 
-        state = node.get("node_state")
-        if state in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value]:
-            return {"rejoined": False, "error": f"Cannot rejoin node in restricted state {state}"}
+        state_val = node.status.value if isinstance(node.status, NodeState) else str(node.status)
+        if state_val in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value]:
+            return {"rejoined": False, "error": f"Cannot rejoin node in restricted state {state_val}"}
 
         # Target Kingdom Identity Binding Check
-        target_k_id = node.get("kingdom_id")
+        target_k_id = node.kingdom_id
         if expected_kingdom_id and target_k_id and expected_kingdom_id != target_k_id:
             return {
                 "rejoined": False,
