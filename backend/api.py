@@ -1,5 +1,6 @@
 import os
 import time
+from enum import Enum
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
@@ -253,12 +254,12 @@ def export_diagnostics():
     nodes = node_registry.list_nodes()
     sanitized_nodes = [
         {
-            "id": n["id"],
-            "role": n.get("role"),
-            "node_state": n.get("node_state"),
-            "fingerprint": n.get("fingerprint"),
-            "health": n.get("health"),
-            "granted_capabilities": n.get("granted_capabilities", [])
+            "id": n.node_id,
+            "role": n.role.value if isinstance(n.role, Enum) else str(n.role),
+            "node_state": n.status.value if isinstance(n.status, Enum) else str(n.status),
+            "fingerprint": n.fingerprint,
+            "health": n.health,
+            "granted_capabilities": n.granted_capabilities or []
         }
         for n in nodes
     ]
@@ -612,18 +613,20 @@ def get_kingdom_identity():
 @router.get("/nodes")
 def list_cluster_nodes(node_state: str | None = Query(default=None)):
     state_filter = NodeState(node_state) if node_state else None
-    return node_registry.list_nodes(state=state_filter)
+    nodes = node_registry.list_nodes(state=state_filter)
+    return [n.to_dict() for n in nodes]
 
 @router.get("/nodes/pending")
 def list_pending_nodes():
-    return node_registry.list_nodes(state=NodeState.PENDING_APPROVAL)
+    nodes = node_registry.list_nodes(state=NodeState.PENDING_APPROVAL)
+    return [n.to_dict() for n in nodes]
 
 @router.get("/nodes/{node_id}")
 def get_cluster_node(node_id: str):
     node = node_registry.get_node(node_id)
     if not node:
         raise HTTPException(status_code=404, detail="Node not found in cluster registry")
-    return node
+    return node.to_dict()
 
 @router.post("/nodes/invitation", status_code=status.HTTP_201_CREATED)
 def create_pairing_invitation(ttl_seconds: int = Query(default=600, ge=60, le=3600)):
@@ -694,11 +697,12 @@ def check_node_health(node_id: str):
     node = node_registry.get_node(node_id)
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
+    state_val = node.status.value if isinstance(node.status, Enum) else str(node.status)
     return {
         "id": node_id,
-        "health": node.get("health", "unknown"),
-        "node_state": node.get("node_state"),
-        "last_heartbeat": node.get("last_heartbeat")
+        "health": node.health,
+        "node_state": state_val,
+        "last_heartbeat": node.last_heartbeat
     }
 
 @router.get("/nodes/{node_id}/capabilities")
@@ -707,8 +711,8 @@ def get_node_capabilities(node_id: str):
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
     return {
-        "requested_capabilities": node.get("capabilities", []),
-        "granted_capabilities": node.get("granted_capabilities", [])
+        "requested_capabilities": node.capabilities or [],
+        "granted_capabilities": node.granted_capabilities or []
     }
 
 @router.post("/nodes/{node_id}/capabilities")

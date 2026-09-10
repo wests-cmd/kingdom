@@ -46,12 +46,6 @@ class HardwareProfile:
         elif self.vram_mb > 0 and self.vram_gb == 0:
             self.vram_gb = self.vram_mb // 1024
 
-    def get(self, key: str, default: Any = None) -> Any:
-        return getattr(self, key, default)
-
-    def __getitem__(self, key: str) -> Any:
-        return getattr(self, key)
-
 @dataclass
 class NodeInfo:
     node_id: str
@@ -65,7 +59,7 @@ class NodeInfo:
     health: str = "healthy"
     fingerprint: Optional[str] = None
     kingdom_id: Optional[str] = None
-    public_identity: Optional[str] = None
+    public_identity: Optional[Dict[str, Any]] = None
     last_heartbeat: float = field(default_factory=time.time)
     software_version: str = "40.2.0"
     connection_metadata: Dict[str, Any] = field(default_factory=dict)
@@ -99,30 +93,6 @@ class NodeInfo:
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }
-
-    def get(self, key: str, default: Any = None) -> Any:
-        if key in ["id", "node_id"]:
-            return self.node_id
-        d = self.to_dict()
-        if key in d:
-            return d[key]
-        return getattr(self, key, default)
-
-    def __getitem__(self, key: str) -> Any:
-        if key in ["id", "node_id"]:
-            return self.node_id
-        d = self.to_dict()
-        if key in d:
-            return d[key]
-        return getattr(self, key)
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        if key in ["id", "node_id"]:
-            self.node_id = value
-        elif key in ["status", "node_state"]:
-            self.status = value
-        else:
-            setattr(self, key, value)
 
 # Allowed state transitions
 VALID_TRANSITIONS = {

@@ -106,13 +106,13 @@ class PairingManager:
 
         # Identity Substitution Protection: Check if node_id exists with different fingerprint
         existing_node = node_registry.get_node(node_id)
-        if existing_node and existing_node.get("fingerprint"):
-            if existing_node["fingerprint"] != computed_fp:
+        if existing_node and existing_node.fingerprint:
+            if existing_node.fingerprint != computed_fp:
                 # Security Alert: Identity key substitution detected!
                 node_registry.update_node_state(node_id, NodeState.QUARANTINED, reason="Identity substitution attempt detected")
                 event_bus.publish("security.identity_substitution_detected", {
                     "node_id": node_id,
-                    "previous_fingerprint": existing_node["fingerprint"],
+                    "previous_fingerprint": existing_node.fingerprint,
                     "presented_fingerprint": computed_fp
                 }, source="pairing_manager")
                 return {
