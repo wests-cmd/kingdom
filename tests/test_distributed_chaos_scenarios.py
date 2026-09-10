@@ -46,7 +46,7 @@ def test_scenario_a_unannounced_node_disappearance_and_lease_fencing():
     time.sleep(0.15)
     registry.check_stale_heartbeats(timeout_seconds=0.1)
 
-    assert registry.get_node("node_A")["node_state"] == NodeState.DISCONNECTED.value
+    assert registry.get_node("node_A").node_state == NodeState.DISCONNECTED.value
 
     # Reassign lease for task_999 to Node B (fencing token 2)
     lease2 = lease_mgr.issue_lease("task_999", "node_B", "compute")
@@ -156,4 +156,4 @@ def test_scenario_e_revoked_node_reconnection_quarantine():
             reported_clock_time=time.time()
         )
 
-    assert registry.get_node("node_compromised_key")["node_state"] == NodeState.REVOKED.value
+    assert registry.get_node("node_compromised_key").node_state == NodeState.REVOKED.value

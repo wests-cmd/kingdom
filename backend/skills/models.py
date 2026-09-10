@@ -55,3 +55,25 @@ class Skill(BaseModel):
     compatibility_requirements: Dict[str, str] = Field(default_factory=dict)
     state: SkillLifecycleState = SkillLifecycleState.SAVED
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    def __init__(self, **data):
+        req_caps = data.pop("required_capabilities", None)
+        super().__init__(**data)
+        if req_caps:
+            self.dependencies.required_capabilities = req_caps
+
+    @property
+    def required_capabilities(self) -> List[str]:
+        return self.dependencies.required_capabilities
+
+    @property
+    def required_skills(self) -> List[SkillRequirement]:
+        return self.dependencies.required_skills
+
+    @property
+    def lifecycle_state(self) -> SkillLifecycleState:
+        return self.state
+
+    @lifecycle_state.setter
+    def lifecycle_state(self, val: SkillLifecycleState) -> None:
+        self.state = val

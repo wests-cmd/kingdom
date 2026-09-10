@@ -15,19 +15,19 @@ def test_unannounced_node_disappearance_and_task_reassignment():
     })
 
     # Simulate node claiming task-999 and then missing heartbeats
-    node = node_registry.get_node(node_id)
-    node["current_task"] = "task-999"
-    node["last_heartbeat"] = time.time() - 120.0 # Timeout 2 minutes ago
-    node_registry.repo.save(node)
+    raw_node = node_registry.repo.get(node_id)
+    raw_node["current_task"] = "task-999"
+    raw_node["last_heartbeat"] = time.time() - 120.0 # Timeout 2 minutes ago
+    node_registry.repo.save(raw_node)
 
     # Check stale heartbeats
     node_registry.check_stale_heartbeats(timeout_seconds=60.0)
 
     # Verify node marked DISCONNECTED and active task cleared
     updated = node_registry.get_node(node_id)
-    assert updated["node_state"] == NodeState.DISCONNECTED.value
-    assert updated["health"] == "unhealthy"
-    assert updated["current_task"] is None
+    assert updated.node_state == NodeState.DISCONNECTED.value
+    assert updated.health == "unhealthy"
+    assert updated.current_task is None
 
 def test_deterministic_sync_engine_conflict_resolution():
     node_id = "kn-sync-01"
@@ -56,7 +56,7 @@ def test_deterministic_sync_engine_conflict_resolution():
 
     # Verify local node state updated to newer remote status
     reconciled = node_registry.get_node(node_id)
-    assert reconciled["status"] == "busy"
+    assert reconciled.status == "busy"
 
 def test_multi_metric_hypothesis_sandbox_gating():
     # Generate optimization hypothesis

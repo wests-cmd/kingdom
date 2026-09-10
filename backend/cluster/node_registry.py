@@ -51,12 +51,14 @@ class NodeInfo:
     node_id: str
     hostname: str = "kingdom-node"
     role: Union[NodeRole, str] = NodeRole.KNIGHT
-    status: Union[NodeState, str] = NodeState.CONNECTED
+    status: str = "idle"
+    node_state_val: Union[NodeState, str] = NodeState.CONNECTED
     hardware_profile: Union[HardwareProfile, Dict[str, Any]] = field(default_factory=HardwareProfile)
     trust_score: float = 1.0
     capabilities: List[str] = field(default_factory=list)
     granted_capabilities: List[str] = field(default_factory=list)
     health: str = "healthy"
+    current_task: Optional[str] = None
     fingerprint: Optional[str] = None
     kingdom_id: Optional[str] = None
     public_identity: Optional[Dict[str, Any]] = None
@@ -67,22 +69,27 @@ class NodeInfo:
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
 
+    @property
+    def node_state(self) -> str:
+        return self.node_state_val.value if isinstance(self.node_state_val, NodeState) else str(self.node_state_val)
+
     def to_dict(self) -> Dict[str, Any]:
         hw = asdict(self.hardware_profile) if isinstance(self.hardware_profile, HardwareProfile) else self.hardware_profile
         role_val = self.role.value if isinstance(self.role, NodeRole) else self.role
-        status_val = self.status.value if isinstance(self.status, NodeState) else self.status
+        state_str = self.node_state
         return {
             "id": self.node_id,
             "node_id": self.node_id,
             "hostname": self.hostname,
             "role": role_val,
-            "status": status_val,
-            "node_state": status_val,
+            "status": self.status,
+            "node_state": state_str,
             "hardware_profile": hw,
             "trust_score": self.trust_score,
             "capabilities": self.capabilities,
             "granted_capabilities": self.granted_capabilities,
             "health": self.health,
+            "current_task": self.current_task,
             "fingerprint": self.fingerprint,
             "kingdom_id": self.kingdom_id,
             "public_identity": self.public_identity,
@@ -223,12 +230,14 @@ class NodeRegistry:
             node_id=data.get("id", node_id),
             hostname=data.get("hostname", "kingdom-node"),
             role=data.get("role", "knight"),
-            status=data.get("node_state", NodeState.CONNECTED.value),
+            status=data.get("status", "idle"),
+            node_state_val=data.get("node_state", NodeState.CONNECTED.value),
             hardware_profile=data.get("hardware_profile", {}),
             trust_score=data.get("trust_score", 1.0),
             capabilities=data.get("capabilities", []),
             granted_capabilities=data.get("granted_capabilities", []),
             health=data.get("health", "healthy"),
+            current_task=data.get("current_task"),
             fingerprint=data.get("fingerprint"),
             kingdom_id=data.get("kingdom_id"),
             public_identity=data.get("public_identity"),
@@ -254,12 +263,14 @@ class NodeRegistry:
                 node_id=n.get("id", ""),
                 hostname=n.get("hostname", "kingdom-node"),
                 role=n.get("role", "knight"),
-                status=n.get("node_state", NodeState.CONNECTED.value),
+                status=n.get("status", "idle"),
+                node_state_val=n.get("node_state", NodeState.CONNECTED.value),
                 hardware_profile=n.get("hardware_profile", {}),
                 trust_score=n.get("trust_score", 1.0),
                 capabilities=n.get("capabilities", []),
                 granted_capabilities=n.get("granted_capabilities", []),
                 health=n.get("health", "healthy"),
+                current_task=n.get("current_task"),
                 fingerprint=n.get("fingerprint"),
                 kingdom_id=n.get("kingdom_id"),
                 public_identity=n.get("public_identity"),
