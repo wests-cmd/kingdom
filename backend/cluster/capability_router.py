@@ -23,7 +23,7 @@ class CapabilityRouter:
 
         for node in all_nodes:
             # 1. State check (Must be CONNECTED or APPROVED)
-            state_val = node.status.value if isinstance(node.status, NodeState) else str(node.status)
+            state_val = node.node_state
             if state_val not in [NodeState.CONNECTED.value, NodeState.APPROVED.value]:
                 continue
 

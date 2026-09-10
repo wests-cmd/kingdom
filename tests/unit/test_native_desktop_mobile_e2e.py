@@ -33,7 +33,7 @@ def test_e2e_desktop_mobile_pairing_lifecycle_and_reconnect():
 
     # 4. Commander approves phone
     assert mobile_pairing_manager.approve_mobile_device(phone.node_id) is True
-    assert node_registry.get_node(phone.node_id)["node_state"] == NodeState.APPROVED.value
+    assert node_registry.get_node(phone.node_id).node_state == NodeState.APPROVED.value
 
     # 5. Reconnection after network interruption expecting same Kingdom -> ALLOWED
     rejoin_res = rejoin_manager.rejoin(phone.node_id, expected_kingdom_id=k_commander.node_id)
@@ -46,7 +46,7 @@ def test_e2e_desktop_mobile_pairing_lifecycle_and_reconnect():
 
     # 7. Remote device revocation
     assert mobile_pairing_manager.revoke_mobile_device(phone.node_id, reason="E2E Revocation") is True
-    assert node_registry.get_node(phone.node_id)["node_state"] == NodeState.REVOKED.value
+    assert node_registry.get_node(phone.node_id).node_state == NodeState.REVOKED.value
 
     # 8. Reconnection after revocation -> DENIED
     rejoin_revoked = rejoin_manager.rejoin(phone.node_id, expected_kingdom_id=k_commander.node_id)

@@ -17,9 +17,9 @@ class DataClassification(str, Enum):
 
 class CredentialBroker:
     TOKEN_PATTERNS = [
-        re.compile(r"ghp_[A-Za-z0-9_]{16,}"),
-        re.compile(r"github_pat_[A-Za-z0-9_]{16,}"),
-        re.compile(r"sk-[A-Za-z0-9_]{16,}"),
+        re.compile(r"ghp_[A-Za-z0-9_]{10,}"),
+        re.compile(r"github_pat_[A-Za-z0-9_]{10,}"),
+        re.compile(r"sk-[A-Za-z0-9_]{10,}"),
         re.compile(r"bearer\s+[A-Za-z0-9_\-\.]+", re.IGNORECASE)
     ]
 
@@ -57,11 +57,19 @@ class CredentialBroker:
         Supports dicts, lists, tuples, sets, strings, and custom objects.
         """
         if isinstance(payload, dict):
-            return {
-                k: "[REDACTED_CREDENTIAL]" if any(s in k.lower() for s in ["token", "secret", "password", "key", "credential", "auth"])
-                else self.sanitize_payload_for_llm(v)
-                for k, v in payload.items()
-            }
+            sanitized_dict = {}
+            for k, v in payload.items():
+                sanitized_val = self.sanitize_payload_for_llm(v)
+                if any(s in k.lower() for s in ["token", "secret", "password", "key", "credential", "auth"]):
+                    if isinstance(sanitized_val, str) and "[REDACTED_BEARER_TOKEN]" in sanitized_val:
+                        sanitized_dict[k] = "[REDACTED_BEARER_TOKEN]"
+                    elif isinstance(v, str) and any(pattern.search(v) for pattern in self.TOKEN_PATTERNS):
+                        sanitized_dict[k] = "[REDACTED_BEARER_TOKEN]"
+                    else:
+                        sanitized_dict[k] = "[REDACTED_CREDENTIAL]"
+                else:
+                    sanitized_dict[k] = sanitized_val
+            return sanitized_dict
         elif isinstance(payload, (list, tuple, set)):
             sanitized_items = [self.sanitize_payload_for_llm(item) for item in payload]
             return type(payload)(sanitized_items)
