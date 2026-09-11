@@ -1,0 +1,3 @@
+## 2026-03-31 - Redundant Regex Evaluation in Payload Sanitization
+**Learning:** In `CredentialBroker.sanitize_payload_for_llm`, dictionary key branches checking for credential/token names were re-evaluating regex pattern searches (`TOKEN_PATTERNS`) on dictionary values after already calling recursive string sanitization (`sanitized_val`). Since recursive string sanitization replaces all matching token patterns with `"[REDACTED_BEARER_TOKEN]"`, checking if `"[REDACTED_BEARER_TOKEN]"` is in `sanitized_val` is completely sufficient and avoids duplicate regex scans across payloads.
+**Action:** When scrubbing nested data structures where inner elements are sanitized first, leverage the post-processed result rather than re-running regexes on original raw inputs.
