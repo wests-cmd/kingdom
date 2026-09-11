@@ -37,7 +37,7 @@ def test_partition_engine_detection_and_reconnection():
     # 2. Contact timeout (15s > 10s skew threshold) -> Partition detected, node DISCONNECTED
     partitioned_timeout = partition_engine.detect_partition_and_isolate("node_worker_1", last_contact_timestamp=now - 15.0)
     assert partitioned_timeout is True
-    assert registry.get_node("node_worker_1")["node_state"] == NodeState.DISCONNECTED.value
+    assert registry.get_node("node_worker_1").node_state == NodeState.DISCONNECTED.value
 
     # 3. Valid Reconnection verification
     verified = partition_engine.verify_reconnection_state(
@@ -46,7 +46,7 @@ def test_partition_engine_detection_and_reconnection():
         reported_clock_time=now
     )
     assert verified is True
-    assert registry.get_node("node_worker_1")["node_state"] == NodeState.CONNECTED.value
+    assert registry.get_node("node_worker_1").node_state == NodeState.CONNECTED.value
 
     # 4. Reconnection with excessive clock skew fails
     with pytest.raises(ValueError, match="clock skew error"):
@@ -77,7 +77,7 @@ def test_revocation_propagator():
     )
 
     assert record["target_id"] == "node_compromised"
-    assert registry.get_node("node_compromised")["node_state"] == NodeState.REVOKED.value
+    assert registry.get_node("node_compromised").node_state == NodeState.REVOKED.value
 
     # Reconnection of revoked node is rejected
     partition_engine = PartitionEngine(registry)

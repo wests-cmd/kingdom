@@ -20,6 +20,11 @@ class WorkflowResourceBudget(BaseModel):
     max_tool_calls: int = 15
     max_network_calls: int = 10
 
+    def __init__(self, **data):
+        if "max_execution_seconds" in data and "max_execution_time_sec" not in data:
+            data["max_execution_time_sec"] = data.pop("max_execution_seconds")
+        super().__init__(**data)
+
     # Consumption counters
     used_steps: int = 0
     used_execution_time_sec: float = 0.0
@@ -74,17 +79,35 @@ class WorkflowContract(BaseModel):
 class CheckpointManager:
 
     def __init__(self):
-        self.checkpoints: Dict[str, WorkflowContract] = {}
+        self.checkpoints: Dict[str, Any] = {}
 
-    def save_checkpoint(self, workflow: WorkflowContract) -> None:
-        # Save deep copy of workflow state
-        self.checkpoints[workflow.workflow_id] = workflow.model_copy(deep=True)
+    def save_checkpoint(self, workflow_or_id: Any, step_index: Optional[int] = None, state: Optional[Dict[str, Any]] = None) -> None:
+        if isinstance(workflow_or_id, WorkflowContract):
+            wf = workflow_or_id
+            self.checkpoints[wf.workflow_id] = {
+                "workflow": wf.model_copy(deep=True),
+                "step_index": len(wf.completed_steps),
+                "state": {"completed_steps": wf.completed_steps},
+                "timestamp": time.time()
+            }
+        else:
+            workflow_id = str(workflow_or_id)
+            self.checkpoints[workflow_id] = {
+                "step_index": step_index if step_index is not None else 0,
+                "state": state if state is not None else {},
+                "timestamp": time.time()
+            }
 
-    def load_checkpoint(self, workflow_id: str) -> Optional[WorkflowContract]:
+    def load_checkpoint(self, workflow_id: str) -> Optional[Any]:
         checkpoint = self.checkpoints.get(workflow_id)
-        if checkpoint:
-            return checkpoint.model_copy(deep=True)
-        return None
+        if not checkpoint:
+            return None
+        if "workflow" in checkpoint:
+            return checkpoint["workflow"].model_copy(deep=True)
+        return checkpoint
+
+    def get_latest_checkpoint(self, workflow_id: str) -> Optional[Dict[str, Any]]:
+        return self.checkpoints.get(workflow_id)
 
 
 class CompensationEngine:
@@ -119,6 +142,12 @@ class EmergencyIncidentMode:
         self.activated_at = time.time()
         self.activated_by = operator
         self.reason = reason
+
+    def trigger_lockdown(self, reason: str = "System Incident Lockdown") -> None:
+        self.activate_emergency_lockdown(operator="SYSTEM", reason=reason)
+
+    def is_active(self) -> bool:
+        return self.active
 
     def deactivate_emergency_lockdown(self, operator: str) -> None:
         self.active = False

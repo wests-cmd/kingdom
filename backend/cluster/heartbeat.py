@@ -15,23 +15,24 @@ class HeartbeatManager:
         if not node:
             return {"success": False, "error": f"Node {node_id} not found in cluster registry."}
 
-        state = node.get("node_state")
-        if state in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value]:
-            return {"success": False, "error": f"Node {node_id} is in invalid state {state}."}
+        state = node.status
+        state_val = state.value if isinstance(state, NodeState) else str(state)
+        if state_val in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value]:
+            return {"success": False, "error": f"Node {node_id} is in invalid state {state_val}."}
 
         now = time.time()
-        node["last_heartbeat"] = now
-        node["health"] = health
+        node.last_heartbeat = now
+        node.health = health
         if load_metrics:
-            meta = node.get("connection_metadata", {})
+            meta = node.connection_metadata or {}
             meta["load_metrics"] = load_metrics
-            node["connection_metadata"] = meta
+            node.connection_metadata = meta
 
         # Transition from DISCONNECTED / RECONNECTING back to CONNECTED
-        if state in [NodeState.DISCONNECTED.value, NodeState.RECONNECTING.value, NodeState.APPROVED.value]:
+        if state_val in [NodeState.DISCONNECTED.value, NodeState.RECONNECTING.value, NodeState.APPROVED.value]:
             node_registry.update_node_state(node_id, NodeState.CONNECTED)
         else:
-            node_registry.repo.save(node)
+            node_registry.repo.save(node.to_dict())
 
         event_bus.publish("cluster.heartbeat_received", {
             "node_id": node_id,
@@ -42,7 +43,7 @@ class HeartbeatManager:
         return {
             "success": True,
             "node_id": node_id,
-            "node_state": node.get("node_state"),
+            "node_state": state_val,
             "timestamp": now
         }
 
@@ -54,15 +55,16 @@ class HeartbeatManager:
         healthy_count = 0
 
         for node in all_nodes:
-            state = node.get("node_state")
-            if state in [NodeState.CONNECTED.value, NodeState.APPROVED.value]:
-                elapsed = now - node.get("last_heartbeat", 0)
+            state = node.status
+            state_val = state.value if isinstance(state, NodeState) else str(state)
+            if state_val in [NodeState.CONNECTED.value, NodeState.APPROVED.value]:
+                elapsed = now - (node.last_heartbeat or 0)
                 if elapsed > self.timeout_seconds:
-                    node_registry.update_node_state(node["id"], NodeState.DISCONNECTED, reason="Heartbeat timeout")
+                    node_registry.update_node_state(node.node_id, NodeState.DISCONNECTED, reason="Heartbeat timeout")
                     disconnected_count += 1
                 elif elapsed > (self.timeout_seconds / 2):
-                    node["health"] = "degraded"
-                    node_registry.repo.save(node)
+                    node.health = "degraded"
+                    node_registry.repo.save(node.to_dict())
                     degraded_count += 1
                 else:
                     healthy_count += 1

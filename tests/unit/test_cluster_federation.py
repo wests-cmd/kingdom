@@ -95,7 +95,7 @@ def test_identity_substitution_detection():
     res = pairing_manager.process_pairing_request(req)
     assert res["success"] is False
     assert res.get("security_alert") is True
-    assert node_registry.get_node("kn-sub-01")["node_state"] == NodeState.QUARANTINED.value
+    assert node_registry.get_node("kn-sub-01").node_state == NodeState.QUARANTINED.value
 
 def test_capability_authorization_and_revocation():
     kn = KnightIdentity.get_or_create("kn-cap-01", "Cap Knight")
@@ -114,7 +114,7 @@ def test_capability_authorization_and_revocation():
 
     capability_authorizer.revoke_node(kn.node_id, reason="Security audit test")
     assert capability_authorizer.is_capability_granted(kn.node_id, "compute") is False
-    assert node_registry.get_node(kn.node_id)["node_state"] == NodeState.REVOKED.value
+    assert node_registry.get_node(kn.node_id).node_state == NodeState.REVOKED.value
 
 def test_rpc_signed_transport_and_replay_protection():
     k_identity = KingdomIdentity.get_or_create()
@@ -206,7 +206,7 @@ def test_full_node_lifecycle_and_unauthorized_capability_denial():
     # 7. Revoke Knight -> Immediate trust loss
     capability_authorizer.revoke_node(kn.node_id, reason="Lifecycle E2E Revocation")
     assert capability_authorizer.is_capability_granted(kn.node_id, "compute") is False
-    assert node_registry.get_node(kn.node_id)["node_state"] == NodeState.REVOKED.value
+    assert node_registry.get_node(kn.node_id).node_state == NodeState.REVOKED.value
 
     # 8. RPC from Revoked Knight -> Denied
     rpc_revoked = kn_transport.create_signed_message(k_commander.node_id, "COMPUTE_EXEC", {"task": "matrix_mult_2"})

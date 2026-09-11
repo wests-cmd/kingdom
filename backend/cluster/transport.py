@@ -83,15 +83,15 @@ class RPCSecureTransport:
             pub_key_hex = pub_identity.get("public_key_hex")
         elif sender_node:
             # Enforce Kingdom identity matching: Node must belong to this specific Kingdom
-            target_k_id = sender_node.get("kingdom_id")
+            target_k_id = sender_node.kingdom_id
             if target_k_id and target_k_id != self.identity.node_id:
                 return {"valid": False, "error": f"Cross-Kingdom RPC blocked: Sender node {sender_id} belongs to Kingdom {target_k_id}, not {self.identity.node_id}."}
 
-            state = sender_node.get("node_state")
-            if state in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value]:
-                return {"valid": False, "error": f"Sender node {sender_id} is in revoked or restricted state: {state}."}
-            pub_identity = sender_node.get("public_identity")
-            pub_key_hex = pub_identity.get("public_key_hex") if pub_identity else None
+            state_val = sender_node.status.value if isinstance(sender_node.status, NodeState) else str(sender_node.status)
+            if state_val in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value]:
+                return {"valid": False, "error": f"Sender node {sender_id} is in revoked or restricted state: {state_val}."}
+            pub_identity = sender_node.public_identity or {}
+            pub_key_hex = pub_identity.get("public_key_hex") if isinstance(pub_identity, dict) else None
         else:
             pub_key_hex = None
 

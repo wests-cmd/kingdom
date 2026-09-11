@@ -52,13 +52,15 @@ class PartitionEngine:
         if not node:
             raise KeyError(f"Reconnecting node '{node_id}' not found in registry.")
 
-        if node.get("node_state") == NodeState.REVOKED.value:
+        state_val = node.status.value if isinstance(node.status, NodeState) else str(node.status)
+        if state_val == NodeState.REVOKED.value:
             raise PermissionError(f"Reconnection rejected: Node '{node_id}' is REVOKED.")
 
         # Version compatibility check
-        if reported_version != node.get("software_version", "40.2.0"):
+        expected_ver = node.software_version or "40.2.0"
+        if reported_version != expected_ver:
             raise ValueError(
-                f"Protocol version mismatch on reconnection: Expected {node.get('software_version')}, got {reported_version}."
+                f"Protocol version mismatch on reconnection: Expected {expected_ver}, got {reported_version}."
             )
 
         # Clock skew sanity check
