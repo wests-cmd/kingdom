@@ -1,7 +1,9 @@
 import json
+import re
 from pathlib import Path
 
 AI_MAP_PATH = Path("data/ai_maps")
+VALID_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 class AIMap:
 
@@ -35,5 +37,6 @@ class AIMap:
         return sorted(path.stem for path in AI_MAP_PATH.glob("*.json"))
 
     def _validate_name(self, name):
-        if not name or Path(name).name != name or any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for character in name):
+        # Optimization: Use precompiled regex matching instead of character-by-character string scanning
+        if not name or Path(name).name != name or not VALID_NAME_RE.match(name):
             raise ValueError("Map name must use only letters, numbers, underscores, or hyphens")
