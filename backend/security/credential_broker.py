@@ -61,10 +61,9 @@ class CredentialBroker:
             for k, v in payload.items():
                 sanitized_val = self.sanitize_payload_for_llm(v)
                 if any(s in k.lower() for s in ["token", "secret", "password", "key", "credential", "auth"]):
-                    # Optimization: sanitized_val has already been processed by self.sanitize_payload_for_llm(v),
-                    # which replaces all TOKEN_PATTERNS in string values with "[REDACTED_BEARER_TOKEN]".
-                    # Relying on "[REDACTED_BEARER_TOKEN]" in sanitized_val eliminates redundant regex searches.
                     if isinstance(sanitized_val, str) and "[REDACTED_BEARER_TOKEN]" in sanitized_val:
+                        sanitized_dict[k] = "[REDACTED_BEARER_TOKEN]"
+                    elif isinstance(v, str) and any(pattern.search(v) for pattern in self.TOKEN_PATTERNS):
                         sanitized_dict[k] = "[REDACTED_BEARER_TOKEN]"
                     else:
                         sanitized_dict[k] = "[REDACTED_CREDENTIAL]"

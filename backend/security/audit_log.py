@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import re
-from collections import deque
 from datetime import datetime, timezone
 from typing import Any
 
@@ -20,8 +19,7 @@ SK_KEY_RE = re.compile(r"sk-[a-zA-Z0-9]{32,}")
 class AuditLogger:
     def __init__(self, max_history: int = 1000) -> None:
         self.max_history = max_history
-        # Optimization: Use deque with maxlen for O(1) bounded insertions instead of O(n) list.pop(0)
-        self._records: deque[dict[str, Any]] = deque(maxlen=max_history)
+        self._records: list[dict[str, Any]] = []
 
     def record(
         self,
@@ -52,6 +50,8 @@ class AuditLogger:
         }
 
         self._records.append(record)
+        if len(self._records) > self.max_history:
+            self._records.pop(0)
 
         log_msg = f"[AUDIT] decision={decision} actor={record['actor']} cap={capability} op={record['operation']} reason={record['reason']}"
         if decision == "DENIED":
@@ -88,15 +88,15 @@ class AuditLogger:
         decision: str | None = None,
         capability: str | None = None,
     ) -> list[dict[str, Any]]:
-        items = list(self._records)
+        filtered = self._records
         if actor:
-            items = [r for r in items if r["actor"] == actor]
+            filtered = [r for r in filtered if r["actor"] == actor]
         if decision:
-            items = [r for r in items if r["decision"] == decision]
+            filtered = [r for r in filtered if r["decision"] == decision]
         if capability:
-            items = [r for r in items if r["capability"] == capability]
+            filtered = [r for r in filtered if r["capability"] == capability]
 
-        return list(reversed(items[-limit:]))
+        return list(reversed(filtered[-limit:]))
 
     def _sanitize_dict(self, data: dict[str, Any]) -> dict[str, Any]:
         sanitized = {}
