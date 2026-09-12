@@ -13,9 +13,17 @@ def _run_migration(filename):
     spec.loader.exec_module(module)
     module.upgrade()
 
+MIGRATION_REGISTRY = {
+    "40.1.0": "40_1.py",
+    "40.2.0": "40_1.py"
+}
+
 def run_migrations():
     version = get_version()
+    migration_file = MIGRATION_REGISTRY.get(version)
 
-    if version == "40.1":
-        print("Running migration 40_0 to 40_1")
-        _run_migration("40_1.py")
+    if migration_file:
+        print(f"[Migrator] Running migration script {migration_file} for version {version}")
+        _run_migration(migration_file)
+    else:
+        print(f"[Migrator] Schema is up to date for version {version}")

@@ -7,16 +7,21 @@ const { spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
 
-const BACKEND_PORT = process.env.PORT || 8000;
-const READINESS_URL = `http://localhost:${BACKEND_PORT}/health/ready`;
+let BACKEND_PORT = process.env.PORT || 8000;
+let READINESS_URL = `http://localhost:${BACKEND_PORT}/health/ready`;
 const MAX_POLL_ATTEMPTS = 30;
 const POLL_INTERVAL_MS = 1000;
 
 let backendProcess = null;
 
-function checkReadiness() {
+function setPort(port) {
+  BACKEND_PORT = port;
+  READINESS_URL = `http://localhost:${BACKEND_PORT}/health/ready`;
+}
+
+function checkReadiness(url = READINESS_URL) {
   return new Promise((resolve) => {
-    http.get(READINESS_URL, (res) => {
+    http.get(url, (res) => {
       if (res.statusCode === 200) {
         resolve(true);
       } else {

@@ -9,10 +9,10 @@ class TopologySync:
             "commander": "KG-MASTER-01",
             "knights": [
                 {
-                    "id": n["id"],
-                    "state": n.get("node_state"),
-                    "role": n.get("role"),
-                    "capabilities": n.get("granted_capabilities", [])
+                    "id": n.node_id,
+                    "state": n.node_state,
+                    "role": n.role.value if hasattr(n.role, "value") else str(n.role),
+                    "capabilities": n.granted_capabilities
                 }
                 for n in nodes
             ],

@@ -8,10 +8,9 @@
     "start": "electron .",
     "build": "electron-builder --dir"
   },
-  "dependencies": {
-    "electron": "^31.0.0"
-  },
+  "dependencies": {},
   "devDependencies": {
+    "electron": "^31.0.0",
     "electron-builder": "^24.13.3"
   },
   "build": {

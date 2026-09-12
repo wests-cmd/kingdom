@@ -95,7 +95,9 @@ class TestDoomsdayScenarios(unittest.TestCase):
 
         contract = WorkflowContract(
             workflow_id="wf-doomsday-01",
-            autonomy_level=AutonomyLevel.L3_WORKFLOW_ORCHESTRATOR,
+            actor_identity_id="system-doomsday-actor",
+            objective="Doomsday emergency recovery orchestration",
+            autonomy_level=AutonomyLevel.LEVEL_3_ADAPTIVE_BOUNDED,
             budget=WorkflowResourceBudget(max_steps=10, max_execution_seconds=60, max_cost_usd=1.0)
         )
 

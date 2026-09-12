@@ -24,7 +24,13 @@ async function createWindow() {
 
   const isReady = await waitForBackendReady();
   if (isReady) {
-    mainWindow.loadURL('http://localhost:8000');
+    const staticIndex = path.join(__dirname, '..', 'frontend', 'dist', 'index.html');
+    const fs = require('fs');
+    if (fs.existsSync(staticIndex)) {
+      mainWindow.loadFile(staticIndex);
+    } else {
+      mainWindow.loadURL('http://localhost:8000');
+    }
   } else {
     mainWindow.loadFile(path.join(__dirname, 'error.html'));
   }

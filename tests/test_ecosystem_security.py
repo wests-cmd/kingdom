@@ -27,7 +27,7 @@ def test_adversarial_credential_theft_attempt():
 
     sanitized = broker.sanitize_payload_for_llm(malicious_payload)
     assert "ghp_SECRET_OAUTH_TOKEN_999" not in str(sanitized)
-    assert sanitized["raw_token"] == "[REDACTED_CREDENTIAL]"
+    assert sanitized["raw_token"] == "[REDACTED_BEARER_TOKEN]"
     assert sanitized["api_secret"] == "[REDACTED_CREDENTIAL]"
 
 def test_adversarial_unauthorized_tool_invocation():

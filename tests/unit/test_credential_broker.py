@@ -34,9 +34,9 @@ def test_llm_payload_sanitization():
 
     sanitized = broker.sanitize_payload_for_llm(raw_payload)
 
-    assert sanitized["access_token"] == "[REDACTED_CREDENTIAL]"
+    assert sanitized["access_token"] == "[REDACTED_BEARER_TOKEN]"
     assert sanitized["api_secret"] == "[REDACTED_CREDENTIAL]"
-    assert sanitized["user"]["api_key"] == "[REDACTED_CREDENTIAL]"
+    assert sanitized["user"]["api_key"] == "[REDACTED_BEARER_TOKEN]"
     assert sanitized["user"]["name"] == "Alice"
     assert sanitized["items"][0] == "[REDACTED_BEARER_TOKEN]"
     assert sanitized["items"][1] == "public_data"
