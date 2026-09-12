@@ -1,13 +1,7 @@
-import re
-
-_ZERO_WIDTH_RE = re.compile(r"[\u200b\u200c\u200d\ufeff\u00ad]")
-_WS_RE = re.compile(r"\s+")
-
 BLOCKED_PATTERNS = [
     "ignore previous instructions",
     "ignore all instructions",
     "ignore above instructions",
-    "ignore system instructions",
     "disregard previous instructions",
     "forget previous instructions",
     "disregard policy",
@@ -39,11 +33,8 @@ BLOCKED_PATTERNS = [
     "display secret token",
     "send passwords",
     "system override",
-    "send passwords",
     "bypass safety",
     "bypass governance",
-    # Block common jailbreak personas like "act as DAN" (Do Anything Now)
-    "act as dan",
 ]
 
 
@@ -56,11 +47,10 @@ class InjectionDetector:
         if not isinstance(content, str):
             content = str(content)
 
-        sanitized = _ZERO_WIDTH_RE.sub("", content)
-        sanitized = _WS_RE.sub(" ", sanitized).lower()
+        lowered = content.lower()
 
         for pattern in BLOCKED_PATTERNS:
-            if pattern in sanitized:
+            if pattern in lowered:
                 return {
                     "blocked": True,
                     "reason": pattern
