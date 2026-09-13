@@ -8,8 +8,9 @@ from backend.cluster.node_registry import node_registry, NodeState
 from backend.events.event_bus import event_bus
 
 class PairingManager:
-    def __init__(self, kingdom_identity: Optional[KingdomIdentity] = None):
+    def __init__(self, kingdom_identity: Optional[KingdomIdentity] = None, registry=None):
         self.kingdom_identity = kingdom_identity or KingdomIdentity.get_or_create()
+        self.node_registry = registry or node_registry
         self._invitations: Dict[str, Dict[str, Any]] = {}
 
     def create_invitation(self, ttl_seconds: int = 600) -> Dict[str, Any]:
@@ -105,11 +106,11 @@ class PairingManager:
             return {"success": False, "error": "Invalid request signature verification."}
 
         # Identity Substitution Protection: Check if node_id exists with different fingerprint
-        existing_node = node_registry.get_node(node_id)
+        existing_node = self.node_registry.get_node(node_id)
         if existing_node and existing_node.fingerprint:
             if existing_node.fingerprint != computed_fp:
                 # Security Alert: Identity key substitution detected!
-                node_registry.update_node_state(node_id, NodeState.QUARANTINED, reason="Identity substitution attempt detected")
+                self.node_registry.update_node_state(node_id, NodeState.QUARANTINED, reason="Identity substitution attempt detected")
                 event_bus.publish("security.identity_substitution_detected", {
                     "node_id": node_id,
                     "previous_fingerprint": existing_node.fingerprint,
@@ -126,7 +127,7 @@ class PairingManager:
         inv["used"] = True
 
         # Register or update node state to PENDING_APPROVAL
-        node_registry.register_discovered_node({
+        self.node_registry.register_discovered_node({
             "id": node_id,
             "role": "knight",
             "node_state": NodeState.PENDING_APPROVAL.value,
