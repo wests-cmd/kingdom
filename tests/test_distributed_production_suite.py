@@ -1,21 +1,20 @@
 """
-Multi-Process Production Distributed Topology & Knight Enrollment Lifecycle Suite.
+Multi-Process Production Distributed Topology, Enrollment Lifecycle, and Security Contract Suite.
 
 Tests:
-1. Multi-Node Process Startup & Local RPC Secure Transport Binding
-2. Knight Enrollment Lifecycle: Startup -> WAITING_FOR_APPROVAL -> Commander Approval -> CONNECTED
-3. Pairing Code Security: Expiration, Single-Use Invalidation, Replay Rejection, Ed25519 Proof-of-Possession Signature Verification
-4. Unauthorized / Rejected Knight Access Blockade & Audit Telemetry Logging
+1. Multi-Node Topology Enrollment Lifecycle: Startup -> WAITING_FOR_APPROVAL -> Commander Approval -> CONNECTED -> RPC Transport
+2. Pairing Security Contracts: Single-use codes, replay attack rejection, wrong target rejection, invalid signature rejection
+3. Transport Verification Contract: Verify RPCSecureTransport.verify_and_unwrap_message NEVER returns None across 10 security rejection cases
 """
 
 import pytest
 import time
-import json
 import secrets
-from backend.cluster.identity import KingdomIdentity, KnightIdentity, compute_fingerprint
+from typing import Dict, Any, Optional
+from backend.cluster.identity import KingdomIdentity, KnightIdentity, BaseNodeIdentity
 from backend.cluster.node_registry import NodeRegistry, NodeState, NodeRole
 from backend.cluster.pairing import PairingManager
-from backend.cluster.transport import RPCSecureTransport, RPCMessage
+from backend.cluster.transport import RPCSecureTransport, RPCMessage, MAX_TIME_SKEW_SECONDS
 from backend.cluster.capabilities import capability_authorizer
 from backend.storage.repository import KnightRepository
 
@@ -29,6 +28,7 @@ class InMemoryRepo(KnightRepository):
         return knight
     def list_all(self):
         return list(self.data.values())
+
 
 def test_multi_node_topology_enrollment_lifecycle():
     """
@@ -74,6 +74,10 @@ def test_multi_node_topology_enrollment_lifecycle():
     assert registered_node.granted_capabilities == []
 
     # Step 4: Commander approves Knight with explicit capability scope
+    # Register node in default registry so capability_authorizer can find it
+    from backend.cluster.node_registry import node_registry
+    node_registry.register_discovered_node(registered_node.to_dict())
+
     approved_node = capability_authorizer.approve_node_and_capabilities(
         knight_identity.node_id,
         granted_capabilities=["gpu"]
@@ -95,6 +99,8 @@ def test_multi_node_topology_enrollment_lifecycle():
 
     # Commander unwraps and verifies message signature & identity binding
     unwrapped = cmd_transport.verify_and_unwrap_message(rpc_msg, expected_target_id=cmd_identity.node_id)
+    assert unwrapped is not None
+    assert isinstance(unwrapped, dict)
     assert unwrapped["valid"] is True
     assert unwrapped["sender_id"] == knight_identity.node_id
     assert unwrapped["payload"]["status"] == "ready"
@@ -155,3 +161,98 @@ def test_pairing_security_contracts():
     res_replay = pairing_mgr.process_pairing_request(valid_req)
     assert res_replay["success"] is False
     assert "Invalid, expired, or already used" in res_replay["error"]
+
+
+def test_verify_and_unwrap_message_never_returns_none():
+    """
+    Comprehensive regression test proving RPCSecureTransport.verify_and_unwrap_message()
+    NEVER returns None across 10 distinct security rejection paths and malformed input scenarios.
+    """
+    cmd_identity = KingdomIdentity.get_or_create()
+    kn_identity = KnightIdentity.get_or_create("kn-contract-test", "Contract Knight")
+
+    cmd_transport = RPCSecureTransport(cmd_identity)
+    kn_transport = RPCSecureTransport(kn_identity)
+
+    from backend.cluster.node_registry import node_registry
+    node_registry.register_discovered_node({
+        "id": kn_identity.node_id,
+        "node_state": NodeState.CONNECTED.value,
+        "public_identity": kn_identity.get_public_identity(),
+        "kingdom_id": cmd_identity.node_id
+    })
+
+    # 1. Non-dict payload
+    res1 = cmd_transport.verify_and_unwrap_message("string_not_dict")
+    assert res1 is not None and isinstance(res1, dict)
+    assert res1["valid"] is False
+    assert "expected dict" in res1["error"]
+
+    # 2. None payload
+    res2 = cmd_transport.verify_and_unwrap_message(None)
+    assert res2 is not None and isinstance(res2, dict)
+    assert res2["valid"] is False
+
+    # 3. Protocol version mismatch
+    msg = kn_transport.create_signed_message(cmd_identity.node_id, "test", {"data": 1})
+    msg["protocol_version"] = "invalid.version.v99"
+    res3 = cmd_transport.verify_and_unwrap_message(msg)
+    assert res3 is not None and isinstance(res3, dict)
+    assert res3["valid"] is False
+    assert "Protocol mismatch" in res3["error"]
+
+    # 4. Unregistered / unknown sender node
+    unknown_kn = KnightIdentity.get_or_create("kn-unknown-999", "Unknown Knight")
+    unknown_transport = RPCSecureTransport(unknown_kn)
+    msg_unknown = unknown_transport.create_signed_message(cmd_identity.node_id, "test", {"data": 1})
+    res4 = cmd_transport.verify_and_unwrap_message(msg_unknown)
+    assert res4 is not None and isinstance(res4, dict)
+    assert res4["valid"] is False
+    assert "Unknown or unauthenticated sender" in res4["error"]
+
+    # 5. Wrong target node
+    msg_valid = kn_transport.create_signed_message(cmd_identity.node_id, "test", {"data": 1})
+    res5 = cmd_transport.verify_and_unwrap_message(msg_valid, expected_target_id="KG-WRONG-TARGET")
+    assert res5 is not None and isinstance(res5, dict)
+    assert res5["valid"] is False
+    assert "wrong target" in res5["error"].lower()
+
+    # 6. Replay attack / duplicate msg_id
+    res_first = cmd_transport.verify_and_unwrap_message(msg_valid)
+    assert res_first["valid"] is True
+    res_replay = cmd_transport.verify_and_unwrap_message(msg_valid)
+    assert res_replay is not None and isinstance(res_replay, dict)
+    assert res_replay["valid"] is False
+    assert "Replay attack" in res_replay["error"]
+
+    # 7. Clock skew / expired timestamp
+    msg_skew = kn_transport.create_signed_message(cmd_identity.node_id, "test2", {"data": 1})
+    msg_skew["timestamp"] = time.time() - (MAX_TIME_SKEW_SECONDS + 10.0)
+    res7 = cmd_transport.verify_and_unwrap_message(msg_skew)
+    assert res7 is not None and isinstance(res7, dict)
+    assert res7["valid"] is False
+    assert "clock skew" in res7["error"].lower()
+
+    # 8. Missing signature
+    msg_nosig = kn_transport.create_signed_message(cmd_identity.node_id, "test3", {"data": 1})
+    del msg_nosig["signature"]
+    res8 = cmd_transport.verify_and_unwrap_message(msg_nosig)
+    assert res8 is not None and isinstance(res8, dict)
+    assert res8["valid"] is False
+    assert "Missing signature" in res8["error"]
+
+    # 9. Invalid signature hex
+    msg_badhex = kn_transport.create_signed_message(cmd_identity.node_id, "test4", {"data": 1})
+    msg_badhex["signature"] = "not_hex_!!!"
+    res9 = cmd_transport.verify_and_unwrap_message(msg_badhex)
+    assert res9 is not None and isinstance(res9, dict)
+    assert res9["valid"] is False
+    assert "Invalid signature hex" in res9["error"]
+
+    # 10. Restricted node state (REVOKED / REJECTED / QUARANTINED / PENDING_APPROVAL)
+    node_registry.update_node_state(kn_identity.node_id, NodeState.REVOKED)
+    msg_rev = kn_transport.create_signed_message(cmd_identity.node_id, "test5", {"data": 1})
+    res10 = cmd_transport.verify_and_unwrap_message(msg_rev)
+    assert res10 is not None and isinstance(res10, dict)
+    assert res10["valid"] is False
+    assert "revoked or restricted state" in res10["error"]

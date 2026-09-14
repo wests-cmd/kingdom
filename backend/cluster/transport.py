@@ -55,10 +55,18 @@ class RPCSecureTransport:
         sig = self.identity.sign_message(canonical)
         return msg.to_dict(signature=sig.hex())
 
-    def verify_and_unwrap_message(self, message_dict: Dict[str, Any], expected_target_id: Optional[str] = None) -> Dict[str, Any]:
+    def verify_and_unwrap_message(self, message_dict: Any, expected_target_id: Optional[str] = None) -> Dict[str, Any]:
+        if not isinstance(message_dict, dict):
+            return {"valid": False, "error": f"Invalid message format: expected dict, got {type(message_dict).__name__}"}
+
         # Protocol version validation
         if message_dict.get("protocol_version") != PROTOCOL_VERSION:
             return {"valid": False, "error": f"Protocol mismatch. Expected {PROTOCOL_VERSION}, got {message_dict.get('protocol_version')}"}
+
+        msg_type = message_dict.get("msg_type")
+        payload = message_dict.get("payload")
+        if msg_type is None or payload is None or not isinstance(payload, dict):
+            return {"valid": False, "error": "Malformed message: missing or invalid msg_type/payload."}
 
         msg_id = message_dict.get("msg_id")
         if not msg_id or msg_id in self._processed_msg_ids:
@@ -87,8 +95,8 @@ class RPCSecureTransport:
             if target_k_id and target_k_id != self.identity.node_id:
                 return {"valid": False, "error": f"Cross-Kingdom RPC blocked: Sender node {sender_id} belongs to Kingdom {target_k_id}, not {self.identity.node_id}."}
 
-            state_val = sender_node.status.value if isinstance(sender_node.status, NodeState) else str(sender_node.status)
-            if state_val in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value]:
+            state_val = sender_node.node_state
+            if state_val in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value, NodeState.PENDING_APPROVAL.value]:
                 return {"valid": False, "error": f"Sender node {sender_id} is in revoked or restricted state: {state_val}."}
             pub_identity = sender_node.public_identity or {}
             pub_key_hex = pub_identity.get("public_key_hex") if isinstance(pub_identity, dict) else None
@@ -108,14 +116,17 @@ class RPCSecureTransport:
             return {"valid": False, "error": "Invalid signature hex format."}
 
         # Construct canonical RPCMessage
-        msg = RPCMessage(
-            sender_id=sender_id,
-            target_id=target_id,
-            msg_type=message_dict["msg_type"],
-            payload=message_dict["payload"],
-            msg_id=msg_id,
-            timestamp=timestamp
-        )
+        try:
+            msg = RPCMessage(
+                sender_id=sender_id,
+                target_id=target_id,
+                msg_type=msg_type,
+                payload=payload,
+                msg_id=msg_id,
+                timestamp=timestamp
+            )
+        except Exception as e:
+            return {"valid": False, "error": f"Failed to parse RPC message structure: {str(e)}"}
         canonical = msg.get_canonical_bytes()
 
         valid_sig = BaseNodeIdentity.verify_signature(pub_key_hex, canonical, sig_bytes)
