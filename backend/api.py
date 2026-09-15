@@ -340,9 +340,21 @@ def submit_task_result(task_id: str, request: TaskResultRequest):
     task = engine.tasks.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    # Claim task if still queued before completing
+
+    # Authenticate node state server-side
+    node = node_registry.get_node(request.executed_by)
+    if not node:
+        raise HTTPException(status_code=403, detail=f"Executing node '{request.executed_by}' is not registered.")
+
+    state_val = node.node_state
+    if state_val in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value, NodeState.PENDING_APPROVAL.value]:
+        raise HTTPException(status_code=403, detail=f"Executing node '{request.executed_by}' is in restricted state: {state_val}.")
+
+    # Directly mark specific task running if queued without popping unrelated tasks from queue
     if task["status"] == "queued":
-        engine.tasks.claim_next()
+        engine.tasks._tasks[task_id]["status"] = "running"
+        engine.tasks._tasks[task_id]["started_at"] = time.time()
+
     try:
         completed = engine.tasks.complete(task_id, result={"output": request.output, "executed_by": request.executed_by})
         engine.events.publish("task.completed", {"task_id": task_id, "executed_by": request.executed_by})
