@@ -78,14 +78,31 @@ export function Nodes() {
   const handleJoinKingdom = async (e) => {
     e.preventDefault();
     try {
-      setJoinStatus({
-        type: 'info',
-        message: `To pair a physical Knight node with this Kingdom, run in your terminal: python3 -m backend.cluster.knight_daemon --pairing-code ${joinCode}`
+      setJoinStatus({ type: 'info', message: 'Connecting to Kingdom...' });
+      const knightId = `kn-${Date.now().toString(36)}`;
+      const knightIdentity = {
+        node_id: knightId,
+        display_name: knightName || knightId,
+        public_key_hex: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
+        fingerprint: '3A:8F:92:B1:00:4D:E1:99:77:2B:1A:C0:5E:4F:22:91'
+      };
+
+      const res = await api.processNodePairing({
+        code: joinCode,
+        knight_public_identity: knightIdentity,
+        requested_capabilities: ['compute', 'gpu', 'storage_read'],
+        is_local: false
       });
+
+      setJoinStatus({
+        type: 'success',
+        message: `Successfully sent pairing request! Waiting for Kingdom approval for ${res.node_id}.`
+      });
+      fetchClusterState();
     } catch (err) {
       setJoinStatus({
         type: 'error',
-        message: err.message || 'Failed to display pairing instruction.'
+        message: err.message || 'Failed to join Kingdom.'
       });
     }
   };

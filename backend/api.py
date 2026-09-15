@@ -329,6 +329,27 @@ def get_task(task_id: str):
         raise HTTPException(status_code=404, detail="Task not found")
     return task
 
+class TaskResultRequest(BaseModel):
+    task_id: str
+    executed_by: str
+    output: Any
+    timestamp: float = Field(default_factory=time.time)
+
+@router.post("/tasks/{task_id}/result")
+def submit_task_result(task_id: str, request: TaskResultRequest):
+    task = engine.tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    # Claim task if still queued before completing
+    if task["status"] == "queued":
+        engine.tasks.claim_next()
+    try:
+        completed = engine.tasks.complete(task_id, result={"output": request.output, "executed_by": request.executed_by})
+        engine.events.publish("task.completed", {"task_id": task_id, "executed_by": request.executed_by})
+        return completed
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
 @router.post("/tasks/{task_id}/cancel")
 def cancel_task(task_id: str):
     try:

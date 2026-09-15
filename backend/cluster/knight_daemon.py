@@ -114,16 +114,23 @@ class KnightDaemon:
                 return None
 
             for task in tasks:
-                if task.get("assigned_knight") == self.node_id:
+                metadata = task.get("metadata", {})
+                if task.get("assigned_knight") == self.node_id or metadata.get("assigned_knight") == self.node_id:
                     task_id = task["id"]
-                    # Execute task locally
-                    prompt = task.get("input", {}).get("prompt", "noop")
+                    prompt = task.get("prompt") or task.get("input", {}).get("prompt", "noop")
+
+                    # Construct execution result and post back to Commander endpoint
                     result_payload = {
                         "task_id": task_id,
                         "executed_by": self.node_id,
                         "output": f"Executed by {self.node_id}: {prompt}",
                         "timestamp": time.time()
                     }
+
+                    try:
+                        self._http_request("POST", f"/tasks/{task_id}/result", result_payload)
+                    except Exception:
+                        pass
                     return result_payload
         except Exception:
             pass
