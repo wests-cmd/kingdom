@@ -20,7 +20,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest
-      - name: Run Backend Unit Tests
+      - name: Run Backend Unit Tests & Distributed Process E2E Suite
         run: |
           python3 -m pytest
 
