@@ -34,6 +34,12 @@
     "linux": {
       "target": ["AppImage", "deb"],
       "maintainer": "Kingdom Maintainers <westd613@gmail.com>"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin"
+      }
+    ]
   }
 }

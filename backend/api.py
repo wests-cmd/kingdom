@@ -24,6 +24,8 @@ from backend.cluster.capabilities import capability_authorizer
 from backend.cluster.heartbeat import heartbeat_manager
 from backend.cluster.audit import audit_logger
 from backend.cluster.mobile_pairing import mobile_pairing_manager
+from backend.cluster.transport import RPCSecureTransport, RPCMessage
+from backend.cluster.task_leasing import TaskLeaseManager
 from backend.memory.ingestion import knowledge_ingestor
 from backend.memory.knowledge_domains import knowledge_domain_manager
 from backend.skills.learning_engine import skill_learning_engine
@@ -34,6 +36,8 @@ from backend.state import STATE
 router = APIRouter()
 engine = RuntimeEngine()
 zero_trust = engine.security
+task_lease_manager = TaskLeaseManager()
+engine.lease_manager = task_lease_manager
 
 # Skills & Learning Managers Setup
 sample_skill = Skill(
@@ -164,6 +168,16 @@ class FinancialOrderRequest(BaseModel):
     action: str
     shares: int = Field(ge=1)
     limit_price: float = Field(gt=0)
+
+class RPCMessageRequest(BaseModel):
+    protocol_version: str
+    msg_id: str
+    sender_id: str
+    target_id: str
+    msg_type: str
+    payload: dict[str, Any]
+    timestamp: float
+    signature: str
 
 # --- SYSTEM VERSION ENDPOINT ---
 
@@ -660,6 +674,68 @@ def get_cluster_node(node_id: str):
     if not node:
         raise HTTPException(status_code=404, detail="Node not found in cluster registry")
     return node.to_dict()
+
+@router.post("/nodes/rpc")
+def handle_cluster_rpc(request: RPCMessageRequest):
+    k_identity = KingdomIdentity.get_or_create()
+    transport = RPCSecureTransport(k_identity)
+
+    msg_dict = request.model_dump()
+    verified = transport.verify_and_unwrap_message(msg_dict, expected_target_id=k_identity.node_id)
+    if not verified.get("valid"):
+        raise HTTPException(status_code=403, detail=verified.get("error"))
+
+    sender_id = verified["sender_id"]
+    msg_type = verified["msg_type"]
+    payload = verified["payload"]
+
+    if msg_type == "heartbeat":
+        res = heartbeat_manager.ping(sender_id)
+        return {"status": "ok", "ping": res}
+
+    elif msg_type == "task_poll":
+        tasks = engine.tasks.list("queued")
+        assigned_tasks = []
+        for t in tasks:
+            meta = t.get("metadata", {})
+            if t.get("assigned_knight") == sender_id or meta.get("assigned_knight") == sender_id:
+                task_id = t["id"]
+                lease = task_lease_manager.issue_lease(
+                    task_id=task_id,
+                    assigned_node_id=sender_id,
+                    capability_scope=meta.get("capability", "compute")
+                )
+                t_copy = dict(t)
+                t_copy["fencing_token"] = lease.fencing_token
+                t_copy["lease_id"] = lease.lease_id
+                assigned_tasks.append(t_copy)
+        return {"status": "ok", "tasks": assigned_tasks}
+
+    elif msg_type == "task_result":
+        task_id = payload.get("task_id")
+        executed_by = payload.get("executed_by") or sender_id
+        fencing_token = payload.get("fencing_token", 1)
+        output = payload.get("output")
+
+        node = node_registry.get_node(executed_by)
+        if not node:
+            raise HTTPException(status_code=403, detail=f"Executing node '{executed_by}' is not registered.")
+
+        state_val = node.node_state
+        if state_val in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value, NodeState.PENDING_APPROVAL.value]:
+            raise HTTPException(status_code=403, detail=f"Executing node '{executed_by}' is in restricted state: {state_val}.")
+
+        try:
+            task_lease_manager.validate_lease_execution(task_id, executed_by, fencing_token)
+        except Exception as exc:
+            raise HTTPException(status_code=403, detail=f"Task lease fencing error: {str(exc)}")
+
+        completed = engine.tasks.complete(task_id, result={"output": output, "executed_by": executed_by})
+        engine.events.publish("task.completed", {"task_id": task_id, "executed_by": executed_by})
+        return {"status": "ok", "completed": completed}
+
+    else:
+        return {"status": "ok", "message": f"RPC msg_type '{msg_type}' processed."}
 
 @router.post("/nodes/invitation", status_code=status.HTTP_201_CREATED)
 def create_pairing_invitation(ttl_seconds: int = Query(default=600, ge=60, le=3600)):

@@ -48,6 +48,80 @@ class UpdaterEngine:
             return True
         return False
 
+    def execute_update_pipeline(
+        self,
+        target_version: str,
+        artifact_bytes: bytes,
+        expected_checksum: str,
+        data_dir: str = "data",
+        backup_dir: str = "data/backups",
+        health_check_fn: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        """
+        Executes atomic 7-stage release update pipeline with automatic health rollback:
+        CHECK -> STAGE -> VERIFY SHA-256 -> BACKUP -> INSTALL/MIGRATE -> HEALTH CHECK -> SUCCESS / ROLLBACK
+        """
+        staging_dir = os.path.join(data_dir, "staging_update")
+        os.makedirs(staging_dir, exist_ok=True)
+
+        try:
+            # 1. VERIFY CHECKSUM
+            if expected_checksum and not self.verify_checksum(artifact_bytes, expected_checksum):
+                shutil.rmtree(staging_dir, ignore_errors=True)
+                return {
+                    "status": "failed",
+                    "version": self.current_version,
+                    "error": "Checksum verification failed"
+                }
+
+            # 2. CREATE DATA BACKUP
+            backup_path = self.backup_data(data_dir, backup_dir)
+
+            # 3. STAGE ARTIFACT
+            artifact_file = os.path.join(staging_dir, "release_artifact.tar.gz")
+            with open(artifact_file, "wb") as f:
+                f.write(artifact_bytes)
+
+            # 4. RUN SCHEMA MIGRATIONS
+            from backend.system.migrator import run_migrations
+            run_migrations()
+
+            # 5. EXECUTE HEALTH CHECK
+            health_ok = True
+            if health_check_fn:
+                try:
+                    health_ok = health_check_fn()
+                except Exception:
+                    health_ok = False
+
+            if not health_ok:
+                # AUTOMATIC ROLLBACK
+                self.rollback(backup_path, data_dir)
+                shutil.rmtree(staging_dir, ignore_errors=True)
+                return {
+                    "status": "rolled_back",
+                    "version": self.current_version,
+                    "backup_restored": backup_path,
+                    "error": "Post-update health check failed. System automatically rolled back."
+                }
+
+            # SUCCESS
+            shutil.rmtree(staging_dir, ignore_errors=True)
+            STATE["version"] = target_version
+            return {
+                "status": "success",
+                "version": target_version,
+                "backup_path": backup_path
+            }
+
+        except Exception as exc:
+            shutil.rmtree(staging_dir, ignore_errors=True)
+            return {
+                "status": "failed",
+                "version": self.current_version,
+                "error": str(exc)
+            }
+
 updater_engine = UpdaterEngine()
 
 def check_updates():

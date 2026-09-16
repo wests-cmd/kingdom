@@ -1,4 +1,4 @@
-name: Kingdom CI Pipeline
+name: Kingdom CI & Release Pipeline
 
 on:
   push:
@@ -8,6 +8,7 @@ on:
 
 jobs:
   test-backend:
+    name: Backend Tests & Distributed E2E
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,16 +16,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install dependencies
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest
+          pip install pytest pyinstaller
       - name: Run Backend Unit Tests & Distributed Process E2E Suite
         run: |
           python3 -m pytest
 
   build-frontend:
+    name: Build Production Frontend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,27 +34,49 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Verify Node & npm versions
-        run: |
-          node --version
-          npm --version
-      - name: Install Frontend Dependencies & Build
+      - name: Install Frontend Dependencies & Compile Bundle
         run: |
           cd frontend
-          npm install
+          npm ci
           npm run build
 
   build-desktop-release:
+    name: Package Desktop Release
     runs-on: ubuntu-latest
     needs: [test-backend, build-frontend]
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Node.js 24
+      - name: Set up Node.js 24 & Python 3.12
         uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Build Desktop Shell & Artifacts
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Python PyInstaller & Requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+      - name: Compile Standalone Backend Executable
+        run: |
+          pyinstaller --onefile --name kingdom-backend backend/main.py
+          mkdir -p desktop/bin
+          cp dist/kingdom-backend desktop/bin/kingdom-backend
+          chmod +x desktop/bin/kingdom-backend
+      - name: Build Production Frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+      - name: Package Desktop Artifacts (AppImage & DEB)
         run: |
           cd desktop
-          npm install
+          npm ci
           npm run build
+      - name: Verify Release Artifacts & Generate SHA-256 Checksums
+        run: |
+          ls -la desktop/dist
+          sha256sum desktop/dist/Kingdom-40.2.0.AppImage > desktop/dist/Kingdom-40.2.0.AppImage.sha256
+          sha256sum desktop/dist/kingdom-desktop_40.2.0_amd64.deb > desktop/dist/kingdom-desktop_40.2.0_amd64.deb.sha256
+          cat desktop/dist/*.sha256

@@ -99,41 +99,52 @@ class KnightDaemon:
         except Exception:
             return self.node_state
 
+    def _get_commander_id(self) -> str:
+        try:
+            res = self._http_request("GET", "/nodes/identity")
+            return res.get("node_id", "KG-MASTER-01")
+        except Exception:
+            return "KG-MASTER-01"
+
+    def send_rpc(self, msg_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        target_id = self._get_commander_id()
+        signed_rpc = self.transport.create_signed_message(target_id=target_id, msg_type=msg_type, payload=payload)
+        return self._http_request("POST", "/nodes/rpc", signed_rpc)
+
     def send_heartbeat(self) -> bool:
         try:
-            res = self._http_request("POST", f"/nodes/{self.node_id}/reconnect")
-            return res.get("success", False)
+            res = self.send_rpc("heartbeat", {"node_id": self.node_id})
+            return res.get("status") == "ok"
         except Exception:
             return False
 
     def poll_and_execute_task(self) -> Optional[Dict[str, Any]]:
-        # Poll Commander tasks assigned to this node
         try:
-            tasks = self._http_request("GET", "/tasks?status=queued")
+            res = self.send_rpc("task_poll", {"node_id": self.node_id})
+            tasks = res.get("tasks", [])
             if not isinstance(tasks, list):
                 return None
 
             for task in tasks:
-                metadata = task.get("metadata", {})
-                if task.get("assigned_knight") == self.node_id or metadata.get("assigned_knight") == self.node_id:
-                    task_id = task["id"]
-                    prompt = task.get("prompt") or task.get("input", {}).get("prompt", "noop")
+                task_id = task["id"]
+                fencing_token = task.get("fencing_token", 1)
+                prompt = task.get("prompt") or task.get("input", {}).get("prompt", "noop")
 
-                    # Construct execution result and post back to Commander endpoint
-                    result_payload = {
-                        "task_id": task_id,
-                        "executed_by": self.node_id,
-                        "output": f"Executed by {self.node_id}: {prompt}",
-                        "timestamp": time.time()
-                    }
+                result_payload = {
+                    "task_id": task_id,
+                    "executed_by": self.node_id,
+                    "fencing_token": fencing_token,
+                    "output": f"Executed by {self.node_id}: {prompt}",
+                    "timestamp": time.time()
+                }
 
-                    try:
-                        self._http_request("POST", f"/tasks/{task_id}/result", result_payload)
-                    except Exception:
-                        pass
-                    return result_payload
-        except Exception:
-            pass
+                try:
+                    self.send_rpc("task_result", result_payload)
+                except Exception as exc:
+                    print(f"[{self.node_id}] RPC task result error: {exc}")
+                return result_payload
+        except Exception as exc:
+            print(f"[{self.node_id}] RPC task poll error: {exc}")
         return None
 
 
