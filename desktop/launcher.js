@@ -6,6 +6,7 @@
 const { spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 
 let BACKEND_PORT = process.env.PORT || 8000;
 let READINESS_URL = `http://localhost:${BACKEND_PORT}/health/ready`;
@@ -47,15 +48,49 @@ async function waitForBackendReady() {
   return false;
 }
 
+function getBackendBinaryPath() {
+  const binaryName = process.platform === 'win32' ? 'kingdom-backend.exe' : 'kingdom-backend';
+
+  if (process.env.KINGDOM_BACKEND_BIN && fs.existsSync(process.env.KINGDOM_BACKEND_BIN)) {
+    return process.env.KINGDOM_BACKEND_BIN;
+  }
+
+  if (process.resourcesPath) {
+    const packagedBin = path.join(process.resourcesPath, 'bin', binaryName);
+    if (fs.existsSync(packagedBin)) {
+      return packagedBin;
+    }
+  }
+
+  const localBin = path.join(__dirname, 'bin', binaryName);
+  if (fs.existsSync(localBin)) {
+    return localBin;
+  }
+
+  return null;
+}
+
 function startBackend() {
   console.log('[Kingdom Desktop Launcher] Starting local Kingdom FastAPI server...');
-  const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+  const bundledBin = getBackendBinaryPath();
 
-  backendProcess = spawn(pythonCmd, ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)], {
-    cwd: path.resolve(__dirname, '..'),
-    env: { ...process.env, PYTHONUNBUFFERED: '1' },
-    stdio: 'inherit'
-  });
+  if (bundledBin) {
+    console.log(`[Kingdom Desktop Launcher] Found standalone bundled backend binary: ${bundledBin}`);
+    backendProcess = spawn(bundledBin, ['--host', '127.0.0.1', '--port', String(BACKEND_PORT)], {
+      cwd: path.dirname(bundledBin),
+      env: { ...process.env, PYTHONUNBUFFERED: '1' },
+      stdio: 'inherit'
+    });
+  } else {
+    console.log('[Kingdom Desktop Launcher] Standalone binary not found. Falling back to Python runtime mode...');
+    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+
+    backendProcess = spawn(pythonCmd, ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)], {
+      cwd: path.resolve(__dirname, '..'),
+      env: { ...process.env, PYTHONUNBUFFERED: '1' },
+      stdio: 'inherit'
+    });
+  }
 
   backendProcess.on('exit', (code, signal) => {
     console.log(`[Kingdom Desktop Launcher] Backend process exited with code ${code}, signal ${signal}`);

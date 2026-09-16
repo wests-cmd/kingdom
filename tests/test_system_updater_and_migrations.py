@@ -65,3 +65,48 @@ def test_schema_migrator():
     except Exception:
         migration_success = False
     assert migration_success is True
+
+
+def test_execute_update_pipeline_success_and_automatic_rollback(tmp_path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    db_file = data_dir / "kingdom.db"
+    db_file.write_text("Version 40.2.0 Database Content")
+
+    updater = UpdaterEngine(current_version="40.2.0")
+    artifact = b"Kingdom v40.3.0 Release Package Content"
+    checksum = hashlib.sha256(artifact).hexdigest()
+
+    # 1. Invalid checksum fails cleanly
+    bad_res = updater.execute_update_pipeline(
+        target_version="40.3.0",
+        artifact_bytes=artifact,
+        expected_checksum="invalid_checksum_hash",
+        data_dir=str(data_dir),
+        backup_dir=str(tmp_path / "backups")
+    )
+    assert bad_res["status"] == "failed"
+
+    # 2. Update pipeline health check failure triggers automatic rollback
+    failed_health_res = updater.execute_update_pipeline(
+        target_version="40.3.0",
+        artifact_bytes=artifact,
+        expected_checksum=checksum,
+        data_dir=str(data_dir),
+        backup_dir=str(tmp_path / "backups"),
+        health_check_fn=lambda: False
+    )
+    assert failed_health_res["status"] == "rolled_back"
+    assert db_file.read_text() == "Version 40.2.0 Database Content"
+
+    # 3. Update pipeline health check success completes update
+    success_res = updater.execute_update_pipeline(
+        target_version="40.3.0",
+        artifact_bytes=artifact,
+        expected_checksum=checksum,
+        data_dir=str(data_dir),
+        backup_dir=str(tmp_path / "backups"),
+        health_check_fn=lambda: True
+    )
+    assert success_res["status"] == "success"
+    assert success_res["version"] == "40.3.0"

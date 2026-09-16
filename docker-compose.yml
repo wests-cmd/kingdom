@@ -1,28 +1,67 @@
 version: "3.8"
 
 services:
-  kingdom-backend:
+  kingdom-commander:
     build: .
-    container_name: kingdom-backend
+    container_name: kingdom-commander
     ports:
       - "8000:8000"
+    environment:
+      - NODE_ROLE=commander
+      - PORT=8000
+      - ALLOWED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000,http://localhost:5173
     volumes:
-      - ./data:/app/data
+      - commander-data:/app/data
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/status')"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"]
       interval: 10s
       timeout: 5s
       retries: 3
+    networks:
+      - kingdom-net
 
-  kingdom-ui:
-    image: node:24-slim
-    container_name: kingdom-ui
-    working_dir: /app/frontend
+  kingdom-knight-a:
+    build: .
+    container_name: kingdom-knight-a
+    environment:
+      - NODE_ROLE=knight
+      - NODE_ID=kn-docker-01
+      - DISPLAY_NAME=Knight Coder
+      - COMMANDER_URL=http://kingdom-commander:8000
     volumes:
-      - .:/app
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
-    ports:
-      - "5173:5173"
+      - knight-a-data:/app/data
+    restart: unless-stopped
     depends_on:
-      kingdom-backend:
+      kingdom-commander:
         condition: service_healthy
+    command: python3 -m backend.cluster.knight_daemon --node-id kn-docker-01 --display-name "Knight Coder" --commander-url http://kingdom-commander:8000 --capabilities compute gpu
+    networks:
+      - kingdom-net
+
+  kingdom-knight-b:
+    build: .
+    container_name: kingdom-knight-b
+    environment:
+      - NODE_ROLE=knight
+      - NODE_ID=kn-docker-02
+      - DISPLAY_NAME=Knight Coder B
+      - COMMANDER_URL=http://kingdom-commander:8000
+    volumes:
+      - knight-b-data:/app/data
+    restart: unless-stopped
+    depends_on:
+      kingdom-commander:
+        condition: service_healthy
+    command: python3 -m backend.cluster.knight_daemon --node-id kn-docker-02 --display-name "Knight Coder B" --commander-url http://kingdom-commander:8000 --capabilities memory storage
+    networks:
+      - kingdom-net
+
+networks:
+  kingdom-net:
+    driver: bridge
+
+volumes:
+  commander-data:
+  knight-a-data:
+  knight-b-data:

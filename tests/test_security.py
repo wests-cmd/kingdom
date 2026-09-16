@@ -230,6 +230,19 @@ class SecurityApiTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("rejected by security firewall", resp.json()["detail"])
 
+    def test_cors_policy_allowed_and_blocked_origins(self):
+        # Allowed origin receives CORS header
+        headers = {"Origin": "http://localhost:5173"}
+        resp = self.client.get("/health/live", headers=headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.headers.get("access-control-allow-origin"), "http://localhost:5173")
+
+        # Disallowed origin does not receive CORS header
+        bad_headers = {"Origin": "http://malicious-site.com"}
+        resp_bad = self.client.get("/health/live", headers=bad_headers)
+        self.assertEqual(resp_bad.status_code, 200)
+        self.assertNotIn("access-control-allow-origin", resp_bad.headers)
+
 
 if __name__ == "__main__":
     unittest.main()
