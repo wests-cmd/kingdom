@@ -37,6 +37,7 @@ def test_full_operational_chain_e2e():
     Simulates a complete task execution lifecycle through all Kingdom subsystems.
     """
     runtime = RuntimeEngine()
+    runtime.tasks.clear()
 
     # 1. Register Commander & Knight Identities
     commander = KingdomIdentity.get_or_create()

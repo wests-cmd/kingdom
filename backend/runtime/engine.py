@@ -42,7 +42,21 @@ class RuntimeEngine:
     async def initialize(self) -> dict[str, Any]:
         return await self.start()
 
+    def reconcile_startup_tasks(self) -> list[dict[str, Any]]:
+        running_tasks = self.tasks.list("running")
+        recovered = []
+        for task in running_tasks:
+            rec_task = self.tasks.transition_task(
+                task["id"],
+                new_status="RECOVERY_REQUIRED",
+                updates={"error": "Process restarted while task was running. Reconciled to RECOVERY_REQUIRED."}
+            )
+            self.events.publish("task.recovery_required", rec_task)
+            recovered.append(rec_task)
+        return recovered
+
     async def start(self) -> dict[str, Any]:
+        self.reconcile_startup_tasks()
         started = await self.scheduler.start()
         STATE["running"] = self.scheduler.running
         if started:

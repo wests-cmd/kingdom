@@ -179,7 +179,7 @@ class RPCMessageRequest(BaseModel):
     timestamp: float
     signature: str
 
-# --- SYSTEM VERSION ENDPOINT ---
+# --- SYSTEM VERSION & COMPATIBILITY ENDPOINTS ---
 
 @router.get("/api/system/version")
 def get_system_version():
@@ -192,6 +192,27 @@ def get_system_version():
         "python_version": platform.python_version(),
         "architecture": platform.machine(),
         "os": platform.system()
+    }
+
+@router.get("/api/system/compatibility")
+def get_system_compatibility():
+    return {
+        "kingdom_version": STATE.get("version", "40.2.0"),
+        "api_version": "v1",
+        "protocol_version": "kingdom.cluster.v1",
+        "event_schema_version": "1.0",
+        "capability_schema_version": "1.0",
+        "auth_version": "zero_trust.v1",
+        "minimum_client_version": "40.0.0",
+        "minimum_knight_version": "40.0.0",
+        "supported_capabilities": sorted(list(ALL_CAPABILITIES)),
+        "required_capabilities": sorted(list(DEFAULT_KNIGHT_CAPABILITIES)),
+        "feature_flags": {
+            "signed_rpc": True,
+            "task_fencing": True,
+            "durable_tasks": True,
+            "zero_trust": True
+        }
     }
 
 # --- HEALTH, READINESS & DIAGNOSTICS ENDPOINTS ---
@@ -698,16 +719,25 @@ def handle_cluster_rpc(request: RPCMessageRequest):
         assigned_tasks = []
         for t in tasks:
             meta = t.get("metadata", {})
-            if t.get("assigned_knight") == sender_id or meta.get("assigned_knight") == sender_id:
+            assigned_k = t.get("assigned_knight") or meta.get("assigned_knight")
+            if assigned_k == sender_id or assigned_k is None:
                 task_id = t["id"]
                 lease = task_lease_manager.issue_lease(
                     task_id=task_id,
                     assigned_node_id=sender_id,
                     capability_scope=meta.get("capability", "compute")
                 )
-                t_copy = dict(t)
-                t_copy["fencing_token"] = lease.fencing_token
-                t_copy["lease_id"] = lease.lease_id
+                engine.tasks.transition_task(
+                    task_id,
+                    new_status="leased",
+                    updates={
+                        "assigned_knight": sender_id,
+                        "lease_id": lease.lease_id,
+                        "fencing_token": lease.fencing_token,
+                        "started_at": time.time()
+                    }
+                )
+                t_copy = engine.tasks.get(task_id)
                 assigned_tasks.append(t_copy)
         return {"status": "ok", "tasks": assigned_tasks}
 

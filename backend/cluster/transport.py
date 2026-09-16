@@ -49,6 +49,39 @@ class RPCSecureTransport:
         self.identity = node_identity
         self._processed_msg_ids: set = set()
 
+    def _is_replayed_msg_id(self, msg_id: str, sender_id: str, timestamp: float) -> bool:
+        if msg_id in self._processed_msg_ids:
+            return True
+        try:
+            from backend.storage.db import db
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1 FROM rpc_replay WHERE msg_id = ?", (msg_id,))
+                if cursor.fetchone():
+                    self._processed_msg_ids.add(msg_id)
+                    return True
+        except Exception:
+            pass
+        return False
+
+    def _record_processed_msg_id(self, msg_id: str, sender_id: str, timestamp: float):
+        self._processed_msg_ids.add(msg_id)
+        if len(self._processed_msg_ids) > 10000:
+            self._processed_msg_ids.clear()
+        try:
+            from backend.storage.db import db
+            expires_at = timestamp + MAX_TIME_SKEW_SECONDS
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                INSERT INTO rpc_replay (msg_id, sender_id, timestamp, expires_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(msg_id) DO NOTHING
+                """, (msg_id, sender_id, timestamp, expires_at))
+                conn.commit()
+        except Exception:
+            pass
+
     def create_signed_message(self, target_id: str, msg_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         msg = RPCMessage(sender_id=self.identity.node_id, target_id=target_id, msg_type=msg_type, payload=payload)
         canonical = msg.get_canonical_bytes()
@@ -69,7 +102,10 @@ class RPCSecureTransport:
             return {"valid": False, "error": "Malformed message: missing or invalid msg_type/payload."}
 
         msg_id = message_dict.get("msg_id")
-        if not msg_id or msg_id in self._processed_msg_ids:
+        sender_id = message_dict.get("sender_id", "")
+        timestamp = message_dict.get("timestamp", 0)
+
+        if not msg_id or self._is_replayed_msg_id(msg_id, sender_id, timestamp):
             return {"valid": False, "error": "Replay attack detected or duplicate message ID."}
 
         timestamp = message_dict.get("timestamp", 0)
@@ -134,10 +170,8 @@ class RPCSecureTransport:
             event_bus.publish("security.rpc_invalid_signature", {"sender_id": sender_id, "msg_id": msg_id}, source="rpc_transport")
             return {"valid": False, "error": "Invalid cryptographic signature."}
 
-        # Cache msg_id to prevent replay attacks
-        self._processed_msg_ids.add(msg_id)
-        if len(self._processed_msg_ids) > 10000:
-            self._processed_msg_ids.clear()
+        # Cache and persist msg_id to prevent replay attacks
+        self._record_processed_msg_id(msg_id, sender_id, timestamp)
 
         return {
             "valid": True,
