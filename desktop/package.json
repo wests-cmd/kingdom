@@ -3,10 +3,16 @@
   "private": true,
   "version": "40.2.0",
   "description": "Kingdom Native Desktop Application Shell",
+  "homepage": "https://github.com/wests-cmd/kingdom",
+  "author": {
+    "name": "Kingdom Maintainers",
+    "email": "westd613@gmail.com"
+  },
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --dir"
+    "build": "electron-builder",
+    "build:dir": "electron-builder --dir"
   },
   "dependencies": {},
   "devDependencies": {
@@ -26,7 +32,8 @@
       "target": ["dmg"]
     },
     "linux": {
-      "target": ["AppImage", "deb"]
+      "target": ["AppImage", "deb"],
+      "maintainer": "Kingdom Maintainers <westd613@gmail.com>"
     }
   }
 }
