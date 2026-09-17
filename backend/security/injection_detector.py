@@ -35,6 +35,8 @@ BLOCKED_PATTERNS = [
     "system override",
     "bypass safety",
     "bypass governance",
+    # Block common jailbreak personas like "act as DAN" (Do Anything Now)
+    "act as dan",
 ]
 
 
