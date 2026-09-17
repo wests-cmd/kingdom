@@ -38,5 +38,13 @@ class TestKingdomAPI(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"mode": "adaptive"})
 
+    def test_compatibility_endpoint(self):
+        response = self.client.get("/api/system/compatibility")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["kingdom_version"], "40.2.0")
+        self.assertEqual(data["protocol_version"], "kingdom.cluster.v1")
+        self.assertTrue(data["feature_flags"]["signed_rpc"])
+
 if __name__ == "__main__":
     unittest.main()
