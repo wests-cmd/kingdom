@@ -11,32 +11,61 @@ class TaskRepository:
         task_id = task["id"]
         now = time.time()
         input_json = json.dumps(task.get("input", {}))
+        meta_json = json.dumps(task.get("metadata", {}))
         result_json = json.dumps(task.get("result")) if task.get("result") is not None else None
+        created_at_val = task.get("created_at") or str(now)
 
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-            INSERT INTO tasks (id, type, status, input_json, assigned_knight, result_json, error, cancellation_requested, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tasks (
+                id, execution_id, prompt, type, status, input_json, metadata_json,
+                assigned_knight, attempt, max_attempts, started_at, completed_at,
+                result_json, error, cancellation_requested, version, lease_id,
+                fencing_token, idempotency_key, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
+                execution_id=excluded.execution_id,
+                prompt=excluded.prompt,
                 type=excluded.type,
                 status=excluded.status,
                 input_json=excluded.input_json,
+                metadata_json=excluded.metadata_json,
                 assigned_knight=excluded.assigned_knight,
+                attempt=excluded.attempt,
+                max_attempts=excluded.max_attempts,
+                started_at=excluded.started_at,
+                completed_at=excluded.completed_at,
                 result_json=excluded.result_json,
                 error=excluded.error,
                 cancellation_requested=excluded.cancellation_requested,
+                version=excluded.version,
+                lease_id=excluded.lease_id,
+                fencing_token=excluded.fencing_token,
+                idempotency_key=excluded.idempotency_key,
                 updated_at=excluded.updated_at
             """, (
                 task_id,
+                task.get("execution_id"),
+                task.get("prompt"),
                 task.get("type", "generic"),
                 task.get("status", "queued"),
                 input_json,
+                meta_json,
                 task.get("assigned_knight"),
+                task.get("attempt", 0),
+                task.get("max_attempts", 1),
+                task.get("started_at"),
+                task.get("completed_at"),
                 result_json,
                 task.get("error"),
                 1 if task.get("cancellation_requested") else 0,
-                task.get("created_at", now),
+                task.get("version", 1),
+                task.get("lease_id"),
+                task.get("fencing_token", 0),
+                task.get("idempotency_key"),
+                created_at_val,
                 now
             ))
             conn.commit()
@@ -54,22 +83,34 @@ class TaskRepository:
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             if status:
-                cursor.execute("SELECT * FROM tasks WHERE status = ? ORDER BY created_at DESC LIMIT ?", (status, limit))
+                cursor.execute("SELECT * FROM tasks WHERE status = ? ORDER BY updated_at DESC LIMIT ?", (status, limit))
             else:
-                cursor.execute("SELECT * FROM tasks ORDER BY created_at DESC LIMIT ?", (limit,))
+                cursor.execute("SELECT * FROM tasks ORDER BY updated_at DESC LIMIT ?", (limit,))
             rows = cursor.fetchall()
             return [self._row_to_dict(r) for r in rows]
 
     def _row_to_dict(self, row):
+        keys = row.keys()
         return {
             "id": row["id"],
+            "execution_id": row["execution_id"] if "execution_id" in keys else None,
+            "prompt": row["prompt"] if "prompt" in keys else None,
             "type": row["type"],
             "status": row["status"],
-            "input": json.loads(row["input_json"]) if row["input_json"] else {},
+            "input": json.loads(row["input_json"]) if "input_json" in keys and row["input_json"] else {},
+            "metadata": json.loads(row["metadata_json"]) if "metadata_json" in keys and row["metadata_json"] else {},
             "assigned_knight": row["assigned_knight"],
-            "result": json.loads(row["result_json"]) if row["result_json"] else None,
+            "attempt": row["attempt"] if "attempt" in keys and row["attempt"] is not None else 0,
+            "max_attempts": row["max_attempts"] if "max_attempts" in keys and row["max_attempts"] is not None else 1,
+            "started_at": row["started_at"] if "started_at" in keys else None,
+            "completed_at": row["completed_at"] if "completed_at" in keys else None,
+            "result": json.loads(row["result_json"]) if "result_json" in keys and row["result_json"] else None,
             "error": row["error"],
             "cancellation_requested": bool(row["cancellation_requested"]),
+            "version": row["version"] if "version" in keys and row["version"] is not None else 1,
+            "lease_id": row["lease_id"] if "lease_id" in keys else None,
+            "fencing_token": row["fencing_token"] if "fencing_token" in keys and row["fencing_token"] is not None else 0,
+            "idempotency_key": row["idempotency_key"] if "idempotency_key" in keys else None,
             "created_at": row["created_at"],
             "updated_at": row["updated_at"]
         }

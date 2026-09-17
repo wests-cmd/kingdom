@@ -20,8 +20,12 @@ async def wait_for_task_completion(engine: RuntimeEngine, task_id: str, timeout:
 
 
 class RuntimeCoreTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.engine = RuntimeEngine()
+        self.engine.tasks.clear()
+
     async def test_lifecycle_and_task_completion_emit_events(self):
-        engine = RuntimeEngine()
+        engine = self.engine
         task = engine.submit_task("research resilient distributed systems", {"source": "test"})
         self.assertEqual(task["status"], "queued")
         await engine.start()
@@ -35,7 +39,7 @@ class RuntimeCoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(engine.status()["running"])
 
     async def test_swarm_decomposes_and_executes_subtasks(self):
-        engine = RuntimeEngine()
+        engine = self.engine
         task = engine.submit_task("coordinate", {"subtasks": ["code a test", "research an option"]})
         await engine.start()
 
@@ -48,14 +52,14 @@ class RuntimeCoreTests(unittest.IsolatedAsyncioTestCase):
         await engine.stop()
 
     async def test_only_queued_tasks_can_be_cancelled(self):
-        engine = RuntimeEngine()
+        engine = self.engine
         task = engine.submit_task("code a status page")
         cancelled = engine.cancel_task(task["id"])
         self.assertEqual(cancelled["status"], "cancelled")
         self.assertEqual(engine.tasks.counts()["cancelled"], 1)
 
     async def test_failed_task_is_requeued_until_its_attempt_limit(self):
-        engine = RuntimeEngine()
+        engine = self.engine
         task = engine.submit_task("retry this", {"max_attempts": 2})
         running = engine.tasks.claim_next()
 

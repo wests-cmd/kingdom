@@ -191,7 +191,14 @@ class NodeRegistry:
         state_val = new_status if isinstance(new_status, NodeState) else NodeState(new_status)
         return self.update_node_state(node_id, state_val, reason)
 
-    def update_node_state(self, node_id: str, new_state: NodeState, reason: str = "") -> Optional[Dict[str, Any]]:
+    def update_node_state(
+        self,
+        node_id: str,
+        new_state: NodeState,
+        reason: str = "",
+        admin_override: bool = False,
+        actor: str = "system"
+    ) -> Optional[Dict[str, Any]]:
         node = self.repo.get(node_id)
         if not node:
             return None
@@ -203,8 +210,8 @@ class NodeRegistry:
             current_state = NodeState.CONNECTED
 
         if new_state != current_state and new_state not in VALID_TRANSITIONS.get(current_state, []):
-            # Allow administrative override for tests/quarantine
-            pass
+            if not admin_override:
+                raise ValueError(f"Invalid node state transition from '{current_state.value}' to '{new_state.value}'.")
 
         node["node_state"] = new_state.value
         node["status"] = new_state.value
@@ -218,7 +225,9 @@ class NodeRegistry:
             "node_id": node_id,
             "old_state": current_state.value,
             "new_state": new_state.value,
-            "reason": reason
+            "reason": reason,
+            "admin_override": admin_override,
+            "actor": actor
         }, source="node_registry")
         return node
 

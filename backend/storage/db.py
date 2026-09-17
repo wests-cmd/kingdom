@@ -63,6 +63,25 @@ class Database:
             )
             """)
 
+            # Schema migration check for tasks columns
+            cursor.execute("PRAGMA table_info(tasks)")
+            task_cols = [col[1] for col in cursor.fetchall()]
+            for col_name, col_def in [
+                ("execution_id", "TEXT"),
+                ("prompt", "TEXT"),
+                ("metadata_json", "TEXT"),
+                ("attempt", "INTEGER DEFAULT 0"),
+                ("max_attempts", "INTEGER DEFAULT 1"),
+                ("started_at", "TEXT"),
+                ("completed_at", "TEXT"),
+                ("version", "INTEGER DEFAULT 1"),
+                ("lease_id", "TEXT"),
+                ("fencing_token", "INTEGER DEFAULT 0"),
+                ("idempotency_key", "TEXT")
+            ]:
+                if col_name not in task_cols:
+                    cursor.execute(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_def}")
+
             # Schema migration check for knights columns
             cursor.execute("PRAGMA table_info(knights)")
             columns = [column[1] for column in cursor.fetchall()]
@@ -80,6 +99,30 @@ class Database:
                 cursor.execute("ALTER TABLE knights ADD COLUMN connection_metadata_json TEXT")
             if "hardware_profile_json" not in columns:
                 cursor.execute("ALTER TABLE knights ADD COLUMN hardware_profile_json TEXT")
+
+            # Leases table
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS leases (
+                lease_id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL,
+                node_id TEXT NOT NULL,
+                fencing_token INTEGER NOT NULL,
+                capability_scope TEXT,
+                issued_at REAL NOT NULL,
+                expires_at REAL NOT NULL,
+                revoked INTEGER DEFAULT 0
+            )
+            """)
+
+            # RPC Replay Protection table
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS rpc_replay (
+                msg_id TEXT PRIMARY KEY,
+                sender_id TEXT NOT NULL,
+                timestamp REAL NOT NULL,
+                expires_at REAL NOT NULL
+            )
+            """)
 
             # Events table
             cursor.execute("""
