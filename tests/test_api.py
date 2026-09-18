@@ -46,5 +46,21 @@ class TestKingdomAPI(unittest.TestCase):
         self.assertEqual(data["protocol_version"], "kingdom.cluster.v1")
         self.assertTrue(data["feature_flags"]["signed_rpc"])
 
+    def test_version_sentinel_propagation(self):
+        original_ver = STATE.get("version")
+        try:
+            STATE["version"] = "99.99.99-sentinel"
+            res_ver = self.client.get("/api/system/version").json()
+            self.assertEqual(res_ver["version"], "99.99.99-sentinel")
+
+            res_compat = self.client.get("/api/system/compatibility").json()
+            self.assertEqual(res_compat["kingdom_version"], "99.99.99-sentinel")
+
+            res_status = self.client.get("/status").json()
+            self.assertEqual(res_status["version"], "99.99.99-sentinel")
+        finally:
+            if original_ver:
+                STATE["version"] = original_ver
+
 if __name__ == "__main__":
     unittest.main()
