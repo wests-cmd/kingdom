@@ -62,5 +62,12 @@ class TestKingdomAPI(unittest.TestCase):
             if original_ver:
                 STATE["version"] = original_ver
 
+    def test_full_scan_diagnostic_endpoint(self):
+        response = self.client.get("/diagnostics/full-scan")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn(data["status"], ["PASS", "WARNING", "FAIL"])
+        self.assertTrue(len(data["checks"]) >= 4)
+
 if __name__ == "__main__":
     unittest.main()

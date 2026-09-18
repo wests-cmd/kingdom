@@ -280,6 +280,112 @@ def system_check():
         "runtime_ready": True
     }
 
+@router.get("/diagnostics/full-scan")
+def run_full_system_diagnostic_scan():
+    import platform, psutil, shutil
+
+    checks = []
+
+    # 1. System Hardware & Storage Check
+    cpu_count = os.cpu_count() or 1
+    mem = psutil.virtual_memory() if hasattr(psutil, 'virtual_memory') else None
+    disk = shutil.disk_usage("/")
+    disk_free_gb = round(disk.free / (1024**3), 2)
+    mem_avail_gb = round(mem.available / (1024**3), 2) if mem else 2.0
+
+    sys_status = "PASS" if disk_free_gb > 1.0 and mem_avail_gb > 0.5 else "WARNING"
+    checks.append({
+        "id": "sys.hardware",
+        "category": "system",
+        "status": sys_status,
+        "severity": "HIGH" if sys_status != "PASS" else "INFO",
+        "title": "Hardware & Storage Resources",
+        "plain_language_message": f"System has {cpu_count} CPU cores, {mem_avail_gb}GB available RAM, and {disk_free_gb}GB free disk space.",
+        "technical_message": f"CPUs={cpu_count}, RAM_Avail_GB={mem_avail_gb}, Disk_Free_GB={disk_free_gb}",
+        "evidence": {"cpu_cores": cpu_count, "mem_avail_gb": mem_avail_gb, "disk_free_gb": disk_free_gb},
+        "fix_available": False,
+        "fix_action": None,
+        "requires_permission": False
+    })
+
+    # 2. Database Check
+    db_ok = False
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM tasks")
+            task_cnt = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM knights")
+            knight_cnt = cursor.fetchone()[0]
+            db_ok = True
+    except Exception as exc:
+        task_cnt = 0
+        knight_cnt = 0
+        db_ok = False
+
+    db_status = "PASS" if db_ok else "FAIL"
+    checks.append({
+        "id": "db.integrity",
+        "category": "database",
+        "status": db_status,
+        "severity": "CRITICAL" if not db_ok else "INFO",
+        "title": "SQLite Storage Integrity",
+        "plain_language_message": "Kingdom database storage is operational and responsive." if db_ok else "Database storage is unavailable.",
+        "technical_message": f"DB_Path={db.db_path}, Tasks_Count={task_cnt}, Knights_Count={knight_cnt}",
+        "evidence": {"db_ok": db_ok, "task_cnt": task_cnt, "knight_cnt": knight_cnt},
+        "fix_available": not db_ok,
+        "fix_action": "init_db",
+        "requires_permission": False
+    })
+
+    # 3. Security Engine Check
+    sec_ok = zero_trust is not None
+    pending_approvals = len(zero_trust.approvals.list_requests(status="pending")) if sec_ok else 0
+    checks.append({
+        "id": "sec.zero_trust",
+        "category": "security",
+        "status": "PASS" if sec_ok else "FAIL",
+        "severity": "CRITICAL" if not sec_ok else "INFO",
+        "title": "Zero-Trust Security Engine",
+        "plain_language_message": f"Zero-trust prompt firewall and capability authorizations active. {pending_approvals} pending approvals.",
+        "technical_message": f"ZeroTrust_Active={sec_ok}, Pending_Approvals={pending_approvals}",
+        "evidence": {"zero_trust_active": sec_ok, "pending_approvals": pending_approvals},
+        "fix_available": False,
+        "fix_action": None,
+        "requires_permission": False
+    })
+
+    # 4. Distributed Node Registry Check
+    node_list = node_registry.list_nodes()
+    connected_nodes = [n for n in node_list if n.status in ["CONNECTED", "APPROVED", "idle", "busy"]]
+    node_status = "PASS" if len(node_list) > 0 else "WARNING"
+    checks.append({
+        "id": "cluster.nodes",
+        "category": "cluster",
+        "status": node_status,
+        "severity": "MEDIUM" if len(node_list) == 0 else "INFO",
+        "title": "Distributed Node Registry",
+        "plain_language_message": f"{len(connected_nodes)} active nodes registered in Kingdom cluster.",
+        "technical_message": f"Total_Nodes={len(node_list)}, Connected_Nodes={len(connected_nodes)}",
+        "evidence": {"total_nodes": len(node_list), "connected_nodes": len(connected_nodes)},
+        "fix_available": len(node_list) == 0,
+        "fix_action": "register_local_knights",
+        "requires_permission": False
+    })
+
+    overall_status = "PASS"
+    if any(c["status"] == "FAIL" for c in checks):
+        overall_status = "FAIL"
+    elif any(c["status"] == "WARNING" for c in checks):
+        overall_status = "WARNING"
+
+    return {
+        "status": overall_status,
+        "timestamp": time.time(),
+        "kingdom_version": STATE.get("version", "40.2.0"),
+        "checks": checks
+    }
+
 @router.get("/diagnostics/export")
 def export_diagnostics():
     import platform
