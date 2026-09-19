@@ -73,7 +73,14 @@ jobs:
         run: |
           cd desktop
           npm ci
-          npm run build
+          n=0
+          until [ $n -ge 3 ]; do
+            npm run build && break
+            n=$((n+1))
+            echo "Desktop build failed (transient download reset). Retrying in 5 seconds ($n/3)..."
+            sleep 5
+          done
+          [ $n -lt 3 ]
       - name: Verify Release Artifacts & Generate SHA-256 Checksums
         run: |
           ls -la desktop/dist
