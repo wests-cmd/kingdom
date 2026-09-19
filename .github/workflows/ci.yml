@@ -46,10 +46,10 @@ jobs:
     needs: [test-backend, build-frontend]
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Node.js 24 & Python 3.12
+      - name: Set up Node.js 22 & Python 3.12
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -73,14 +73,8 @@ jobs:
         run: |
           cd desktop
           npm ci
-          n=0
-          until [ $n -ge 3 ]; do
-            npm run build && break
-            n=$((n+1))
-            echo "Desktop build failed (transient download reset). Retrying in 5 seconds ($n/3)..."
-            sleep 5
-          done
-          [ $n -lt 3 ]
+          chmod +x node_modules/app-builder-bin/linux/x64/app-builder || true
+          npm run build
       - name: Verify Release Artifacts & Generate SHA-256 Checksums
         run: |
           ls -la desktop/dist

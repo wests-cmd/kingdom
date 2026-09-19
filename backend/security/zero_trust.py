@@ -131,6 +131,7 @@ class ZeroTrust:
                     appr_req
                     and appr_req["status"] == "approved"
                     and appr_req["capability"] == capability
+                    and (appr_req.get("requesting_actor") == actor_id or appr_req.get("requesting_node") == actor_id)
                 ):
                     self.audit.record(
                         actor=actor_id,

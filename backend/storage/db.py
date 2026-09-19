@@ -15,6 +15,9 @@ class Database:
     def get_connection(self):
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
+        # Optimization: Enable WAL journal mode and synchronous=NORMAL for concurrent read/write throughput
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
         return conn
 
     def init_db(self):
@@ -154,6 +157,11 @@ class Database:
                 updated_at REAL NOT NULL
             )
             """)
+
+            # Indexes for query performance
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status_created ON tasks(status, created_at DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_events_task_type ON events(task_id, event_type, timestamp DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_memory_created ON memory(created_at DESC)")
 
             conn.commit()
 
