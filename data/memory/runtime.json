@@ -6496,86 +6496,6 @@
       },
       "weight": 1.0,
       "created_at": "2026-09-15T15:52:03.482645+00:00"
-    },
-    {
-      "id": "fc9fbd2c-26c5-4052-ab36-4828ea22a9ca",
-      "content": "research resilient distributed systems",
-      "metadata": {
-        "task_id": "ccbd9d6d-1dec-4405-90f5-0595c28b4204",
-        "status": "completed",
-        "result": {
-          "plan": {
-            "task_id": "ccbd9d6d-1dec-4405-90f5-0595c28b4204",
-            "complexity": "simple",
-            "subtasks": [
-              {
-                "prompt": "research resilient distributed systems",
-                "knight": "researcher"
-              }
-            ]
-          },
-          "results": [
-            {
-              "knight": "researcher",
-              "task": "research resilient distributed systems",
-              "status": "completed",
-              "executed_at": 1789829837.245613
-            }
-          ]
-        }
-      },
-      "weight": 1.0,
-      "created_at": "2026-09-19T14:57:17.255007+00:00"
-    },
-    {
-      "id": "e6030ca5-3caa-4679-a480-7877ee4212a9",
-      "content": "coordinate",
-      "metadata": {
-        "task_id": "0bafdbc6-623b-48b4-8cf3-67a5646f9683",
-        "status": "completed",
-        "result": {
-          "plan": {
-            "task_id": "0bafdbc6-623b-48b4-8cf3-67a5646f9683",
-            "complexity": "simple",
-            "subtasks": [
-              {
-                "prompt": "code a test",
-                "knight": "coder"
-              },
-              {
-                "prompt": "research an option",
-                "knight": "researcher"
-              }
-            ]
-          },
-          "results": [
-            {
-              "knight": "coder",
-              "task": "code a test",
-              "status": "completed",
-              "executed_at": 1789829837.3521087
-            },
-            {
-              "knight": "researcher",
-              "task": "research an option",
-              "status": "completed",
-              "executed_at": 1789829837.3712313
-            }
-          ]
-        }
-      },
-      "weight": 1.0,
-      "created_at": "2026-09-19T14:57:17.381129+00:00"
-    },
-    {
-      "id": "597a4adf-ae19-4e20-8016-e0a217f9ca79",
-      "content": "Task 5fb3e50b-773c-4d61-9015-8483174dc841 completed successfully: Codebase analysis completed. Memory utilization reduced by 25%.",
-      "metadata": {
-        "task_id": "5fb3e50b-773c-4d61-9015-8483174dc841",
-        "node_id": "kn-e2e-coder"
-      },
-      "weight": 1.0,
-      "created_at": "2026-09-19T14:57:17.558152+00:00"
     }
   ],
   "timeline": [
@@ -7338,18 +7258,6 @@
     {
       "timestamp": "2026-09-15T15:52:03.482645+00:00",
       "entry_id": "7e9e7710-dc08-4a5c-9bf7-e3b15cb9550b"
-    },
-    {
-      "timestamp": "2026-09-19T14:57:17.255007+00:00",
-      "entry_id": "fc9fbd2c-26c5-4052-ab36-4828ea22a9ca"
-    },
-    {
-      "timestamp": "2026-09-19T14:57:17.381129+00:00",
-      "entry_id": "e6030ca5-3caa-4679-a480-7877ee4212a9"
-    },
-    {
-      "timestamp": "2026-09-19T14:57:17.558152+00:00",
-      "entry_id": "597a4adf-ae19-4e20-8016-e0a217f9ca79"
     }
   ],
   "graph": {
@@ -8302,21 +8210,6 @@
       {
         "id": "7e9e7710-dc08-4a5c-9bf7-e3b15cb9550b",
         "label": "Task 879ad3db-34a8-4cf6-9ead-8ea98fc968ee completed successfully: Codebase analysis completed. Memory utilization reduced by 25%.",
-        "weight": 1.0
-      },
-      {
-        "id": "fc9fbd2c-26c5-4052-ab36-4828ea22a9ca",
-        "label": "research resilient distributed systems",
-        "weight": 1.0
-      },
-      {
-        "id": "e6030ca5-3caa-4679-a480-7877ee4212a9",
-        "label": "coordinate",
-        "weight": 1.0
-      },
-      {
-        "id": "597a4adf-ae19-4e20-8016-e0a217f9ca79",
-        "label": "Task 5fb3e50b-773c-4d61-9015-8483174dc841 completed successfully: Codebase analysis completed. Memory utilization reduced by 25%.",
         "weight": 1.0
       }
     ],

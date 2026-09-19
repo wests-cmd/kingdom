@@ -39,34 +39,14 @@ zero_trust = engine.security
 task_lease_manager = TaskLeaseManager()
 engine.lease_manager = task_lease_manager
 
-# Skills & Learning Managers Setup
-sample_skill = Skill(
-    id="skill-web-research",
-    name="Web Research",
-    version="1.0.0",
-    description="Automated web research and document analysis",
-    department="Research",
-    trust_level=SkillTrustLevel.VERIFIED,
-    state=SkillLifecycleState.ACTIVE,
-    permissions=["network.outbound"],
-    dependencies=SkillDependency(
-        required_tools=["http_client"],
-        required_capabilities=["model.inference"],
-        required_models=["gpt-4o"]
-    )
-)
-
 lifecycle_manager = SkillLifecycleManager(
     available_tools=["http_client", "pdf_parser"],
     available_capabilities=["model.inference", "python.exec"],
-    available_models=["gpt-4o"],
+    available_models=[],
     granted_permissions=["network.outbound", "filesystem.read"]
 )
-lifecycle_manager.save(sample_skill)
-lifecycle_manager.install(sample_skill.id)
-lifecycle_manager.activate(sample_skill.id, governance_approved=True)
 
-bundle_manager = SkillBundleManager(available_skills=[sample_skill])
+bundle_manager = SkillBundleManager(available_skills=[])
 learning_collector = LearningCollector()
 learning_evaluator = LearningEvaluator(learning_collector)
 learning_runner = LearningExperimentRunner(learning_collector, lifecycle_manager=lifecycle_manager)
@@ -184,11 +164,13 @@ class RPCMessageRequest(BaseModel):
 @router.get("/api/system/version")
 def get_system_version():
     import platform
+    mode = os.getenv("KINGDOM_MODE", STATE.get("mode", "production"))
     return {
         "name": "Kingdom",
-        "version": STATE.get("version", "40.2.0"),
+        "version": STATE.get("version", "unknown"),
+        "mode": mode,
         "release_channel": "stable",
-        "environment": "production",
+        "environment": mode,
         "python_version": platform.python_version(),
         "architecture": platform.machine(),
         "os": platform.system()
@@ -261,12 +243,14 @@ def health_readiness():
 def system_check():
     import platform, psutil, shutil
 
-    cpu_count = os.cpu_count() or 1
+    cpu_count = os.cpu_count()
     mem = psutil.virtual_memory() if hasattr(psutil, 'virtual_memory') else None
     disk = shutil.disk_usage("/")
 
-    mem_total_gb = round(mem.total / (1024**3), 2) if mem else 4.0
-    mem_avail_gb = round(mem.available / (1024**3), 2) if mem else 2.0
+    strict_mode = os.getenv("STRICT_TRUTH_MODE", "false").lower() == "true"
+
+    mem_total_gb = round(mem.total / (1024**3), 2) if mem else (None if strict_mode else None)
+    mem_avail_gb = round(mem.available / (1024**3), 2) if mem else (None if strict_mode else None)
     disk_free_gb = round(disk.free / (1024**3), 2)
 
     return {
