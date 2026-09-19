@@ -168,6 +168,42 @@ class ZeroTrustEngineTests(unittest.TestCase):
         )
         self.assertTrue(auth2["authorized"])
 
+    def test_approval_id_cannot_be_reused_by_different_actor(self):
+        # Register two actors with capability process.execute
+        self.zt.nodes.register_node("actor_a", capabilities=["process.execute"])
+        self.zt.nodes.register_node("actor_b", capabilities=["process.execute"])
+
+        # actor_a requests approval for high risk action
+        auth_a = self.zt.authorize(
+            actor_id="actor_a",
+            capability="process.execute",
+            operation="delete production logs",
+        )
+        self.assertFalse(auth_a["authorized"])
+        approval_id = auth_a["approval_id"]
+
+        # Approve request
+        self.zt.approvals.approve(approval_id, approver="security_admin")
+
+        # actor_b attempts to use actor_a's approval_id -> must be denied
+        auth_b = self.zt.authorize(
+            actor_id="actor_b",
+            capability="process.execute",
+            operation="delete production logs",
+            approval_id=approval_id,
+        )
+        self.assertFalse(auth_b["authorized"])
+        self.assertIn("pending human approval", auth_b["reason"])
+
+        # actor_a using own approval_id -> authorized
+        auth_a_approved = self.zt.authorize(
+            actor_id="actor_a",
+            capability="process.execute",
+            operation="delete production logs",
+            approval_id=approval_id,
+        )
+        self.assertTrue(auth_a_approved["authorized"])
+
 
 class SecurityApiTests(unittest.TestCase):
     def setUp(self):
