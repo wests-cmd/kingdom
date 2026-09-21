@@ -30,7 +30,7 @@ def test_installation_persistence_and_restart(tmp_path):
     config_file = data_dir / "config.json"
 
     db_file.write_text("INITIAL_SQLITE_STATE_40_2_0")
-    config_file.write_text('{"commander_name": "Primary Commander", "version": "40.2.0"}')
+    config_file.write_text('{"commander_name": "Primary Commander", "version": "1.0.0"}')
 
     # Simulate application restart
     assert db_file.read_text() == "INITIAL_SQLITE_STATE_40_2_0"
@@ -43,7 +43,7 @@ def test_migration_idempotency_and_version_registry():
     """
     run_migrations()
     run_migrations()
-    assert STATE["version"] == "40.2.0"
+    assert STATE["version"] == "1.0.0"
 
 
 def test_updater_transaction_pipeline(tmp_path):
@@ -52,16 +52,16 @@ def test_updater_transaction_pipeline(tmp_path):
     """
     # 1. Manifest Check
     manifest = {
-        "latest_version": "40.2.0",
+        "latest_version": "1.0.0",
         "release_channel": "stable",
         "checksum": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-        "download_url": "https://releases.kingdom.network/v40.2.0/kingdom.tar.gz"
+        "download_url": "https://releases.kingdom.network/v1.0.0/kingdom.tar.gz"
     }
     check = updater_engine.check_updates(manifest)
     assert check["update_available"] is False
 
     # 2. Checksum Verification
-    artifact_content = b"Kingdom v40.2.0 production release package"
+    artifact_content = b"Kingdom v1.0.0 production release package"
     valid_hash = hashlib.sha256(artifact_content).hexdigest()
     assert updater_engine.verify_checksum(artifact_content, valid_hash) is True
     assert updater_engine.verify_checksum(artifact_content, "invalid_hash_value") is False

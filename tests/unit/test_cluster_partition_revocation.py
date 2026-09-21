@@ -24,7 +24,7 @@ def test_partition_engine_detection_and_reconnection():
         "id": "node_worker_1",
         "node_state": NodeState.CONNECTED.value,
         "health": "healthy",
-        "software_version": "40.2.0"
+        "software_version": "1.0.0"
     })
 
     partition_engine = PartitionEngine(registry, max_heartbeat_skew_sec=10.0)
@@ -42,7 +42,7 @@ def test_partition_engine_detection_and_reconnection():
     # 3. Valid Reconnection verification
     verified = partition_engine.verify_reconnection_state(
         node_id="node_worker_1",
-        reported_version="40.2.0",
+        reported_version="1.0.0",
         reported_clock_time=now
     )
     assert verified is True
@@ -52,7 +52,7 @@ def test_partition_engine_detection_and_reconnection():
     with pytest.raises(ValueError, match="clock skew error"):
         partition_engine.verify_reconnection_state(
             node_id="node_worker_1",
-            reported_version="40.2.0",
+            reported_version="1.0.0",
             reported_clock_time=now - 1000.0  # 1000s skew!
         )
 
@@ -84,6 +84,6 @@ def test_revocation_propagator():
     with pytest.raises(PermissionError, match="is REVOKED"):
         partition_engine.verify_reconnection_state(
             node_id="node_compromised",
-            reported_version="40.2.0",
+            reported_version="1.0.0",
             reported_clock_time=time.time()
         )

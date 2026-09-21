@@ -17,7 +17,7 @@ def sample_manifest_dict():
         "version": "1.0.0",
         "description": "Provides real-time weather forecasts.",
         "author": "Kingdom Ecosystem Team",
-        "kingdom_compatibility": ">=40.0.0",
+        "kingdom_compatibility": ">=1.0.0",
         "capabilities": ["weather.read"],
         "permissions": ["network.http_get"],
         "subscribed_events": ["system.city_selected"],

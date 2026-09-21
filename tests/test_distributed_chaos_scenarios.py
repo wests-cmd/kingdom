@@ -152,7 +152,7 @@ def test_scenario_e_revoked_node_reconnection_quarantine():
     with pytest.raises(PermissionError, match="is REVOKED"):
         partition_engine.verify_reconnection_state(
             node_id="node_compromised_key",
-            reported_version="40.2.0",
+            reported_version="1.0.0",
             reported_clock_time=time.time()
         )
 

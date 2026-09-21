@@ -18,7 +18,7 @@ class CanonicalSkillManifest(BaseModel):
     version: str
     publisher_id: str
     source: str = "official_repository"
-    kingdom_compatibility: str = ">=40.0.0"
+    kingdom_compatibility: str = ">=1.0.0"
     capabilities_requested: List[str] = Field(default_factory=list)
     permissions_requested: List[str] = Field(default_factory=list)
     dependencies: Dict[str, str] = Field(default_factory=dict)

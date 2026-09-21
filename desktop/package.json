@@ -1,7 +1,7 @@
 {
   "name": "kingdom-desktop",
   "private": true,
-  "version": "40.2.0",
+  "version": "1.0.0",
   "description": "Kingdom Native Desktop Application Shell",
   "homepage": "https://github.com/wests-cmd/kingdom",
   "author": {
@@ -26,13 +26,20 @@
       "output": "dist"
     },
     "win": {
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ]
     },
     "mac": {
-      "target": ["dmg"]
+      "target": [
+        "dmg"
+      ]
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "maintainer": "Kingdom Maintainers <westd613@gmail.com>"
     },
     "extraResources": [

@@ -1,4 +1,4 @@
-name: Kingdom Automated Production Release Pipeline
+name: Kingdom Automated Production Release Pipeline (v1TAS)
 
 on:
   push:
@@ -6,9 +6,17 @@ on:
       - 'v*'
   workflow_dispatch:
     inputs:
+      release_name:
+        description: 'Release Name / Codename'
+        required: true
+        default: 'Kingdom v1TAS'
+      version:
+        description: 'Semantic Version (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
       release_channel:
         description: 'Release Channel (stable / rc / beta)'
-        required: True
+        required: true
         default: 'stable'
 
 permissions:
@@ -145,6 +153,7 @@ jobs:
           version = '$VERSION'
           commit = '${{ github.sha }}'
           tag = '${{ needs.validate-and-test.outputs.git_tag }}'
+          release_name = '${{ github.event.inputs.release_name || \"Kingdom v1TAS\" }}'
 
           artifacts = []
           for fname in sorted(os.listdir('.')):
@@ -164,6 +173,7 @@ jobs:
           manifest = {
               'product': 'Kingdom',
               'version': version,
+              'release_name': release_name,
               'tag': tag,
               'commit': commit,
               'release_channel': '${{ github.event.inputs.release_channel || \"stable\" }}',
@@ -172,7 +182,7 @@ jobs:
               'compatibility': {
                   'kingdom_api_version': 'v1',
                   'centipede_protocol_version': 'v1',
-                  'schema_version': 'v40.2'
+                  'schema_version': '1.0'
               }
           }
 
@@ -217,21 +227,22 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.validate-and-test.outputs.git_tag }}
-          name: Kingdom v${{ needs.validate-and-test.outputs.canonical_version }}
+          name: ${{ github.event.inputs.release_name || 'Kingdom v1TAS' }} (v${{ needs.validate-and-test.outputs.canonical_version }})
           body: |
-            # Kingdom v${{ needs.validate-and-test.outputs.canonical_version }} Official Production Release
+            # Kingdom v1TAS (v${{ needs.validate-and-test.outputs.canonical_version }}) Official Production Release
 
             Commit: `${{ github.sha }}`
             Release Channel: `${{ github.event.inputs.release_channel || 'stable' }}`
 
-            ## Release Summary
+            ## Release Highlights
+            - First Stable Production Release (`Kingdom v1TAS` / Semantic Version `1.0.0`)
             - Zero-Trust Distributed AI Runtime & Orchestration Infrastructure
             - Standalone Bundled PyInstaller Backend (`kingdom-backend-linux-x86_64`)
             - Native Desktop Distribution Artifacts (AppImage & DEB)
             - Centipede OS Compatibility Protocol v1
 
             ## Cryptographic Verification
-            Please verify artifact checksums using `SHA256SUMS` included in this release.
+            Please verify artifact checksums using `SHA256SUMS` included in this release package.
           files: release_staging/*
           draft: false
           prerelease: false
