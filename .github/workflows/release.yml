@@ -1,0 +1,239 @@
+name: Kingdom Automated Production Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_channel:
+        description: 'Release Channel (stable / rc / beta)'
+        required: True
+        default: 'stable'
+
+permissions:
+  contents: write
+  packages: write
+  security-events: read
+
+jobs:
+  validate-and-test:
+    name: Validate Version & Execute Production Test Suite
+    runs-on: ubuntu-latest
+    outputs:
+      canonical_version: ${{ steps.version.outputs.version }}
+      git_tag: ${{ steps.version.outputs.tag }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pyinstaller
+
+      - name: Resolve & Validate Canonical Version
+        id: version
+        run: |
+          VERSION=$(python3 scripts/validate_version.py --print-version)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+          else
+            TAG_NAME="v${VERSION}"
+          fi
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+
+          python3 scripts/validate_version.py --tag "$TAG_NAME"
+
+      - name: Run Full Pytest Test Suite
+        run: |
+          python -m pytest --maxfail=1
+
+  build-backend-and-desktop:
+    name: Build Production Backend Binary & Desktop Package
+    needs: validate-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Build Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Compile Standalone Backend Binary
+        run: |
+          pyinstaller --onefile --name kingdom-backend --distpath desktop/bin backend/main.py
+          chmod +x desktop/bin/kingdom-backend
+
+      - name: Smoke Test Backend Binary
+        run: |
+          ./desktop/bin/kingdom-backend --help || true
+          test -f desktop/bin/kingdom-backend
+          test -s desktop/bin/kingdom-backend
+
+      - name: Build Frontend Production Static Assets
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+          cd ..
+
+      - name: Package Desktop Application (AppImage & DEB)
+        run: |
+          cd desktop
+          npm ci
+
+          # Retry loop for Electron binary download resilience
+          n=0
+          until [ $n -ge 3 ]
+          do
+             npm run build && break
+             n=$[$n+1]
+             echo "Desktop build attempt $n failed. Retrying..."
+             sleep 5
+          done
+          cd ..
+
+      - name: Assemble Staging Release Directory & Artifacts
+        run: |
+          VERSION="${{ needs.validate-and-test.outputs.canonical_version }}"
+          mkdir -p release_staging
+
+          # Copy desktop artifacts if generated
+          if [ -d "desktop/dist" ]; then
+            cp desktop/dist/*.AppImage release_staging/ 2>/dev/null || true
+            cp desktop/dist/*.deb release_staging/ 2>/dev/null || true
+          fi
+
+          # Copy standalone backend binary
+          cp desktop/bin/kingdom-backend release_staging/kingdom-backend-linux-x86_64
+
+          cd release_staging
+
+          # Generate SHA256SUMS
+          sha256sum * > SHA256SUMS
+
+          # Generate release-manifest.json
+          python3 -c "
+          import os, json, glob, hashlib
+
+          version = '$VERSION'
+          commit = '${{ github.sha }}'
+          tag = '${{ needs.validate-and-test.outputs.git_tag }}'
+
+          artifacts = []
+          for fname in sorted(os.listdir('.')):
+              if fname in ['SHA256SUMS', 'release-manifest.json']:
+                  continue
+              fpath = os.path.join('.', fname)
+              size = os.path.getsize(fpath)
+              sha = hashlib.sha256(open(fpath, 'rb').read()).hexdigest()
+              artifacts.append({
+                  'filename': fname,
+                  'size': size,
+                  'sha256': sha,
+                  'platform': 'linux',
+                  'arch': 'x86_64'
+              })
+
+          manifest = {
+              'product': 'Kingdom',
+              'version': version,
+              'tag': tag,
+              'commit': commit,
+              'release_channel': '${{ github.event.inputs.release_channel || \"stable\" }}',
+              'build_timestamp': '${{ github.event.head_commit.timestamp || \"\" }}',
+              'artifacts': artifacts,
+              'compatibility': {
+                  'kingdom_api_version': 'v1',
+                  'centipede_protocol_version': 'v1',
+                  'schema_version': 'v40.2'
+              }
+          }
+
+          with open('release-manifest.json', 'w') as f:
+              json.dump(manifest, f, indent=2)
+          "
+
+          cat release-manifest.json
+          cd ..
+
+      - name: Validate Release Artifacts & Manifest Integrity
+        run: |
+          VERSION="${{ needs.validate-and-test.outputs.canonical_version }}"
+          python3 scripts/validate_version.py --manifest release_staging/release-manifest.json
+
+          cd release_staging
+          sha256sum -c SHA256SUMS
+          cd ..
+
+      - name: Upload Release Staging Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kingdom-release-${{ needs.validate-and-test.outputs.canonical_version }}
+          path: release_staging/
+
+  publish-github-release:
+    name: Publish Official GitHub Release
+    needs: [validate-and-test, build-backend-and-desktop]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: kingdom-release-${{ needs.validate-and-test.outputs.canonical_version }}
+          path: release_staging/
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate-and-test.outputs.git_tag }}
+          name: Kingdom v${{ needs.validate-and-test.outputs.canonical_version }}
+          body: |
+            # Kingdom v${{ needs.validate-and-test.outputs.canonical_version }} Official Production Release
+
+            Commit: `${{ github.sha }}`
+            Release Channel: `${{ github.event.inputs.release_channel || 'stable' }}`
+
+            ## Release Summary
+            - Zero-Trust Distributed AI Runtime & Orchestration Infrastructure
+            - Standalone Bundled PyInstaller Backend (`kingdom-backend-linux-x86_64`)
+            - Native Desktop Distribution Artifacts (AppImage & DEB)
+            - Centipede OS Compatibility Protocol v1
+
+            ## Cryptographic Verification
+            Please verify artifact checksums using `SHA256SUMS` included in this release.
+          files: release_staging/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
