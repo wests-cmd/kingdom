@@ -1,3 +1,0 @@
-## 2026-09-18 - Single-Pass Tokenization and Scoring for Memory Search
-**Learning:** `MemoryService.search` was repeatedly invoking `score(entry)` during list sorting (`sorted(..., key=score)`) and filtering (`[... if score(entry)[0]]`). Inside `score(entry)`, `re.findall(r"\w+", ...)` re-tokenized string content multiple times per item ($O(N \log N)$ calls). Replacing multi-pass `sorted()` with pre-compiled regex matching in a single linear pass over entries and selecting top results via `heapq.nlargest` yielded an ~1.8x speedup.
-**Action:** Always pre-compile regexes for inner loops, avoid passing key functions to `sorted()` that compute expensive string tokenizations or Regex operations repeatedly, and use `heapq.nlargest` for top-K selections.
