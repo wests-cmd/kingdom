@@ -31,7 +31,7 @@ class ExtensionManifest(BaseModel):
     version: str
     description: str
     author: str
-    kingdom_compatibility: str = ">=40.0.0"
+    kingdom_compatibility: str = ">=1.0.0"
     capabilities: List[str] = Field(default_factory=list)
     permissions: List[str] = Field(default_factory=list)
     dependencies: Dict[str, str] = Field(default_factory=dict)

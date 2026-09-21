@@ -84,6 +84,7 @@ jobs:
       - name: Verify Release Artifacts & Generate SHA-256 Checksums
         run: |
           ls -la desktop/dist
-          sha256sum desktop/dist/Kingdom-40.2.0.AppImage > desktop/dist/Kingdom-40.2.0.AppImage.sha256
-          sha256sum desktop/dist/kingdom-desktop_40.2.0_amd64.deb > desktop/dist/kingdom-desktop_40.2.0_amd64.deb.sha256
+          VERSION=$(python3 scripts/validate_version.py --print-version)
+          sha256sum desktop/dist/Kingdom-${VERSION}.AppImage > desktop/dist/Kingdom-${VERSION}.AppImage.sha256
+          sha256sum desktop/dist/kingdom-desktop_${VERSION}_amd64.deb > desktop/dist/kingdom-desktop_${VERSION}_amd64.deb.sha256
           cat desktop/dist/*.sha256

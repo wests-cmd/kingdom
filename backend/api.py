@@ -179,14 +179,14 @@ def get_system_version():
 @router.get("/api/system/compatibility")
 def get_system_compatibility():
     return {
-        "kingdom_version": STATE.get("version", "40.2.0"),
+        "kingdom_version": STATE.get("version", "1.0.0"),
         "api_version": "v1",
         "protocol_version": "kingdom.cluster.v1",
         "event_schema_version": "1.0",
         "capability_schema_version": "1.0",
         "auth_version": "zero_trust.v1",
-        "minimum_client_version": "40.0.0",
-        "minimum_knight_version": "40.0.0",
+        "minimum_client_version": "1.0.0",
+        "minimum_knight_version": "1.0.0",
         "supported_capabilities": sorted(list(ALL_CAPABILITIES)),
         "required_capabilities": sorted(list(DEFAULT_KNIGHT_CAPABILITIES)),
         "feature_flags": {
@@ -366,7 +366,7 @@ def run_full_system_diagnostic_scan():
     return {
         "status": overall_status,
         "timestamp": time.time(),
-        "kingdom_version": STATE.get("version", "40.2.0"),
+        "kingdom_version": STATE.get("version", "1.0.0"),
         "checks": checks
     }
 
@@ -390,7 +390,7 @@ def export_diagnostics():
     ]
 
     return {
-        "kingdom_version": "v40.2",
+        "kingdom_version": "v1.0",
         "timestamp": time.time(),
         "system": {
             "os": platform.system(),

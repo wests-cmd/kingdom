@@ -1,5 +1,6 @@
+# Canonical Single Source of Version Truth for Kingdom
 STATE = {
     "running": False,
     "mode": "adaptive",
-    "version": "40.2.0"
+    "version": "1.0.0"
 }

@@ -3,7 +3,7 @@ from typing import Dict, Any, List, Tuple
 from backend.state import STATE
 from backend.extensions.models import ExtensionManifest, ExtensionToolDeclaration
 
-RUNTIME_VERSION = STATE.get("version", "40.2.0")
+RUNTIME_VERSION = STATE.get("version", "1.0.0")
 
 
 class ManifestValidationError(Exception):
@@ -21,7 +21,7 @@ class ExtensionManifestValidator:
 
     @classmethod
     def parse_version_constraint(cls, constraint: str) -> Tuple[str, str]:
-        """Parses constraint like '>=40.0.0' or '==40.2.0' into operator and version string."""
+        """Parses constraint like '>=1.0.0' or '==1.0.0' into operator and version string."""
         match = re.match(r"^([><=]+)\s*(\d+\.\d+\.\d+)", constraint.strip())
         if match:
             return match.group(1), match.group(2)
@@ -67,7 +67,7 @@ class ExtensionManifestValidator:
             raise ManifestValidationError(f"Invalid extension_id format '{ext_id}'. Must be alphanumeric/hyphen/underscore.")
 
         # Check compatibility
-        compat = manifest_dict.get("kingdom_compatibility", ">=40.0.0")
+        compat = manifest_dict.get("kingdom_compatibility", ">=1.0.0")
         if not cls.check_compatibility(compat):
             raise ManifestValidationError(
                 f"Extension '{ext_id}' requires Kingdom version '{compat}', but current runtime is '{RUNTIME_VERSION}'."

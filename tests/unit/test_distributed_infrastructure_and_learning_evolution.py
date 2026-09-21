@@ -11,7 +11,7 @@ def test_unannounced_node_disappearance_and_task_reassignment():
         "id": node_id,
         "node_state": NodeState.CONNECTED.value,
         "hardware_profile": {"cpu_cores": 8, "vram_mb": 16384},
-        "software_version": "40.2.0"
+        "software_version": "1.0.0"
     })
 
     # Simulate node claiming task-999 and then missing heartbeats

@@ -2,7 +2,7 @@
 Kingdom Release Installation Contract Suite.
 Tests:
 - Clean machine startup & readiness health check contracts
-- Single source version reporting (40.2.0)
+- Single source version reporting (1.0.0)
 - Data backup, schema migration, and automatic rollback routines
 """
 
@@ -32,24 +32,24 @@ def test_version_consistency_contract():
     assert res.status_code == 200
     data = res.json()
     assert data["version"] == STATE["version"]
-    assert data["version"] == "40.2.0"
+    assert data["version"] == "1.0.0"
 
 
 def test_updater_release_and_rollback_contract(tmp_path):
     # Check update
     check_res = updater_engine.check_updates()
     assert "update_available" in check_res
-    assert check_res["current_version"] == "40.2.0"
+    assert check_res["current_version"] == "1.0.0"
 
     # Verify checksum
-    sample_data = b"Kingdom release artifact content v40.2.0"
+    sample_data = b"Kingdom release artifact content v1.0.0"
     computed_hash = hashlib.sha256(sample_data).hexdigest()
     assert updater_engine.verify_checksum(sample_data, computed_hash) is True
 
     # Backup & Rollback
     src = tmp_path / "src"
     src.mkdir()
-    (src / "data.db").write_text("v40.2.0 DB State")
+    (src / "data.db").write_text("v1.0.0 DB State")
 
     backup_root = tmp_path / "backups"
     backup_path = updater_engine.backup_data(str(src), str(backup_root))
@@ -58,4 +58,4 @@ def test_updater_release_and_rollback_contract(tmp_path):
     dst = tmp_path / "restored"
     rolled_back = updater_engine.rollback(backup_path, str(dst))
     assert rolled_back is True
-    assert (dst / "data.db").read_text() == "v40.2.0 DB State"
+    assert (dst / "data.db").read_text() == "v1.0.0 DB State"

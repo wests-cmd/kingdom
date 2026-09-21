@@ -42,7 +42,7 @@ class TestKingdomAPI(unittest.TestCase):
         response = self.client.get("/api/system/compatibility")
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(data["kingdom_version"], "40.2.0")
+        self.assertEqual(data["kingdom_version"], "1.0.0")
         self.assertEqual(data["protocol_version"], "kingdom.cluster.v1")
         self.assertTrue(data["feature_flags"]["signed_rpc"])
 

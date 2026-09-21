@@ -13,20 +13,20 @@ from backend.system.migrator import run_migrations
 def test_updater_check_updates():
     updater = UpdaterEngine(current_version="40.1.0")
     manifest = {
-        "latest_version": "40.2.0",
+        "latest_version": "1.0.0",
         "release_channel": "stable",
         "release_date": "2026-09-10",
         "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "download_url": "https://releases.kingdom.network/v40.2.0/kingdom-v40.2.0.tar.gz"
+        "download_url": "https://releases.kingdom.network/v1.0.0/kingdom-v1.0.0.tar.gz"
     }
     res = updater.check_updates(manifest)
     assert res["update_available"] is True
-    assert res["latest_version"] == "40.2.0"
+    assert res["latest_version"] == "1.0.0"
 
 
 def test_checksum_verification():
     updater = UpdaterEngine()
-    data = b"Kingdom v40.2.0 production release package content"
+    data = b"Kingdom v1.0.0 production release package content"
     expected_hash = hashlib.sha256(data).hexdigest()
 
     assert updater.verify_checksum(data, expected_hash) is True
@@ -34,7 +34,7 @@ def test_checksum_verification():
 
 
 def test_backup_and_rollback(tmp_path):
-    updater = UpdaterEngine(current_version="40.2.0")
+    updater = UpdaterEngine(current_version="1.0.0")
 
     # 1. Source Data Directory
     source_dir = tmp_path / "data_source"
@@ -71,9 +71,9 @@ def test_execute_update_pipeline_success_and_automatic_rollback(tmp_path):
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     db_file = data_dir / "kingdom.db"
-    db_file.write_text("Version 40.2.0 Database Content")
+    db_file.write_text("Version 1.0.0 Database Content")
 
-    updater = UpdaterEngine(current_version="40.2.0")
+    updater = UpdaterEngine(current_version="1.0.0")
     artifact = b"Kingdom v40.3.0 Release Package Content"
     checksum = hashlib.sha256(artifact).hexdigest()
 
@@ -97,7 +97,7 @@ def test_execute_update_pipeline_success_and_automatic_rollback(tmp_path):
         health_check_fn=lambda: False
     )
     assert failed_health_res["status"] == "rolled_back"
-    assert db_file.read_text() == "Version 40.2.0 Database Content"
+    assert db_file.read_text() == "Version 1.0.0 Database Content"
 
     # 3. Update pipeline health check success completes update
     success_res = updater.execute_update_pipeline(
