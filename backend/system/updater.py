@@ -8,17 +8,17 @@ from backend.state import STATE
 
 class UpdaterEngine:
     def __init__(self, current_version: str = None):
-        self.current_version = current_version or STATE.get("version", "40.2.0")
+        self.current_version = current_version or STATE.get("version", "1.0.0")
 
     def check_updates(self, manifest: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         if not manifest:
             manifest = {
-                "latest_version": "40.2.0",
+                "latest_version": "1.0.0",
                 "release_channel": "stable",
-                "release_date": "2026-09-10",
+                "release_date": "2026-09-21",
                 "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-                "download_url": "https://releases.kingdom.network/v40.2.0/kingdom-v40.2.0.tar.gz",
-                "release_notes": "Kingdom v40.2.0 Stable Release Candidate"
+                "download_url": "https://releases.kingdom.network/v1.0.0/kingdom-v1.0.0.tar.gz",
+                "release_notes": "Kingdom v1TAS Official Release"
             }
 
         latest_ver = manifest.get("latest_version", self.current_version)
