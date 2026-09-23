@@ -143,9 +143,6 @@ jobs:
 
           cd release_staging
 
-          # Generate SHA256SUMS
-          sha256sum * > SHA256SUMS
-
           # Generate release-manifest.json
           python3 -c "
           import os, json, glob, hashlib
@@ -190,7 +187,11 @@ jobs:
               json.dump(manifest, f, indent=2)
           "
 
+          # Generate SHA256SUMS for all binaries and manifest
+          sha256sum * > SHA256SUMS
+
           cat release-manifest.json
+          cat SHA256SUMS
           cd ..
 
       - name: Validate Release Artifacts & Manifest Integrity
@@ -199,7 +200,8 @@ jobs:
           python3 scripts/validate_version.py --manifest release_staging/release-manifest.json
 
           cd release_staging
-          sha256sum -c SHA256SUMS
+          # Verify checksums excluding SHA256SUMS itself
+          grep -v "SHA256SUMS" SHA256SUMS | sha256sum -c -
           cd ..
 
       - name: Upload Release Staging Artifacts
@@ -227,6 +229,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.validate-and-test.outputs.git_tag }}
+          target_commitish: ${{ github.sha }}
           name: ${{ github.event.inputs.release_name || 'Kingdom v1TAS' }} (v${{ needs.validate-and-test.outputs.canonical_version }})
           body: |
             # Kingdom v1TAS (v${{ needs.validate-and-test.outputs.canonical_version }}) Official Production Release
