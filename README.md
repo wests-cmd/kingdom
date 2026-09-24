@@ -33,6 +33,49 @@ Normal users do NOT need to install Python, Node.js, or npm. The packaged Kingdo
 | **Windows** | `NSIS` | 🟢 Supported | `Kingdom-Setup-1.0.0.exe` |
 | **macOS** | `DMG` | 🟢 Supported | `Kingdom-1.0.0.dmg` |
 
+#### What One-Click Download and Deployment Means and How It Works
+A "one-click download and deployment" process allows a user or automated system to retrieve, install, and execute the runtime with a single action without manual environment setup or elevated privileges.
+
+##### 1. Public Website Integration Contract
+The public website dynamically fetches the machine-readable `release-manifest.json` published with every official release.
+```json
+{
+  "product": "Kingdom",
+  "version": "1.0.0",
+  "release_name": "Kingdom v1TAS",
+  "tag": "v1.0.0",
+  "commit": "<SHA>",
+  "release_channel": "stable",
+  "artifacts": [
+    {
+      "filename": "Kingdom-1.0.0.AppImage",
+      "size": 128456000,
+      "sha256": "...",
+      "platform": "linux",
+      "arch": "x86_64"
+    }
+  ],
+  "compatibility": {
+    "kingdom_api_version": "v1",
+    "centipede_protocol_version": "v1",
+    "schema_version": "1.0"
+  }
+}
+```
+
+##### 2. Platform Detection & Direct Downloads
+- **Browser Client Detection:** The website detects the visitor's operating system (`Windows`, `macOS`, `Linux`) and renders the primary `Download Kingdom` button pointing directly to the matching verified release asset in `release-manifest.json`.
+- **SHA-256 Checksum Verification:** Every package download includes cryptographic hash verification against `SHA256SUMS`.
+- **Non-Admin Per-User Execution:** Desktop builds install in per-user space without requiring administrator rights or local Python installations.
+
+##### 3. Modern DevOps & Cloud Contexts
+For server and container deployments:
+```bash
+# Production Compose Startup
+docker-compose up --build -d
+```
+The multi-stage container builds static assets (`node:24-alpine`) and serves them via Python FastAPI (`python:3.12-slim`), providing immediate health check readiness.
+
 ---
 
 ### 🛠️ Developer Installation
