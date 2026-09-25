@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import heapq
 import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
+
+_WORD_PATTERN = re.compile(r"\w+")
 
 
 class MemoryService:
@@ -27,11 +30,26 @@ class MemoryService:
         return self.add(task["prompt"], {"task_id": task["id"], "status": task["status"], "result": task["result"]}, 1.0 if task["status"] == "completed" else 0.25)
 
     def search(self, query, limit=5):
-        terms = set(re.findall(r"\w+", query.lower()))
-        def score(entry):
-            matches = len(terms.intersection(re.findall(r"\w+", entry["content"].lower())))
-            return (matches, entry["weight"])
-        return [entry for entry in sorted(self._state["entries"], key=score, reverse=True) if score(entry)[0]][:limit]
+        # Optimization: Single-pass query matching with pre-compiled regex and heapq.nlargest extraction.
+        # Avoids repeated regex tokenization and double-scoring per entry during sorting and filtering.
+        if not query or not self._state["entries"]:
+            return []
+        terms = set(_WORD_PATTERN.findall(query.lower()))
+        if not terms:
+            return []
+
+        scored_entries = []
+        for entry in self._state["entries"]:
+            words = set(_WORD_PATTERN.findall(entry["content"].lower()))
+            matches = len(terms.intersection(words))
+            if matches > 0:
+                scored_entries.append((matches, entry["weight"], entry))
+
+        if not scored_entries:
+            return []
+
+        top_entries = heapq.nlargest(limit, scored_entries, key=lambda x: (x[0], x[1]))
+        return [item[2] for item in top_entries]
 
     def entries(self, limit=100):
         return self._state["entries"][-limit:]
