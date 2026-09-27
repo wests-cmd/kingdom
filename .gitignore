@@ -226,3 +226,4 @@ kingdom.db
 **/dist/
 data/
 data/logs/
+configs/local_profile.json
