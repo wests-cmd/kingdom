@@ -46,6 +46,10 @@
       {
         "from": "bin",
         "to": "bin"
+      },
+      {
+        "from": "../frontend/dist",
+        "to": "frontend/dist"
       }
     ]
   }

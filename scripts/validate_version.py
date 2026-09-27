@@ -33,8 +33,8 @@ def get_authoritative_version(root_dir: str) -> str:
 
 def check_package_json(filepath: str, expected_version: str) -> bool:
     if not os.path.exists(filepath):
-        print(f"[WARN] Package file missing: {filepath}")
-        return True
+        print(f"[ERROR] Required package file missing: {filepath}")
+        return False
 
     with open(filepath, "r") as f:
         data = json.load(f)
