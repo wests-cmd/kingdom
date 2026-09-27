@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Kingdom — First-Run Guided Setup</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0d0d0d;
+      color: #e2e8f0;
+      margin: 0;
+      padding: 32px;
+    }
+    .header {
+      margin-bottom: 24px;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #ffffff;
+      margin: 0 0 8px 0;
+    }
+    .subtitle {
+      color: #a0aec0;
+      font-size: 14px;
+      margin: 0;
+    }
+    .hw-card {
+      background-color: #1a202c;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .hw-item {
+      flex: 1 1 180px;
+    }
+    .hw-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #718096;
+      margin-bottom: 4px;
+    }
+    .hw-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: #cbd5e0;
+    }
+    .profiles-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .profile-card {
+      background-color: #1a202c;
+      border: 2px solid #2d3748;
+      border-radius: 8px;
+      padding: 16px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+    .profile-card:hover {
+      border-color: #4a5568;
+    }
+    .profile-card.selected {
+      border-color: #3182ce;
+      background-color: #2b6cb015;
+    }
+    .badge-suggested {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background-color: #319795;
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+      text-transform: uppercase;
+    }
+    .profile-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #ffffff;
+      margin: 0 0 4px 0;
+    }
+    .profile-desc {
+      font-size: 13px;
+      color: #a0aec0;
+      margin: 0;
+    }
+    .custom-options {
+      background-color: #1a202c;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 12px;
+      display: none;
+    }
+    .custom-group {
+      margin-bottom: 12px;
+    }
+    .custom-label {
+      font-size: 13px;
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+    .btn {
+      background-color: #3182ce;
+      color: white;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .btn:hover {
+      background-color: #2b6cb0;
+    }
+    .btn:disabled {
+      background-color: #4a5568;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Set up Kingdom</h1>
+    <p class="subtitle">Kingdom checked this computer and recommended a setup profile.</p>
+  </div>
+
+  <div class="hw-card" id="hw-report">
+    <div class="hw-item">
+      <div class="hw-label">Operating System</div>
+      <div class="hw-value" id="hw-os">Detecting...</div>
+    </div>
+    <div class="hw-item">
+      <div class="hw-label">Processor</div>
+      <div class="hw-value" id="hw-cpu">Detecting...</div>
+    </div>
+    <div class="hw-item">
+      <div class="hw-label">System Memory</div>
+      <div class="hw-value" id="hw-ram">Detecting...</div>
+    </div>
+    <div class="hw-item">
+      <div class="hw-label">Graphics Card</div>
+      <div class="hw-value" id="hw-gpu">Detecting...</div>
+    </div>
+  </div>
+
+  <div class="profiles-grid" id="profiles-container">
+    <!-- Populated dynamically via catalog -->
+  </div>
+
+  <div class="custom-options" id="custom-container">
+    <div style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #ffffff;">Custom Runtime Options</div>
+    <div class="custom-group">
+      <label class="custom-label">
+        <input type="checkbox" id="chk-gui" checked> Enable Graphical Command Center
+      </label>
+    </div>
+    <div style="font-size: 12px; font-weight: 600; color: #a0aec0; margin: 12px 0 8px 0;">Active Knights:</div>
+    <div class="custom-group">
+      <label class="custom-label"><input type="checkbox" name="custom-knight" value="planner" checked> Planner Knight</label>
+      <label class="custom-label"><input type="checkbox" name="custom-knight" value="coder" checked> Coder Knight</label>
+      <label class="custom-label"><input type="checkbox" name="custom-knight" value="researcher" checked> Research Knight</label>
+      <label class="custom-label"><input type="checkbox" name="custom-knight" value="memory" checked> Memory Knight</label>
+      <label class="custom-label"><input type="checkbox" name="custom-knight" value="security" checked> Security Knight</label>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button class="btn" id="btn-submit" onclick="submitSetup()">Save & Start Kingdom</button>
+  </div>
+
+  <script>
+    let selectedProfileKey = null;
+    let catalog = null;
+    let hardwareReport = null;
+
+    async function initWizard() {
+      try {
+        if (window.kingdomDesktop) {
+          hardwareReport = await window.kingdomDesktop.getHardwareReport();
+          catalog = await window.kingdomDesktop.getInstallCatalog();
+        }
+
+        renderHardware(hardwareReport);
+        renderProfiles(catalog, hardwareReport ? hardwareReport.suggested_profile : 'developer');
+      } catch (e) {
+        console.error('Wizard init error:', e);
+      }
+    }
+
+    function renderHardware(report) {
+      if (!report) return;
+      document.getElementById('hw-os').innerText = `${report.platform || 'Unknown'} (${report.arch || 'x64'})`;
+      document.getElementById('hw-cpu').innerText = `${report.cpu_cores || 1} Cores`;
+      document.getElementById('hw-ram').innerText = `${report.memory_total_gb || 2} GB RAM`;
+      document.getElementById('hw-gpu').innerText = report.gpu && report.gpu.present ? report.gpu.name : 'Standard Display';
+    }
+
+    function renderProfiles(cat, suggestedKey) {
+      const container = document.getElementById('profiles-container');
+      container.innerHTML = '';
+
+      const profiles = (cat && cat.profiles) ? cat.profiles : {
+        "developer": { name: "Developer", description: "For coding and development work.", gui: true, knights: ["planner", "coder", "security"] },
+        "research": { name: "Research & Analysis", description: "For research, analysis, and memory work.", gui: true, knights: ["planner", "researcher", "memory"] },
+        "full_swarm": { name: "Full Swarm", description: "Runs every built-in Knight. Uses most resources.", gui: true, knights: ["planner", "coder", "researcher", "memory", "security"] },
+        "server_headless": { name: "Server / Headless", description: "Runs Kingdom without GUI Command Center.", gui: false, knights: ["planner", "coder", "researcher", "memory", "security"] }
+      };
+
+      for (const [key, p] of Object.entries(profiles)) {
+        const card = document.createElement('div');
+        card.className = 'profile-card' + (key === suggestedKey ? ' selected' : '');
+        card.onclick = (evt) => selectProfile(key, evt);
+
+        if (key === suggestedKey) {
+          selectedProfileKey = key;
+          const badge = document.createElement('div');
+          badge.className = 'badge-suggested';
+          badge.innerText = 'Suggested';
+          card.appendChild(badge);
+        }
+
+        const title = document.createElement('div');
+        title.className = 'profile-title';
+        title.innerText = p.name;
+
+        const desc = document.createElement('div');
+        desc.className = 'profile-desc';
+        desc.innerText = p.description;
+
+        card.appendChild(title);
+        card.appendChild(desc);
+        container.appendChild(card);
+      }
+
+      // Add Custom card
+      const customCard = document.createElement('div');
+      customCard.className = 'profile-card';
+      customCard.onclick = (evt) => selectProfile('custom', evt);
+
+      const customTitle = document.createElement('div');
+      customTitle.className = 'profile-title';
+      customTitle.innerText = 'Custom Setup';
+
+      const customDesc = document.createElement('div');
+      customDesc.className = 'profile-desc';
+      customDesc.innerText = 'Manually select active Knights and GUI preference.';
+
+      customCard.appendChild(customTitle);
+      customCard.appendChild(customDesc);
+      container.appendChild(customCard);
+    }
+
+    function selectProfile(key, evt) {
+      selectedProfileKey = key;
+      const cards = document.querySelectorAll('.profile-card');
+      cards.forEach(c => c.classList.remove('selected'));
+
+      if (evt && evt.currentTarget) {
+        evt.currentTarget.classList.add('selected');
+      }
+
+      const customContainer = document.getElementById('custom-container');
+      if (key === 'custom') {
+        customContainer.style.display = 'block';
+      } else {
+        customContainer.style.display = 'none';
+      }
+    }
+
+    async function submitSetup() {
+      const btn = document.getElementById('btn-submit');
+      btn.disabled = true;
+      btn.innerText = 'Saving Setup...';
+
+      let profile = { name: 'Custom Profile', gui: true, knights: [] };
+
+      if (selectedProfileKey === 'custom') {
+        profile.gui = document.getElementById('chk-gui').checked;
+        const checkboxes = document.querySelectorAll('input[name="custom-knight"]:checked');
+        checkboxes.forEach(cb => profile.knights.push(cb.value));
+      } else if (catalog && catalog.profiles && catalog.profiles[selectedProfileKey]) {
+        const catProf = catalog.profiles[selectedProfileKey];
+        profile = {
+          name: catProf.name,
+          gui: catProf.gui,
+          knights: catProf.knights
+        };
+      } else {
+        profile = {
+          name: 'Full Swarm',
+          gui: true,
+          knights: ["planner", "coder", "researcher", "memory", "security"]
+        };
+      }
+
+      try {
+        if (window.kingdomDesktop) {
+          await window.kingdomDesktop.saveProfile(profile);
+        }
+      } catch (e) {
+        console.error('Failed to save profile:', e);
+        btn.disabled = false;
+        btn.innerText = 'Retry Save';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', initWizard);
+  </script>
+</body>
+</html>

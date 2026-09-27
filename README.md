@@ -24,7 +24,13 @@ Normal users do NOT need to install Python, Node.js, or npm. The packaged Kingdo
 
 1. Download the Kingdom Desktop package for your operating system from GitHub Release Artifacts.
 2. Launch **Kingdom**.
-3. The desktop shell automatically starts the bundled backend runtime and loads the Command Center UI.
+3. **First-Run Guided Setup:** On first launch, Kingdom inspects system CPU cores, RAM, and GPU capability to suggest a runtime profile:
+   - **Developer:** Runs Planner, Coder, and Security Knights.
+   - **Research & Analysis:** Runs Planner, Researcher, and Memory Knights.
+   - **Full Swarm:** Runs all 5 built-in Knights.
+   - **Server / Headless:** Runs backend runtime in headless mode without GUI Command Center.
+   - **Custom:** Select specific Knights and GUI preference manually.
+4. Kingdom saves your selection locally (`configs/local_profile.json` or per-user `userData`) and launches the selected runtime.
 
 | Platform | Package Format | Status | Build Artifact |
 |---|---|---|---|
@@ -33,48 +39,10 @@ Normal users do NOT need to install Python, Node.js, or npm. The packaged Kingdo
 | **Windows** | `NSIS` | 🟢 Supported | `Kingdom-Setup-1.0.0.exe` |
 | **macOS** | `DMG` | 🟢 Supported | `Kingdom-1.0.0.dmg` |
 
-#### What One-Click Download and Deployment Means and How It Works
-A "one-click download and deployment" process allows a user or automated system to retrieve, install, and execute the runtime with a single action without manual environment setup or elevated privileges.
-
-##### 1. Public Website Integration Contract
-The public website dynamically fetches the machine-readable `release-manifest.json` published with every official release.
-```json
-{
-  "product": "Kingdom",
-  "version": "1.0.0",
-  "release_name": "Kingdom v1TAS",
-  "tag": "v1.0.0",
-  "commit": "<SHA>",
-  "release_channel": "stable",
-  "artifacts": [
-    {
-      "filename": "Kingdom-1.0.0.AppImage",
-      "size": 128456000,
-      "sha256": "...",
-      "platform": "linux",
-      "arch": "x86_64"
-    }
-  ],
-  "compatibility": {
-    "kingdom_api_version": "v1",
-    "centipede_protocol_version": "v1",
-    "schema_version": "1.0"
-  }
-}
-```
-
-##### 2. Platform Detection & Direct Downloads
-- **Browser Client Detection:** The website detects the visitor's operating system (`Windows`, `macOS`, `Linux`) and renders the primary `Download Kingdom` button pointing directly to the matching verified release asset in `release-manifest.json`.
-- **SHA-256 Checksum Verification:** Every package download includes cryptographic hash verification against `SHA256SUMS`.
-- **Non-Admin Per-User Execution:** Desktop builds install in per-user space without requiring administrator rights or local Python installations.
-
-##### 3. Modern DevOps & Cloud Contexts
-For server and container deployments:
-```bash
-# Production Compose Startup
-docker-compose up --build -d
-```
-The multi-stage container builds static assets (`node:24-alpine`) and serves them via Python FastAPI (`python:3.12-slim`), providing immediate health check readiness.
+#### How First-Run Guided Setup & Profile Fallbacks Work
+- **Hardware-Aware Recommendation:** Desktop setup wizard evaluates total system memory and CPU core count to recommend `Full Swarm` (>= 8GB RAM, >= 4 cores), `Developer` (>= 4GB RAM), or `Server / Headless` (< 4GB RAM or no display).
+- **Safe Fallback:** For server, Docker, or direct Python startups without a local profile, Kingdom defaults to initializing all known built-in Knights.
+- **Resetting Setup:** Deleting `configs/local_profile.json` re-triggers first-run guided setup on next desktop launch.
 
 ---
 
@@ -159,6 +127,7 @@ Kingdom reads configuration from `configs/` and environment variables.
 - `configs/default.yaml`: Base system settings, logging, and storage paths.
 - `configs/control_levels.yaml`: Autonomous governance control levels (L0 to L5).
 - `configs/runtime.yaml`: Default model and execution parameters.
+- `configs/install_profiles.json`: Guided setup component catalog and profile templates.
 - `.env.example`: Template for environment-specific secrets.
 
 > **Security Rule:** Never commit real API keys, passwords, or private tokens to Git repositories. Copy `.env.example` to `.env` for local configuration.
