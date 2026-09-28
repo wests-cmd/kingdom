@@ -126,7 +126,67 @@ async function createWindow() {
       nodeIntegration: false,
       contextIsolation: true
     }
-  });
+  }
+
+  return {
+    name: typeof profile.name === 'string' ? profile.name : 'Custom Profile',
+    gui: gui,
+    knights: validKnights.length > 0 ? validKnights : VALID_KNIGHT_ROLES.slice()
+  };
+}
+
+function loadCatalog() {
+  try {
+    if (fs.existsSync(CATALOG_PATH)) {
+      return JSON.parse(fs.readFileSync(CATALOG_PATH, 'utf-8'));
+    }
+  } catch (error) {
+    console.error('[Kingdom Desktop] Failed to load install catalog:', error);
+  }
+  return null;
+}
+
+function loadSavedProfile() {
+  if (!fs.existsSync(PROFILE_PATH)) {
+    return null;
+  }
+
+  try {
+    const profile = JSON.parse(fs.readFileSync(PROFILE_PATH, 'utf-8'));
+    return validateProfile(profile);
+  } catch (error) {
+    console.error('[Kingdom Desktop] Invalid local profile; using first-run setup:', error);
+    return null;
+  }
+}
+
+async function launchBackendAndUI(profile) {
+  process.env.KINGDOM_LOCAL_PROFILE = PROFILE_PATH;
+
+  startBackend();
+
+  if (profile && profile.gui === false) {
+    console.log('[Kingdom Desktop] Headless profile active. Backend running without GUI window.');
+    return;
+  }
+
+  if (!mainWindow) {
+    mainWindow = new BrowserWindow({
+      width: 1280,
+      height: 800,
+      title: "Kingdom v1.0.0 — Distributed AI Runtime",
+      backgroundColor: "#0d0d0d",
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        nodeIntegration: false,
+        contextIsolation: true
+      }
+    });
+
+    mainWindow.on('closed', () => {
+      mainWindow = null;
+    });
+  }
 
   const isReady = await waitForBackendReady();
   if (isReady) {
@@ -139,6 +199,22 @@ async function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, 'error.html'));
   }
+}
+
+function openSetupWizard() {
+  mainWindow = new BrowserWindow({
+    width: 900,
+    height: 700,
+    title: "Kingdom v1.0.0 — First-Run Guided Setup",
+    backgroundColor: "#0d0d0d",
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true
+    }
+  });
+
+  mainWindow.loadFile(path.join(__dirname, 'setup-wizard.html'));
 
   mainWindow.on('closed', () => {
     mainWindow = null;

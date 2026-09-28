@@ -131,6 +131,7 @@ docker-compose down
 - `configs/default.yaml`: Base system settings, logging, and storage paths.
 - `configs/control_levels.yaml`: Autonomous governance control levels (L0 to L5).
 - `configs/runtime.yaml`: Default model and execution parameters.
+- `configs/install_profiles.json`: Guided setup component catalog and profile templates.
 - `.env.example`: Template for environment-specific secrets.
 
 > **Security Rule:** Never commit real API keys, passwords, or private tokens to Git repositories. Copy `.env.example` to `.env` for local configuration.
