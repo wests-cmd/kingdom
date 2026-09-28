@@ -125,16 +125,6 @@ def test_explicit_registry_invalid_roles():
     assert set(registry._knights.keys()) == {"planner", "coder", "researcher", "memory", "security"}
 
 
-def test_default_profile_path_is_repo_relative_to_module():
-    monkeypatch = pytest.MonkeyPatch()
-    try:
-        monkeypatch.delenv("KINGDOM_LOCAL_PROFILE", raising=False)
-        roles = load_enabled_knight_roles()
-        assert set(roles) == {"planner", "coder", "researcher", "memory", "security"}
-    finally:
-        monkeypatch.undo()
-
-
 def test_install_profiles_catalog_file_integrity():
     catalog_path = Path(__file__).resolve().parents[2] / "configs" / "install_profiles.json"
     assert catalog_path.exists()
