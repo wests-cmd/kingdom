@@ -1,6 +1,6 @@
 /**
  * KINGDOM Desktop Secure Preload Bridge
- * Exposes safe desktop process management IPC functions to the renderer without exposing Node.js primitives.
+ * Exposes safe desktop process management and guided setup IPC functions to the renderer without exposing Node.js primitives.
  */
 
 const { contextBridge, ipcRenderer } = require('electron');

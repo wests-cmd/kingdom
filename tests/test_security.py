@@ -168,6 +168,29 @@ class ZeroTrustEngineTests(unittest.TestCase):
         )
         self.assertTrue(auth2["authorized"])
 
+    def test_cross_actor_approval_reuse_rejected(self):
+        # Register two nodes with process.execute capability
+        self.zt.nodes.register_node("actor_a", capabilities=["process.execute"])
+        self.zt.nodes.register_node("actor_b", capabilities=["process.execute"])
+
+        # actor_a requests approval for high-risk operation
+        auth_a = self.zt.authorize(actor_id="actor_a", capability="process.execute", operation="sensitive op")
+        self.assertFalse(auth_a["authorized"])
+        approval_id = auth_a["approval_id"]
+        self.assertIsNotNone(approval_id)
+
+        # Admin approves the request
+        self.zt.approvals.approve(approval_id, approver="security_admin")
+
+        # actor_b attempts to authorize using actor_a's approval_id -> must be rejected
+        auth_b = self.zt.authorize(
+            actor_id="actor_b",
+            capability="process.execute",
+            operation="sensitive op",
+            approval_id=approval_id,
+        )
+        self.assertFalse(auth_b["authorized"])
+
 
 class SecurityApiTests(unittest.TestCase):
     def setUp(self):

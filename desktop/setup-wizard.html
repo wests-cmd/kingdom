@@ -2,330 +2,523 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Kingdom — First-Run Guided Setup</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Set Up Kingdom</title>
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: #0d0d0d;
-      color: #e2e8f0;
+    :root {
+      --bg-color: #0d0d0d;
+      --card-bg: #161618;
+      --card-border: #2a2a2e;
+      --card-hover: #3a3a40;
+      --accent-color: #6366f1;
+      --accent-hover: #4f46e5;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --suggested-bg: #1e1b4b;
+      --suggested-border: #4338ca;
+      --suggested-badge: #818cf8;
+    }
+
+    * {
+      box-sizing: border-box;
       margin: 0;
-      padding: 32px;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-    .header {
-      margin-bottom: 24px;
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
     }
+
+    header {
+      padding: 24px 32px 12px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
     h1 {
       font-size: 24px;
       font-weight: 700;
       color: #ffffff;
-      margin: 0 0 8px 0;
+      margin-bottom: 6px;
     }
+
     .subtitle {
-      color: #a0aec0;
       font-size: 14px;
-      margin: 0;
+      color: var(--text-muted);
     }
-    .hw-card {
-      background-color: #1a202c;
-      border: 1px solid #2d3748;
-      border-radius: 8px;
-      padding: 16px;
-      margin-bottom: 24px;
+
+    .main-container {
       display: flex;
-      flex-wrap: wrap;
-      gap: 16px;
+      flex: 1;
+      overflow: hidden;
     }
-    .hw-item {
-      flex: 1 1 180px;
-    }
-    .hw-label {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #718096;
-      margin-bottom: 4px;
-    }
-    .hw-value {
-      font-size: 14px;
-      font-weight: 600;
-      color: #cbd5e0;
-    }
-    .profiles-grid {
+
+    .sidebar {
+      width: 280px;
+      background-color: #121214;
+      border-right: 1px solid var(--card-border);
+      padding: 20px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      margin-bottom: 24px;
+      gap: 16px;
     }
-    .profile-card {
-      background-color: #1a202c;
-      border: 2px solid #2d3748;
-      border-radius: 8px;
-      padding: 16px;
-      cursor: pointer;
-      position: relative;
-      transition: all 0.2s ease;
+
+    .sidebar h2 {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
     }
-    .profile-card:hover {
-      border-color: #4a5568;
+
+    .hw-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      padding: 10px 12px;
+      border-radius: 6px;
     }
-    .profile-card.selected {
-      border-color: #3182ce;
-      background-color: #2b6cb015;
-    }
-    .badge-suggested {
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      background-color: #319795;
-      color: white;
+
+    .hw-label {
       font-size: 11px;
-      font-weight: 700;
-      padding: 2px 8px;
-      border-radius: 12px;
+      color: var(--text-muted);
       text-transform: uppercase;
     }
+
+    .hw-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .content {
+      flex: 1;
+      padding: 24px 32px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .profiles-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    .profile-card {
+      position: relative;
+      background: var(--card-bg);
+      border: 2px solid var(--card-border);
+      border-radius: 8px;
+      padding: 18px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .profile-card:hover {
+      border-color: var(--card-hover);
+      transform: translateY(-1px);
+    }
+
+    .profile-card.selected {
+      border-color: var(--accent-color);
+      background: #181824;
+    }
+
+    .profile-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
     .profile-title {
       font-size: 16px;
       font-weight: 600;
       color: #ffffff;
-      margin: 0 0 4px 0;
     }
+
+    .suggested-badge {
+      display: none;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: var(--suggested-badge);
+      background: var(--suggested-bg);
+      border: 1px solid var(--suggested-border);
+      padding: 3px 8px;
+      border-radius: 12px;
+      text-transform: uppercase;
+    }
+
+    .profile-card.suggested .suggested-badge {
+      display: inline-block;
+    }
+
     .profile-desc {
       font-size: 13px;
-      color: #a0aec0;
-      margin: 0;
+      color: var(--text-muted);
+      line-height: 1.4;
     }
+
+    .knights-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .knight-pill {
+      font-size: 11px;
+      background: #23232a;
+      color: #d1d5db;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+
     .custom-options {
-      background-color: #1a202c;
-      border: 1px solid #2d3748;
-      border-radius: 8px;
-      padding: 16px;
-      margin-top: 12px;
       display: none;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 8px;
+      flex-direction: column;
+      gap: 16px;
     }
-    .custom-group {
-      margin-bottom: 12px;
+
+    .custom-options.active {
+      display: flex;
     }
-    .custom-label {
-      font-size: 13px;
-      color: #e2e8f0;
+
+    .checkbox-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .checkbox-label {
       display: flex;
       align-items: center;
       gap: 8px;
+      font-size: 13px;
+      color: var(--text-main);
       cursor: pointer;
     }
-    .footer {
+
+    .checkbox-label input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent-color);
+      cursor: pointer;
+    }
+
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    footer {
+      padding: 16px 32px;
+      border-top: 1px solid var(--card-border);
       display: flex;
       justify-content: flex-end;
       gap: 12px;
+      background-color: #121214;
     }
+
     .btn {
-      background-color: #3182ce;
-      color: white;
-      border: none;
       padding: 10px 24px;
-      border-radius: 6px;
       font-size: 14px;
       font-weight: 600;
+      border-radius: 6px;
       cursor: pointer;
-      transition: background-color 0.2s;
+      transition: all 0.2s ease;
+      border: none;
     }
-    .btn:hover {
-      background-color: #2b6cb0;
+
+    .btn-primary {
+      background-color: var(--accent-color);
+      color: #ffffff;
     }
-    .btn:disabled {
-      background-color: #4a5568;
+
+    .btn-primary:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
       cursor: not-allowed;
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>Set up Kingdom</h1>
-    <p class="subtitle">Kingdom checked this computer and recommended a setup profile.</p>
+
+  <header>
+    <h1>Set Up Kingdom</h1>
+    <p class="subtitle">Let's check your computer and choose the best Kingdom setup.</p>
+  </header>
+
+  <div class="main-container">
+    <aside class="sidebar">
+      <h2>System Overview</h2>
+      <div class="hw-item">
+        <span class="hw-label">Operating System</span>
+        <span class="hw-value" id="hw-os">Detecting...</span>
+      </div>
+      <div class="hw-item">
+        <span class="hw-label">CPU / Cores</span>
+        <span class="hw-value" id="hw-cpu">Detecting...</span>
+      </div>
+      <div class="hw-item">
+        <span class="hw-label">Memory</span>
+        <span class="hw-value" id="hw-mem">Detecting...</span>
+      </div>
+      <div class="hw-item">
+        <span class="hw-label">GPU</span>
+        <span class="hw-value" id="hw-gpu">Detecting...</span>
+      </div>
+      <div class="hw-item">
+        <span class="hw-label">Display</span>
+        <span class="hw-value" id="hw-display">Detecting...</span>
+      </div>
+      <div class="hw-item">
+        <span class="hw-label">Suggested Setup</span>
+        <span class="hw-value" id="hw-suggested" style="color: var(--suggested-badge);">Detecting...</span>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="section-title">Select Installation Profile</div>
+
+      <div class="profiles-grid" id="profiles-grid">
+        <!-- Developer -->
+        <div class="profile-card" data-key="developer" onclick="selectProfile('developer')">
+          <div class="profile-header">
+            <span class="profile-title">Developer</span>
+            <span class="suggested-badge" id="badge-developer">SUGGESTED</span>
+          </div>
+          <p class="profile-desc">Coding and development focused Kingdom runtime.</p>
+          <div class="knights-pills">
+            <span class="knight-pill">Planner</span>
+            <span class="knight-pill">Coder</span>
+            <span class="knight-pill">Security</span>
+          </div>
+        </div>
+
+        <!-- Research -->
+        <div class="profile-card" data-key="research" onclick="selectProfile('research')">
+          <div class="profile-header">
+            <span class="profile-title">Research & Analysis</span>
+            <span class="suggested-badge" id="badge-research">SUGGESTED</span>
+          </div>
+          <p class="profile-desc">Research, analysis, information gathering, and memory focused runtime.</p>
+          <div class="knights-pills">
+            <span class="knight-pill">Planner</span>
+            <span class="knight-pill">Researcher</span>
+            <span class="knight-pill">Memory</span>
+          </div>
+        </div>
+
+        <!-- Full Swarm -->
+        <div class="profile-card" data-key="full_swarm" onclick="selectProfile('full_swarm')">
+          <div class="profile-header">
+            <span class="profile-title">Full Swarm</span>
+            <span class="suggested-badge" id="badge-full_swarm">SUGGESTED</span>
+          </div>
+          <p class="profile-desc">Runs all built-in Kingdom Knights.</p>
+          <div class="knights-pills">
+            <span class="knight-pill">Planner</span>
+            <span class="knight-pill">Coder</span>
+            <span class="knight-pill">Researcher</span>
+            <span class="knight-pill">Memory</span>
+            <span class="knight-pill">Security</span>
+          </div>
+        </div>
+
+        <!-- Server Headless -->
+        <div class="profile-card" data-key="server_headless" onclick="selectProfile('server_headless')">
+          <div class="profile-header">
+            <span class="profile-title">Server / Headless</span>
+            <span class="suggested-badge" id="badge-server_headless">SUGGESTED</span>
+          </div>
+          <p class="profile-desc">Runs Kingdom without opening the graphical Command Center UI.</p>
+          <div class="knights-pills">
+            <span class="knight-pill">Planner</span>
+            <span class="knight-pill">Coder</span>
+            <span class="knight-pill">Researcher</span>
+            <span class="knight-pill">Memory</span>
+            <span class="knight-pill">Security</span>
+          </div>
+        </div>
+
+        <!-- Custom -->
+        <div class="profile-card" data-key="custom" onclick="selectProfile('custom')">
+          <div class="profile-header">
+            <span class="profile-title">Custom</span>
+          </div>
+          <p class="profile-desc">Manually configure active Knights and interface mode.</p>
+        </div>
+      </div>
+
+      <!-- Custom Options panel -->
+      <div class="custom-options" id="custom-panel">
+        <div class="section-title">Active Knights</div>
+        <div class="checkbox-group">
+          <label class="checkbox-label"><input type="checkbox" id="chk-planner" checked> Planner</label>
+          <label class="checkbox-label"><input type="checkbox" id="chk-coder" checked> Coder</label>
+          <label class="checkbox-label"><input type="checkbox" id="chk-researcher" checked> Researcher</label>
+          <label class="checkbox-label"><input type="checkbox" id="chk-memory" checked> Memory</label>
+          <label class="checkbox-label"><input type="checkbox" id="chk-security" checked> Security</label>
+        </div>
+
+        <div class="toggle-container">
+          <label class="checkbox-label">
+            <input type="checkbox" id="chk-gui" checked>
+            Enable Graphical Interface (Command Center UI)
+          </label>
+        </div>
+      </div>
+    </main>
   </div>
 
-  <div class="hw-card" id="hw-report">
-    <div class="hw-item">
-      <div class="hw-label">Operating System</div>
-      <div class="hw-value" id="hw-os">Detecting...</div>
-    </div>
-    <div class="hw-item">
-      <div class="hw-label">Processor</div>
-      <div class="hw-value" id="hw-cpu">Detecting...</div>
-    </div>
-    <div class="hw-item">
-      <div class="hw-label">System Memory</div>
-      <div class="hw-value" id="hw-ram">Detecting...</div>
-    </div>
-    <div class="hw-item">
-      <div class="hw-label">Graphics Card</div>
-      <div class="hw-value" id="hw-gpu">Detecting...</div>
-    </div>
-  </div>
-
-  <div class="profiles-grid" id="profiles-container">
-    <!-- Populated dynamically via catalog -->
-  </div>
-
-  <div class="custom-options" id="custom-container">
-    <div style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #ffffff;">Custom Runtime Options</div>
-    <div class="custom-group">
-      <label class="custom-label">
-        <input type="checkbox" id="chk-gui" checked> Enable Graphical Command Center
-      </label>
-    </div>
-    <div style="font-size: 12px; font-weight: 600; color: #a0aec0; margin: 12px 0 8px 0;">Active Knights:</div>
-    <div class="custom-group">
-      <label class="custom-label"><input type="checkbox" name="custom-knight" value="planner" checked> Planner Knight</label>
-      <label class="custom-label"><input type="checkbox" name="custom-knight" value="coder" checked> Coder Knight</label>
-      <label class="custom-label"><input type="checkbox" name="custom-knight" value="researcher" checked> Research Knight</label>
-      <label class="custom-label"><input type="checkbox" name="custom-knight" value="memory" checked> Memory Knight</label>
-      <label class="custom-label"><input type="checkbox" name="custom-knight" value="security" checked> Security Knight</label>
-    </div>
-  </div>
-
-  <div class="footer">
-    <button class="btn" id="btn-submit" onclick="submitSetup()">Save & Start Kingdom</button>
-  </div>
+  <footer>
+    <button class="btn btn-primary" id="start-btn" onclick="confirmSetup()">Start Kingdom</button>
+  </footer>
 
   <script>
-    let selectedProfileKey = null;
     let catalog = null;
-    let hardwareReport = null;
+    let selectedKey = 'developer';
+    let suggestedKey = 'developer';
 
-    async function initWizard() {
+    const profilePresets = {
+      developer: { name: 'Developer', gui: true, knights: ['planner', 'coder', 'security'] },
+      research: { name: 'Research & Analysis', gui: true, knights: ['planner', 'researcher', 'memory'] },
+      full_swarm: { name: 'Full Swarm', gui: true, knights: ['planner', 'coder', 'researcher', 'memory', 'security'] },
+      server_headless: { name: 'Server / Headless', gui: false, knights: ['planner', 'coder', 'researcher', 'memory', 'security'] }
+    };
+
+    async function init() {
       try {
         if (window.kingdomDesktop) {
-          hardwareReport = await window.kingdomDesktop.getHardwareReport();
-          catalog = await window.kingdomDesktop.getInstallCatalog();
+          const [report, cat] = await Promise.all([
+            window.kingdomDesktop.getHardwareReport(),
+            window.kingdomDesktop.getInstallCatalog()
+          ]);
+
+          if (report) {
+            document.getElementById('hw-os').innerText = `${report.platform} (${report.arch})`;
+            document.getElementById('hw-cpu').innerText = `${report.cpu_cores} Cores`;
+            document.getElementById('hw-mem').innerText = `${report.memory_total_gb} GB`;
+            document.getElementById('hw-gpu').innerText = report.gpu && report.gpu.present ? report.gpu.name : 'None / Integrated';
+            document.getElementById('hw-display').innerText = report.has_display ? 'Available' : 'Headless (No Display)';
+
+            suggestedKey = report.suggested_profile || 'developer';
+            const presetNames = {
+              developer: 'Developer',
+              research: 'Research & Analysis',
+              full_swarm: 'Full Swarm',
+              server_headless: 'Server / Headless'
+            };
+            document.getElementById('hw-suggested').innerText = presetNames[suggestedKey] || suggestedKey;
+
+            // Highlight suggested card
+            const suggestedCard = document.querySelector(`.profile-card[data-key="${suggestedKey}"]`);
+            if (suggestedCard) {
+              suggestedCard.classList.add('suggested');
+            }
+
+            selectProfile(suggestedKey);
+          }
+
+          if (cat && cat.profiles) {
+            catalog = cat.profiles;
+          }
         }
-
-        renderHardware(hardwareReport);
-        renderProfiles(catalog, hardwareReport ? hardwareReport.suggested_profile : 'developer');
-      } catch (e) {
-        console.error('Wizard init error:', e);
+      } catch (err) {
+        console.error('[Setup Wizard] Failed to load hardware or catalog:', err);
       }
     }
 
-    function renderHardware(report) {
-      if (!report) return;
-      document.getElementById('hw-os').innerText = `${report.platform || 'Unknown'} (${report.arch || 'x64'})`;
-      document.getElementById('hw-cpu').innerText = `${report.cpu_cores || 1} Cores`;
-      document.getElementById('hw-ram').innerText = `${report.memory_total_gb || 2} GB RAM`;
-      document.getElementById('hw-gpu').innerText = report.gpu && report.gpu.present ? report.gpu.name : 'Standard Display';
-    }
+    function selectProfile(key) {
+      selectedKey = key;
+      document.querySelectorAll('.profile-card').forEach(card => {
+        card.classList.toggle('selected', card.getAttribute('data-key') === key);
+      });
 
-    function renderProfiles(cat, suggestedKey) {
-      const container = document.getElementById('profiles-container');
-      container.innerHTML = '';
-
-      const profiles = (cat && cat.profiles) ? cat.profiles : {
-        "developer": { name: "Developer", description: "For coding and development work.", gui: true, knights: ["planner", "coder", "security"] },
-        "research": { name: "Research & Analysis", description: "For research, analysis, and memory work.", gui: true, knights: ["planner", "researcher", "memory"] },
-        "full_swarm": { name: "Full Swarm", description: "Runs every built-in Knight. Uses most resources.", gui: true, knights: ["planner", "coder", "researcher", "memory", "security"] },
-        "server_headless": { name: "Server / Headless", description: "Runs Kingdom without GUI Command Center.", gui: false, knights: ["planner", "coder", "researcher", "memory", "security"] }
-      };
-
-      for (const [key, p] of Object.entries(profiles)) {
-        const card = document.createElement('div');
-        card.className = 'profile-card' + (key === suggestedKey ? ' selected' : '');
-        card.onclick = (evt) => selectProfile(key, evt);
-
-        if (key === suggestedKey) {
-          selectedProfileKey = key;
-          const badge = document.createElement('div');
-          badge.className = 'badge-suggested';
-          badge.innerText = 'Suggested';
-          card.appendChild(badge);
-        }
-
-        const title = document.createElement('div');
-        title.className = 'profile-title';
-        title.innerText = p.name;
-
-        const desc = document.createElement('div');
-        desc.className = 'profile-desc';
-        desc.innerText = p.description;
-
-        card.appendChild(title);
-        card.appendChild(desc);
-        container.appendChild(card);
-      }
-
-      // Add Custom card
-      const customCard = document.createElement('div');
-      customCard.className = 'profile-card';
-      customCard.onclick = (evt) => selectProfile('custom', evt);
-
-      const customTitle = document.createElement('div');
-      customTitle.className = 'profile-title';
-      customTitle.innerText = 'Custom Setup';
-
-      const customDesc = document.createElement('div');
-      customDesc.className = 'profile-desc';
-      customDesc.innerText = 'Manually select active Knights and GUI preference.';
-
-      customCard.appendChild(customTitle);
-      customCard.appendChild(customDesc);
-      container.appendChild(customCard);
-    }
-
-    function selectProfile(key, evt) {
-      selectedProfileKey = key;
-      const cards = document.querySelectorAll('.profile-card');
-      cards.forEach(c => c.classList.remove('selected'));
-
-      if (evt && evt.currentTarget) {
-        evt.currentTarget.classList.add('selected');
-      }
-
-      const customContainer = document.getElementById('custom-container');
+      const customPanel = document.getElementById('custom-panel');
       if (key === 'custom') {
-        customContainer.style.display = 'block';
+        customPanel.classList.add('active');
       } else {
-        customContainer.style.display = 'none';
+        customPanel.classList.remove('active');
       }
     }
 
-    async function submitSetup() {
-      const btn = document.getElementById('btn-submit');
+    async function confirmSetup() {
+      const btn = document.getElementById('start-btn');
       btn.disabled = true;
-      btn.innerText = 'Saving Setup...';
+      btn.innerText = 'Initializing...';
 
-      let profile = { name: 'Custom Profile', gui: true, knights: [] };
+      let finalProfile = null;
 
-      if (selectedProfileKey === 'custom') {
-        profile.gui = document.getElementById('chk-gui').checked;
-        const checkboxes = document.querySelectorAll('input[name="custom-knight"]:checked');
-        checkboxes.forEach(cb => profile.knights.push(cb.value));
-      } else if (catalog && catalog.profiles && catalog.profiles[selectedProfileKey]) {
-        const catProf = catalog.profiles[selectedProfileKey];
-        profile = {
-          name: catProf.name,
-          gui: catProf.gui,
-          knights: catProf.knights
+      if (selectedKey === 'custom') {
+        const knights = [];
+        if (document.getElementById('chk-planner').checked) knights.push('planner');
+        if (document.getElementById('chk-coder').checked) knights.push('coder');
+        if (document.getElementById('chk-researcher').checked) knights.push('researcher');
+        if (document.getElementById('chk-memory').checked) knights.push('memory');
+        if (document.getElementById('chk-security').checked) knights.push('security');
+
+        if (knights.length === 0) {
+          alert('Please select at least one active Knight.');
+          btn.disabled = false;
+          btn.innerText = 'Start Kingdom';
+          return;
+        }
+
+        finalProfile = {
+          name: 'Custom',
+          gui: document.getElementById('chk-gui').checked,
+          knights: knights
         };
       } else {
-        profile = {
-          name: 'Full Swarm',
-          gui: true,
-          knights: ["planner", "coder", "researcher", "memory", "security"]
-        };
+        finalProfile = profilePresets[selectedKey] || profilePresets.developer;
       }
 
       try {
-        if (window.kingdomDesktop) {
-          await window.kingdomDesktop.saveProfile(profile);
+        if (window.kingdomDesktop && window.kingdomDesktop.saveProfile) {
+          await window.kingdomDesktop.saveProfile(finalProfile);
+        } else {
+          console.warn('[Setup Wizard] saveProfile API not found.');
         }
-      } catch (e) {
-        console.error('Failed to save profile:', e);
+      } catch (err) {
+        console.error('[Setup Wizard] Failed to save profile:', err);
+        alert('Failed to save setup profile: ' + err.message);
         btn.disabled = false;
-        btn.innerText = 'Retry Save';
+        btn.innerText = 'Start Kingdom';
       }
     }
 
-    document.addEventListener('DOMContentLoaded', initWizard);
+    window.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
 </html>
