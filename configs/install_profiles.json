@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "profiles": {
+    "developer": {
+      "name": "Developer",
+      "description": "Coding and development focused Kingdom runtime.",
+      "recommended_min_ram_gb": 4,
+      "gui": true,
+      "knights": [
+        "planner",
+        "coder",
+        "security"
+      ]
+    },
+    "research": {
+      "name": "Research & Analysis",
+      "description": "Research, analysis, information gathering, and memory focused runtime.",
+      "recommended_min_ram_gb": 4,
+      "gui": true,
+      "knights": [
+        "planner",
+        "researcher",
+        "memory"
+      ]
+    },
+    "full_swarm": {
+      "name": "Full Swarm",
+      "description": "Runs all built-in Kingdom Knights.",
+      "recommended_min_ram_gb": 8,
+      "gui": true,
+      "knights": [
+        "planner",
+        "coder",
+        "researcher",
+        "memory",
+        "security"
+      ]
+    },
+    "server_headless": {
+      "name": "Server / Headless",
+      "description": "Runs Kingdom without opening the graphical Command Center.",
+      "recommended_min_ram_gb": 2,
+      "gui": false,
+      "knights": [
+        "planner",
+        "coder",
+        "researcher",
+        "memory",
+        "security"
+      ]
+    }
+  }
+}
