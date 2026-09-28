@@ -2,7 +2,6 @@
 
 import json
 import os
-
 from backend.knights.coder import CoderKnight
 from backend.knights.memory_knight import MemoryKnight
 from backend.knights.planner import PlannerKnight
@@ -17,57 +16,66 @@ _KNIGHT_CLASSES = {
     "security": SecurityKnight,
 }
 
+ALL_KNOWN_ROLES = ["planner", "coder", "researcher", "memory", "security"]
+
+
+def _default_profile_path():
+    return os.path.join(
+        os.path.dirname(
+            os.path.dirname(
+                os.path.dirname(
+                    os.path.abspath(__file__)
+                )
+            )
+        ),
+        "configs",
+        "local_profile.json",
+    )
+
 
 def load_enabled_knight_roles():
-    profile_path = os.getenv("KINGDOM_LOCAL_PROFILE")
-
-    if not profile_path:
-        profile_path = "configs/local_profile.json"
+    profile_path = os.getenv("KINGDOM_LOCAL_PROFILE") or _default_profile_path()
+    if not os.path.exists(profile_path):
+        return list(ALL_KNOWN_ROLES)
 
     try:
-        with open(profile_path, "r", encoding="utf-8") as handle:
-            profile = json.load(handle)
-    except (OSError, json.JSONDecodeError, TypeError, ValueError):
-        return list(_KNIGHT_CLASSES.keys())
+        with open(profile_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
 
-    if not isinstance(profile, dict):
-        return list(_KNIGHT_CLASSES.keys())
+        knights = data.get("knights")
+        if not isinstance(knights, list):
+            return list(ALL_KNOWN_ROLES)
 
-    roles = profile.get("knights")
+        seen = set()
+        enabled = []
+        for r in knights:
+            if isinstance(r, str) and r in _KNIGHT_CLASSES and r not in seen:
+                seen.add(r)
+                enabled.append(r)
 
-    if not isinstance(roles, list):
-        return list(_KNIGHT_CLASSES.keys())
+        return enabled if enabled else list(ALL_KNOWN_ROLES)
 
-    valid = []
-
-    for role in roles:
-        if role in _KNIGHT_CLASSES and role not in valid:
-            valid.append(role)
-
-    if not valid:
-        return list(_KNIGHT_CLASSES.keys())
-
-    return valid
+    except Exception:
+        return list(ALL_KNOWN_ROLES)
 
 
 class KnightRegistry:
     def __init__(self, enabled_roles=None):
         if enabled_roles is None:
-            enabled_roles = load_enabled_knight_roles()
+            roles = load_enabled_knight_roles()
+        else:
+            roles = enabled_roles
 
-        valid_roles = []
-        if isinstance(enabled_roles, list):
-            for role in enabled_roles:
-                if role in _KNIGHT_CLASSES and role not in valid_roles:
-                    valid_roles.append(role)
-
-        if not valid_roles:
-            valid_roles = list(_KNIGHT_CLASSES.keys())
+        seen = set()
+        unique_roles = []
+        for r in roles:
+            if isinstance(r, str) and r in _KNIGHT_CLASSES and r not in seen:
+                seen.add(r)
+                unique_roles.append(r)
 
         self._knights = {
             name: _KNIGHT_CLASSES[name]()
-            for name in valid_roles
-            if name in _KNIGHT_CLASSES
+            for name in unique_roles
         }
         self._active = {name: 0 for name in self._knights}
         self._completed = {name: 0 for name in self._knights}
@@ -81,10 +89,9 @@ class KnightRegistry:
         self._active[name] += 1
 
     def finish(self, name):
-        if name not in self._knights:
-            raise KeyError(name)
-        self._active[name] = max(0, self._active[name] - 1)
-        self._completed[name] += 1
+        if name in self._knights:
+            self._active[name] = max(0, self._active[name] - 1)
+            self._completed[name] += 1
 
     def status(self):
         return [
@@ -92,7 +99,7 @@ class KnightRegistry:
                 "name": name,
                 "status": "working" if self._active[name] else "ready",
                 "active": self._active[name],
-                "completed": self._completed[name],
+                "completed": self._completed[name]
             }
             for name in self._knights
         ]
