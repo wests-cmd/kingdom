@@ -73,6 +73,7 @@ function getBackendBinaryPath() {
 function startBackend() {
   console.log('[Kingdom Desktop Launcher] Starting local Kingdom FastAPI server...');
   const bundledBin = getBackendBinaryPath();
+  const isPackaged = Boolean(process.resourcesPath && !process.env.KINGDOM_DEV_MODE);
 
   if (bundledBin) {
     console.log(`[Kingdom Desktop Launcher] Found standalone bundled backend binary: ${bundledBin}`);
@@ -81,8 +82,11 @@ function startBackend() {
       env: { ...process.env, PYTHONUNBUFFERED: '1' },
       stdio: 'inherit'
     });
+  } else if (isPackaged) {
+    console.error('[Kingdom Desktop Launcher] FATAL: Kingdom installation is incomplete. Bundled backend runtime binary was not found.');
+    return;
   } else {
-    console.log('[Kingdom Desktop Launcher] Standalone binary not found. Falling back to Python runtime mode...');
+    console.log('[Kingdom Desktop Launcher] Standalone binary not found in development mode. Falling back to Python runtime mode...');
     const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
 
     backendProcess = spawn(pythonCmd, ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)], {
@@ -92,9 +96,11 @@ function startBackend() {
     });
   }
 
-  backendProcess.on('exit', (code, signal) => {
-    console.log(`[Kingdom Desktop Launcher] Backend process exited with code ${code}, signal ${signal}`);
-  });
+  if (backendProcess) {
+    backendProcess.on('exit', (code, signal) => {
+      console.log(`[Kingdom Desktop Launcher] Backend process exited with code ${code}, signal ${signal}`);
+    });
+  }
 }
 
 function stopBackend() {
