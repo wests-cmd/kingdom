@@ -1,0 +1,29 @@
+{
+  "version": "1.0.0",
+  "targets": {
+    "desktop-slim": {
+      "status": "AVAILABLE"
+    },
+    "desktop-full": {
+      "status": "AVAILABLE"
+    },
+    "docker": {
+      "status": "AVAILABLE"
+    },
+    "iso": {
+      "status": "PLANNED"
+    },
+    "live-usb": {
+      "status": "PLANNED"
+    },
+    "vm": {
+      "status": "PLANNED"
+    },
+    "android": {
+      "status": "PLANNED"
+    },
+    "ios": {
+      "status": "PLANNED"
+    }
+  }
+}
