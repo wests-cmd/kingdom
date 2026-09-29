@@ -1,77 +1,89 @@
 /**
- * KINGDOM Desktop Hardware Detection Engine
- * Performs safe, lightweight hardware inspection using built-in Node.js APIs.
+ * KINGDOM Best-Effort Hardware Detection Utility for Desktop Setup Wizard
  */
 
 const os = require('os');
+const { execSync } = require('child_process');
 
 function detectGpu() {
+  const platform = os.platform();
   try {
-    if (process.env.GPU_MODEL) {
-      return {
-        present: true,
-        name: String(process.env.GPU_MODEL)
-      };
+    if (platform === 'linux') {
+      const output = execSync('lspci 2>/dev/null | grep -i "vga\\|3d\\|display"', { timeout: 2000, encoding: 'utf-8' });
+      if (output.strip ? output.strip() : output.trim()) {
+        const line = output.split('\n')[0];
+        const name = line.split(':').pop().trim();
+        return { present: true, name: name || 'Linux Display Adapter' };
+      }
+    } else if (platform === 'darwin') {
+      const output = execSync('system_profiler SPDisplaysDataType 2>/dev/null | grep "Chipset Model"', { timeout: 2000, encoding: 'utf-8' });
+      if (output.trim()) {
+        const name = output.split(':').pop().trim();
+        return { present: true, name: name || 'Apple Display Adapter' };
+      }
+    } else if (platform === 'win32') {
+      const output = execSync('wmic path win32_VideoController get name 2>NUL', { timeout: 2000, encoding: 'utf-8' });
+      const lines = output.split('\n').map(l => l.trim()).filter(l => l && l !== 'Name');
+      if (lines.length > 0) {
+        return { present: true, name: lines[0] };
+      }
     }
-  } catch (err) {
-    // Ignore any error and fall back cleanly
+  } catch (e) {
+    // Optional GPU detection safely falls back if command is missing or errors
   }
-
-  return {
-    present: false,
-    name: null
-  };
-}
-
-function detectDisplay(platform) {
-  if (platform === 'linux') {
-    return Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY);
-  }
-  return true;
+  return { present: false, name: null };
 }
 
 function getHardwareReport() {
-  let platform = 'unknown';
-  let arch = 'unknown';
-  let cpus = [];
-  let totalMem = 0;
-
   try {
-    platform = os.platform();
-    arch = os.arch();
-    cpus = os.cpus() || [];
-    totalMem = os.totalmem() || 0;
+    const cpus = os.cpus() || [];
+    const memoryTotalBytes = os.totalmem() || 0;
+    const memory_total_gb = Math.round((memoryTotalBytes / (1024 * 1024 * 1024)) * 10) / 10;
+    const cpu_cores = cpus.length || 1;
+    const cpu_model = cpus.length > 0 ? cpus[0].model : 'Generic CPU';
+    const platform = os.platform();
+    const arch = os.arch();
+
+    // Display check: HEADLESS or DISPLAY env flag
+    const has_display = process.env.DISPLAY !== '' && process.env.HEADLESS !== 'true';
+
+    const gpu = detectGpu();
+
+    return {
+      platform,
+      arch,
+      cpu_cores,
+      cpu_model,
+      memory_total_gb,
+      gpu,
+      has_display
+    };
   } catch (err) {
-    console.error('[Kingdom Hardware] Failed to gather basic OS metrics:', err);
+    return {
+      platform: os.platform(),
+      arch: os.arch(),
+      cpu_cores: 1,
+      cpu_model: 'Unknown',
+      memory_total_gb: 2,
+      gpu: { present: false, name: null },
+      has_display: true
+    };
   }
-
-  const cpuCores = cpus.length || 1;
-  const cpuModel = cpus[0] && cpus[0].model ? cpus[0].model.trim() : 'Unknown CPU';
-  const memoryTotalGb = Math.round((totalMem / (1024 * 1024 * 1024)) * 10) / 10;
-  const gpuInfo = detectGpu();
-  const hasDisplay = detectDisplay(platform);
-
-  return {
-    platform,
-    arch,
-    cpu_cores: cpuCores,
-    cpu_model: cpuModel,
-    memory_total_gb: memoryTotalGb,
-    gpu: gpuInfo,
-    has_display: hasDisplay
-  };
 }
 
 function suggestProfile(report) {
-  if (!report || !report.has_display) {
+  if (!report || report.has_display === false) {
     return 'server_headless';
   }
 
-  if (report.memory_total_gb >= 8 && report.cpu_cores >= 4) {
+  const memory = report.memory_total_gb || 0;
+  const cores = report.cpu_cores || 1;
+
+  if (memory >= 8 && cores >= 4) {
     return 'full_swarm';
   }
 
-  if (report.memory_total_gb < 4) {
+  if (memory < 4) {
     return 'server_headless';
   }
 

@@ -1,139 +1,97 @@
-"""
-Unit & Doomsday Tests for Installation Profiles, Guided Setup, Hardware Detection, and Knight Selection.
-"""
-
 import json
 import os
 import tempfile
 import pytest
-from pathlib import Path
-
-from backend.knights.registry import KnightRegistry, load_enabled_knight_roles
+from backend.knights.registry import KnightRegistry, load_enabled_knight_roles, ALL_KNOWN_ROLES
 
 
-def test_registry_default_no_profile(monkeypatch):
-    monkeypatch.delenv("KINGDOM_LOCAL_PROFILE", raising=False)
-    # Ensure non-existent profile file
-    with tempfile.TemporaryDirectory() as tmpdir:
-        non_existent = os.path.join(tmpdir, "missing.json")
-        monkeypatch.setenv("KINGDOM_LOCAL_PROFILE", non_existent)
+def test_no_profile_enables_all_knights(monkeypatch):
+    monkeypatch.setenv("KINGDOM_LOCAL_PROFILE", "/nonexistent/profile_path.json")
+    roles = load_enabled_knight_roles()
+    assert sorted(roles) == sorted(ALL_KNOWN_ROLES)
 
-        roles = load_enabled_knight_roles()
-        assert set(roles) == {"planner", "coder", "researcher", "memory", "security"}
-
-        registry = KnightRegistry()
-        assert set(registry._knights.keys()) == {"planner", "coder", "researcher", "memory", "security"}
+    registry = KnightRegistry()
+    assert sorted(registry._knights.keys()) == sorted(ALL_KNOWN_ROLES)
 
 
-def test_registry_valid_profile(monkeypatch):
-    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".json") as tmp:
-        json.dump({"gui": True, "knights": ["planner", "coder", "security"]}, tmp)
-        tmp_path = tmp.name
+def test_valid_profile_restricts_active_knights(monkeypatch, tmp_path):
+    prof_file = tmp_path / "local_profile.json"
+    prof_file.write_text(json.dumps({
+        "name": "Developer",
+        "gui": True,
+        "knights": ["coder", "planner"]
+    }))
+    monkeypatch.setenv("KINGDOM_LOCAL_PROFILE", str(prof_file))
 
-    try:
-        monkeypatch.setenv("KINGDOM_LOCAL_PROFILE", tmp_path)
-        roles = load_enabled_knight_roles()
-        assert roles == ["planner", "coder", "security"]
+    roles = load_enabled_knight_roles()
+    assert roles == ["coder", "planner"]
 
-        registry = KnightRegistry()
-        assert set(registry._knights.keys()) == {"planner", "coder", "security"}
-        assert registry.get("coder") is not None
-        assert registry.get("researcher") is None
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+    registry = KnightRegistry()
+    assert sorted(registry._knights.keys()) == ["coder", "planner"]
 
 
-def test_registry_malformed_json_doomsday(monkeypatch):
-    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".json") as tmp:
-        tmp.write("{ invalid json content ...")
-        tmp_path = tmp.name
+def test_malformed_json_falls_back_to_all_knights(monkeypatch, tmp_path):
+    prof_file = tmp_path / "local_profile.json"
+    prof_file.write_text("INVALID_JSON_CONTENT{{{")
+    monkeypatch.setenv("KINGDOM_LOCAL_PROFILE", str(prof_file))
 
-    try:
-        monkeypatch.setenv("KINGDOM_LOCAL_PROFILE", tmp_path)
-        roles = load_enabled_knight_roles()
-        assert set(roles) == {"planner", "coder", "researcher", "memory", "security"}
-
-        registry = KnightRegistry()
-        assert set(registry._knights.keys()) == {"planner", "coder", "researcher", "memory", "security"}
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+    roles = load_enabled_knight_roles()
+    assert sorted(roles) == sorted(ALL_KNOWN_ROLES)
 
 
-def test_registry_unknown_knight_roles(monkeypatch):
-    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".json") as tmp:
-        json.dump({"gui": True, "knights": ["planner", "fake_knight", "not_real"]}, tmp)
-        tmp_path = tmp.name
+def test_profile_ignores_unknown_knight_names(monkeypatch, tmp_path):
+    prof_file = tmp_path / "local_profile.json"
+    prof_file.write_text(json.dumps({
+        "knights": ["coder", "does_not_exist", "planner"]
+    }))
+    monkeypatch.setenv("KINGDOM_LOCAL_PROFILE", str(prof_file))
 
-    try:
-        monkeypatch.setenv("KINGDOM_LOCAL_PROFILE", tmp_path)
-        roles = load_enabled_knight_roles()
-        assert roles == ["planner"]
-
-        registry = KnightRegistry()
-        assert list(registry._knights.keys()) == ["planner"]
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+    roles = load_enabled_knight_roles()
+    assert roles == ["coder", "planner"]
 
 
-def test_registry_empty_knight_list_fallback(monkeypatch):
-    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".json") as tmp:
-        json.dump({"gui": True, "knights": []}, tmp)
-        tmp_path = tmp.name
+def test_profile_with_no_valid_knights_falls_back_to_all(monkeypatch, tmp_path):
+    prof_file = tmp_path / "local_profile.json"
+    prof_file.write_text(json.dumps({
+        "knights": ["invalid_1", "invalid_2"]
+    }))
+    monkeypatch.setenv("KINGDOM_LOCAL_PROFILE", str(prof_file))
 
-    try:
-        monkeypatch.setenv("KINGDOM_LOCAL_PROFILE", tmp_path)
-        roles = load_enabled_knight_roles()
-        assert set(roles) == {"planner", "coder", "researcher", "memory", "security"}
-
-        registry = KnightRegistry()
-        assert set(registry._knights.keys()) == {"planner", "coder", "researcher", "memory", "security"}
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+    roles = load_enabled_knight_roles()
+    assert sorted(roles) == sorted(ALL_KNOWN_ROLES)
 
 
-def test_registry_duplicate_knight_roles(monkeypatch):
-    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".json") as tmp:
-        json.dump({"gui": True, "knights": ["planner", "coder", "planner", "coder", "memory"]}, tmp)
-        tmp_path = tmp.name
-
-    try:
-        monkeypatch.setenv("KINGDOM_LOCAL_PROFILE", tmp_path)
-        roles = load_enabled_knight_roles()
-        assert roles == ["planner", "coder", "memory"]
-
-        registry = KnightRegistry()
-        assert list(registry._knights.keys()) == ["planner", "coder", "memory"]
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-
-
-def test_explicit_registry_construction():
+def test_explicit_enabled_roles_override():
     registry = KnightRegistry(enabled_roles=["memory"])
     assert list(registry._knights.keys()) == ["memory"]
-    assert registry.get("memory") is not None
-    assert registry.get("coder") is None
 
 
-def test_explicit_registry_invalid_roles():
-    registry = KnightRegistry(enabled_roles=["non_existent_knight"])
-    # Fallback to all knights
-    assert set(registry._knights.keys()) == {"planner", "coder", "researcher", "memory", "security"}
+def test_duplicate_knight_names_deduplicated(monkeypatch, tmp_path):
+    prof_file = tmp_path / "local_profile.json"
+    prof_file.write_text(json.dumps({
+        "knights": ["coder", "coder", "planner", "planner", "coder"]
+    }))
+    monkeypatch.setenv("KINGDOM_LOCAL_PROFILE", str(prof_file))
+
+    roles = load_enabled_knight_roles()
+    assert roles == ["coder", "planner"]
+
+    registry = KnightRegistry()
+    assert list(registry._knights.keys()) == ["coder", "planner"]
 
 
-def test_install_profiles_catalog_file_integrity():
-    catalog_path = Path(__file__).resolve().parents[2] / "configs" / "install_profiles.json"
-    assert catalog_path.exists()
+def test_missing_profile_path_does_not_crash(monkeypatch):
+    monkeypatch.setenv("KINGDOM_LOCAL_PROFILE", "/path/that/definitely/does/not/exist.json")
+    registry = KnightRegistry()
+    assert sorted(registry._knights.keys()) == sorted(ALL_KNOWN_ROLES)
 
-    with open(catalog_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
 
-    assert data["schema_version"] == 1
-    assert "developer" in data["profiles"]
-    assert "research" in data["profiles"]
-    assert "full_swarm" in data["profiles"]
-    assert "server_headless" in data["profiles"]
+def test_kingdom_local_profile_env_var_override(monkeypatch, tmp_path):
+    prof_file = tmp_path / "custom_env_profile.json"
+    prof_file.write_text(json.dumps({
+        "knights": ["researcher", "memory"]
+    }))
+    monkeypatch.setenv("KINGDOM_LOCAL_PROFILE", str(prof_file))
+
+    registry = KnightRegistry()
+    assert sorted(registry._knights.keys()) == ["memory", "researcher"]

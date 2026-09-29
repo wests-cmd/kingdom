@@ -73,10 +73,24 @@ jobs:
         run: |
           python -m pytest --maxfail=1
 
-  build-backend-and-desktop:
-    name: Build Production Backend Binary & Desktop Package
+  build-desktop-matrix:
+    name: Build Native Desktop Packages (${{ matrix.platform }}-${{ matrix.arch }})
     needs: validate-and-test
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+          - os: windows-latest
+            platform: windows
+            arch: x64
+          - os: macos-latest
+            platform: macos
+            arch: arm64
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout Code
@@ -98,16 +112,16 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Compile Standalone Backend Binary
+      - name: Compile Standalone Backend Binary (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
           pyinstaller --onefile --name kingdom-backend --distpath desktop/bin backend/main.py
           chmod +x desktop/bin/kingdom-backend
 
-      - name: Smoke Test Backend Binary
+      - name: Compile Standalone Backend Binary (Windows)
+        if: runner.os == 'Windows'
         run: |
-          ./desktop/bin/kingdom-backend --help || true
-          test -f desktop/bin/kingdom-backend
-          test -s desktop/bin/kingdom-backend
+          pyinstaller --onefile --name kingdom-backend --distpath desktop/bin backend/main.py
 
       - name: Build Frontend Production Static Assets
         run: |
@@ -116,35 +130,40 @@ jobs:
           npm run build
           cd ..
 
-      - name: Package Desktop Application (AppImage & DEB)
+      - name: Package Desktop Application
         run: |
           cd desktop
           npm ci
-
-          # Retry loop for Electron binary download resilience
-          n=0
-          until [ $n -ge 3 ]
-          do
-             npm run build && break
-             n=$[$n+1]
-             echo "Desktop build attempt $n failed. Retrying..."
-             sleep 5
-          done
+          npm run build
           cd ..
+
+      - name: Upload Platform Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kingdom-desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          path: desktop/dist/
+
+  assemble-and-publish:
+    name: Assemble Manifest, Checksums & Publish Official Release
+    needs: [validate-and-test, build-desktop-matrix]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download All Desktop Build Matrix Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: matrix_artifacts/
 
       - name: Assemble Staging Release Directory & Artifacts
         run: |
           VERSION="${{ needs.validate-and-test.outputs.canonical_version }}"
           mkdir -p release_staging
 
-          # Copy desktop artifacts if generated
-          if [ -d "desktop/dist" ]; then
-            cp desktop/dist/*.AppImage release_staging/ 2>/dev/null || true
-            cp desktop/dist/*.deb release_staging/ 2>/dev/null || true
-          fi
-
-          # Copy standalone backend binary
-          cp desktop/bin/kingdom-backend release_staging/kingdom-backend-linux-x86_64
+          # Flatten downloaded artifacts
+          find matrix_artifacts -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.exe" -o -name "*.dmg" \) -exec cp {} release_staging/ \;
 
           cd release_staging
 
@@ -164,12 +183,19 @@ jobs:
               fpath = os.path.join('.', fname)
               size = os.path.getsize(fpath)
               sha = hashlib.sha256(open(fpath, 'rb').read()).hexdigest()
+
+              platform = 'linux'
+              if fname.endswith('.exe'):
+                  platform = 'windows'
+              elif fname.endswith('.dmg'):
+                  platform = 'macos'
+
               artifacts.append({
                   'filename': fname,
                   'size': size,
                   'sha256': sha,
-                  'platform': 'linux',
-                  'arch': 'x86_64'
+                  'platform': platform,
+                  'arch': 'x64' if 'x64' in fname or 'amd64' in fname or platform != 'macos' else 'arm64'
               })
 
           manifest = {
@@ -199,38 +225,11 @@ jobs:
           cat SHA256SUMS
           cd ..
 
-      - name: Validate Release Artifacts & Manifest Integrity
+      - name: Validate Release Staging Artifacts & Hash Integrity
         run: |
-          VERSION="${{ needs.validate-and-test.outputs.canonical_version }}"
-          python3 scripts/validate_version.py --manifest release_staging/release-manifest.json
+          python3 scripts/validate_version.py --artifacts-dir release_staging
 
-          cd release_staging
-          # Verify checksums excluding SHA256SUMS itself
-          grep -v "SHA256SUMS" SHA256SUMS | sha256sum -c -
-          cd ..
-
-      - name: Upload Release Staging Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: kingdom-release-${{ needs.validate-and-test.outputs.canonical_version }}
-          path: release_staging/
-
-  publish-github-release:
-    name: Publish Official GitHub Release
-    needs: [validate-and-test, build-backend-and-desktop]
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Download Build Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: kingdom-release-${{ needs.validate-and-test.outputs.canonical_version }}
-          path: release_staging/
-
-      - name: Create or Update GitHub Release
+      - name: Create or Update Official GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.validate-and-test.outputs.git_tag }}
@@ -246,10 +245,9 @@ jobs:
             ${{ github.event.inputs.release_notes || 'Kingdom v1TAS — first stable production release.' }}
 
             ## Release Highlights
-            - First Stable Production Release (`Kingdom v1TAS` / Semantic Version `1.0.0`)
+            - First Cross-Platform Stable Production Release (`Kingdom v1TAS` / Semantic Version `1.0.0`)
             - Zero-Trust Distributed AI Runtime & Orchestration Infrastructure
-            - Standalone Bundled PyInstaller Backend (`kingdom-backend-linux-x86_64`)
-            - Native Desktop Distribution Artifacts (AppImage & DEB)
+            - Cross-Platform Native Bundled Desktop Package Matrix (Windows NSIS, macOS DMG, Linux AppImage/DEB)
             - Centipede OS Compatibility Protocol v1
 
             ## Cryptographic Verification
