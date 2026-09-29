@@ -799,6 +799,166 @@
       },
       "weight": 1.0,
       "created_at": "2026-09-29T12:55:24.682649+00:00"
+    },
+    {
+      "id": "e9a46b72-c1d3-464a-b363-becfc062f6ae",
+      "content": "research resilient distributed systems",
+      "metadata": {
+        "task_id": "9e53fe97-7a1d-4892-83c1-f4831aecde3a",
+        "status": "completed",
+        "result": {
+          "plan": {
+            "task_id": "9e53fe97-7a1d-4892-83c1-f4831aecde3a",
+            "complexity": "simple",
+            "subtasks": [
+              {
+                "prompt": "research resilient distributed systems",
+                "knight": "researcher"
+              }
+            ]
+          },
+          "results": [
+            {
+              "knight": "researcher",
+              "task": "research resilient distributed systems",
+              "status": "completed",
+              "executed_at": 1790688047.857568
+            }
+          ]
+        }
+      },
+      "weight": 1.0,
+      "created_at": "2026-09-29T13:20:47.868363+00:00"
+    },
+    {
+      "id": "63eeefb0-2119-4a0b-9d87-73fecc86c889",
+      "content": "coordinate",
+      "metadata": {
+        "task_id": "bdc6cf56-5ee1-4447-99c0-fc3cdb600fad",
+        "status": "completed",
+        "result": {
+          "plan": {
+            "task_id": "bdc6cf56-5ee1-4447-99c0-fc3cdb600fad",
+            "complexity": "simple",
+            "subtasks": [
+              {
+                "prompt": "code a test",
+                "knight": "coder"
+              },
+              {
+                "prompt": "research an option",
+                "knight": "researcher"
+              }
+            ]
+          },
+          "results": [
+            {
+              "knight": "coder",
+              "task": "code a test",
+              "status": "completed",
+              "executed_at": 1790688047.9838135
+            },
+            {
+              "knight": "researcher",
+              "task": "research an option",
+              "status": "completed",
+              "executed_at": 1790688047.9894624
+            }
+          ]
+        }
+      },
+      "weight": 1.0,
+      "created_at": "2026-09-29T13:20:48.017181+00:00"
+    },
+    {
+      "id": "44790a3a-6028-4885-9169-38215905479e",
+      "content": "Task 66f70807-3eb1-4ee8-b665-7216674cd6d7 completed successfully: Codebase analysis completed. Memory utilization reduced by 25%.",
+      "metadata": {
+        "task_id": "66f70807-3eb1-4ee8-b665-7216674cd6d7",
+        "node_id": "kn-e2e-coder"
+      },
+      "weight": 1.0,
+      "created_at": "2026-09-29T13:20:48.237476+00:00"
+    },
+    {
+      "id": "ad0249d2-8100-4fcc-9a2f-dba7ca1d9f9d",
+      "content": "research resilient distributed systems",
+      "metadata": {
+        "task_id": "3143c207-7d4b-499a-9454-99d3081a6c21",
+        "status": "completed",
+        "result": {
+          "plan": {
+            "task_id": "3143c207-7d4b-499a-9454-99d3081a6c21",
+            "complexity": "simple",
+            "subtasks": [
+              {
+                "prompt": "research resilient distributed systems",
+                "knight": "researcher"
+              }
+            ]
+          },
+          "results": [
+            {
+              "knight": "researcher",
+              "task": "research resilient distributed systems",
+              "status": "completed",
+              "executed_at": 1790688281.1860855
+            }
+          ]
+        }
+      },
+      "weight": 1.0,
+      "created_at": "2026-09-29T13:24:41.197176+00:00"
+    },
+    {
+      "id": "2a99db8d-0e8d-40c1-98f4-df80aa40ca5b",
+      "content": "coordinate",
+      "metadata": {
+        "task_id": "2fd230a3-c5d2-49b0-a743-3aefddaa15d4",
+        "status": "completed",
+        "result": {
+          "plan": {
+            "task_id": "2fd230a3-c5d2-49b0-a743-3aefddaa15d4",
+            "complexity": "simple",
+            "subtasks": [
+              {
+                "prompt": "code a test",
+                "knight": "coder"
+              },
+              {
+                "prompt": "research an option",
+                "knight": "researcher"
+              }
+            ]
+          },
+          "results": [
+            {
+              "knight": "coder",
+              "task": "code a test",
+              "status": "completed",
+              "executed_at": 1790688281.3019457
+            },
+            {
+              "knight": "researcher",
+              "task": "research an option",
+              "status": "completed",
+              "executed_at": 1790688281.3242373
+            }
+          ]
+        }
+      },
+      "weight": 1.0,
+      "created_at": "2026-09-29T13:24:41.335940+00:00"
+    },
+    {
+      "id": "c5fbddca-233a-40a4-83e9-e324a6d3c5a6",
+      "content": "Task 663ef903-5dea-46ee-b3d4-88af0093a7a3 completed successfully: Codebase analysis completed. Memory utilization reduced by 25%.",
+      "metadata": {
+        "task_id": "663ef903-5dea-46ee-b3d4-88af0093a7a3",
+        "node_id": "kn-e2e-coder"
+      },
+      "weight": 1.0,
+      "created_at": "2026-09-29T13:24:41.541030+00:00"
     }
   ],
   "timeline": [
@@ -921,6 +1081,30 @@
     {
       "timestamp": "2026-09-29T12:55:24.682649+00:00",
       "entry_id": "ed47cf1f-bfd6-40e4-93a8-5b4320a4873a"
+    },
+    {
+      "timestamp": "2026-09-29T13:20:47.868363+00:00",
+      "entry_id": "e9a46b72-c1d3-464a-b363-becfc062f6ae"
+    },
+    {
+      "timestamp": "2026-09-29T13:20:48.017181+00:00",
+      "entry_id": "63eeefb0-2119-4a0b-9d87-73fecc86c889"
+    },
+    {
+      "timestamp": "2026-09-29T13:20:48.237476+00:00",
+      "entry_id": "44790a3a-6028-4885-9169-38215905479e"
+    },
+    {
+      "timestamp": "2026-09-29T13:24:41.197176+00:00",
+      "entry_id": "ad0249d2-8100-4fcc-9a2f-dba7ca1d9f9d"
+    },
+    {
+      "timestamp": "2026-09-29T13:24:41.335940+00:00",
+      "entry_id": "2a99db8d-0e8d-40c1-98f4-df80aa40ca5b"
+    },
+    {
+      "timestamp": "2026-09-29T13:24:41.541030+00:00",
+      "entry_id": "c5fbddca-233a-40a4-83e9-e324a6d3c5a6"
     }
   ],
   "graph": {
@@ -1073,6 +1257,36 @@
       {
         "id": "ed47cf1f-bfd6-40e4-93a8-5b4320a4873a",
         "label": "Task 75f27bce-3d06-4cee-ad45-34bd355311b2 completed successfully: Codebase analysis completed. Memory utilization reduced by 25%.",
+        "weight": 1.0
+      },
+      {
+        "id": "e9a46b72-c1d3-464a-b363-becfc062f6ae",
+        "label": "research resilient distributed systems",
+        "weight": 1.0
+      },
+      {
+        "id": "63eeefb0-2119-4a0b-9d87-73fecc86c889",
+        "label": "coordinate",
+        "weight": 1.0
+      },
+      {
+        "id": "44790a3a-6028-4885-9169-38215905479e",
+        "label": "Task 66f70807-3eb1-4ee8-b665-7216674cd6d7 completed successfully: Codebase analysis completed. Memory utilization reduced by 25%.",
+        "weight": 1.0
+      },
+      {
+        "id": "ad0249d2-8100-4fcc-9a2f-dba7ca1d9f9d",
+        "label": "research resilient distributed systems",
+        "weight": 1.0
+      },
+      {
+        "id": "2a99db8d-0e8d-40c1-98f4-df80aa40ca5b",
+        "label": "coordinate",
+        "weight": 1.0
+      },
+      {
+        "id": "c5fbddca-233a-40a4-83e9-e324a6d3c5a6",
+        "label": "Task 663ef903-5dea-46ee-b3d4-88af0093a7a3 completed successfully: Codebase analysis completed. Memory utilization reduced by 25%.",
         "weight": 1.0
       }
     ],
