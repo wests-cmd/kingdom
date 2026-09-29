@@ -2,8 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.api import router
 from backend.websocket import ws_router
+from backend.state import STATE
 
-app = FastAPI(title="Kingdom v40.2.0")
+app = FastAPI(
+    title="Kingdom v1TAS",
+    version=STATE.get("version", "1.0.0")
+)
 
 import os
 
