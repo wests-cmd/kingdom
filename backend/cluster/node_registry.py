@@ -63,7 +63,7 @@ class NodeInfo:
     kingdom_id: Optional[str] = None
     public_identity: Optional[Dict[str, Any]] = None
     last_heartbeat: float = field(default_factory=time.time)
-    software_version: str = "40.2.0"
+    software_version: str = "1.0.0"
     connection_metadata: Dict[str, Any] = field(default_factory=dict)
     is_local: bool = False
     created_at: float = field(default_factory=time.time)
@@ -178,7 +178,7 @@ class NodeRegistry:
             "fingerprint": node_data.get("fingerprint"),
             "kingdom_id": node_data.get("kingdom_id"),
             "hardware_profile": node_data.get("hardware_profile", {"cpu_cores": 4, "vram_mb": 0}),
-            "software_version": node_data.get("software_version", "40.2.0"),
+            "software_version": node_data.get("software_version", "1.0.0"),
             "cluster_membership": node_data.get("cluster_membership", "active_worker"),
             "connection_metadata": node_data.get("connection_metadata", {}),
             "created_at": existing.get("created_at", now) if existing else now
@@ -251,7 +251,7 @@ class NodeRegistry:
             kingdom_id=data.get("kingdom_id"),
             public_identity=data.get("public_identity"),
             last_heartbeat=data.get("last_heartbeat", time.time()),
-            software_version=data.get("software_version", "40.2.0"),
+            software_version=data.get("software_version", "1.0.0"),
             connection_metadata=data.get("connection_metadata", {}),
             is_local=data.get("is_local", False),
             created_at=data.get("created_at", time.time()),
@@ -284,7 +284,7 @@ class NodeRegistry:
                 kingdom_id=n.get("kingdom_id"),
                 public_identity=n.get("public_identity"),
                 last_heartbeat=n.get("last_heartbeat", time.time()),
-                software_version=n.get("software_version", "40.2.0"),
+                software_version=n.get("software_version", "1.0.0"),
                 connection_metadata=n.get("connection_metadata", {}),
                 is_local=n.get("is_local", False),
                 created_at=n.get("created_at", time.time()),

@@ -124,13 +124,17 @@ class ZeroTrust:
         risk = self.risk_classifier.classify_operation(capability, parameters)
 
         if self.approvals.requires_approval(capability, risk):
-            # Verify explicit approval_id capability scope
+            # Verify explicit approval_id capability scope and actor identity binding
             if approval_id:
                 appr_req = self.approvals.get_request(approval_id)
                 if (
                     appr_req
                     and appr_req["status"] == "approved"
                     and appr_req["capability"] == capability
+                    and (
+                        appr_req.get("requesting_actor") == actor_id
+                        or appr_req.get("requesting_node") == actor_id
+                    )
                 ):
                     self.audit.record(
                         actor=actor_id,

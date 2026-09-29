@@ -55,7 +55,7 @@ def test_system_check_and_diagnostics_export():
     res_diag = client.get("/diagnostics/export")
     assert res_diag.status_code == 200
     diag = res_diag.json()
-    assert diag["kingdom_version"] == "v1.0"
+    assert diag["kingdom_version"] == "1.0.0"
     assert "commander_identity" in diag
 
 

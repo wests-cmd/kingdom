@@ -390,7 +390,7 @@ def export_diagnostics():
     ]
 
     return {
-        "kingdom_version": "v1.0",
+        "kingdom_version": STATE.get("version", "1.0.0"),
         "timestamp": time.time(),
         "system": {
             "os": platform.system(),

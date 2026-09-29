@@ -20,18 +20,17 @@ Kingdom enforces single-source versioning. All sub-components derive their versi
 
 ---
 
-## 2. Release Artifacts & Cross-Platform Build Matrix
+## 2. Release Artifacts & Verification
 
-The release automation pipeline (`.github/workflows/release.yml`) builds and publishes official release artifacts across OS runners to GitHub Releases:
+The release automation pipeline (`.github/workflows/release.yml`) builds and publishes official release artifacts to GitHub Releases:
 
-| Artifact Filename | Platform / Arch | Package Type | Build Runner | Checksum |
-|---|---|---|---|---|
-| `Kingdom-Setup-1.0.0.exe` | Windows x64 | NSIS Installer | `windows-latest` | Verified in `SHA256SUMS` |
-| `Kingdom-1.0.0.dmg` | macOS arm64 / x64 | DMG Package | `macos-latest` | Verified in `SHA256SUMS` |
-| `Kingdom-1.0.0.AppImage` | Linux x86_64 | Native AppImage | `ubuntu-latest` | Verified in `SHA256SUMS` |
-| `kingdom-desktop_1.0.0_amd64.deb` | Linux x86_64 | Debian Package | `ubuntu-latest` | Verified in `SHA256SUMS` |
-| `SHA256SUMS` | Multi-platform | Checksums File | `ubuntu-latest` | Verified via `sha256sum -c` |
-| `release-manifest.json` | Multi-platform | Release Manifest | `ubuntu-latest` | Validated against semver |
+| Artifact Filename | Platform / Arch | Package Type | Checksum |
+|---|---|---|---|
+| `Kingdom-1.0.0.AppImage` | Linux x86_64 | Native Desktop AppImage | Verified in `SHA256SUMS` |
+| `kingdom-desktop_1.0.0_amd64.deb` | Linux x86_64 | Debian Package | Verified in `SHA256SUMS` |
+| `kingdom-backend-linux-x86_64` | Linux x86_64 | PyInstaller Standalone Binary | Verified in `SHA256SUMS` |
+| `SHA256SUMS` | Multi-platform | Cryptographic Checksum File | Verified via `sha256sum -c` |
+| `release-manifest.json` | Multi-platform | Machine-readable Release Manifest | Validated against semver |
 
 ---
 
@@ -62,10 +61,6 @@ Every release manifest (`release-manifest.json`) and runtime API endpoint (`/api
 2. Ensure `backend/state.py` version increment follows Semantic Versioning (`PATCH` for bug fixes, `MINOR` for backward-compatible features, `MAJOR` for breaking changes).
 3. Execute `python3 scripts/validate_version.py` to synchronize manifests.
 4. Trigger `.github/workflows/release.yml` via git tag push (`vX.Y.Z`) or manual GitHub Actions workflow dispatch.
-
-### Code Signing & Credentials
-- **Windows (NSIS):** Configured via `CSC_LINK` and `CSC_KEY_PASSWORD` in repository secrets.
-- **macOS (DMG):** Configured via `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`, and `CSC_LINK`. If credentials are not present in CI secrets, builds run as unsigned staging artifacts and report `UNSIGNED / NOT NOTARIZED`.
 
 ### Failure Recovery & Rollback
 If a deployed update fails health check validation:

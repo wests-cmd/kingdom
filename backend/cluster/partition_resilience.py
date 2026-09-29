@@ -57,7 +57,7 @@ class PartitionEngine:
             raise PermissionError(f"Reconnection rejected: Node '{node_id}' is REVOKED.")
 
         # Version compatibility check
-        expected_ver = node.software_version or "40.2.0"
+        expected_ver = node.software_version or "1.0.0"
         if reported_version != expected_ver:
             raise ValueError(
                 f"Protocol version mismatch on reconnection: Expected {expected_ver}, got {reported_version}."
