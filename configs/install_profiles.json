@@ -1,42 +1,9 @@
 {
-  "_comment": "Kingdom local guided setup catalog. This file contains selectable runtime profiles. It does not grant security authority.",
   "schema_version": 1,
-  "components": [
-    {
-      "id": "gui",
-      "label": "Graphical Command Center",
-      "description": "Opens the Kingdom desktop Command Center."
-    },
-    {
-      "id": "planner",
-      "label": "Planner Knight",
-      "description": "Breaks larger goals into executable tasks."
-    },
-    {
-      "id": "coder",
-      "label": "Coder Knight",
-      "description": "Handles coding and code-oriented tasks."
-    },
-    {
-      "id": "researcher",
-      "label": "Research Knight",
-      "description": "Handles research and information-gathering work."
-    },
-    {
-      "id": "memory",
-      "label": "Memory Knight",
-      "description": "Handles Kingdom memory operations."
-    },
-    {
-      "id": "security",
-      "label": "Security Knight",
-      "description": "Handles security-oriented runtime work."
-    }
-  ],
   "profiles": {
     "developer": {
       "name": "Developer",
-      "description": "For coding and development work.",
+      "description": "Coding and development focused Kingdom runtime.",
       "recommended_min_ram_gb": 4,
       "gui": true,
       "knights": [
@@ -47,7 +14,7 @@
     },
     "research": {
       "name": "Research & Analysis",
-      "description": "For research, analysis, summarization, and memory-heavy work.",
+      "description": "Research, analysis, information gathering, and memory focused runtime.",
       "recommended_min_ram_gb": 4,
       "gui": true,
       "knights": [
@@ -58,7 +25,7 @@
     },
     "full_swarm": {
       "name": "Full Swarm",
-      "description": "Runs every built-in Knight. Uses the most resources.",
+      "description": "Runs all built-in Kingdom Knights.",
       "recommended_min_ram_gb": 8,
       "gui": true,
       "knights": [
@@ -71,7 +38,7 @@
     },
     "server_headless": {
       "name": "Server / Headless",
-      "description": "Runs Kingdom without opening the desktop Command Center.",
+      "description": "Runs Kingdom without opening the graphical Command Center.",
       "recommended_min_ram_gb": 2,
       "gui": false,
       "knights": [

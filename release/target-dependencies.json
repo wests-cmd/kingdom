@@ -1,0 +1,16 @@
+{
+  "dependencies": {
+    "desktop-slim": {
+      "toolchain": ["bun"]
+    },
+    "docker": {
+      "toolchain": ["docker-compose"]
+    },
+    "iso": {
+      "status": "PLANNED_TOOLCHAIN_REQUIRED"
+    },
+    "android": {
+      "status": "PLANNED_TOOLCHAIN_REQUIRED"
+    }
+  }
+}

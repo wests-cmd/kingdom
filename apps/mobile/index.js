@@ -8,7 +8,7 @@
  */
 
 console.log("====================================================");
-console.log("       KINGDOM MOBILE BOUNDED INTERFACE (v40.2.0)   ");
+console.log("       KINGDOM MOBILE BOUNDED INTERFACE (v1.0.0)    ");
 console.log("====================================================");
 
 class KingdomMobileClient {
@@ -30,7 +30,7 @@ class KingdomMobileClient {
 
   async getCommanderStatus() {
     console.log(`[Kingdom Mobile] Checking Commander status...`);
-    return { status: "ready", version: "40.2.0", pairing_active: this.paired };
+    return { status: "ready", version: "1.0.0", pairing_active: this.paired };
   }
 }
 

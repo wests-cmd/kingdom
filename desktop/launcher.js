@@ -70,16 +70,26 @@ function getBackendBinaryPath() {
   return null;
 }
 
-function startBackend() {
+function startBackend(profilePath) {
   console.log('[Kingdom Desktop Launcher] Starting local Kingdom FastAPI server...');
   const bundledBin = getBackendBinaryPath();
   const isPackaged = Boolean(process.resourcesPath && !process.env.KINGDOM_DEV_MODE);
+
+  const env = {
+    ...process.env,
+    PYTHONUNBUFFERED: '1'
+  };
+
+  const activeProfile = profilePath || process.env.KINGDOM_LOCAL_PROFILE;
+  if (activeProfile) {
+    env.KINGDOM_LOCAL_PROFILE = activeProfile;
+  }
 
   if (bundledBin) {
     console.log(`[Kingdom Desktop Launcher] Found standalone bundled backend binary: ${bundledBin}`);
     backendProcess = spawn(bundledBin, ['--host', '127.0.0.1', '--port', String(BACKEND_PORT)], {
       cwd: path.dirname(bundledBin),
-      env: { ...process.env, PYTHONUNBUFFERED: '1' },
+      env,
       stdio: 'inherit'
     });
   } else if (isPackaged) {
@@ -91,7 +101,7 @@ function startBackend() {
 
     backendProcess = spawn(pythonCmd, ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)], {
       cwd: path.resolve(__dirname, '..'),
-      env: { ...process.env, PYTHONUNBUFFERED: '1' },
+      env,
       stdio: 'inherit'
     });
   }

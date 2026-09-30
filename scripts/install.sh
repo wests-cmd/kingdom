@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-echo "=== Kingdom Installer v40.2 ==="
+echo "=== Kingdom Installer ==="
 
 OS="$(uname -s)"
 ARCH="$(uname -m)"
@@ -42,4 +42,4 @@ fi
 echo "=== Installation Verification ==="
 python3 -c "import fastapi, pydantic, uvicorn; print('Backend runtime dependencies verified.')"
 
-echo "Kingdom v40.2 Installation Complete."
+echo "Kingdom Installation Complete."

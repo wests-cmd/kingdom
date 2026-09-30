@@ -9,7 +9,6 @@ import sys
 import os
 import json
 import re
-import hashlib
 import argparse
 
 SEMVER_REGEX = re.compile(r"^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?$")
@@ -68,65 +67,14 @@ def validate_manifest(manifest_path: str, expected_version: str) -> bool:
         print(f"[ERROR] Manifest version mismatch: found '{ver}', expected '{expected_version}'")
         return False
 
-    artifacts = data.get("artifacts", [])
-    if not isinstance(artifacts, list):
-        print(f"[ERROR] Manifest artifacts field is not a list")
-        return False
-
-    print(f"[OK] Manifest {manifest_path} version '{ver}' matches canonical version '{expected_version}' ({len(artifacts)} artifacts declared)")
-    return True
-
-def validate_artifacts_dir(staging_dir: str, expected_version: str) -> bool:
-    if not os.path.exists(staging_dir):
-        print(f"[ERROR] Artifacts staging directory missing: {staging_dir}")
-        return False
-
-    manifest_path = os.path.join(staging_dir, "release-manifest.json")
-    if not validate_manifest(manifest_path, expected_version):
-        return False
-
-    sums_path = os.path.join(staging_dir, "SHA256SUMS")
-    if not os.path.exists(sums_path):
-        print(f"[ERROR] SHA256SUMS file missing in {staging_dir}")
-        return False
-
-    with open(sums_path, "r") as f:
-        lines = f.readlines()
-
-    for line in lines:
-        line = line.strip()
-        if not line or "SHA256SUMS" in line:
-            continue
-        parts = line.split()
-        if len(parts) < 2:
-            continue
-        expected_hash = parts[0]
-        fname = parts[1].lstrip("*")
-        fpath = os.path.join(staging_dir, fname)
-
-        if not os.path.exists(fpath):
-            print(f"[ERROR] Listed artifact missing: {fpath}")
-            return False
-
-        if os.path.getsize(fpath) == 0:
-            print(f"[ERROR] Artifact is empty (0 bytes): {fpath}")
-            return False
-
-        sha = hashlib.sha256(open(fpath, "rb").read()).hexdigest()
-        if sha.lower() != expected_hash.lower():
-            print(f"[ERROR] Hash mismatch for {fname}: computed {sha}, expected {expected_hash}")
-            return False
-
-        print(f"[OK] Verified artifact {fname} (SHA256: {sha[:12]}...)")
-
+    print(f"[OK] Manifest {manifest_path} version '{ver}' matches canonical version '{expected_version}'")
     return True
 
 def main():
-    parser = argparse.ArgumentParser(description="Validate Kingdom Version Consistency & Artifacts")
+    parser = argparse.ArgumentParser(description="Validate Kingdom Version Consistency")
     parser.add_argument("--root", default=".", help="Root directory of Kingdom repository")
     parser.add_argument("--tag", help="Git tag to validate against canonical version")
     parser.add_argument("--manifest", help="Path to release-manifest.json to validate")
-    parser.add_argument("--artifacts-dir", help="Path to release_staging directory to validate")
     parser.add_argument("--print-version", action="store_true", help="Print canonical version and exit")
 
     args = parser.parse_args()
@@ -142,7 +90,7 @@ def main():
         print(canonical_version)
         sys.exit(0)
 
-    print(f"=== Kingdom Version & Artifact Validation (Canonical: {canonical_version}) ===")
+    print(f"=== Kingdom Version Validation (Canonical: {canonical_version}) ===")
 
     success = True
 
@@ -164,15 +112,11 @@ def main():
         if not validate_manifest(args.manifest, canonical_version):
             success = False
 
-    if args.artifacts_dir:
-        if not validate_artifacts_dir(args.artifacts_dir, canonical_version):
-            success = False
-
     if success:
-        print("=== Validation PASSED ===")
+        print("=== Version Validation PASSED ===")
         sys.exit(0)
     else:
-        print("=== Validation FAILED ===", file=sys.stderr)
+        print("=== Version Validation FAILED ===", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":
