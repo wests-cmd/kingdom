@@ -52,6 +52,9 @@ class RuntimeEngine:
                 updates={"error": "Process restarted while task was running. Reconciled to RECOVERY_REQUIRED."}
             )
             self.events.publish("task.recovery_required", rec_task)
+            if task.get("metadata", {}).get("tool") in {"text.analyze@1.0.0", "code.python.analyze@1.0.0"}:
+                rec_task = self.tasks.transition_task(task["id"], "queued", {"error": "Restarted idempotent analysis safely requeued"})
+                self.events.publish("task.requeued", rec_task)
             recovered.append(rec_task)
         return recovered
 
@@ -121,6 +124,7 @@ class RuntimeEngine:
         return task
 
     async def _process_next_task(self) -> None:
+        self.recover_remote_tasks()
         task = self.tasks.claim_next()
         if task is None:
             return
@@ -133,21 +137,25 @@ class RuntimeEngine:
             # Zero-trust policy check before executing task
             auth_res = self.security.authorize(
                 actor_id=actor,
+                token=(self.security.nodes.get_node(actor) or {}).get("token"),
                 capability=capability,
                 operation=f"Execute task {task['id']}",
                 prompt=task["prompt"],
                 approval_id=approval_id,
-                parameters=task["metadata"],
+                parameters={"task_id": task["id"], "prompt": task["prompt"],
+                            "metadata": {k: v for k, v in task["metadata"].items() if k != "approval_id"}},
             )
+            if not auth_res["authorized"] and auth_res.get("approval_id"):
+                waiting = self.tasks.transition_task(task["id"], "WAITING_APPROVAL",
+                    {"metadata": {**task["metadata"], "approval_id": auth_res["approval_id"]}})
+                self.events.publish("task.waiting_approval", waiting)
+                return
             if not auth_res["authorized"]:
                 raise PermissionError(f"Security policy denied task execution: {auth_res['reason']}")
 
             result = await self.swarm.execute(task)
-            provider = task["metadata"].get("model_provider")
-            if provider:
-                model_result = await self.models.generate(task["prompt"], task["metadata"].get("model"), provider)
-                result["model"] = model_result
-                self.events.publish("model.completed", {"task_id": task["id"], **model_result})
+            if not result.get("results") or any(r.get("verification", {}).get("state") != "VERIFIED" for r in result["results"]):
+                raise RuntimeError("Independent execution evidence is required for completion")
             completed = self.tasks.complete(task["id"], result)
             self.memory.record_task(completed)
             self.events.publish("task.completed", completed)
@@ -167,3 +175,20 @@ class RuntimeEngine:
                 )
             event_type = "task.requeued" if recovered["status"] == "queued" else "task.failed"
             self.events.publish(event_type, recovered)
+
+    def recover_remote_tasks(self):
+        from backend.cluster.task_leasing import task_lease_manager
+        from backend.cluster.node_registry import node_registry
+        import time
+        from backend.cluster.heartbeat import heartbeat_manager
+        leases = getattr(self, "lease_manager", task_lease_manager)
+        heartbeat_manager.evaluate_cluster_health()
+        for task in self.tasks.list("leased"):
+            lease = leases.leases.get(task["id"])
+            node = node_registry.get_node(task.get("assigned_knight"))
+            if not lease or lease.revoked or lease.expires_at <= time.time() or not node or node.node_state not in {"APPROVED", "CONNECTED"}:
+                leases.revoke_lease(task["id"])
+                self.tasks.transition_task(task["id"], "RECOVERY_REQUIRED")
+                recovered = self.tasks.transition_task(task["id"], "queued", {"assigned_knight": None, "lease_id": None,
+                    "error": "Remote lease or node became unavailable; safely requeued"})
+                self.events.publish("task.requeued", recovered)

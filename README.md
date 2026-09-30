@@ -13,6 +13,18 @@ Kingdom (`wests-cmd/kingdom`) is the core zero-trust distributed runtime and inf
 
 ---
 
+## Release status and verified scope
+
+The stable release is gated on native installer, dependency, authenticated runtime, and outcome checks. Consult the release page for published assets; build targets alone are not available downloads.
+
+Tasks can analyze supplied text or check Python syntax without a cloud account. AI text tasks require a configured model provider and produce generated text, not proof of external actions. Remote workers currently execute the same bounded analysis tools. Broker connection, live market data, and trade execution are unavailable until real adapters are integrated; Kingdom never reports a simulated trade as executed.
+
+The desktop signs in to its own bundled backend automatically. Server operators use the private `data/owner-token` access code (or supply `KINGDOM_OWNER_TOKEN` with at least 32 unpredictable characters). Administrative APIs require owner authentication. Worker enrollment requires an invitation and human approval, and workers submit signed results for exact active leases. Credentials belong in the credential broker rather than task metadata.
+
+Native desktop updates use the published platform installer after comparing its SHA-256 with the release manifest. Automatic in-place desktop updates are not provided. The offline server updater accepts only a checksummed archive with an exact `kingdom.server.install.v1` installation manifest and a real post-install health check. It replaces actual installation files, retains a sibling backup, and restores the exact prior directory on failure. Run it while the installation is stopped; migrations use an explicit installation-aware callback.
+
+Mobile native applications, ARM64 installers, Windows signing, and macOS signing/notarization are not included in this release.
+
 ## 1. INSTALL KINGDOM
 
 Kingdom provides packaged installation paths for normal end-users, developers, servers, and production Docker environments.

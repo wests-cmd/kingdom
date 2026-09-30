@@ -25,6 +25,21 @@ class ToolDefinition:
 class ToolEngine:
     def __init__(self):
         self._tools: Dict[str, ToolDefinition] = {}
+        self._handlers = {}
+
+    def register_handler(self, tool_key, handler):
+        if tool_key not in self._tools:
+            raise KeyError(tool_key)
+        self._handlers[tool_key] = handler
+
+    def execute(self, tool_key, params, actor_capabilities, actor_permissions):
+        errors = self.validate_tool_invocation(tool_key, params, actor_capabilities, actor_permissions)
+        if errors:
+            raise PermissionError("; ".join(errors))
+        handler = self._handlers.get(tool_key)
+        if handler is None:
+            raise NotImplementedError(f"No executable handler registered for {tool_key}")
+        return handler(params)
 
     def register_tool(self, tool: ToolDefinition) -> None:
         key = f"{tool.tool_id}@{tool.version}"

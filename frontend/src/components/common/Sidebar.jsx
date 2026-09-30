@@ -17,6 +17,7 @@ export default function Sidebar({ currentPage, setCurrentPage }) {
     { id: "Dashboard", label: "Dashboard" },
     { id: "Swarm", label: "Swarm" },
     { id: "Runtime", label: "Runtime" },
+    { id: "Tasks", label: "Tasks" },
     { id: "AIMap", label: "AI Map" },
     { id: "Memory", label: "Memory" },
     { id: "Routing", label: "Routing" },

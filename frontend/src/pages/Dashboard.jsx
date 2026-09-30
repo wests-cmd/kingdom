@@ -78,8 +78,8 @@ export default function Dashboard() {
 
         <div className="card">
           <div className="card-title">Pending Approvals</div>
-          <div className="card-value" style={{ color: security.pending_approvals > 0 ? "var(--accent-red)" : "var(--text-main)" }}>
-            {security.pending_approvals || 0}
+          <div className="card-value" style={{ color: security.pending_approvals_count > 0 ? "var(--accent-red)" : "var(--text-main)" }}>
+            {security.pending_approvals_count || 0}
           </div>
         </div>
       </div>

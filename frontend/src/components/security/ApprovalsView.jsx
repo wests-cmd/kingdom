@@ -27,7 +27,7 @@ export default function ApprovalsView() {
 
   const handleApprove = async (id) => {
     try {
-      await api.post(`/security/approvals/${id}/approve`, { approving_identity: "admin" })
+      await api.post(`/security/approvals/${id}/approve`, {})
       fetchApprovals()
     } catch (err) {
       alert("Error approving request: " + (err.response?.data?.detail || err.message))
@@ -36,7 +36,7 @@ export default function ApprovalsView() {
 
   const handleDeny = async (id) => {
     try {
-      await api.post(`/security/approvals/${id}/deny`, { denying_identity: "admin", reason: "Denied via UI" })
+      await api.post(`/security/approvals/${id}/deny`, { reason: "Denied via UI" })
       fetchApprovals()
     } catch (err) {
       alert("Error denying request: " + (err.response?.data?.detail || err.message))
@@ -52,11 +52,13 @@ export default function ApprovalsView() {
 
       {approvals.map((req) => (
         <div key={req.approval_id} style={{ background: "#222", padding: "12px", borderRadius: "6px", marginBottom: "8px" }}>
-          <div><strong>Requested Capability:</strong> {req.requested_capability}</div>
-          <div><strong>Node:</strong> {req.requesting_node} ({req.component})</div>
-          <div><strong>Action:</strong> {req.action}</div>
+          <div><strong>Requested Capability:</strong> {req.capability}</div>
+          <div><strong>Node:</strong> {req.requesting_node} ({req.requesting_actor})</div>
+          <div><strong>Action:</strong> {req.operation}</div>
           <div><strong>Risk Level:</strong> <span style={{ color: req.risk_level === "HIGH" ? "red" : "orange" }}>{req.risk_level}</span></div>
           <div><strong>Reason:</strong> {req.reason}</div>
+          <div><strong>Exact request:</strong> <pre>{JSON.stringify(req.parameters, null, 2)}</pre></div>
+          <div><strong>Expires:</strong> {new Date(req.expires_at).toLocaleString()}</div>
           <div style={{ marginTop: "8px" }}>
             <button onClick={() => handleApprove(req.approval_id)} style={{ marginRight: "8px", background: "green", color: "#fff", border: "none", padding: "6px 12px", borderRadius: "4px", cursor: "pointer" }}>
               Approve

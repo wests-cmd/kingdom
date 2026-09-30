@@ -20,8 +20,9 @@ class TestKnightSystem(unittest.TestCase):
         self.assertIsNotNone(hb)
 
     def test_base_knight_execution_lifecycle(self):
-        knight = BaseKnight("unit-tester", role="coder")
-        res = knight.execute({"id": "task-101", "actor": {"id": "admin", "role": "admin", "verified": True}})
+        knight = BaseKnight("coder", role="coder")
+        token = knight.zero_trust.nodes.get_node("admin")["token"]
+        res = knight.execute({"id": "task-101", "prompt": "real text", "metadata": {"tool": "text.analyze@1.0.0"}, "capability": "compute", "actor": {"id": "admin", "token": token}})
         self.assertEqual(res["status"], "completed")
 
 if __name__ == "__main__":

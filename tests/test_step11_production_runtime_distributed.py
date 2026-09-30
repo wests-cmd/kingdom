@@ -18,6 +18,7 @@ from backend.cluster.pairing import pairing_manager
 from backend.cluster.capabilities import capability_authorizer
 from backend.cluster.capability_router import CapabilityRouter, CapabilityRoutingError
 from backend.cluster.rejoin import rejoin_manager
+from backend.storage.db import Database
 from backend.cluster.task_leasing import TaskLeaseManager
 from backend.cluster.partition_resilience import PartitionEngine, RevocationPropagator
 from backend.cluster.sync_engine import sync_engine
@@ -90,11 +91,11 @@ def test_remote_approval_and_capability_isolation():
     assert capability_authorizer.is_capability_granted(kn.node_id, "credential.read") is False
 
 
-def test_task_lease_fencing_and_stale_result_invalidation():
+def test_task_lease_fencing_and_stale_result_invalidation(tmp_path):
     """
     Verifies monotonic fencing token generation and rejection of stale task result submissions.
     """
-    lease_mgr = TaskLeaseManager()
+    lease_mgr = TaskLeaseManager(database=Database(tmp_path / "leases.db"))
 
     # Issue lease to Knight 1 (fencing token 1)
     lease1 = lease_mgr.issue_lease("task_fencing_200", "kn-worker-1", "compute")

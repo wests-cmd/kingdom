@@ -61,26 +61,24 @@ class RPCSecureTransport:
                     self._processed_msg_ids.add(msg_id)
                     return True
         except Exception:
-            pass
+            return True  # Fail closed when the replay ledger cannot be read.
         return False
 
     def _record_processed_msg_id(self, msg_id: str, sender_id: str, timestamp: float):
-        self._processed_msg_ids.add(msg_id)
-        if len(self._processed_msg_ids) > 10000:
-            self._processed_msg_ids.clear()
         try:
             from backend.storage.db import db
-            expires_at = timestamp + MAX_TIME_SKEW_SECONDS
             with db.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                INSERT INTO rpc_replay (msg_id, sender_id, timestamp, expires_at)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(msg_id) DO NOTHING
-                """, (msg_id, sender_id, timestamp, expires_at))
+                inserted = conn.execute("INSERT INTO rpc_replay(msg_id,sender_id,timestamp,expires_at) VALUES(?,?,?,?) ON CONFLICT(msg_id) DO NOTHING",
+                                        (msg_id, sender_id, timestamp, timestamp + MAX_TIME_SKEW_SECONDS))
                 conn.commit()
+                if inserted.rowcount != 1:
+                    return False
+            self._processed_msg_ids.add(msg_id)
+            if len(self._processed_msg_ids) > 10000:
+                self._processed_msg_ids.clear()
+            return True
         except Exception:
-            pass
+            return False
 
     def create_signed_message(self, target_id: str, msg_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         msg = RPCMessage(sender_id=self.identity.node_id, target_id=target_id, msg_type=msg_type, payload=payload)
@@ -171,7 +169,8 @@ class RPCSecureTransport:
             return {"valid": False, "error": "Invalid cryptographic signature."}
 
         # Cache and persist msg_id to prevent replay attacks
-        self._record_processed_msg_id(msg_id, sender_id, timestamp)
+        if not self._record_processed_msg_id(msg_id, sender_id, timestamp):
+            return {"valid": False, "error": "Duplicate message or unavailable durable replay ledger"}
 
         return {
             "valid": True,

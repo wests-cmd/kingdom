@@ -11,7 +11,7 @@ from backend.system.migrator import run_migrations
 
 
 def test_updater_check_updates():
-    updater = UpdaterEngine(current_version="40.1.0")
+    updater = UpdaterEngine(current_version="0.9.0")
     manifest = {
         "latest_version": "1.0.0",
         "release_channel": "stable",
@@ -68,45 +68,55 @@ def test_schema_migrator():
 
 
 def test_execute_update_pipeline_success_and_automatic_rollback(tmp_path):
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    db_file = data_dir / "kingdom.db"
-    db_file.write_text("Version 1.0.0 Database Content")
-
-    updater = UpdaterEngine(current_version="1.0.0")
-    artifact = b"Kingdom v40.3.0 Release Package Content"
+    import io, json, tarfile
+    target = tmp_path / "installed"
+    target.mkdir()
+    (target / "old-only.txt").write_text("old")
+    (target / "app.py").write_text("old application")
+    content = b"actual new application"
+    manifest = json.dumps({"format":"kingdom.server.install.v1", "version":"1.0.1", "files":{"app.py":hashlib.sha256(content).hexdigest(), "new-only.txt":hashlib.sha256(b"new").hexdigest()}}).encode()
+    output = io.BytesIO()
+    with tarfile.open(fileobj=output, mode="w:gz") as archive:
+        for name, body in [("app.py",content), ("new-only.txt", b"new"), ("install-manifest.json",manifest)]:
+            info = tarfile.TarInfo(name); info.size=len(body)
+            archive.addfile(info, io.BytesIO(body))
+    artifact = output.getvalue()
     checksum = hashlib.sha256(artifact).hexdigest()
+    updater = UpdaterEngine(current_version="1.0.0")
+    options = dict(target_version="1.0.1", artifact_bytes=artifact, data_dir=str(target), backup_dir=str(tmp_path / "backups"))
+    assert updater.execute_update_pipeline(**options, expected_checksum="invalid")["status"] == "failed"
+    assert updater.execute_update_pipeline(**options, expected_checksum=checksum)["status"] == "failed"
+    def unhealthy():
+        assert (target / "app.py").read_bytes() == content
+        assert (target / "new-only.txt").exists()
+        assert not (target / "old-only.txt").exists()
+        return False
+    failure = updater.execute_update_pipeline(**options, expected_checksum=checksum, health_check_fn=unhealthy)
+    assert failure["status"] == "rolled_back"
+    assert (target / "old-only.txt").read_text() == "old"
+    assert (target / "app.py").read_text() == "old application"
+    assert not (target / "new-only.txt").exists()
+    success = updater.execute_update_pipeline(**options, expected_checksum=checksum, health_check_fn=lambda: (target / "app.py").read_bytes() == content)
+    assert success["status"] == "success"
+    assert updater.current_version == "1.0.1"
 
-    # 1. Invalid checksum fails cleanly
-    bad_res = updater.execute_update_pipeline(
-        target_version="40.3.0",
-        artifact_bytes=artifact,
-        expected_checksum="invalid_checksum_hash",
-        data_dir=str(data_dir),
-        backup_dir=str(tmp_path / "backups")
-    )
-    assert bad_res["status"] == "failed"
 
-    # 2. Update pipeline health check failure triggers automatic rollback
-    failed_health_res = updater.execute_update_pipeline(
-        target_version="40.3.0",
-        artifact_bytes=artifact,
-        expected_checksum=checksum,
-        data_dir=str(data_dir),
-        backup_dir=str(tmp_path / "backups"),
-        health_check_fn=lambda: False
-    )
-    assert failed_health_res["status"] == "rolled_back"
-    assert db_file.read_text() == "Version 1.0.0 Database Content"
+def test_backup_cannot_recurse_into_source(tmp_path):
+    source = tmp_path / "data"
+    source.mkdir()
+    with pytest.raises(ValueError, match="disjoint"):
+        UpdaterEngine().backup_data(source, source / "backups")
 
-    # 3. Update pipeline health check success completes update
-    success_res = updater.execute_update_pipeline(
-        target_version="40.3.0",
-        artifact_bytes=artifact,
-        expected_checksum=checksum,
-        data_dir=str(data_dir),
-        backup_dir=str(tmp_path / "backups"),
-        health_check_fn=lambda: True
-    )
-    assert success_res["status"] == "success"
-    assert success_res["version"] == "40.3.0"
+
+def test_rollback_removes_files_introduced_by_failed_update(tmp_path):
+    source = tmp_path / "old"; source.mkdir(); (source / "original").write_text("original")
+    updater = UpdaterEngine()
+    backup = updater.backup_data(source, tmp_path / "backups")
+    (source / "introduced").write_text("must disappear")
+    assert updater.rollback(backup, source)
+    assert not (source / "introduced").exists()
+
+
+def test_release_discovery_never_downgrades():
+    result = UpdaterEngine("1.0.1").check_updates({"latest_version":"1.0.0", "release_channel":"stable"})
+    assert result["update_available"] is False

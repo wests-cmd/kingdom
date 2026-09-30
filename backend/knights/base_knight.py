@@ -47,7 +47,7 @@ class BaseKnight:
             validation = self.zero_trust.validate(actor, required_capability=capability)
             if not validation.get("authorized"):
                 audit_logger.log_event(
-                    actor=str(actor),
+                    actor=actor.get("id", "guest") if isinstance(actor, dict) else str(actor),
                     node=self.id,
                     operation="knight_execute",
                     capability=capability,
@@ -69,20 +69,16 @@ class BaseKnight:
         self._sync_to_repo()
         event_bus.publish("task.started", {"task_id": task_id, "knight_id": self.id}, source="knight", task_id=task_id)
 
-        # Simulate execution
-        result = {
-            "knight": self.name,
-            "task": task,
-            "status": "completed",
-            "executed_at": time.time()
-        }
-
-        self.status = "idle"
-        self.current_task = None
-        self._sync_to_repo()
-        event_bus.publish("task.completed", result, source="knight", task_id=task_id)
-
-        return result
+        from backend.runtime.execution import execute_request, verify_request_result
+        try:
+            outcome = execute_request(task, self.zero_trust.nodes.get_node_capabilities(self.name))
+            verification = verify_request_result(task, outcome)
+            return {"knight": self.name, "status": "completed", "executed_at": time.time(),
+                    "outcome": outcome, "verification": verification}
+        finally:
+            self.status = "idle"
+            self.current_task = None
+            self._sync_to_repo()
 
     def cancel_task(self, task_id: str) -> Dict[str, Any]:
         if self.current_task == task_id:

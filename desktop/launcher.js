@@ -14,6 +14,7 @@ const MAX_POLL_ATTEMPTS = 30;
 const POLL_INTERVAL_MS = 1000;
 
 let backendProcess = null;
+const ownerToken = process.env.KINGDOM_OWNER_TOKEN || require('crypto').randomBytes(48).toString('base64url');
 
 function setPort(port) {
   BACKEND_PORT = port;
@@ -79,7 +80,8 @@ function startBackend(profilePath) {
 
   const env = {
     ...process.env,
-    PYTHONUNBUFFERED: '1'
+    PYTHONUNBUFFERED: '1',
+    KINGDOM_OWNER_TOKEN: ownerToken
   };
 
   const activeProfile = profilePath || process.env.KINGDOM_LOCAL_PROFILE;
@@ -194,6 +196,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  getOwnerToken: () => ownerToken,
   startBackend,
   stopBackend,
   waitForBackendReady,

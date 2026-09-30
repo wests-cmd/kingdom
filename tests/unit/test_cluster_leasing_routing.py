@@ -1,6 +1,7 @@
 import time
 import pytest
 from backend.cluster.node_registry import NodeRegistry, NodeState
+from backend.storage.db import Database
 from backend.cluster.task_leasing import TaskLeaseManager
 from backend.cluster.capability_router import CapabilityRouter, CapabilityRoutingError
 
@@ -17,8 +18,8 @@ class DummyRepo:
         return list(self.data.values())
 
 
-def test_task_lease_manager_fencing_and_expiration():
-    mgr = TaskLeaseManager(default_lease_ttl_sec=0.2)
+def test_task_lease_manager_fencing_and_expiration(tmp_path):
+    mgr = TaskLeaseManager(default_lease_ttl_sec=0.2, database=Database(tmp_path / "leases.db"))
 
     # 1. Issue initial lease to Node A
     lease1 = mgr.issue_lease("task_100", "node_A", "compute.gpu")

@@ -26,6 +26,8 @@ import subprocess
 import urllib.request
 import urllib.parse
 import pytest
+import secrets
+OWNER_CODE = secrets.token_urlsafe(48)
 
 
 COMMANDER_PORT = 8090
@@ -33,7 +35,7 @@ COMMANDER_URL = f"http://127.0.0.1:{COMMANDER_PORT}"
 
 
 def _http_get(url: str, timeout: float = 3.0) -> dict:
-    req = urllib.request.Request(url, method="GET")
+    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + OWNER_CODE}, method="GET")
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         body = resp.read().decode("utf-8")
         return json.loads(body) if body else {}
@@ -41,7 +43,7 @@ def _http_get(url: str, timeout: float = 3.0) -> dict:
 
 def _http_post(url: str, payload: dict | None = None, timeout: float = 5.0) -> dict:
     data_bytes = json.dumps(payload).encode("utf-8") if payload else None
-    headers = {"Content-Type": "application/json"} if payload else {}
+    headers = {"Content-Type": "application/json", "Authorization": "Bearer " + OWNER_CODE}
     req = urllib.request.Request(url, data=data_bytes, headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         body = resp.read().decode("utf-8")
@@ -69,6 +71,7 @@ def commander_process(tmp_path_factory):
     db_file = cmd_dir / "kingdom_e2e.db"
     env = os.environ.copy()
     env["DATA_DIR"] = str(cmd_dir)
+    env["KINGDOM_OWNER_TOKEN"] = OWNER_CODE
 
     # Configure isolated DB path via backend.storage.db.DEFAULT_DB_PATH
     cmd = [
@@ -77,7 +80,10 @@ def commander_process(tmp_path_factory):
     ]
 
     proc = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    assert wait_for_url(f"{COMMANDER_URL}/status", max_wait_sec=10.0) is True, "Commander failed to start"
+    if not wait_for_url(f"{COMMANDER_URL}/health/ready", max_wait_sec=10.0):
+        proc.terminate()
+        proc.wait(timeout=5)
+        raise AssertionError("Commander failed to start")
 
     yield proc
 
@@ -132,7 +138,7 @@ def test_process_distributed_enrollment_task_execution_lifecycle(commander_proce
         # 4. Approve Knight process with 'gpu' capability granted
         approve_res = _http_post(
             f"{COMMANDER_URL}/nodes/{kn_id}/approve",
-            payload={"granted_capabilities": ["gpu"]}
+            payload={"granted_capabilities": ["gpu", "compute"]}
         )
         assert approve_res["node_state"] == "APPROVED"
         assert "gpu" in approve_res["granted_capabilities"]
@@ -144,14 +150,25 @@ def test_process_distributed_enrollment_task_execution_lifecycle(commander_proce
 
         # 5. Create a task assigned to this Knight process
         task_req = {
-            "prompt": "Run GPU benchmark matrix multiplication",
-            "metadata": {"assigned_knight": kn_id}
+            "prompt": "Analyze this real process result",
+            "metadata": {"assigned_knight": kn_id, "execution_target": "remote", "tool": "text.analyze@1.0.0", "capability": "compute"}
         }
         task_res = _http_post(f"{COMMANDER_URL}/tasks", payload=task_req)
         assert task_res["id"] is not None
 
         # Allow daemon loop to poll and execute
         time.sleep(2.5)
+
+        deadline = time.time() + 12
+        while time.time() < deadline:
+            completed = _http_get(f"{COMMANDER_URL}/tasks/{task_res['id']}")
+            if completed["status"] in {"completed", "failed"}:
+                break
+            time.sleep(0.2)
+        assert completed["status"] == "completed", completed.get("error")
+        assert completed["result"]["output"]["output"]["words"] == 5
+        assert completed["result"]["verification"]["state"] == "VERIFIED"
+        assert completed["result"]["executed_by"] == kn_id
 
         # 6. Terminate Knight process -> Verify process disappearance
         kn_proc.terminate()

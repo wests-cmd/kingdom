@@ -1,3 +1,4 @@
+from tests.auth_support import owner_client
 import asyncio
 import tempfile
 import unittest
@@ -26,13 +27,15 @@ class RuntimeCoreTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_lifecycle_and_task_completion_emit_events(self):
         engine = self.engine
-        task = engine.submit_task("research resilient distributed systems", {"source": "test"})
+        task = engine.submit_task("research resilient distributed systems", {"source": "test", "tool": "text.analyze@1.0.0"})
         self.assertEqual(task["status"], "queued")
         await engine.start()
         completed = await wait_for_task_completion(engine, task["id"], timeout=5.0)
         self.assertIsNotNone(completed)
         self.assertEqual(completed["status"], "completed")
         self.assertEqual(completed["result"]["results"][0]["knight"], "researcher")
+        self.assertEqual(completed["result"]["results"][0]["outcome"]["output"]["words"], 4)
+        self.assertEqual(completed["result"]["results"][0]["verification"]["state"], "VERIFIED")
         self.assertTrue(engine.status()["running"])
         self.assertEqual(engine.events.history(10)[-1]["type"], "task.completed")
         await engine.stop()
@@ -40,7 +43,7 @@ class RuntimeCoreTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_swarm_decomposes_and_executes_subtasks(self):
         engine = self.engine
-        task = engine.submit_task("coordinate", {"subtasks": ["code a test", "research an option"]})
+        task = engine.submit_task("coordinate", {"subtasks": ["code a test", "research an option"], "tool": "text.analyze@1.0.0"})
         await engine.start()
 
         completed = await wait_for_task_completion(engine, task["id"], timeout=5.0)
@@ -75,7 +78,7 @@ class RuntimeCoreTests(unittest.IsolatedAsyncioTestCase):
 
 class RuntimeApiTests(unittest.TestCase):
     def test_task_api_and_websocket_snapshot(self):
-        client = TestClient(app)
+        client = owner_client(app)
         response = client.post("/tasks", json={"prompt": "code a health check"})
 
         self.assertEqual(response.status_code, 201)
@@ -90,17 +93,17 @@ class RuntimeApiTests(unittest.TestCase):
             websocket.__exit__(None, None, None)
 
     def test_mode_api_rejects_unknown_modes(self):
-        client = TestClient(app)
+        client = owner_client(app)
         self.assertEqual(client.put("/mode", json={"mode": "burst"}).json(), {"mode": "burst"})
         self.assertEqual(client.put("/mode", json={"mode": "unknown"}).status_code, 422)
 
     def test_knights_api_exposes_live_registry(self):
-        response = TestClient(app).get("/knights")
+        response = owner_client(app).get("/knights")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["knights"][0]["name"], "planner")
 
     def test_model_api_is_explicit_when_no_provider_is_configured(self):
-        client = TestClient(app)
+        client = owner_client(app)
         response = client.post("/models/generate", json={"prompt": "hello"})
         self.assertEqual(response.status_code, 503)
         self.assertIn("No model provider", response.json()["detail"])
@@ -111,7 +114,7 @@ class MemoryServiceTests(unittest.TestCase):
     def test_memory_persists_graph_and_searches(self):
         with tempfile.TemporaryDirectory() as directory:
             memory = MemoryService(directory)
-            entry = memory.add("resilient distributed runtime", {"source": "test"})
+            entry = memory.add("resilient distributed runtime", {"source": "test", "tool": "text.analyze@1.0.0"})
             restored = MemoryService(directory)
 
             self.assertEqual(restored.search("distributed")[0]["id"], entry["id"])

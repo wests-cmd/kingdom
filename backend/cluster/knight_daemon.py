@@ -91,10 +91,11 @@ class KnightDaemon:
 
     def check_approval_status(self) -> str:
         try:
-            res = self._http_request("GET", f"/nodes/{self.node_id}")
+            res = self._http_request("GET", f"/nodes/{self.node_id}/status")
             state = res.get("node_state") or res.get("status")
             if state:
                 self.node_state = state
+                self.granted_capabilities = res.get("granted_capabilities", [])
             return self.node_state
         except Exception:
             return self.node_state
@@ -134,9 +135,18 @@ class KnightDaemon:
                     "task_id": task_id,
                     "executed_by": self.node_id,
                     "fencing_token": fencing_token,
-                    "output": f"Executed by {self.node_id}: {prompt}",
+                    "lease_id": task.get("lease_id"),
                     "timestamp": time.time()
                 }
+                try:
+                    from backend.runtime.execution import execute_request, verify_request_result
+                    if not task.get("metadata", {}).get("tool"):
+                        raise NotImplementedError("Remote execution requires a supported controlled tool")
+                    outcome = execute_request(task, getattr(self, "granted_capabilities", []))
+                    verify_request_result(task, outcome, allow_local_model=False)
+                    result_payload.update(status="completed", output=outcome)
+                except Exception as exc:
+                    result_payload.update(status="failed", error=str(exc))
 
                 try:
                     self.send_rpc("task_result", result_payload)
