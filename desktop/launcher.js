@@ -9,7 +9,7 @@ const path = require('path');
 const fs = require('fs');
 
 let BACKEND_PORT = process.env.PORT || 8000;
-let READINESS_URL = `http://localhost:${BACKEND_PORT}/health/ready`;
+let READINESS_URL = `http://127.0.0.1:${BACKEND_PORT}/health/ready`;
 const MAX_POLL_ATTEMPTS = 30;
 const POLL_INTERVAL_MS = 1000;
 
@@ -17,12 +17,13 @@ let backendProcess = null;
 
 function setPort(port) {
   BACKEND_PORT = port;
-  READINESS_URL = `http://localhost:${BACKEND_PORT}/health/ready`;
+  READINESS_URL = `http://127.0.0.1:${BACKEND_PORT}/health/ready`;
 }
 
 function checkReadiness(url = READINESS_URL) {
   return new Promise((resolve) => {
-    http.get(url, (res) => {
+    const request = http.get(url, (res) => {
+      res.resume();
       if (res.statusCode === 200) {
         resolve(true);
       } else {
@@ -31,6 +32,7 @@ function checkReadiness(url = READINESS_URL) {
     }).on('error', () => {
       resolve(false);
     });
+    request.setTimeout(2000, () => { request.destroy(); resolve(false); });
   });
 }
 
@@ -86,10 +88,16 @@ function startBackend(profilePath) {
   }
 
   if (bundledBin) {
+    const runtimeDir = env.KINGDOM_DATA_DIR || (activeProfile
+      ? path.join(path.dirname(activeProfile), 'runtime')
+      : path.join(require('os').homedir(), '.kingdom'));
+    fs.mkdirSync(runtimeDir, { recursive: true });
+    env.KINGDOM_DATA_DIR = runtimeDir;
     console.log(`[Kingdom Desktop Launcher] Found standalone bundled backend binary: ${bundledBin}`);
     backendProcess = spawn(bundledBin, ['--host', '127.0.0.1', '--port', String(BACKEND_PORT)], {
-      cwd: path.dirname(bundledBin),
+      cwd: runtimeDir,
       env,
+      windowsHide: true,
       stdio: 'inherit'
     });
   } else if (isPackaged) {
@@ -107,6 +115,9 @@ function startBackend(profilePath) {
   }
 
   if (backendProcess) {
+    backendProcess.on('error', (error) => {
+      console.error('[Kingdom Desktop Launcher] Failed to start backend:', error.message);
+    });
     backendProcess.on('exit', (code, signal) => {
       console.log(`[Kingdom Desktop Launcher] Backend process exited with code ${code}, signal ${signal}`);
     });

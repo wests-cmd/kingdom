@@ -73,7 +73,7 @@ def commander_process(tmp_path_factory):
     # Configure isolated DB path via backend.storage.db.DEFAULT_DB_PATH
     cmd = [
         sys.executable, "-c",
-        f"import os, sys, uvicorn, pathlib; from backend.storage import db; db.db.db_path=pathlib.Path('{db_file}'); db.db.init_db(); uvicorn.run('backend.main:app', host='127.0.0.1', port={COMMANDER_PORT}, log_level='warning')"
+        f"import os, sys, uvicorn, pathlib; from backend.storage import db; db.db.db_path=pathlib.Path({str(db_file)!r}); db.db.init_db(); uvicorn.run('backend.main:app', host='127.0.0.1', port={COMMANDER_PORT}, log_level='warning')"
     ]
 
     proc = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

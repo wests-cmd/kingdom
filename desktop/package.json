@@ -28,12 +28,15 @@
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "artifactName": "Kingdom-Setup-${version}.${ext}"
     },
     "mac": {
       "target": [
         "dmg"
-      ]
+      ],
+      "artifactName": "Kingdom-${version}.${ext}",
+      "identity": null
     },
     "linux": {
       "target": [
@@ -50,6 +53,10 @@
       {
         "from": "../frontend/dist",
         "to": "frontend/dist"
+      },
+      {
+        "from": "../configs/install_profiles.json",
+        "to": "configs/install_profiles.json"
       }
     ]
   }
