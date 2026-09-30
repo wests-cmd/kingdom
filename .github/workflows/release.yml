@@ -158,11 +158,14 @@ jobs:
               echo 'A published v1.0.0 already exists; refusing to replace stable assets.'
               exit 1
             fi
-            gh release view v1.0.0 --json targetCommitish --jq .targetCommitish | grep -Fx "$RELEASE_COMMIT"
-            gh release upload v1.0.0 release_staging/* --clobber
-          else
-            gh release create v1.0.0 release_staging/* --target "$RELEASE_COMMIT" --title 'Kingdom v1TAS (v1.0.0)' --notes-file release-notes.md --draft
+            gh release delete v1.0.0 --yes
           fi
+          if gh api 'repos/'"$GH_REPO"'/git/ref/tags/v1.0.0' > existing-tag.json 2>/dev/null; then
+            python -c 'import json,os; t=json.load(open("existing-tag.json"))["object"]; assert t["type"] == "commit" and t["sha"] == os.environ["RELEASE_COMMIT"], "Existing tag targets different source"'
+          else
+            gh api --method POST 'repos/'"$GH_REPO"'/git/refs' -f ref=refs/tags/v1.0.0 -f sha="$RELEASE_COMMIT"
+          fi
+          gh release create v1.0.0 release_staging/* --verify-tag --target "$RELEASE_COMMIT" --title 'Kingdom v1TAS (v1.0.0)' --notes-file release-notes.md --draft
           gh release download v1.0.0 --dir release_download
           diff -u release_staging/SHA256SUMS release_download/SHA256SUMS
           cd release_download
