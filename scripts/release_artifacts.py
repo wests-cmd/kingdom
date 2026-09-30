@@ -26,7 +26,7 @@ def stage(platform, version, commit):
         if not source.is_file() or source.stat().st_size == 0:
             raise RuntimeError(f"Required artifact missing: {source}")
         shutil.copy2(source, destination / name)
-    for kind in ("backend", "desktop"):
+    for kind in ("backend", "desktop", "dependencies"):
         source = Path("evidence") / f"{kind}.json"
         evidence = json.loads(source.read_text())
         expected_platform = {"linux": "linux", "windows": "win32", "macos": "darwin"}[platform]
@@ -40,6 +40,9 @@ def stage(platform, version, commit):
             raise RuntimeError("Smoke evidence architecture mismatch")
         if kind == "backend" and not evidence.get("frontend_served"):
             raise RuntimeError("Backend smoke evidence incomplete")
+        if kind == "dependencies" and (not evidence.get("audited") or evidence.get("findings")
+                                      or evidence.get("cryptography") != "50.0.2"):
+            raise RuntimeError("Dependency audit evidence incomplete")
         shutil.copy2(source, destination / f"{platform}-{kind}-evidence.json")
     shutil.copy2(Path("evidence/desktop.png"), destination / f"{platform}-desktop.png")
     artifacts = [{"filename": name, "size": (destination / name).stat().st_size,
