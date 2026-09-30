@@ -61,11 +61,17 @@ def test_approvals_survive_restart_bind_exact_scope_and_are_spent_once(tmp_path)
         reopened.approve(req["id"])
 
 
-def test_approved_request_expires_before_use(tmp_path):
-    approvals = ApprovalEngine(default_ttl_seconds=0.05, database=Database(tmp_path / "state.db"))
+def test_approved_request_expires_before_use(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta
+    import backend.security.approval_engine as approval_module
+    approvals = ApprovalEngine(default_ttl_seconds=3600, database=Database(tmp_path / "state.db"))
     req = approvals.create_request("process.execute", "execute", requesting_actor="owner")
     approvals.approve(req["id"], approver="owner")
-    time.sleep(0.07)
+    class ExpiredClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime.now(tz) + timedelta(seconds=3601)
+    monkeypatch.setattr(approval_module, "datetime", ExpiredClock)
     assert not approvals.consume(req["id"], actor_id="owner", capability="process.execute", operation="execute", parameters={})
     assert approvals.get_request(req["id"])["status"] == "expired"
 

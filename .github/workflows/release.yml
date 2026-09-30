@@ -13,6 +13,11 @@ on:
       - 'scripts/*native*'
       - 'scripts/desktop_backend.py'
       - 'requirements-release.txt'
+      - 'requirements.txt'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'desktop/**'
+      - 'tests/**'
 
 permissions:
   contents: read
