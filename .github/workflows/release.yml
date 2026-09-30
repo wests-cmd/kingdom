@@ -54,7 +54,17 @@ jobs:
         with:
           node-version: '24'
       - name: Install test and build dependencies
-        run: python -m pip install -r requirements-release.txt
+        run: |
+          python -m venv .release-venv
+          if [ '${{ matrix.platform }}' = windows ]; then
+            VENV_BIN="$PWD/.release-venv/Scripts"
+            cygpath -w "$VENV_BIN" >> "$GITHUB_PATH"
+          else
+            VENV_BIN="$PWD/.release-venv/bin"
+            echo "$VENV_BIN" >> "$GITHUB_PATH"
+          fi
+          "$VENV_BIN/python" -m pip install --upgrade pip
+          "$VENV_BIN/python" -m pip install --only-binary=cryptography -r requirements-release.txt
       - name: Validate version and run tests
         run: |
           python scripts/validate_version.py --tag v1.0.0
