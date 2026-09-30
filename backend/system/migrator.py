@@ -14,6 +14,7 @@ def _run_migration(filename):
     module.upgrade()
 
 MIGRATION_REGISTRY = {
+    "1.0.0": "40_1.py",
     "40.1.0": "40_1.py",
     "40.2.0": "40_1.py"
 }

@@ -964,6 +964,107 @@ def process_mobile_pairing(request: MobilePairRequest):
         raise HTTPException(status_code=400, detail=res.get("error"))
     return res
 
+
+# --- Profiles & API Catalog Routes ---
+from backend.catalog.repository import catalog_repo
+from backend.catalog.sync_service import catalog_sync_service
+from backend.catalog.verification_service import verification_service
+from backend.catalog.resolver import capability_resolver
+
+
+@router.get("/profiles")
+def list_profiles():
+    return catalog_repo.list_profiles()
+
+
+@router.get("/profiles/active")
+def get_active_profile(user_id: str = "default_user"):
+    return catalog_repo.get_active_user_profile(user_id)
+
+
+@router.post("/profiles/active")
+def set_active_profile(request: Dict[str, Any]):
+    profile_id = request.get("profile_id")
+    if not profile_id:
+        raise HTTPException(status_code=400, detail="profile_id is required")
+    user_id = request.get("user_id", "default_user")
+    return catalog_repo.set_active_user_profile(profile_id, user_id=user_id)
+
+
+@router.get("/profiles/{profile_id}")
+def get_profile(profile_id: str):
+    p = catalog_repo.get_profile(profile_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return p
+
+
+@router.post("/profiles", status_code=status.HTTP_201_CREATED)
+def create_profile(data: Dict[str, Any]):
+    if not data.get("name"):
+        raise HTTPException(status_code=400, detail="Profile name is required")
+    return catalog_repo.create_profile(data)
+
+
+@router.get("/capabilities")
+def list_capabilities():
+    return catalog_repo.list_capabilities()
+
+
+@router.get("/capabilities/{capability_id}")
+def get_capability(capability_id: str):
+    c = catalog_repo.get_capability(capability_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Capability not found")
+    return c
+
+
+@router.get("/capabilities/{capability_id}/providers")
+def get_capability_providers(capability_id: str):
+    return catalog_repo.list_api_providers(capability_slug=capability_id)
+
+
+@router.get("/profiles/{profile_id}/capabilities")
+def get_profile_capabilities(profile_id: str):
+    p = catalog_repo.get_profile(profile_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return p.get("capabilities", [])
+
+
+@router.get("/catalog/apis")
+def list_catalog_apis(category: Optional[str] = None, capability: Optional[str] = None, verified_only: bool = False):
+    return catalog_repo.list_api_providers(category=category, capability_slug=capability, verified_only=verified_only)
+
+
+@router.get("/catalog/apis/{provider_id}")
+def get_catalog_api(provider_id: str):
+    p = catalog_repo.get_api_provider(provider_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="API Provider not found")
+    return p
+
+
+@router.post("/admin/catalog/sync")
+def trigger_catalog_sync():
+    return catalog_sync_service.sync_public_apis()
+
+
+@router.get("/admin/catalog/sync/status")
+def get_catalog_sync_status():
+    last_sync = catalog_repo.get_last_sync_record("public_apis")
+    return last_sync or {"status": "never_synced"}
+
+
+@router.post("/admin/catalog/{provider_id}/verify")
+def verify_catalog_provider(provider_id: str):
+    return verification_service.verify_provider(provider_id)
+
+
+@router.get("/profiles/resolver/capabilities")
+def resolve_capabilities(user_id: str = "default_user", capability: Optional[str] = None):
+    return capability_resolver.resolve_profile_capabilities(user_id=user_id, requested_capability=capability)
+
 # --- GOVERNED FINANCIAL ENDPOINTS ---
 
 @router.post("/financial/connect")

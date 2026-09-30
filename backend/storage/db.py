@@ -155,6 +155,137 @@ class Database:
             )
             """)
 
+            # Profiles table
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS profiles (
+                id TEXT PRIMARY KEY,
+                slug TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                icon TEXT,
+                system INTEGER DEFAULT 0,
+                status TEXT DEFAULT 'active',
+                version INTEGER DEFAULT 1,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
+            )
+            """)
+
+            # Capabilities table
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS capabilities (
+                id TEXT PRIMARY KEY,
+                slug TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                category TEXT NOT NULL,
+                risk_level TEXT DEFAULT 'low',
+                requires_auth INTEGER DEFAULT 0,
+                requires_approval INTEGER DEFAULT 0,
+                read_only INTEGER DEFAULT 1,
+                enabled INTEGER DEFAULT 1,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
+            )
+            """)
+
+            # Profile Capabilities mapping
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS profile_capabilities (
+                profile_id TEXT NOT NULL,
+                capability_id TEXT NOT NULL,
+                priority INTEGER DEFAULT 0,
+                required INTEGER DEFAULT 0,
+                mode TEXT DEFAULT 'recommend',
+                created_at REAL NOT NULL,
+                PRIMARY KEY (profile_id, capability_id)
+            )
+            """)
+
+            # User Profiles
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                profile_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                enabled INTEGER DEFAULT 1,
+                is_default INTEGER DEFAULT 0,
+                preferences_json TEXT,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
+            )
+            """)
+
+            # API Providers table
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS api_providers (
+                id TEXT PRIMARY KEY,
+                slug TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                homepage_url TEXT,
+                documentation_url TEXT,
+                source TEXT NOT NULL,
+                category TEXT,
+                auth_type TEXT DEFAULT 'none',
+                https_supported INTEGER DEFAULT 1,
+                cors_support TEXT DEFAULT 'unknown',
+                free_access TEXT DEFAULT 'unknown',
+                status TEXT DEFAULT 'discovered',
+                last_verified_at REAL,
+                verification_status TEXT DEFAULT 'unverified',
+                metadata_json TEXT,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
+            )
+            """)
+
+            # API Capabilities mapping
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS api_capabilities (
+                api_provider_id TEXT NOT NULL,
+                capability_id TEXT NOT NULL,
+                confidence REAL DEFAULT 1.0,
+                mapping_source TEXT DEFAULT 'catalog',
+                verified INTEGER DEFAULT 0,
+                created_at REAL NOT NULL,
+                PRIMARY KEY (api_provider_id, capability_id)
+            )
+            """)
+
+            # Catalog Syncs log table
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS api_catalog_syncs (
+                id TEXT PRIMARY KEY,
+                source TEXT NOT NULL,
+                started_at REAL NOT NULL,
+                completed_at REAL,
+                entries_seen INTEGER DEFAULT 0,
+                entries_added INTEGER DEFAULT 0,
+                entries_updated INTEGER DEFAULT 0,
+                entries_disabled INTEGER DEFAULT 0,
+                errors TEXT,
+                status TEXT DEFAULT 'pending',
+                source_checksum TEXT
+            )
+            """)
+
+            # API Verifications log table
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS api_verifications (
+                id TEXT PRIMARY KEY,
+                api_provider_id TEXT NOT NULL,
+                checked_at REAL NOT NULL,
+                reachable INTEGER DEFAULT 0,
+                https_valid INTEGER DEFAULT 0,
+                documentation_reachable INTEGER DEFAULT 0,
+                auth_detected TEXT,
+                response_time_ms REAL,
+                error TEXT
+            )
+            """)
+
             conn.commit()
 
 # Global database instance

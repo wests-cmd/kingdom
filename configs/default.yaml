@@ -1,5 +1,5 @@
 system_name: kingdom
-version: 1.0.0
+version: 40.1
 
 logging:
   level: INFO

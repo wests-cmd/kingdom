@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react"
 import Sidebar from "./components/common/Sidebar"
 import Dashboard from "./pages/Dashboard"
+import Profiles from "./pages/Profiles"
+import Catalog from "./pages/Catalog"
 import Swarm from "./pages/Swarm"
 import Runtime from "./pages/Runtime"
 import AIMap from "./pages/AIMap"
@@ -29,6 +31,8 @@ export default function App() {
   const renderPage = () => {
     switch (currentPage) {
       case "Dashboard": return <Dashboard />
+      case "Profiles": return <Profiles />
+      case "Catalog": return <Catalog />
       case "Swarm": return <Swarm />
       case "Runtime": return <Runtime />
       case "AIMap": return <AIMap />

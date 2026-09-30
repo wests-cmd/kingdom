@@ -15,6 +15,8 @@ export default function Sidebar({ currentPage, setCurrentPage }) {
   }, [])
   const navItems = [
     { id: "Dashboard", label: "Dashboard" },
+    { id: "Profiles", label: "Profiles" },
+    { id: "Catalog", label: "API Catalog" },
     { id: "Swarm", label: "Swarm" },
     { id: "Runtime", label: "Runtime" },
     { id: "AIMap", label: "AI Map" },

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
+from backend.catalog.resolver import capability_resolver
 from backend.knights.registry import KnightRegistry
 from backend.routing.complexity_router import ComplexityRouter
 from backend.security.zero_trust import ZeroTrust
@@ -25,9 +26,15 @@ class SwarmManager:
     async def execute(self, task):
         subtasks = self._decompose(task["prompt"], task["metadata"].get("subtasks"))
         assignments = [self._balancer.select_knight(subtask) for subtask in subtasks]
+        user_id = task.get("metadata", {}).get("user_id", "default_user")
+        profile_resolution = capability_resolver.resolve_profile_capabilities(user_id=user_id)
         plan = {
             "task_id": task["id"],
             "complexity": self._complexity.classify(task["prompt"]),
+            "profile_context": {
+                "active_profile": profile_resolution.get("active_profile"),
+                "resolved_capabilities_count": profile_resolution.get("resolved_capabilities_count")
+            },
             "subtasks": [{"prompt": subtask, "knight": knight} for subtask, knight in zip(subtasks, assignments)],
         }
         self._publish("swarm.planned", plan)

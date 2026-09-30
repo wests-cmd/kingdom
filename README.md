@@ -120,6 +120,7 @@ docker-compose down
 | **Memory Graph** | Timeline persistence, vector search & snapshots | Yes | ✅ Implemented |
 | **Skills Platform** | Typed skill lifecycle, dependencies & readiness engine | Yes | ✅ Implemented |
 | **Learning Engine** | Evidence collection, proposals, experiments & rollback | Yes | ✅ Implemented |
+| **Profiles & API Catalog** | Human-friendly profiles, capabilities vocabulary & Public APIs catalog | Yes | ✅ Implemented |
 | **MCP Server** | Model Context Protocol tool contracts for external agents | Yes | ✅ Implemented |
 | **Python SDK** | Client library for agent-to-Kingdom HTTP/REST calls | Yes | ✅ Implemented |
 

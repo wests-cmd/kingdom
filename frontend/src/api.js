@@ -79,6 +79,41 @@ export async function revokeNode(nodeId, reason = "Administrator revoked node") 
   return res.data;
 }
 
+export async function listProfiles() {
+  const res = await api.get("/profiles");
+  return res.data;
+}
+
+export async function getActiveProfile() {
+  const res = await api.get("/profiles/active");
+  return res.data;
+}
+
+export async function setActiveProfile(profileId) {
+  const res = await api.post("/profiles/active", { profile_id: profileId });
+  return res.data;
+}
+
+export async function listCapabilities() {
+  const res = await api.get("/capabilities");
+  return res.data;
+}
+
+export async function listCatalogApis(params = {}) {
+  const res = await api.get("/catalog/apis", { params });
+  return res.data;
+}
+
+export async function triggerCatalogSync() {
+  const res = await api.post("/admin/catalog/sync");
+  return res.data;
+}
+
+export async function verifyCatalogProvider(providerId) {
+  const res = await api.post(`/admin/catalog/${providerId}/verify`);
+  return res.data;
+}
+
 export const apiHelper = {
   getSystemVersion,
   getKingdomIdentity,
@@ -88,7 +123,14 @@ export const apiHelper = {
   processNodePairing,
   approveNode,
   rejectNode,
-  revokeNode
+  revokeNode,
+  listProfiles,
+  getActiveProfile,
+  setActiveProfile,
+  listCapabilities,
+  listCatalogApis,
+  triggerCatalogSync,
+  verifyCatalogProvider
 };
 
 export { apiHelper as api };
