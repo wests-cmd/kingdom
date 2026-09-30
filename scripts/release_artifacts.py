@@ -29,10 +29,15 @@ def stage(platform, version, commit):
     for kind in ("backend", "desktop"):
         source = Path("evidence") / f"{kind}.json"
         evidence = json.loads(source.read_text())
+        expected_platform = {"linux": "linux", "windows": "win32", "macos": "darwin"}[platform]
+        if evidence.get("platform") != expected_platform:
+            raise RuntimeError("Smoke evidence platform mismatch")
         if evidence.get("version") != version:
             raise RuntimeError("Smoke evidence version mismatch")
         if kind == "desktop" and not all(evidence.get(key) for key in ("dashboardLoaded", "profilePersisted", "catalogLoaded")):
             raise RuntimeError("Desktop smoke evidence incomplete")
+        if kind == "desktop" and evidence.get("arch") != "x64":
+            raise RuntimeError("Smoke evidence architecture mismatch")
         if kind == "backend" and not evidence.get("frontend_served"):
             raise RuntimeError("Backend smoke evidence incomplete")
         shutil.copy2(source, destination / f"{platform}-{kind}-evidence.json")
