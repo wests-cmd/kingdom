@@ -33,12 +33,16 @@ Normal users do NOT need to install Python, Node.js, or npm. The packaged Kingdo
    - **Custom Profile:** Manually select individual active Knights (Planner, Coder, Researcher, Memory, Security) and toggle the Command Center UI on/off.
 4. **Profile Persistence:** Your setup choice is stored securely in per-user data (`<userData>/local_profile.json`).
 
-| Platform | Package Format | Status | Build Artifact |
+Published downloads and verification files are listed on the [v1.0.0 release](https://github.com/wests-cmd/kingdom/releases/tag/v1.0.0). A configured package target alone does not establish availability; publication requires the native release checks to pass.
+
+| Platform | Package Format | Release target | Build Artifact |
 |---|---|---|---|
-| **Linux** | `AppImage` | 🟢 Available | `Kingdom-1.0.0.AppImage` |
-| **Linux** | `DEB` | 🟢 Available | `kingdom-desktop_1.0.0_amd64.deb` |
-| **Windows** | `NSIS` | 🟢 Supported | `Kingdom-Setup-1.0.0.exe` |
-| **macOS** | `DMG` | 🟢 Supported | `Kingdom-1.0.0.dmg` |
+| **Linux** | `AppImage` | x86_64 | `Kingdom-1.0.0.AppImage` |
+| **Linux** | `DEB` | amd64 | `kingdom-desktop_1.0.0_amd64.deb` |
+| **Windows** | `NSIS` | x86_64, unsigned | `Kingdom-Setup-1.0.0.exe` |
+| **macOS** | `DMG` | Intel x86_64, unsigned and not notarized | `Kingdom-1.0.0.dmg` |
+
+Each installer includes a backend built on its own target operating system. Verify downloads against `SHA256SUMS` and `release-manifest.json`. The release also includes native startup evidence and dashboard screenshots. Native Apple Silicon, Windows ARM64, and Linux ARM64 installers are not supplied in v1.0.0. Signing and notarization are not claimed; OS trust prompts may apply.
 
 ---
 

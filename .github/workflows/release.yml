@@ -1,261 +1,145 @@
-name: Kingdom Automated Production Release Pipeline (v1TAS)
+name: Verified native release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  pull_request:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      release_title:
-        description: 'Release title'
-        required: true
-        default: 'Kingdom v1TAS'
-      release_notes:
-        description: 'Release notes'
-        required: true
-        default: 'Kingdom v1TAS — first stable production release.'
-      release_channel:
-        description: 'Release channel'
-        required: true
-        type: choice
-        options:
-          - stable
-          - rc
-          - beta
-        default: stable
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - '.github/workflows/release.yml'
+      - 'scripts/*release*'
+      - 'scripts/*native*'
+      - 'scripts/desktop_backend.py'
+      - 'requirements-release.txt'
 
 permissions:
-  contents: write
-  packages: write
-  security-events: read
+  contents: read
+
+concurrency:
+  group: native-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  validate-and-test:
-    name: Validate Version & Execute Production Test Suite
-    runs-on: ubuntu-latest
-    outputs:
-      canonical_version: ${{ steps.version.outputs.version }}
-      git_tag: ${{ steps.version.outputs.tag }}
-
+  native-build:
+    name: Verify ${{ matrix.platform }} x86_64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            backend: desktop/bin/kingdom-backend
+            app: desktop/dist/linux-unpacked/kingdom-desktop
+          - os: windows-latest
+            platform: windows
+            backend: desktop/bin/kingdom-backend.exe
+            app: desktop/dist/win-unpacked/Kingdom.exe
+          - os: macos-15-intel
+            platform: macos
+            backend: desktop/bin/kingdom-backend
+            app: desktop/dist/mac/Kingdom.app/Contents/MacOS/Kingdom
+    defaults:
+      run:
+        shell: bash
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Install Python Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pyinstaller
-
-      - name: Resolve & Validate Canonical Version
-        id: version
-        run: |
-          VERSION=$(python3 scripts/validate_version.py --print-version)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            TAG_NAME="${GITHUB_REF#refs/tags/}"
-          else
-            TAG_NAME="v${VERSION}"
-          fi
-          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
-
-          python3 scripts/validate_version.py --tag "$TAG_NAME"
-
-      - name: Run Full Pytest Test Suite
-        run: |
-          python -m pytest --maxfail=1
-
-  build-backend-and-desktop:
-    name: Build Production Backend Binary & Desktop Package
-    needs: validate-and-test
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js 24
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Install test and build dependencies
+        run: |
+          python -m venv .release-venv
+          if [ '${{ matrix.platform }}' = windows ]; then
+            VENV_BIN="$PWD/.release-venv/Scripts"
+            cygpath -w "$VENV_BIN" >> "$GITHUB_PATH"
+          else
+            VENV_BIN="$PWD/.release-venv/bin"
+            echo "$VENV_BIN" >> "$GITHUB_PATH"
+          fi
+          "$VENV_BIN/python" -m pip install --upgrade pip
+          "$VENV_BIN/python" -m pip install --only-binary=cryptography -r requirements-release.txt
+      - name: Validate version and run tests
+        run: |
+          python scripts/validate_version.py --tag v1.0.0
+          python -m pytest --maxfail=1
+      - name: Build frontend
+        run: |
+          npm --prefix frontend ci
+          npm --prefix frontend audit --audit-level=high
+          npm --prefix frontend run build
+      - name: Build native frozen backend
+        run: python scripts/build_native_backend.py
+      - name: Exercise native backend from clean directory
+        run: python scripts/smoke_native_backend.py '${{ matrix.backend }}' evidence/backend.json
+      - name: Package native desktop installers
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npm --prefix desktop ci
+          npm --prefix desktop audit --audit-level=high
+          npm --prefix desktop run build -- --x64 --publish never
+      - name: Exercise actual native installer setup and dashboard
+        run: python scripts/smoke_native_installer.py '${{ matrix.platform }}'
+      - name: Stage required installers, hashes, and evidence
+        run: python scripts/release_artifacts.py stage --platform '${{ matrix.platform }}' --version 1.0.0 --commit '${{ github.sha }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kingdom-verified-${{ matrix.platform }}
+          path: release_staging/
+          if-no-files-found: error
+          retention-days: 30
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+  publish:
+    name: Publish verified v1.0.0
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/tags/v1.0.0')
+    needs: native-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Install Build Dependencies
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: kingdom-verified-*
+          merge-multiple: true
+          path: release_staging
+      - name: Independently verify downloaded build artifacts
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-
-      - name: Compile Standalone Backend Binary
-        run: |
-          pyinstaller --onefile --name kingdom-backend --distpath desktop/bin backend/main.py
-          chmod +x desktop/bin/kingdom-backend
-
-      - name: Smoke Test Backend Binary
-        run: |
-          ./desktop/bin/kingdom-backend --help || true
-          test -f desktop/bin/kingdom-backend
-          test -s desktop/bin/kingdom-backend
-
-      - name: Build Frontend Production Static Assets
-        run: |
-          cd frontend
-          npm ci
-          npm run build
-          cd ..
-
-      - name: Package Desktop Application (AppImage & DEB)
-        run: |
-          cd desktop
-          npm ci
-
-          # Retry loop for Electron binary download resilience
-          n=0
-          until [ $n -ge 3 ]
-          do
-             npm run build && break
-             n=$[$n+1]
-             echo "Desktop build attempt $n failed. Retrying..."
-             sleep 5
-          done
-          cd ..
-
-      - name: Assemble Staging Release Directory & Artifacts
-        run: |
-          VERSION="${{ needs.validate-and-test.outputs.canonical_version }}"
-          mkdir -p release_staging
-
-          # Copy desktop artifacts if generated
-          if [ -d "desktop/dist" ]; then
-            cp desktop/dist/*.AppImage release_staging/ 2>/dev/null || true
-            cp desktop/dist/*.deb release_staging/ 2>/dev/null || true
-          fi
-
-          # Copy standalone backend binary
-          cp desktop/bin/kingdom-backend release_staging/kingdom-backend-linux-x86_64
-
+          python scripts/release_artifacts.py verify --version 1.0.0 --commit '${{ github.sha }}'
           cd release_staging
-
-          # Generate release-manifest.json
-          python3 -c "
-          import os, json, glob, hashlib
-
-          version = '$VERSION'
-          commit = '${{ github.sha }}'
-          tag = '${{ needs.validate-and-test.outputs.git_tag }}'
-          release_name = '${{ github.event.inputs.release_title || \"Kingdom v1TAS\" }}'
-
-          artifacts = []
-          for fname in sorted(os.listdir('.')):
-              if fname in ['SHA256SUMS', 'release-manifest.json']:
-                  continue
-              fpath = os.path.join('.', fname)
-              size = os.path.getsize(fpath)
-              sha = hashlib.sha256(open(fpath, 'rb').read()).hexdigest()
-              artifacts.append({
-                  'filename': fname,
-                  'size': size,
-                  'sha256': sha,
-                  'platform': 'linux',
-                  'arch': 'x86_64'
-              })
-
-          manifest = {
-              'product': 'Kingdom',
-              'version': version,
-              'release_name': release_name,
-              'tag': tag,
-              'commit': commit,
-              'release_channel': '${{ github.event.inputs.release_channel || \"stable\" }}',
-              'build_timestamp': '${{ github.event.head_commit.timestamp || \"\" }}',
-              'artifacts': artifacts,
-              'compatibility': {
-                  'kingdom_api_version': 'v1',
-                  'centipede_protocol_version': 'v1',
-                  'schema_version': '1.0'
-              }
-          }
-
-          with open('release-manifest.json', 'w') as f:
-              json.dump(manifest, f, indent=2)
-          "
-
-          # Generate SHA256SUMS for all binaries and manifest
-          sha256sum * > SHA256SUMS
-
-          cat release-manifest.json
-          cat SHA256SUMS
-          cd ..
-
-      - name: Validate Release Artifacts & Manifest Integrity
-        run: |
-          VERSION="${{ needs.validate-and-test.outputs.canonical_version }}"
-          python3 scripts/validate_version.py --manifest release_staging/release-manifest.json
-
-          cd release_staging
-          # Verify checksums excluding SHA256SUMS itself
-          grep -v "SHA256SUMS" SHA256SUMS | sha256sum -c -
-          cd ..
-
-      - name: Upload Release Staging Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: kingdom-release-${{ needs.validate-and-test.outputs.canonical_version }}
-          path: release_staging/
-
-  publish-github-release:
-    name: Publish Official GitHub Release
-    needs: [validate-and-test, build-backend-and-desktop]
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Download Build Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: kingdom-release-${{ needs.validate-and-test.outputs.canonical_version }}
-          path: release_staging/
-
-      - name: Create or Update GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.validate-and-test.outputs.git_tag }}
-          target_commitish: ${{ github.sha }}
-          name: ${{ github.event.inputs.release_title || 'Kingdom v1TAS' }} (v${{ needs.validate-and-test.outputs.canonical_version }})
-          body: |
-            # ${{ github.event.inputs.release_title || 'Kingdom v1TAS' }} (v${{ needs.validate-and-test.outputs.canonical_version }}) Official Production Release
-
-            Commit: `${{ github.sha }}`
-            Release Channel: `${{ github.event.inputs.release_channel || 'stable' }}`
-
-            ## Release Notes
-            ${{ github.event.inputs.release_notes || 'Kingdom v1TAS — first stable production release.' }}
-
-            ## Release Highlights
-            - First Stable Production Release (`Kingdom v1TAS` / Semantic Version `1.0.0`)
-            - Zero-Trust Distributed AI Runtime & Orchestration Infrastructure
-            - Standalone Bundled PyInstaller Backend (`kingdom-backend-linux-x86_64`)
-            - Native Desktop Distribution Artifacts (AppImage & DEB)
-            - Centipede OS Compatibility Protocol v1
-
-            ## Cryptographic Verification
-            Please verify artifact checksums using `SHA256SUMS` included in this release package.
-          files: release_staging/*
-          draft: false
-          prerelease: false
+          sha256sum -c SHA256SUMS
+      - name: Create draft, verify uploaded bytes, and publish
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ github.sha }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if gh release view v1.0.0 --json isDraft --jq .isDraft > existing-release.txt 2>/dev/null; then
+            if [ "$(cat existing-release.txt)" != true ]; then
+              echo 'A published v1.0.0 already exists; refusing to replace stable assets.'
+              exit 1
+            fi
+            gh release view v1.0.0 --json targetCommitish --jq .targetCommitish | grep -Fx "$RELEASE_COMMIT"
+            gh release upload v1.0.0 release_staging/* --clobber
+          else
+            gh release create v1.0.0 release_staging/* --target "$RELEASE_COMMIT" --title 'Kingdom v1TAS (v1.0.0)' --notes-file release-notes.md --draft
+          fi
+          gh release download v1.0.0 --dir release_download
+          diff -u release_staging/SHA256SUMS release_download/SHA256SUMS
+          cd release_download
+          sha256sum -c SHA256SUMS
+          cd ..
+          gh api 'repos/'"$GH_REPO"'/git/ref/tags/v1.0.0' --jq .object.sha | grep -Fx "$RELEASE_COMMIT"
+          gh release edit v1.0.0 --draft=false --prerelease=false --latest --notes-file release-notes.md
+          gh release view v1.0.0 --json url,isDraft,assets

@@ -12,9 +12,14 @@ const { getHardwareReport, suggestProfile } = require('./hardware');
 let mainWindow = null;
 let setupWindow = null;
 
+const smokeReport = process.env.GITHUB_ACTIONS === 'true' && process.env.KINGDOM_RELEASE_SMOKE_REPORT;
+if (app && smokeReport) app.setPath('userData', path.join(path.dirname(smokeReport), 'user-data'));
+
 const VALID_KNIGHTS = new Set(['planner', 'coder', 'researcher', 'memory', 'security']);
 
-const CATALOG_PATH = path.join(__dirname, '..', 'configs', 'install_profiles.json');
+const CATALOG_PATH = app && app.isPackaged
+  ? path.join(process.resourcesPath, 'configs', 'install_profiles.json')
+  : path.join(__dirname, '..', 'configs', 'install_profiles.json');
 const PROFILE_PATH = app ? path.join(app.getPath('userData'), 'local_profile.json') : path.join(__dirname, '..', 'configs', 'local_profile.json');
 
 function validateProfile(profile) {
@@ -130,12 +135,7 @@ async function createWindow() {
 
   const isReady = await waitForBackendReady();
   if (isReady) {
-    const staticIndex = path.join(__dirname, '..', 'frontend', 'dist', 'index.html');
-    if (fs.existsSync(staticIndex)) {
-      mainWindow.loadFile(staticIndex);
-    } else {
-      mainWindow.loadURL('http://localhost:8000');
-    }
+    await mainWindow.loadURL(`http://127.0.0.1:${process.env.PORT || 8000}`);
   } else {
     mainWindow.loadFile(path.join(__dirname, 'error.html'));
   }
@@ -167,6 +167,7 @@ function createSetupWindow() {
 }
 
 if (app) {
+  // A release runner uses a disposable profile and exercises the actual packaged app.
   app.whenReady().then(() => {
     setupIpcHandlers();
 
@@ -186,6 +187,20 @@ if (app) {
       createSetupWindow();
     }
 
+    if (smokeReport) {
+      runReleaseSmoke(smokeReport).then(async () => {
+        if (mainWindow) mainWindow.destroy();
+        await stopBackend();
+        app.exit(0);
+      }).catch(async (error) => {
+        console.error(error);
+        if (mainWindow) mainWindow.destroy();
+        if (setupWindow) setupWindow.destroy();
+        await stopBackend();
+        app.exit(1);
+      });
+    }
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0 && !setupWindow) {
         const activeProfile = loadSavedProfile();
@@ -202,9 +217,63 @@ if (app) {
   });
 
   app.on('window-all-closed', () => {
-    stopBackend();
+    if (smokeReport) return;
+    const activeProfile = loadSavedProfile();
+    if (activeProfile && !activeProfile.gui) return;
     if (process.platform !== 'darwin') app.quit();
   });
+  let quitting = false;
+  app.on('before-quit', (event) => {
+    if (quitting) return;
+    event.preventDefault();
+    quitting = true;
+    stopBackend().then(() => app.quit());
+  });
+}
+
+async function runReleaseSmoke(reportPath) {
+  const deadline = Date.now() + 90000;
+  async function until(check, description) {
+    while (Date.now() < deadline) {
+      if (await check()) return;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    throw new Error(`Release smoke timed out: ${description}`);
+  }
+  await until(() => setupWindow && !setupWindow.webContents.isLoading(), 'setup wizard');
+  const report = await setupWindow.webContents.executeJavaScript(`(async () => {
+    const hardware = await window.kingdomDesktop.getHardwareReport();
+    const catalog = await window.kingdomDesktop.getInstallCatalog();
+    if (!catalog || !catalog.profiles.developer) throw new Error('Missing bundled catalog');
+    if (!hardware.cpu_cores) throw new Error('Hardware inspection failed');
+    return {hardware, catalogLoaded: true, wizardLoaded: document.title};
+  })()`);
+  await setupWindow.webContents.executeJavaScript(`void window.kingdomDesktop.saveProfile({
+    name: 'Developer', gui: true, knights: ['planner', 'coder', 'security']
+  }).catch(console.error)`);
+  await until(async () => mainWindow && !mainWindow.webContents.isLoading()
+    && mainWindow.webContents.getURL().startsWith('http://127.0.0.1')
+    && await mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('#root')?.children.length)"), 'rendered dashboard');
+  const apiVersion = await mainWindow.webContents.executeJavaScript("fetch('/api/system/version').then(r => r.json())");
+  if (apiVersion.version !== '1.0.0') throw new Error('Packaged backend version mismatch');
+  await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('.badge-online')) && document.body.textContent.includes('Last synchronized at')"), 'realtime connection and dashboard data');
+  await mainWindow.webContents.executeJavaScript("fetch('/start', {method: 'POST'}).then(r => {if (!r.ok) throw new Error('Runtime start failed'); return r.json()})");
+  await until(() => mainWindow.webContents.executeJavaScript("fetch('/status').then(r => r.json()).then(s => s.running && s.scheduler_running)"), 'running scheduler');
+  await until(() => mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.card-value')).some(e => e.textContent === 'ACTIVE')"), 'live runtime dashboard');
+  report.dashboardLoaded = true;
+  report.profilePersisted = Boolean(loadSavedProfile());
+  report.version = apiVersion.version;
+  report.realtimeConnected = true;
+  report.runtimeStarted = true;
+  report.platform = process.platform;
+  report.arch = process.arch;
+  fs.mkdirSync(path.dirname(reportPath), {recursive: true});
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+  fs.writeFileSync(reportPath.replace(/\.json$/, '.png'), (await mainWindow.webContents.capturePage()).toPNG());
+  await mainWindow.webContents.executeJavaScript("fetch('/stop', {method: 'POST'}).then(r => {if (!r.ok) throw new Error('Runtime stop failed'); return r.json()})");
+  await until(() => mainWindow.webContents.executeJavaScript("fetch('/status').then(r => r.json()).then(s => !s.running && !s.scheduler_running)"), 'stopped scheduler');
+  report.runtimeStopped = true;
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 }
 
 module.exports = {

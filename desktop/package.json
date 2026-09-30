@@ -14,10 +14,9 @@
     "build": "electron-builder",
     "build:dir": "electron-builder --dir"
   },
-  "dependencies": {},
   "devDependencies": {
-    "electron": "^31.0.0",
-    "electron-builder": "^24.13.3"
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
   },
   "build": {
     "appId": "com.wests-cmd.kingdom",
@@ -28,12 +27,15 @@
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "artifactName": "Kingdom-Setup-${version}.${ext}"
     },
     "mac": {
       "target": [
         "dmg"
-      ]
+      ],
+      "artifactName": "Kingdom-${version}.${ext}",
+      "identity": null
     },
     "linux": {
       "target": [
@@ -50,6 +52,10 @@
       {
         "from": "../frontend/dist",
         "to": "frontend/dist"
+      },
+      {
+        "from": "../configs/install_profiles.json",
+        "to": "configs/install_profiles.json"
       }
     ]
   }
