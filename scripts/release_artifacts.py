@@ -34,8 +34,10 @@ def stage(platform, version, commit):
             raise RuntimeError("Smoke evidence platform mismatch")
         if evidence.get("version") != version:
             raise RuntimeError("Smoke evidence version mismatch")
-        if kind == "desktop" and not all(evidence.get(key) for key in ("dashboardLoaded", "profilePersisted", "catalogLoaded", "realtimeConnected", "runtimeStarted", "runtimeStopped")):
+        if kind == "desktop" and not all(evidence.get(key) for key in ("dashboardLoaded", "profilePersisted", "catalogLoaded", "realtimeConnected", "runtimeStarted", "runtimeStopped", "taskExecuted")):
             raise RuntimeError("Desktop smoke evidence incomplete")
+        if kind == "desktop" and (evidence["taskExecuted"].get("words") != 3 or evidence["taskExecuted"].get("verification") != "VERIFIED"):
+            raise RuntimeError("Native task outcome evidence incomplete")
         if kind == "desktop" and evidence.get("arch") != "x64":
             raise RuntimeError("Smoke evidence architecture mismatch")
         if kind == "backend" and not evidence.get("frontend_served"):
@@ -84,7 +86,9 @@ Source commit: `{commit}`
 
 Verified native x86_64 installers: Linux AppImage and DEB, Windows NSIS, macOS Intel DMG. Each platform builds its own bundled backend; Python and Node.js are not required on the user's machine.
 
-Every build passes the backend test suite, a frozen backend startup/readiness and frontend check, and a packaged desktop first-run setup/profile persistence/dashboard check. Platform evidence and screenshots are attached. These checks establish the documented release gate; they are not exhaustive hardware compatibility testing.
+Every build passes the backend test suite, a frozen backend startup/readiness and frontend check, and a packaged desktop first-run setup/profile persistence/dashboard check that submits a real text-analysis task through the UI and verifies its result. Platform evidence and screenshots are attached. These checks establish the documented release gate; they are not exhaustive hardware compatibility testing.
+
+Administrative APIs and live connections require owner authentication. Worker results are signed and bound to exact active leases. Approvals persist, expire, and can be consumed only once for the exact authorized operation. Supported tasks execute bounded text/Python analysis; AI text generation requires a configured model provider and never proves external actions occurred. Broker connection, live market data, and trade execution are unavailable. Desktop upgrades use these verified installers; automatic in-place desktop upgrades are not provided.
 
 Windows installers are unsigned. The macOS Intel installer is unsigned and not notarized; a native Apple Silicon installer is not supplied. OS trust prompts may apply. No signing or notarization claim is made.
 
