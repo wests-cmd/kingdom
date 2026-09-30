@@ -19,7 +19,7 @@ permissions:
 
 concurrency:
   group: native-release-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   native-build:
@@ -98,7 +98,7 @@ jobs:
 
   publish:
     name: Publish verified v1.0.0
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/tags/v1.0.0')
+    if: false # Publication paused until the current Intel cryptography build passes.
     needs: native-build
     runs-on: ubuntu-latest
     permissions:
