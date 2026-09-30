@@ -5,6 +5,8 @@ import subprocess
 import sys
 import tempfile
 import hashlib
+import socket
+import time
 
 
 def sha(path):
@@ -44,6 +46,15 @@ with tempfile.TemporaryDirectory(prefix="kingdom-install-") as temporary:
             assert sha(destination / "squashfs-root/resources/bin/kingdom-backend") == sha(root / "desktop/bin/kingdom-backend")
             for relative in ("resources/app.asar", "resources/bin/kingdom-backend"):
                 assert sha(destination / "squashfs-root" / relative) == sha(unpacked / "opt/Kingdom" / relative)
+        # A successful UI check must also leave no serving backend behind.
+        with socket.socket() as connection:
+            connection.settimeout(2)
+            assert connection.connect_ex(("127.0.0.1", 8000)) != 0, "Orphaned backend after desktop shutdown"
     finally:
         if mounted:
-            subprocess.run(["hdiutil", "detach", str(destination)], check=True, timeout=60)
+            for attempt in range(3):
+                detached = subprocess.run(["hdiutil", "detach", str(destination)], timeout=60)
+                if detached.returncode == 0:
+                    break
+                time.sleep(2)
+            detached.check_returncode()

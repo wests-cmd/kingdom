@@ -19,7 +19,7 @@ def main():
         os.chdir(runtime)
     from backend.main import app
     import uvicorn
-    uvicorn.run(app, host=args.host, port=args.port)
+    uvicorn.run(app, host=args.host, port=args.port, timeout_graceful_shutdown=3)
 
 
 if __name__ == "__main__":

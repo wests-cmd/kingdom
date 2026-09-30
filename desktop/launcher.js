@@ -98,6 +98,7 @@ function startBackend(profilePath) {
       cwd: runtimeDir,
       env,
       windowsHide: true,
+      detached: process.platform !== 'win32',
       stdio: 'inherit'
     });
   } else if (isPackaged) {
@@ -110,6 +111,7 @@ function startBackend(profilePath) {
     backendProcess = spawn(pythonCmd, ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)], {
       cwd: path.resolve(__dirname, '..'),
       env,
+      detached: process.platform !== 'win32',
       stdio: 'inherit'
     });
   }
@@ -129,15 +131,27 @@ function stopBackend() {
     const child = backendProcess;
     backendProcess = null;
     console.log('[Kingdom Desktop Launcher] Stopping Kingdom backend process...');
-    if (process.platform === 'win32' && child.pid) {
-      spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {windowsHide: true});
-    } else {
-      child.kill('SIGTERM');
-    }
+    const signalTree = (signal) => {
+      if (!child.pid) return;
+      if (process.platform === 'win32') {
+        spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {windowsHide: true});
+      } else {
+        // PyInstaller's one-file bootloader owns a second server process.
+        // Signal the dedicated group so neither process survives app shutdown.
+        try { process.kill(-child.pid, signal); } catch (error) {
+          if (error.code !== 'ESRCH') console.error('Backend shutdown failed:', error);
+        }
+      }
+    };
+    signalTree('SIGTERM');
     return new Promise((resolve) => {
-      if (child.exitCode !== null) return resolve();
-      const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(); }, 5000);
-      child.once('exit', () => { clearTimeout(timer); resolve(); });
+      const finish = () => {
+        if (process.platform !== 'win32') signalTree('SIGKILL');
+        resolve();
+      };
+      if (child.exitCode !== null || child.signalCode !== null) return finish();
+      const timer = setTimeout(finish, 5000);
+      child.once('exit', () => { clearTimeout(timer); finish(); });
     });
   }
   return Promise.resolve();
