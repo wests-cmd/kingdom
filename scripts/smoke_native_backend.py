@@ -47,7 +47,12 @@ with tempfile.TemporaryDirectory(prefix="kingdom-native-") as directory:
                                          "version": version["version"], "frontend_served": True,
                                          "writable_user_data": True}, indent=2))
         finally:
-            process.terminate()
+            if sys.platform == "win32" and process.poll() is None:
+                # A PyInstaller onefile bootloader owns a second process on Windows.
+                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            elif process.poll() is None:
+                process.terminate()
             try:
                 process.wait(timeout=15)
             except subprocess.TimeoutExpired:

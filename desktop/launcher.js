@@ -3,7 +3,7 @@
  * Manages local Kingdom backend startup, readiness polling, and desktop webview/window launch.
  */
 
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
@@ -126,10 +126,21 @@ function startBackend(profilePath) {
 
 function stopBackend() {
   if (backendProcess) {
-    console.log('[Kingdom Desktop Launcher] Stopping Kingdom backend process...');
-    backendProcess.kill('SIGTERM');
+    const child = backendProcess;
     backendProcess = null;
+    console.log('[Kingdom Desktop Launcher] Stopping Kingdom backend process...');
+    if (process.platform === 'win32' && child.pid) {
+      spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {windowsHide: true});
+    } else {
+      child.kill('SIGTERM');
+    }
+    return new Promise((resolve) => {
+      if (child.exitCode !== null) return resolve();
+      const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(); }, 5000);
+      child.once('exit', () => { clearTimeout(timer); resolve(); });
+    });
   }
+  return Promise.resolve();
 }
 
 async function launchDesktop() {

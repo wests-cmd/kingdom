@@ -61,6 +61,7 @@ jobs:
       - name: Build frontend
         run: |
           npm --prefix frontend ci
+          npm --prefix frontend audit --audit-level=high
           npm --prefix frontend run build
       - name: Build native frozen backend
         run: python scripts/build_native_backend.py
@@ -71,16 +72,10 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: |
           npm --prefix desktop ci
+          npm --prefix desktop audit --audit-level=high
           npm --prefix desktop run build -- --x64 --publish never
-      - name: Exercise packaged desktop setup and dashboard
-        env:
-          KINGDOM_RELEASE_SMOKE_REPORT: ${{ github.workspace }}/evidence/desktop.json
-        run: |
-          if [ '${{ matrix.platform }}' = linux ]; then
-            xvfb-run -a '${{ matrix.app }}' --no-sandbox
-          else
-            '${{ matrix.app }}'
-          fi
+      - name: Exercise actual native installer setup and dashboard
+        run: python scripts/smoke_native_installer.py '${{ matrix.platform }}'
       - name: Stage required installers, hashes, and evidence
         run: python scripts/release_artifacts.py stage --platform '${{ matrix.platform }}' --version 1.0.0 --commit '${{ github.sha }}'
       - uses: actions/upload-artifact@v4

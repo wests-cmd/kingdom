@@ -188,9 +188,15 @@ if (app) {
     }
 
     if (smokeReport) {
-      runReleaseSmoke(smokeReport).then(() => { stopBackend(); app.exit(0); }).catch((error) => {
+      runReleaseSmoke(smokeReport).then(async () => {
+        if (mainWindow) mainWindow.destroy();
+        await stopBackend();
+        app.exit(0);
+      }).catch(async (error) => {
         console.error(error);
-        stopBackend();
+        if (mainWindow) mainWindow.destroy();
+        if (setupWindow) setupWindow.destroy();
+        await stopBackend();
         app.exit(1);
       });
     }
@@ -211,8 +217,17 @@ if (app) {
   });
 
   app.on('window-all-closed', () => {
-    stopBackend();
+    if (smokeReport) return;
+    const activeProfile = loadSavedProfile();
+    if (activeProfile && !activeProfile.gui) return;
     if (process.platform !== 'darwin') app.quit();
+  });
+  let quitting = false;
+  app.on('before-quit', (event) => {
+    if (quitting) return;
+    event.preventDefault();
+    quitting = true;
+    stopBackend().then(() => app.quit());
   });
 }
 
