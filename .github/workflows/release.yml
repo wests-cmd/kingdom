@@ -120,7 +120,7 @@ jobs:
 
   publish:
     name: Publish verified v1.0.0
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/tags/v1.0.0')
+    if: false # Stable certification is held until runtime/security blockers are resolved.
     needs: native-build
     runs-on: ubuntu-latest
     permissions:
