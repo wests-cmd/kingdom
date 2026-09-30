@@ -64,7 +64,29 @@ jobs:
             echo "$VENV_BIN" >> "$GITHUB_PATH"
           fi
           "$VENV_BIN/python" -m pip install --upgrade pip
-          "$VENV_BIN/python" -m pip install --only-binary=cryptography -r requirements-release.txt
+          if [ '${{ matrix.platform }}' = macos ]; then
+            # Current upstream wheels omit Intel macOS. Build the patched version
+            # with a pinned static OpenSSL to avoid frozen dylib collisions.
+            curl --fail --location --retry 3 -o openssl.tar.gz https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz
+            echo '603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a  openssl.tar.gz' | shasum -a 256 -c -
+            tar xzf openssl.tar.gz
+            cd openssl-3.5.9
+            ./Configure darwin64-x86_64-cc no-shared no-tests --prefix="$GITHUB_WORKSPACE/.release-openssl"
+            make -j3
+            make install_sw
+            cd "$GITHUB_WORKSPACE"
+            OPENSSL_STATIC=1 OPENSSL_DIR="$GITHUB_WORKSPACE/.release-openssl" "$VENV_BIN/python" -m pip install --no-cache-dir --no-binary=cryptography -r requirements-release.txt
+            CRYPTO_LIBRARY=$("$VENV_BIN/python" -c 'import cryptography.hazmat.bindings._rust as r; print(r.__file__)')
+            otool -L "$CRYPTO_LIBRARY" | tee cryptography-linkage.txt
+            if grep -E 'lib(ssl|crypto).*dylib' cryptography-linkage.txt; then
+              echo 'Cryptography must not depend on external OpenSSL dylibs.'
+              exit 1
+            fi
+          else
+            "$VENV_BIN/python" -m pip install --only-binary=cryptography -r requirements-release.txt
+          fi
+      - name: Audit installed Python dependencies
+        run: python scripts/audit_release_dependencies.py
       - name: Validate version and run tests
         run: |
           python scripts/validate_version.py --tag v1.0.0
@@ -98,7 +120,7 @@ jobs:
 
   publish:
     name: Publish verified v1.0.0
-    if: false # Publication paused until the current Intel cryptography build passes.
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/tags/v1.0.0')
     needs: native-build
     runs-on: ubuntu-latest
     permissions:
