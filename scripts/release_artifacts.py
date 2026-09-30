@@ -34,7 +34,7 @@ def stage(platform, version, commit):
             raise RuntimeError("Smoke evidence platform mismatch")
         if evidence.get("version") != version:
             raise RuntimeError("Smoke evidence version mismatch")
-        if kind == "desktop" and not all(evidence.get(key) for key in ("dashboardLoaded", "profilePersisted", "catalogLoaded")):
+        if kind == "desktop" and not all(evidence.get(key) for key in ("dashboardLoaded", "profilePersisted", "catalogLoaded", "realtimeConnected", "runtimeStarted", "runtimeStopped")):
             raise RuntimeError("Desktop smoke evidence incomplete")
         if kind == "desktop" and evidence.get("arch") != "x64":
             raise RuntimeError("Smoke evidence architecture mismatch")
