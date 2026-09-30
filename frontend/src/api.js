@@ -1,7 +1,15 @@
 import axios from "axios"
+import { getAccessCode } from "./session"
 
 const api = axios.create({
-  baseURL: "http://localhost:8000"
+  baseURL: import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:8000" : window.location.origin),
+  withCredentials: true
+})
+api.interceptors.request.use(config => {
+  const code = getAccessCode()
+  if (code) config.headers.Authorization = `Bearer ${code}`
+  config.headers["X-Kingdom-Request"] = "1"
+  return config
 })
 
 export async function fetchSkills() {

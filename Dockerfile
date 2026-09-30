@@ -1,4 +1,4 @@
-# Multi-stage Docker build for Kingdom v40.2.0 Production Release
+# Multi-stage Docker build for Kingdom v1.0.0 production runtime
 
 # Stage 1: Build Production Frontend Static Assets
 FROM node:24-alpine AS frontend-builder

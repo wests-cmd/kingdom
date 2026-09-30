@@ -2,7 +2,8 @@ import os
 import time
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from backend.security.http_auth import owner_auth, require_owner
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -25,7 +26,7 @@ from backend.cluster.heartbeat import heartbeat_manager
 from backend.cluster.audit import audit_logger
 from backend.cluster.mobile_pairing import mobile_pairing_manager
 from backend.cluster.transport import RPCSecureTransport, RPCMessage
-from backend.cluster.task_leasing import TaskLeaseManager
+from backend.cluster.task_leasing import TaskLeaseManager, task_lease_manager
 from backend.memory.ingestion import knowledge_ingestor
 from backend.memory.knowledge_domains import knowledge_domain_manager
 from backend.skills.learning_engine import skill_learning_engine
@@ -33,10 +34,9 @@ from backend.integrations.financial import financial_engine
 from backend.storage.db import db
 from backend.state import STATE
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_owner)])
 engine = RuntimeEngine()
 zero_trust = engine.security
-task_lease_manager = TaskLeaseManager()
 engine.lease_manager = task_lease_manager
 
 lifecycle_manager = SkillLifecycleManager(
@@ -53,6 +53,13 @@ learning_runner = LearningExperimentRunner(learning_collector, lifecycle_manager
 
 # Attach skills_manager to runtime engine for MCP server discovery
 engine.skills_manager = lifecycle_manager
+
+@router.post("/auth/session")
+def establish_owner_session(request: Request, response: Response):
+    response.set_cookie("kingdom_session", owner_auth.token, httponly=True,
+                        samesite="strict", secure=request.url.scheme == "https", path="/")
+    return {"identity": "owner", "identity_type": "human_user"}
+
 
 # Request Models
 class TaskRequest(BaseModel):
@@ -76,7 +83,7 @@ class MapRequest(BaseModel):
     graph: dict[str, Any]
 
 class SecurityAuthorizeRequest(BaseModel):
-    actor_id: str = "system"
+    actor_id: str = "owner"
     capability: str
     operation: str
     prompt: str | None = None
@@ -88,7 +95,7 @@ class SecurityApprovalCreateRequest(BaseModel):
     capability: str
     operation: str
     reason: str = ""
-    requesting_actor: str = "system"
+    requesting_actor: str = "owner"
     risk_level: str = "HIGH"
     parameters: dict[str, Any] = Field(default_factory=dict)
 
@@ -438,8 +445,13 @@ def set_mode(request: ModeRequest):
 
 @router.post("/tasks", status_code=status.HTTP_201_CREATED)
 def create_task(request: TaskRequest):
+    if request.metadata.get("actor_id", "owner") != "owner" or request.metadata.get("actor", "owner") != "owner":
+        raise HTTPException(status_code=403, detail="Task actor must be the authenticated owner")
+    metadata = dict(request.metadata)
+    metadata["actor_id"] = "owner"
+    metadata["actor"] = "owner"
     try:
-        return engine.submit_task(request.prompt, request.metadata)
+        return engine.submit_task(request.prompt, metadata)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -462,30 +474,7 @@ class TaskResultRequest(BaseModel):
 
 @router.post("/tasks/{task_id}/result")
 def submit_task_result(task_id: str, request: TaskResultRequest):
-    task = engine.tasks.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    # Authenticate node state server-side
-    node = node_registry.get_node(request.executed_by)
-    if not node:
-        raise HTTPException(status_code=403, detail=f"Executing node '{request.executed_by}' is not registered.")
-
-    state_val = node.node_state
-    if state_val in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value, NodeState.PENDING_APPROVAL.value]:
-        raise HTTPException(status_code=403, detail=f"Executing node '{request.executed_by}' is in restricted state: {state_val}.")
-
-    # Directly mark specific task running if queued without popping unrelated tasks from queue
-    if task["status"] == "queued":
-        engine.tasks._tasks[task_id]["status"] = "running"
-        engine.tasks._tasks[task_id]["started_at"] = time.time()
-
-    try:
-        completed = engine.tasks.complete(task_id, result={"output": request.output, "executed_by": request.executed_by})
-        engine.events.publish("task.completed", {"task_id": task_id, "executed_by": request.executed_by})
-        return completed
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    raise HTTPException(status_code=410, detail="Unsigned results are disabled; submit an identity-bound signed task_result RPC with the active lease.")
 
 @router.post("/tasks/{task_id}/cancel")
 def cancel_task(task_id: str):
@@ -602,9 +591,11 @@ def install_skill(skill_id: str):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 @router.post("/skills/{skill_id}/activate")
-def activate_skill(skill_id: str, governance_approved: bool = True):
+def activate_skill(skill_id: str, approval_id: str | None = None):
+    if not approval_id or not engine.security.approvals.consume(approval_id, actor_id="owner", capability="system.admin", operation="activate_skill", parameters={"skill_id": skill_id}):
+        raise HTTPException(status_code=403, detail="An exact, unused human approval is required to activate this skill")
     try:
-        return lifecycle_manager.activate(skill_id, governance_approved=governance_approved).model_dump()
+        return lifecycle_manager.activate(skill_id, governance_approved=True).model_dump()
     except SkillLifecycleError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -666,6 +657,9 @@ def security_status():
     pending_approvals = engine.security.approvals.list_requests(status="pending")
     return {
         "enabled": True,
+        "zero_trust": True,
+        "deny_by_default": True,
+        "capabilities_count": len(ALL_CAPABILITIES),
         "mode": "zero_trust",
         "registered_nodes": len(engine.security.nodes.list_nodes()),
         "pending_approvals_count": len(pending_approvals),
@@ -688,12 +682,14 @@ def security_permissions():
 
 @router.post("/security/authorize")
 def security_authorize(request: SecurityAuthorizeRequest):
+    if request.actor_id != "owner":
+        raise HTTPException(status_code=403, detail="Actor impersonation is forbidden")
     return engine.security.authorize(
-        actor_id=request.actor_id,
+        actor_id="owner",
         capability=request.capability,
         operation=request.operation,
         prompt=request.prompt,
-        token=request.token,
+        token=owner_auth.token,
         parameters=request.parameters,
         approval_id=request.approval_id,
     )
@@ -704,6 +700,8 @@ def security_list_approvals(approval_status: str | None = Query(default=None, al
 
 @router.post("/security/approvals", status_code=status.HTTP_201_CREATED)
 def security_create_approval(request: SecurityApprovalCreateRequest):
+    if request.requesting_actor != "owner":
+        raise HTTPException(status_code=403, detail="Approval actor must be the authenticated owner")
     return engine.security.approvals.create_request(
         capability=request.capability,
         operation=request.operation,
@@ -715,9 +713,12 @@ def security_create_approval(request: SecurityApprovalCreateRequest):
 
 @router.post("/security/approvals/{approval_id}/approve")
 def security_approve(approval_id: str, request: SecurityApprovalDecisionRequest | None = None):
-    approver = request.approver if request else "admin"
+    approver = "owner"
     try:
         req = engine.security.approvals.approve(approval_id, approver=approver)
+        for task in engine.tasks.list("WAITING_APPROVAL"):
+            if task.get("metadata", {}).get("approval_id") == approval_id:
+                engine.tasks.transition_task(task["id"], "queued")
         engine.security.audit.record(
             actor=approver,
             operation="approve",
@@ -734,7 +735,7 @@ def security_approve(approval_id: str, request: SecurityApprovalDecisionRequest 
 
 @router.post("/security/approvals/{approval_id}/deny")
 def security_deny(approval_id: str, request: SecurityApprovalDecisionRequest | None = None):
-    denier = request.approver if request else "admin"
+    denier = "owner"
     reason = request.reason if request else "Denied by administrator"
     try:
         req = engine.security.approvals.deny(approval_id, reason=reason, denier=denier)
@@ -779,6 +780,14 @@ def list_pending_nodes():
     nodes = node_registry.list_nodes(state=NodeState.PENDING_APPROVAL)
     return [n.to_dict() for n in nodes]
 
+@router.get("/nodes/{node_id}/status")
+def public_node_status(node_id: str):
+    node = node_registry.get_node(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    return {"node_state": node.node_state, "granted_capabilities": node.granted_capabilities}
+
+
 @router.get("/nodes/{node_id}")
 def get_cluster_node(node_id: str):
     node = node_registry.get_node(node_id)
@@ -799,6 +808,8 @@ def handle_cluster_rpc(request: RPCMessageRequest):
     sender_id = verified["sender_id"]
     msg_type = verified["msg_type"]
     payload = verified["payload"]
+    if payload.get("node_id", sender_id) != sender_id:
+        raise HTTPException(status_code=403, detail="RPC payload identity differs from authenticated sender")
 
     if msg_type == "heartbeat":
         res = heartbeat_manager.ping(sender_id)
@@ -810,32 +821,28 @@ def handle_cluster_rpc(request: RPCMessageRequest):
         for t in tasks:
             meta = t.get("metadata", {})
             assigned_k = t.get("assigned_knight") or meta.get("assigned_knight")
-            if assigned_k == sender_id or assigned_k is None:
+            is_remote = meta.get("execution_target") == "remote" or (assigned_k and assigned_k not in engine.swarm.registry._knights)
+            required_capability = meta.get("capability", "compute")
+            if is_remote and (assigned_k == sender_id or assigned_k is None) and capability_authorizer.is_capability_granted(sender_id, required_capability):
                 task_id = t["id"]
-                lease = task_lease_manager.issue_lease(
-                    task_id=task_id,
-                    assigned_node_id=sender_id,
-                    capability_scope=meta.get("capability", "compute")
-                )
-                engine.tasks.transition_task(
-                    task_id,
-                    new_status="leased",
-                    updates={
-                        "assigned_knight": sender_id,
-                        "lease_id": lease.lease_id,
-                        "fencing_token": lease.fencing_token,
-                        "started_at": time.time()
-                    }
-                )
-                t_copy = engine.tasks.get(task_id)
-                assigned_tasks.append(t_copy)
+                claimed = engine.tasks.claim_remote_atomically(task_id, sender_id, required_capability, task_lease_manager)
+                if claimed:
+                    assigned_tasks.append(claimed)
+                    break
         return {"status": "ok", "tasks": assigned_tasks}
 
     elif msg_type == "task_result":
         task_id = payload.get("task_id")
         executed_by = payload.get("executed_by") or sender_id
+        if executed_by != sender_id:
+            raise HTTPException(status_code=403, detail="Result identity differs from authenticated sender")
         fencing_token = payload.get("fencing_token", 1)
         output = payload.get("output")
+        task = engine.tasks.get(task_id)
+        if not task or task["status"].lower() != "leased" or payload.get("lease_id") != task.get("lease_id"):
+            raise HTTPException(status_code=403, detail="Result must refer to the exact active task lease")
+        if not capability_authorizer.is_capability_granted(sender_id, task.get("metadata", {}).get("capability", "compute")):
+            raise HTTPException(status_code=403, detail="Worker no longer holds the task capability")
 
         node = node_registry.get_node(executed_by)
         if not node:
@@ -850,7 +857,19 @@ def handle_cluster_rpc(request: RPCMessageRequest):
         except Exception as exc:
             raise HTTPException(status_code=403, detail=f"Task lease fencing error: {str(exc)}")
 
-        completed = engine.tasks.complete(task_id, result={"output": output, "executed_by": executed_by})
+        if payload.get("status") == "failed":
+            failed = engine.tasks.fail(task_id, "Remote operation failed: " + str(payload.get("error", "No verified outcome"))[:500])
+            task_lease_manager.revoke_lease(task_id)
+            engine.events.publish("task.failed", failed)
+            return {"status": "ok", "failed": failed}
+        from backend.runtime.execution import verify_request_result
+        try:
+            verification = verify_request_result(task, output, allow_local_model=False)
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail="Independent result verification failed") from exc
+        completed = engine.tasks.complete(task_id, result={"output": output, "executed_by": sender_id, "verification": verification})
+        task_lease_manager.revoke_lease(task_id)
+        engine.memory.record_task(completed)
         engine.events.publish("task.completed", {"task_id": task_id, "executed_by": executed_by})
         return {"status": "ok", "completed": completed}
 
@@ -1030,8 +1049,10 @@ def teach_new_skill(request: TeachSkillRequest):
     return res
 
 @router.post("/skills/{skill_id}/promote")
-def promote_learned_skill(skill_id: str, governance_approved: bool = True):
-    res = skill_learning_engine.test_and_promote_skill(skill_id, governance_approved=governance_approved)
+def promote_learned_skill(skill_id: str, approval_id: str | None = None):
+    if not approval_id or not engine.security.approvals.consume(approval_id, actor_id="owner", capability="system.admin", operation="promote_skill", parameters={"skill_id": skill_id}):
+        raise HTTPException(status_code=403, detail="An exact, unused human approval is required to promote this skill")
+    res = skill_learning_engine.test_and_promote_skill(skill_id, governance_approved=True)
     if not res.get("success"):
         raise HTTPException(status_code=400, detail=res.get("error"))
     return res

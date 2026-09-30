@@ -7,7 +7,7 @@ class TaskRepository:
     def __init__(self, database=None):
         self.db = database or db
 
-    def save(self, task):
+    def save(self, task, expected_version=None):
         task_id = task["id"]
         now = time.time()
         input_json = json.dumps(task.get("input", {}))
@@ -45,6 +45,7 @@ class TaskRepository:
                 fencing_token=excluded.fencing_token,
                 idempotency_key=excluded.idempotency_key,
                 updated_at=excluded.updated_at
+            WHERE ? IS NULL OR tasks.version = ?
             """, (
                 task_id,
                 task.get("execution_id"),
@@ -66,8 +67,10 @@ class TaskRepository:
                 task.get("fencing_token", 0),
                 task.get("idempotency_key"),
                 created_at_val,
-                now
+                now, expected_version, expected_version
             ))
+            if cursor.rowcount != 1:
+                raise ValueError("Task state changed concurrently; stale write rejected")
             conn.commit()
 
     def get(self, task_id):
@@ -82,12 +85,27 @@ class TaskRepository:
     def list_all(self, status=None, limit=100):
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
-            if status:
+            if limit is None:
+                cursor.execute("SELECT * FROM tasks ORDER BY created_at ASC")
+            elif status:
                 cursor.execute("SELECT * FROM tasks WHERE status = ? ORDER BY updated_at DESC LIMIT ?", (status, limit))
             else:
                 cursor.execute("SELECT * FROM tasks ORDER BY updated_at DESC LIMIT ?", (limit,))
             rows = cursor.fetchall()
             return [self._row_to_dict(r) for r in rows]
+
+    def claim(self, task_id, expected_version, *, status="running", assigned_knight=None, lease_id=None, fencing_token=0):
+        """Only one scheduler/RPC caller may claim a queued database version."""
+        with self.db.get_connection() as conn:
+            updated = conn.execute("""UPDATE tasks SET status=?, started_at=?, attempt=attempt+1,
+                version=version+1, assigned_knight=?, lease_id=?, fencing_token=?, updated_at=?
+                WHERE id=? AND lower(status)='queued' AND version=?""",
+                (status, str(time.time()), assigned_knight, lease_id, fencing_token, time.time(), task_id, expected_version))
+            if updated.rowcount != 1:
+                return None
+            row = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+            conn.commit()
+            return self._row_to_dict(row)
 
     def _row_to_dict(self, row):
         keys = row.keys()

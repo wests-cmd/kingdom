@@ -1,3 +1,4 @@
+from tests.auth_support import owner_client
 """
 Kingdom Release Installation Contract Suite.
 Tests:
@@ -15,7 +16,7 @@ from backend.state import STATE
 from backend.system.updater import updater_engine
 from backend.system.migrator import run_migrations
 
-client = TestClient(app)
+client = owner_client(app)
 
 
 def test_clean_machine_startup_contract():

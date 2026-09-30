@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import json
+from pathlib import Path
+from threading import RLock
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -20,6 +23,7 @@ class AuditLogger:
     def __init__(self, max_history: int = 1000) -> None:
         self.max_history = max_history
         self._records: list[dict[str, Any]] = []
+        self._lock = RLock()
 
     def record(
         self,
@@ -49,7 +53,12 @@ class AuditLogger:
             "metadata": self._sanitize_dict(metadata or {}),
         }
 
-        self._records.append(record)
+        with self._lock:
+            path = Path("data/logs/audit.jsonl")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as output:
+                output.write(json.dumps(record, sort_keys=True) + "\n")
+            self._records.append(record)
         if len(self._records) > self.max_history:
             self._records.pop(0)
 

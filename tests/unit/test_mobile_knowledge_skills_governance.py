@@ -79,28 +79,12 @@ def test_skill_learning_and_promotion_pipeline():
     assert res_promo["success"] is True
     assert res_promo["status"] == "ACTIVE"
 
-def test_governed_financial_research_and_order_approval_block():
-    # Market research
+def test_financial_feature_never_fabricates_accounts_market_data_or_trades():
     research = financial_engine.research_market_and_dividends("SCHD dividends")
-    assert len(research["candidates"]) > 0
-
-    # Connect broker
-    financial_engine.connect_broker_account("Interactive Brokers", "mock_oauth_token_123")
-
-    # Draft order preview
-    res_draft = financial_engine.draft_order_preview(symbol="SCHD", action="buy", shares=10, limit_price=78.50)
-    assert res_draft["success"] is True
-    approval_id = res_draft["approval_id"]
-
-    # Attempt execution before human approval -> DENIED
-    res_exec_denied = financial_engine.execute_approved_order(approval_id)
-    assert res_exec_denied["success"] is False
-    assert "without explicit human approval" in res_exec_denied["error"]
-
-    # Approve order via governance approval engine
-    approval_engine.approve(approval_id, approver="admin")
-
-    # Execute order after approval -> SUCCESS
-    res_exec_ok = financial_engine.execute_approved_order(approval_id)
-    assert res_exec_ok["success"] is True
-    assert res_exec_ok["status"] == "EXECUTED"
+    assert research["success"] is False
+    assert research["candidates"] == []
+    connection = financial_engine.connect_broker_account("Interactive Brokers", "test-token")
+    assert connection["success"] is False
+    assert financial_engine.connected_broker is None
+    assert financial_engine.draft_order_preview("SCHD", "buy", 10, 78.50)["success"] is False
+    assert financial_engine.execute_approved_order("invented-approval")["success"] is False

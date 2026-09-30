@@ -31,7 +31,7 @@ export default function Settings() {
 
         <div className="card">
           <div className="card-title">Capabilities Count</div>
-          <div className="card-value">{security.capabilities_count || 14}</div>
+          <div className="card-value">{security.capabilities_count ?? "Unavailable"}</div>
         </div>
       </div>
 
@@ -41,11 +41,11 @@ export default function Settings() {
           {audit.map((a, i) => (
             <div key={i} className="card" style={{ padding: "10px 14px" }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ fontWeight: "700", color: a.decision === "authorized" ? "var(--accent-green)" : "var(--accent-red)" }}>
+                <span style={{ fontWeight: "700", color: a.decision === "ALLOWED" ? "var(--accent-green)" : "var(--accent-red)" }}>
                   {a.decision.toUpperCase()} — {a.operation} ({a.capability})
                 </span>
                 <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                  {new Date(a.timestamp * 1000).toLocaleTimeString()}
+                  {new Date(a.timestamp).toLocaleTimeString()}
                 </span>
               </div>
               <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>Actor: {a.actor} | Node: {a.node}</div>

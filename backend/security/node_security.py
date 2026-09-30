@@ -22,7 +22,7 @@ class NodeSecurityManager:
 
         default_identities = ["planner", "coder", "researcher", "memory", "security", "system"]
         for actor in default_identities:
-            token = f"kingdom-internal-{actor}-token"
+            token = secrets.token_urlsafe(48)
             self.register_node(
                 node_id=actor,
                 name=f"Identity ({actor.title()})",
@@ -33,8 +33,10 @@ class NodeSecurityManager:
             node_id="admin",
             name="Identity (Admin)",
             capabilities=set(ALL_CAPABILITIES),
-            token="kingdom-internal-admin-token",
+            token=secrets.token_urlsafe(48),
         )
+        from backend.security.http_auth import owner_auth
+        self.register_node("owner", name="Authenticated human owner", capabilities=set(ALL_CAPABILITIES), token=owner_auth.token)
 
     def register_node(
         self,
@@ -44,7 +46,7 @@ class NodeSecurityManager:
         token: str | None = None,
     ) -> dict[str, Any]:
         node_token = token or f"node-tok-{secrets.token_hex(16)}"
-        caps = set(capabilities) if capabilities else set(DEFAULT_KNIGHT_CAPABILITIES)
+        caps = set(capabilities) if capabilities is not None else set(DEFAULT_KNIGHT_CAPABILITIES)
 
         node_record = {
             "node_id": node_id,

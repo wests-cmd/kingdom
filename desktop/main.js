@@ -6,7 +6,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { startBackend, stopBackend, waitForBackendReady } = require('./launcher');
+const { startBackend, stopBackend, waitForBackendReady, getOwnerToken } = require('./launcher');
 const { getHardwareReport, suggestProfile } = require('./hardware');
 
 let mainWindow = null;
@@ -76,6 +76,11 @@ function loadSavedProfile() {
 }
 
 function setupIpcHandlers() {
+  ipcMain.handle('auth:getSessionToken', (event) => {
+    const origin = new URL(event.senderFrame.url).origin;
+    if (origin !== `http://127.0.0.1:${process.env.PORT || 8000}`) throw new Error('Untrusted session requester');
+    return getOwnerToken();
+  });
   ipcMain.handle('setup:getHardwareReport', async () => {
     const report = getHardwareReport();
     return {
@@ -133,6 +138,10 @@ async function createWindow() {
     }
   });
 
+  mainWindow.webContents.setWindowOpenHandler(() => ({action: "deny"}));
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (new URL(url).origin !== `http://127.0.0.1:${process.env.PORT || 8000}`) event.preventDefault();
+  });
   const isReady = await waitForBackendReady();
   if (isReady) {
     await mainWindow.loadURL(`http://127.0.0.1:${process.env.PORT || 8000}`);
@@ -235,7 +244,8 @@ async function runReleaseSmoke(reportPath) {
   const deadline = Date.now() + 90000;
   async function until(check, description) {
     while (Date.now() < deadline) {
-      if (await check()) return;
+      const result = await check();
+      if (result) return result;
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
     throw new Error(`Release smoke timed out: ${description}`);
@@ -257,9 +267,21 @@ async function runReleaseSmoke(reportPath) {
   const apiVersion = await mainWindow.webContents.executeJavaScript("fetch('/api/system/version').then(r => r.json())");
   if (apiVersion.version !== '1.0.0') throw new Error('Packaged backend version mismatch');
   await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('.badge-online')) && document.body.textContent.includes('Last synchronized at')"), 'realtime connection and dashboard data');
-  await mainWindow.webContents.executeJavaScript("fetch('/start', {method: 'POST'}).then(r => {if (!r.ok) throw new Error('Runtime start failed'); return r.json()})");
+  await mainWindow.webContents.executeJavaScript("fetch('/start', {method: 'POST', headers: {'X-Kingdom-Request': '1'}}).then(r => {if (!r.ok) throw new Error('Runtime start failed'); return r.json()})");
   await until(() => mainWindow.webContents.executeJavaScript("fetch('/status').then(r => r.json()).then(s => s.running && s.scheduler_running)"), 'running scheduler');
   await until(() => mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.card-value')).some(e => e.textContent === 'ACTIVE')"), 'live runtime dashboard');
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e => e.textContent === 'Tasks').click()");
+  await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('input[placeholder=\"New task description...\"]'))"), 'task submission form');
+  await mainWindow.webContents.executeJavaScript(`(() => {
+    const input = document.querySelector('input[placeholder="New task description..."]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'native release verification');
+    input.dispatchEvent(new Event('input', {bubbles:true}));
+  })()`);
+  await mainWindow.webContents.executeJavaScript("document.querySelector('main.content form').requestSubmit()");
+  const verifiedTask = await until(() => mainWindow.webContents.executeJavaScript("fetch('/tasks').then(r => r.json()).then(tasks => tasks.find(t => t.prompt === 'native release verification' && t.status === 'completed'))"), 'real verified native task');
+  if (verifiedTask.result.results[0].outcome.output.words !== 3 || verifiedTask.result.results[0].verification.state !== 'VERIFIED') throw new Error('Native task outcome verification failed');
+  report.taskExecuted = {taskId: verifiedTask.id, words: 3, verification: 'VERIFIED'};
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e => e.textContent === 'Dashboard').click()");
   report.dashboardLoaded = true;
   report.profilePersisted = Boolean(loadSavedProfile());
   report.version = apiVersion.version;
@@ -270,7 +292,7 @@ async function runReleaseSmoke(reportPath) {
   fs.mkdirSync(path.dirname(reportPath), {recursive: true});
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
   fs.writeFileSync(reportPath.replace(/\.json$/, '.png'), (await mainWindow.webContents.capturePage()).toPNG());
-  await mainWindow.webContents.executeJavaScript("fetch('/stop', {method: 'POST'}).then(r => {if (!r.ok) throw new Error('Runtime stop failed'); return r.json()})");
+  await mainWindow.webContents.executeJavaScript("fetch('/stop', {method: 'POST', headers: {'X-Kingdom-Request': '1'}}).then(r => {if (!r.ok) throw new Error('Runtime stop failed'); return r.json()})");
   await until(() => mainWindow.webContents.executeJavaScript("fetch('/status').then(r => r.json()).then(s => !s.running && !s.scheduler_running)"), 'stopped scheduler');
   report.runtimeStopped = true;
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));

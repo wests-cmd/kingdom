@@ -16,6 +16,7 @@ Also tests combined Doomsday failure recovery:
 """
 
 import pytest
+from backend.runtime.execution import execute_request, verify_request_result
 import time
 from backend.runtime.engine import RuntimeEngine
 from backend.runtime.workflow_engine import WorkflowContract, AutonomyLevel, WorkflowResourceBudget, CheckpointManager, EmergencyIncidentMode
@@ -24,6 +25,7 @@ from backend.cluster.node_registry import node_registry, NodeState, NodeRole, Ha
 from backend.cluster.pairing import pairing_manager
 from backend.cluster.capabilities import capability_authorizer
 from backend.cluster.capability_router import CapabilityRouter
+from backend.storage.db import Database
 from backend.cluster.task_leasing import TaskLeaseManager
 from backend.cluster.partition_resilience import PartitionEngine, RevocationPropagator
 from backend.security.credential_broker import CredentialBroker
@@ -32,7 +34,7 @@ from backend.skills.installer import SkillInstaller
 from backend.skills.dependency import SkillDependencyEngine
 
 
-def test_full_operational_chain_e2e():
+def test_full_operational_chain_e2e(tmp_path):
     """
     Simulates a complete task execution lifecycle through all Kingdom subsystems.
     """
@@ -57,7 +59,7 @@ def test_full_operational_chain_e2e():
 
     # 3. User submits task intent
     user_prompt = "Run diagnostic analysis on codebase and optimize performance."
-    task = runtime.submit_task(user_prompt, metadata={"actor": "user_admin", "capability": "coder.execute"})
+    task = runtime.submit_task(user_prompt, metadata={"actor": "user_admin", "capability": "compute", "tool": "text.analyze@1.0.0"})
     assert task["id"] is not None
     assert task["status"] == "queued"
 
@@ -67,7 +69,7 @@ def test_full_operational_chain_e2e():
     assert selected_node["node_id"] == knight_coder.node_id
 
     # 5. Task Lease Manager issues monotonic fencing token
-    lease_mgr = TaskLeaseManager()
+    lease_mgr = TaskLeaseManager(database=Database(tmp_path / "leases.db"))
     lease = lease_mgr.issue_lease(task["id"], knight_coder.node_id, "coder.execute")
     assert lease.fencing_token == 1
 
@@ -75,6 +77,7 @@ def test_full_operational_chain_e2e():
     runtime.security.nodes.register_node("user_admin", capabilities=["coder.execute", "model.inference", "compute"])
     auth_res = runtime.security.authorize(
         actor_id="user_admin",
+        token=runtime.security.nodes.get_node("user_admin")["token"],
         capability="coder.execute",
         operation="Code optimization task",
         prompt=user_prompt
@@ -95,12 +98,10 @@ def test_full_operational_chain_e2e():
     # 8. Execution Sandbox & Outcome aggregation
     claimed_task = runtime.tasks.claim_next()
     assert claimed_task["id"] == task["id"]
-    execution_result = {
-        "status": "completed",
-        "output": "Codebase analysis completed. Memory utilization reduced by 25%.",
-        "node_id": knight_coder.node_id,
-        "fencing_token": lease.fencing_token
-    }
+    execution_result = execute_request(claimed_task, {"compute"})
+    verification = verify_request_result(claimed_task, execution_result)
+    assert execution_result["output"]["words"] == 8
+    assert verification["state"] == "VERIFIED"
     completed_task = runtime.tasks.complete(task["id"], execution_result)
     assert completed_task["status"] == "completed"
 
@@ -112,7 +113,7 @@ def test_full_operational_chain_e2e():
     assert recorded_mem["id"] is not None
 
 
-def test_doomsday_combined_failure_and_hardening_scenario():
+def test_doomsday_combined_failure_and_hardening_scenario(tmp_path):
     """
     Combined failure scenario testing prompt injection, credential theft defense,
     unannounced Knight disappearance, fencing token invalidation, and emergency lockdown recovery.
@@ -132,7 +133,7 @@ def test_doomsday_combined_failure_and_hardening_scenario():
     assert sanitized["secret_key"] == "[REDACTED_CREDENTIAL]"
 
     # 2. Unannounced Node Disappearance & Lease Fencing
-    lease_mgr = TaskLeaseManager()
+    lease_mgr = TaskLeaseManager(database=Database(tmp_path / "leases.db"))
     node_registry.register_discovered_node({
         "id": "node_disappearing",
         "node_state": NodeState.CONNECTED.value,

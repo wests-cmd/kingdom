@@ -8,17 +8,11 @@ class WorkloadBalancer:
             "security"
         ]
 
-    def select_knight(self, task):
+    def select_knight(self, task, enabled=None):
 
         task = str(task).lower()
 
-        if "code" in task:
-            return "coder"
-
-        if "security" in task:
-            return "security"
-
-        if "research" in task:
-            return "researcher"
-
-        return "planner"
+        selected = "coder" if "code" in task else "security" if "security" in task else "researcher" if "research" in task else "planner"
+        if enabled is not None and selected not in enabled:
+            raise RuntimeError(f"The {selected} Knight is disabled by the active installation profile")
+        return selected

@@ -1,3 +1,4 @@
+from tests.auth_support import owner_client
 import unittest
 from fastapi.testclient import TestClient
 from backend.main import app
@@ -6,7 +7,7 @@ from backend.state import STATE
 class TestKingdomAPI(unittest.TestCase):
 
     def setUp(self):
-        self.client = TestClient(app)
+        self.client = owner_client(app)
         STATE["running"] = False
         STATE["mode"] = "adaptive"
 
@@ -19,14 +20,14 @@ class TestKingdomAPI(unittest.TestCase):
         self.assertIn("version", data)
 
     def test_start_endpoint(self):
-        with TestClient(app) as client:
+        with owner_client(app) as client:
             response = client.post("/start")
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["status"], "started")
             self.assertTrue(STATE["running"])
 
     def test_stop_endpoint(self):
-        with TestClient(app) as client:
+        with owner_client(app) as client:
             client.post("/start")
             response = client.post("/stop")
             self.assertEqual(response.status_code, 200)

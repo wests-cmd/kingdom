@@ -6,6 +6,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('kingdomDesktop', {
+  getSessionToken: () => ipcRenderer.invoke('auth:getSessionToken'),
   restartRuntime: () => ipcRenderer.invoke('runtime:restart'),
   stopRuntime: () => ipcRenderer.invoke('runtime:stop'),
   getDoctorReport: () => ipcRenderer.invoke('doctor:getReport'),

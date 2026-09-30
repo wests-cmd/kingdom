@@ -1,0 +1,15 @@
+.git
+**/node_modules
+**/.venv
+**/.release-venv
+**/__pycache__
+data
+evidence
+work
+outputs
+desktop/dist
+desktop/bin
+frontend/dist
+.env
+.env.*
+!.env.example

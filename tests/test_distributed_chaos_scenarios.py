@@ -1,6 +1,7 @@
 import time
 import pytest
 from backend.cluster.node_registry import NodeRegistry, NodeState, node_registry
+from backend.storage.db import Database
 from backend.cluster.task_leasing import TaskLeaseManager
 from backend.cluster.capability_router import CapabilityRouter, CapabilityRoutingError
 from backend.cluster.partition_resilience import PartitionEngine, RevocationPropagator
@@ -20,10 +21,10 @@ class DummyRepo:
         return list(self.data.values())
 
 
-def test_scenario_a_unannounced_node_disappearance_and_lease_fencing():
+def test_scenario_a_unannounced_node_disappearance_and_lease_fencing(tmp_path):
     repo = DummyRepo()
     registry = NodeRegistry(repository=repo)
-    lease_mgr = TaskLeaseManager()
+    lease_mgr = TaskLeaseManager(database=Database(tmp_path / "leases.db"))
 
     # Register Node A and Node B
     registry.register_discovered_node({

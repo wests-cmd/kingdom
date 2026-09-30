@@ -8,7 +8,10 @@ class RealtimeClient {
 
   connect() {
     try {
-      this.socket = new WebSocket("ws://localhost:8000/ws")
+      const base = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:8000" : window.location.origin)
+      const url = new URL("/ws", base)
+      url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
+      this.socket = new WebSocket(url)
 
       this.socket.onopen = () => {
         this.isConnected = true

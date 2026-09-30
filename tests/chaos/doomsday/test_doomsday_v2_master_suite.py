@@ -16,6 +16,7 @@ from backend.security.injection_detector import InjectionDetector
 from backend.security.credential_broker import CredentialBroker
 from backend.cluster.node_registry import NodeRegistry, NodeState, NodeRole
 from backend.cluster.capability_router import CapabilityRouter, CapabilityRoutingError
+from backend.storage.db import Database
 from backend.cluster.task_leasing import TaskLeaseManager
 from backend.cluster.partition_resilience import PartitionEngine, RevocationPropagator
 from backend.runtime.workflow_engine import WorkflowContract, AutonomyLevel, WorkflowResourceBudget, CheckpointManager, EmergencyIncidentMode
@@ -109,14 +110,14 @@ def test_credential_theft_gauntlet():
     assert sanitized["api_credentials"] == "[REDACTED_CREDENTIAL]"
 
 
-def test_malicious_knight_containment_gauntlet():
+def test_malicious_knight_containment_gauntlet(tmp_path):
     """
     Simulates a rogue Knight attempting capability escalation, identity spoofing, and stale task execution.
     Verifies that zero-trust capability router, identity checks, and lease fencing reject all attempts.
     """
     dummy_repo = DummyRepo()
     registry = NodeRegistry(repository=dummy_repo)
-    lease_mgr = TaskLeaseManager()
+    lease_mgr = TaskLeaseManager(database=Database(tmp_path / "leases.db"))
 
     # 1. Rogue Knight attempts capability escalation
     registry.register_discovered_node({
@@ -173,7 +174,7 @@ def test_storage_chaos_and_crash_consistency():
     assert checkpoint["state"]["completed_steps"] == ["step1", "step2", "step3"]
 
 
-def test_doomsday_v2_master_combined_scenario():
+def test_doomsday_v2_master_combined_scenario(tmp_path):
     """
     Master Doomsday V2 integrated scenario combining:
     Prompt injection -> Credential theft attempt -> Untrusted VM resource attack ->
@@ -196,7 +197,7 @@ def test_doomsday_v2_master_combined_scenario():
     # 2. Node Disappearance & Lease Fencing
     dummy_repo = DummyRepo()
     registry = NodeRegistry(repository=dummy_repo)
-    lease_mgr = TaskLeaseManager()
+    lease_mgr = TaskLeaseManager(database=Database(tmp_path / "leases.db"))
 
     registry.register_discovered_node({
         "id": "node_doomsday_worker_A",

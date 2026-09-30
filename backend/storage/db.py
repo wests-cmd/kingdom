@@ -5,6 +5,14 @@ from pathlib import Path
 
 DEFAULT_DB_PATH = Path("data/kingdom.db")
 
+class ClosingConnection(sqlite3.Connection):
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            return super().__exit__(exc_type, exc_value, traceback)
+        finally:
+            self.close()
+
+
 class Database:
 
     def __init__(self, db_path=DEFAULT_DB_PATH):
@@ -13,7 +21,7 @@ class Database:
         self.init_db()
 
     def get_connection(self):
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, factory=ClosingConnection)
         conn.row_factory = sqlite3.Row
         return conn
 

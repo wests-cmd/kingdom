@@ -32,6 +32,7 @@ class ZeroTrust:
                 actor_id=actor_id,
                 capability=required_capability,
                 operation=f"Validate capability {required_capability}",
+                token=actor.get("token") if isinstance(actor, dict) else None,
             )
             return {
                 "actor": actor_id,
@@ -40,7 +41,7 @@ class ZeroTrust:
                 "reason": auth_res.get("reason", ""),
             }
         node = self.nodes.get_node(actor_id)
-        trusted = node is not None and node.get("active", False)
+        trusted = node is not None and node.get("active", False) and isinstance(actor, dict) and self.nodes.authenticate_token(actor.get("token")) == actor_id
         return {"actor": actor_id, "authorized": trusted, "trusted": trusted}
 
     def authorize(
@@ -82,7 +83,9 @@ class ZeroTrust:
                     "approval_id": None,
                 }
 
-        # 2. Token Authentication (if token provided)
+        # 2. A claimed actor name never authenticates its caller.
+        if not token:
+            return {"authorized": False, "reason": "Authentication token required", "risk_level": RiskLevel.HIGH.value, "approval_id": None}
         if token:
             authenticated_node = self.nodes.authenticate_token(token)
             if not authenticated_node:
@@ -100,7 +103,8 @@ class ZeroTrust:
                     "risk_level": RiskLevel.HIGH.value,
                     "approval_id": None,
                 }
-            actor_id = authenticated_node
+            if authenticated_node != actor_id:
+                return {"authorized": False, "reason": "Token identity does not match requested actor", "risk_level": RiskLevel.HIGH.value, "approval_id": None}
 
         # 3. Capability Check
         actor_caps = self.nodes.get_node_capabilities(actor_id)
@@ -126,16 +130,8 @@ class ZeroTrust:
         if self.approvals.requires_approval(capability, risk):
             # Verify explicit approval_id capability scope and actor identity binding
             if approval_id:
-                appr_req = self.approvals.get_request(approval_id)
-                if (
-                    appr_req
-                    and appr_req["status"] == "approved"
-                    and appr_req["capability"] == capability
-                    and (
-                        appr_req.get("requesting_actor") == actor_id
-                        or appr_req.get("requesting_node") == actor_id
-                    )
-                ):
+                if self.approvals.consume(approval_id, actor_id=actor_id, capability=capability,
+                                          operation=operation, parameters=parameters):
                     self.audit.record(
                         actor=actor_id,
                         operation=operation,
