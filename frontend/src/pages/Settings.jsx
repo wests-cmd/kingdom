@@ -36,7 +36,7 @@ export default function Settings() {
       </div>
 
       <h4>Security Audit Log ({audit.length})</h4>
-      {audit.length === 0 ? <p style={{ color: "#888" }}>No security audit records logged.</p> : (
+      {audit.length === 0 ? <p style={{ color: "var(--text-muted)" }}>No security audit records logged.</p> : (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px" }}>
           {audit.map((a, i) => (
             <div key={i} className="card" style={{ padding: "10px 14px" }}>

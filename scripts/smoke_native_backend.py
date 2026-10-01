@@ -42,10 +42,14 @@ with tempfile.TemporaryDirectory(prefix="kingdom-native-") as directory:
             with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as response:
                 html = response.read().decode()
             assert '<div id="root">' in html, html[:200]
+            for name, signature in (("kingdom-icon.png", b"\x89PNG\r\n\x1a\n"), ("kingdom-citadel.webp", b"RIFF")):
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/branding/{name}") as response:
+                    assert response.read().startswith(signature), f"Missing packaged branding: {name}"
             assert (Path(directory) / "data" / "kingdom.db").is_file()
             report.parent.mkdir(parents=True, exist_ok=True)
             report.write_text(json.dumps({"platform": sys.platform, "backend_ready": ready,
                                          "version": version["version"], "frontend_served": True,
+                                         "branding_served": True,
                                          "writable_user_data": True}, indent=2))
         finally:
             if sys.platform == "win32" and process.poll() is None:

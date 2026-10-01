@@ -17,7 +17,7 @@ export default function Swarm() {
       <div className="worker-inspector-layout">
         <div>
           <h4>Cluster Nodes ({knights.length})</h4>
-          {loading ? <p style={{ color: "#888" }}>Loading node cluster...</p> : (
+          {loading ? <p style={{ color: "var(--text-muted)" }}>Loading node cluster...</p> : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "12px", marginTop: "10px" }}>
               {knights.map(k => (
                 <div

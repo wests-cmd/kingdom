@@ -33,14 +33,14 @@ def test_version_consistency_contract():
     assert res.status_code == 200
     data = res.json()
     assert data["version"] == STATE["version"]
-    assert data["version"] == "1.1.0"
+    assert data["version"] == "1.1.1"
 
 
 def test_updater_release_and_rollback_contract(tmp_path):
     # Check update
     check_res = updater_engine.check_updates()
     assert "update_available" in check_res
-    assert check_res["current_version"] == "1.1.0"
+    assert check_res["current_version"] == "1.1.1"
 
     # Verify checksum
     sample_data = b"Kingdom release artifact content v1.0.0"

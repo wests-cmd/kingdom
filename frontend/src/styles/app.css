@@ -1,5 +1,13 @@
 :root  {
   color-scheme:dark;
+  --accent-primary:#b69aff;
+  --accent-readable:#b69aff;
+  --accent-on-primary:#111111;
+  --input-bg:#141119;
+  --button-bg:#27222f;
+  --sidebar-bg:#141119;
+  --display-scale:1;
+  --atmosphere-opacity:.1;
   --bg-dark:#171918;
   --surface-dark:#202321;
   --surface-border:#363b37;
@@ -49,7 +57,7 @@ p+p {
   margin-top:10px
 }
 a {
-  color:#ddb29c;
+  color:var(--accent-readable);
   text-underline-offset:3px
 }
 small {
@@ -65,7 +73,7 @@ pre {
   max-width:100%;
   font-size:12px;
   line-height:1.6;
-  background:#191c1a;
+  background:var(--input-bg);
   padding:14px;
   border:1px solid var(--surface-border);
   border-radius:6px
@@ -74,9 +82,9 @@ input,select,textarea,button {
   font:inherit
 }
 input:not([type=radio]):not([type=checkbox]),textarea,select {
-  background:#191c1a;
+  background:var(--input-bg);
   color:var(--text-main);
-  border:1px solid #4a514a;
+  border:1px solid var(--surface-border);
   border-radius:6px;
   padding:10px 12px!important;
   max-width:100%
@@ -86,16 +94,16 @@ textarea {
   min-height:90px
 }
 input::placeholder,textarea::placeholder {
-  color:#969e93
+  color:var(--text-muted)
 }
 label {
   font-size:13px;
   color:var(--text-muted)
 }
 button {
-  background:#292e2a;
+  background:var(--button-bg);
   color:var(--text-main);
-  border:1px solid #434b43;
+  border:1px solid var(--surface-border);
   padding:9px 15px;
   border-radius:6px;
   cursor:pointer;
@@ -104,27 +112,27 @@ button {
   transition:background .15s,border-color .15s
 }
 button:hover:not(:disabled) {
-  background:#353e36;
-  border-color:#73816f
+  background:color-mix(in srgb,var(--accent-primary) 12%,var(--surface-dark));
+  border-color:var(--accent-readable)
 }
 button:disabled {
   opacity:.5;
   cursor:not-allowed
 }
 button.primary-red {
-  background:var(--accent-red);
-  border-color:var(--accent-red);
-  color:#211b17
+  background:var(--accent-primary);
+  border-color:var(--accent-readable);
+  color:var(--accent-on-primary)
 }
 button.primary-red:hover:not(:disabled) {
-  background:var(--accent-red-hover)
+  background:color-mix(in srgb,var(--accent-primary) 85%,var(--text-main))
 }
 button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-visible {
-  outline:2px solid #ddb29c;
+  outline:2px solid var(--accent-readable);
   outline-offset:3px
 }
 input[type=radio],input[type=checkbox] {
-  accent-color:var(--accent-red)
+  accent-color:var(--accent-primary)
 }
 .layout {
   display:flex;
@@ -133,7 +141,7 @@ input[type=radio],input[type=checkbox] {
 .sidebar {
   width:228px;
   flex-shrink:0;
-  background:#1b1e1c;
+  background:var(--sidebar-bg);
   border-right:1px solid var(--surface-border);
   height:100vh;
   position:sticky;
@@ -153,13 +161,14 @@ input[type=radio],input[type=checkbox] {
   letter-spacing:2px
 }
 .brand-mark {
-  width:26px;
-  height:30px;
-  color:var(--accent-red)
+  width:40px;
+  height:40px;
+  object-fit:contain;
+  color:var(--accent-readable)
 }
 .nav-group {
   padding-top:14px;
-  border-top:1px solid #303530;
+  border-top:1px solid var(--surface-border);
   margin-top:12px
 }
 .nav-group-title {
@@ -167,7 +176,7 @@ input[type=radio],input[type=checkbox] {
   font-size:10px;
   text-transform:uppercase;
   letter-spacing:1.5px;
-  color:#909b8d
+  color:var(--text-muted)
 }
 .sidebar-nav {
   padding:0;
@@ -188,19 +197,19 @@ input[type=radio],input[type=checkbox] {
   border-radius:5px
 }
 .sidebar-item.active {
-  background:#36332c;
-  color:#e2bc9f;
-  border-color:#494337
+  background:color-mix(in srgb,var(--accent-primary) 14%,var(--surface-dark));
+  color:var(--accent-readable);
+  border-color:color-mix(in srgb,var(--accent-primary) 45%,var(--surface-border))
 }
 .sidebar-item:hover:not(:disabled) {
-  background:#2b302b;
+  background:var(--button-bg);
   border-color:transparent
 }
 .sidebar-footer {
   margin-top:auto;
   padding:20px 12px 0;
   font-size:11px;
-  color:#909b8d;
+  color:var(--text-muted);
   display:flex;
   justify-content:space-between;
   gap:8px
@@ -280,11 +289,11 @@ input[type=radio],input[type=checkbox] {
   font-size:11px;
   text-transform:uppercase;
   letter-spacing:1.5px;
-  color:var(--accent-red);
+  color:var(--accent-readable);
   margin-bottom:9px
 }
 .sync-note {
-  color:#9ba795;
+  color:var(--text-muted);
   font-size:11px;
   white-space:nowrap
 }
@@ -332,7 +341,7 @@ input[type=radio],input[type=checkbox] {
   border-radius:6px
 }
 .notice.error,[role=alert] {
-  color:#e7b4a2
+  color:var(--accent-red)
 }
 .empty-state {
   padding:26px 0;
@@ -356,14 +365,14 @@ input[type=radio],input[type=checkbox] {
   align-items:center;
   gap:14px;
   padding:16px;
-  border:1px solid #3a4039;
+  border:1px solid var(--surface-border);
   border-radius:6px;
-  background:#1d211e;
+  background:var(--input-bg);
   cursor:pointer
 }
 .policy-option.selected {
-  border-color:#b28c70;
-  background:#302c25
+  border-color:var(--accent-readable);
+  background:color-mix(in srgb,var(--accent-primary) 12%,var(--surface-dark))
 }
 .policy-option strong {
   display:block;
@@ -376,16 +385,16 @@ input[type=radio],input[type=checkbox] {
 }
 .policy-number {
   font-size:12px;
-  color:#d4b196;
+  color:var(--accent-readable);
   padding:5px 7px;
-  border:1px solid #52483a;
+  border:1px solid var(--surface-border);
   border-radius:4px
 }
 .active-note {
   margin-left:auto;
   align-self:flex-start;
   font-size:11px;
-  color:#b6c5ad
+  color:var(--accent-green)
 }
 .mode-options {
   display:grid;
@@ -405,12 +414,12 @@ input[type=radio],input[type=checkbox] {
 }
 .mode-option span {
   font-size:11px;
-  color:#d4b196;
+  color:var(--accent-readable);
   margin-top:auto
 }
 .selected {
-  border-color:#b28c70!important;
-  background:#302c25!important
+  border-color:var(--accent-readable)!important;
+  background:color-mix(in srgb,var(--accent-primary) 12%,var(--surface-dark))!important
 }
 .tab-row {
   display:flex;
@@ -422,7 +431,7 @@ input[type=radio],input[type=checkbox] {
 }
 .record-detail {
   padding:15px 0;
-  border-top:1px solid #363b35
+  border-top:1px solid var(--surface-border)
 }
 .record-detail summary {
   display:flex;
@@ -446,7 +455,7 @@ input[type=radio],input[type=checkbox] {
   align-items:center;
   gap:12px;
   padding:12px 0;
-  border-top:1px solid #333b33;
+  border-top:1px solid var(--surface-border);
   font-size:12px
 }
 .state-dot {
@@ -481,8 +490,8 @@ input[type=radio],input[type=checkbox] {
   margin-top:6px
 }
 .connect-page button {
-  background:var(--accent-red);
-  color:#211b17
+  background:var(--accent-primary);
+  color:var(--accent-on-primary)
 }
 .sr-only {
   position:absolute;
@@ -666,10 +675,10 @@ input[type=radio],input[type=checkbox] {
   cursor:pointer
 }
 .text-rose-500,.text-rose-400 {
-  color:#e2a995
+  color:var(--accent-red)
 }
 .text-emerald-400 {
-  color:#a1c4a4
+  color:var(--accent-green)
 }
 .max-w-7xl {
   max-width:1400px
@@ -807,3 +816,33 @@ input[type=radio],input[type=checkbox] {
 .knowledge-forms { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
 @media(min-width:768px) { .md\:grid-cols-4 { grid-template-columns:repeat(4,minmax(0,1fr)); } }
 @media(max-width:767px) { .knowledge-forms { grid-template-columns:1fr; } }
+
+/* Appearance preferences apply throughout the app, including the connection page. */
+#root { zoom:var(--display-scale); }
+.main-container { position:relative; isolation:isolate; }
+.main-container::before { content:""; position:fixed; inset:64px 0 0 228px; pointer-events:none; z-index:-1; opacity:var(--atmosphere-opacity); background:url('/branding/kingdom-citadel.webp') center/cover no-repeat; }
+.brand-mark { color:var(--accent-readable); }
+.appearance-settings { max-width:1050px; }
+.appearance-preview { position:relative; isolation:isolate; overflow:hidden; display:flex; justify-content:space-between; align-items:center; gap:24px; border-left:3px solid var(--accent-readable); padding:30px; background:var(--surface-dark); }
+.appearance-preview::before { content:""; position:absolute; inset:0; z-index:-1; opacity:.16; background:url('/branding/kingdom-citadel.webp') center 40%/cover; }
+.appearance-preview h2 { font-size:28px; }
+.preview-chips { display:flex; gap:10px; flex-wrap:wrap; }
+.preview-chips .status-chip { color:var(--accent-readable); }
+.palette-options { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:12px; margin:22px 0; }
+.palette-option { display:flex; flex-direction:column; align-items:flex-start; text-align:left; gap:8px; padding:18px; min-width:0; }
+.palette-option small { font-weight:400; }
+.palette-swatch { display:block; width:32px; height:12px; border-radius:3px; }
+.appearance-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px; margin-top:22px; }
+.appearance-fields label { display:flex; flex-direction:column; gap:8px; }
+.appearance-field { display:grid; gap:8px; }
+.color-control { display:flex; align-items:center; gap:12px; }
+input[type=color] { width:56px; height:40px; padding:4px!important; cursor:pointer; }
+.badge-online { color:var(--accent-green); background:color-mix(in srgb,var(--accent-green) 10%,var(--surface-dark)); border-color:color-mix(in srgb,var(--accent-green) 35%,var(--surface-border)); }
+.badge-offline { color:var(--accent-red); background:color-mix(in srgb,var(--accent-red) 10%,var(--surface-dark)); border-color:color-mix(in srgb,var(--accent-red) 35%,var(--surface-border)); }
+:root[data-density=compact] .content { padding-top:22px; padding-bottom:22px; }
+:root[data-density=compact] .card,:root[data-density=compact] .panel,:root[data-density=compact] .task-record { padding:14px; }
+:root[data-density=compact] .sidebar-item { padding-top:6px; padding-bottom:6px; }
+:root[data-density=compact] .page-stack { gap:16px; }
+:root[data-motion=reduced] * { transition:none!important; animation:none!important; scroll-behavior:auto!important; }
+@media(max-width:1000px) { .main-container::before { left:195px; } }
+@media(max-width:650px) { .main-container::before { left:0; } .appearance-fields { grid-template-columns:1fr; } .appearance-preview { flex-direction:column; align-items:flex-start; padding:22px; } }

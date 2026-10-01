@@ -15,7 +15,7 @@ export default function AIMapGraph() {
   ]
 
   return (
-    <div style={{ background: "#181818", padding: "16px", borderRadius: "8px", color: "#fff", marginTop: "16px" }}>
+    <div style={{ background: "var(--input-bg)", padding: "16px", borderRadius: "8px", color: "var(--text-main)", marginTop: "16px" }}>
       <h4>AI Map Exchange Topology</h4>
       <svg width="500" height="300" style={{ display: "block", margin: "auto" }}>
         {links.map((l, i) => (

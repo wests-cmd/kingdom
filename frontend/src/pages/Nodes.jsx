@@ -83,23 +83,23 @@ export function Nodes() {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "16px" }}>
         <div>
-          <h1 style={{ fontSize: "20px", fontWeight: "700", color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}>
+          <h1 style={{ fontSize: "20px", fontWeight: "700", color: "var(--text-main)", display: "flex", alignItems: "center", gap: "8px" }}>
             Nodes and devices
           </h1>
-          <p style={{ fontSize: "12px", color: "#888", marginTop: "4px" }}>
+          <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
             Secure, identity-verified Kingdom Commander & Knight federation across LAN, WAN, and overlay networks.
           </p>
         </div>
         <div style={{ display: "flex", gap: "12px" }}>
           <button
             onClick={fetchClusterState}
-            style={{ padding: "6px 14px", background: "#222", border: "1px solid #444", color: "#ccc", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
+            style={{ padding: "6px 14px", background: "var(--input-bg)", border: "1px solid var(--surface-border)", color: "var(--text-main)", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
           >
             Refresh
           </button>
           <button
             onClick={handleCreateInvitation}
-            style={{ padding: "6px 14px", background: "var(--accent-red)", color: "#fff", border: "none", borderRadius: "4px", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}
+            style={{ padding: "6px 14px", background: "var(--accent-red)", color: "var(--text-main)", border: "none", borderRadius: "4px", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}
           >
             Invite a compute worker
           </button>
@@ -108,7 +108,7 @@ export function Nodes() {
 
       {/* Kingdom Identity Banner */}
       {kingdomIdentity && (
-        <div style={{ padding: "16px", background: "#141414", border: "1px solid #282828", borderRadius: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ padding: "16px", background: "var(--input-bg)", border: "1px solid var(--surface-border)", borderRadius: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
             <div style={{ fontSize: "24px", padding: "8px", background: "#2a1213", border: "1px solid #4d181a", borderRadius: "6px" }}>
               K
@@ -117,11 +117,11 @@ export function Nodes() {
               <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--accent-red)", textTransform: "uppercase", letterSpacing: "1px" }}>
                 Kingdom Commander Identity
               </div>
-              <div style={{ fontSize: "16px", fontWeight: "700", color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}>
-                {kingdomIdentity.display_name} <span style={{ fontSize: "11px", padding: "2px 6px", background: "#222", color: "#aaa", borderRadius: "3px", fontFamily: "monospace" }}>{kingdomIdentity.node_id}</span>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "var(--text-main)", display: "flex", alignItems: "center", gap: "8px" }}>
+                {kingdomIdentity.display_name} <span style={{ fontSize: "11px", padding: "2px 6px", background: "var(--input-bg)", color: "var(--text-muted)", borderRadius: "3px", fontFamily: "monospace" }}>{kingdomIdentity.node_id}</span>
               </div>
-              <div style={{ fontSize: "11px", color: "#888", fontFamily: "monospace", marginTop: "2px" }}>
-                Fingerprint: <span style={{ color: "#ddd" }}>{kingdomIdentity.fingerprint}</span>
+              <div style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "monospace", marginTop: "2px" }}>
+                Fingerprint: <span style={{ color: "var(--text-main)" }}>{kingdomIdentity.fingerprint}</span>
               </div>
             </div>
           </div>
@@ -134,7 +134,7 @@ export function Nodes() {
       )}
 
       {/* Navigation Tabs */}
-      <div style={{ display: "flex", borderBottom: "1px solid #282828", fontSize: "13px", fontWeight: "500" }}>
+      <div style={{ display: "flex", borderBottom: "1px solid var(--surface-border)", fontSize: "13px", fontWeight: "500" }}>
         <button
           onClick={() => setActiveTab('nodes')}
           style={{ padding: "8px 16px", border: "none", borderBottom: activeTab === 'nodes' ? "2px solid var(--accent-red)" : "2px solid transparent", background: "none", color: activeTab === 'nodes' ? "var(--accent-red)" : "#888", cursor: "pointer" }}
@@ -147,7 +147,7 @@ export function Nodes() {
         >
           Pending Approvals
           {pendingNodes.length > 0 && (
-            <span style={{ padding: "2px 6px", background: "var(--accent-red)", color: "#fff", fontSize: "10px", borderRadius: "10px" }}>{pendingNodes.length}</span>
+            <span style={{ padding: "2px 6px", background: "var(--accent-red)", color: "var(--text-main)", fontSize: "10px", borderRadius: "10px" }}>{pendingNodes.length}</span>
           )}
         </button>
         <button
@@ -162,12 +162,12 @@ export function Nodes() {
       {activeTab === 'nodes' && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "16px" }}>
           {nodes.map((node) => (
-            <div key={node.id} style={{ padding: "16px", background: "#141414", border: "1px solid #282828", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div key={node.id} style={{ padding: "16px", background: "var(--input-bg)", border: "1px solid var(--surface-border)", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "12px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
-                  <div style={{ fontWeight: "700", color: "#fff", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <div style={{ fontWeight: "700", color: "var(--text-main)", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
                     {deviceLabel(node.public_identity?.display_name || node.id)}
-                    <span style={{ fontSize: "10px", padding: "1px 6px", background: "#222", color: "#aaa", borderRadius: "3px", textTransform: "uppercase" }}>{deviceLabel(node.role,'Remote device')}</span>
+                    <span style={{ fontSize: "10px", padding: "1px 6px", background: "var(--input-bg)", color: "var(--text-muted)", borderRadius: "3px", textTransform: "uppercase" }}>{deviceLabel(node.role,'Remote device')}</span>
                   </div>
                   <div style={{ fontSize: "11px", fontFamily: "monospace", color: "#777", marginTop: "4px" }}>
                     FP: {fingerprintLabel(node.fingerprint)}
@@ -183,20 +183,20 @@ export function Nodes() {
                 </span>
               </div>
 
-              <div style={{ fontSize: "11px", color: "#888", display: "flex", flexDirection: "column", gap: "4px" }}>
+              <div style={{ fontSize: "11px", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: "4px" }}>
                 <div>{node.is_local ? 'Recorded federation grants (local tools are listed in Swarm):' : 'Granted capabilities:'}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
                   {!(node.granted_capabilities || node.capabilities || []).length && <span>None recorded</span>}
                   {(node.granted_capabilities || node.capabilities || []).map((cap, i) => (
-                    <span key={i} style={{ padding: "2px 6px", background: "#222", color: "#ccc", borderRadius: "3px", fontSize: "10px" }}>
+                    <span key={i} style={{ padding: "2px 6px", background: "var(--input-bg)", color: "var(--text-main)", borderRadius: "3px", fontSize: "10px" }}>
                       {capabilityLabel(cap)}
                     </span>
                   ))}
                 </div>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #222", paddingTop: "8px", fontSize: "11px" }}>
-                <span style={{ color: "#666" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--surface-border)", paddingTop: "8px", fontSize: "11px" }}>
+                <span style={{ color: "var(--text-muted)" }}>
                   {node.is_local ? 'Built-in worker · managed by the install profile' : 'Remote / WAN Network'}
                 </span>
                 {!node.is_local && node.node_state !== 'REVOKED' && (
@@ -217,19 +217,19 @@ export function Nodes() {
       {activeTab === 'pending' && (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {pendingNodes.length === 0 ? (
-            <div style={{ padding: "32px", textAlign: "center", color: "#666", background: "#141414", border: "1px solid #282828", borderRadius: "6px" }}>
+            <div style={{ padding: "32px", textAlign: "center", color: "var(--text-muted)", background: "var(--input-bg)", border: "1px solid var(--surface-border)", borderRadius: "6px" }}>
               No pending Knight pairing requests.
             </div>
           ) : (
             pendingNodes.map((node) => (
-              <div key={node.id} style={{ padding: "16px", background: "#141414", border: "1px solid #3d2b00", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div key={node.id} style={{ padding: "16px", background: "var(--input-bg)", border: "1px solid #3d2b00", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
-                    <div style={{ fontSize: "15px", fontWeight: "700", color: "#fff" }}>
+                    <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--text-main)" }}>
                       {deviceLabel(node.id,'Pending device')}
                     </div>
-                    <div style={{ fontSize: "11px", fontFamily: "monospace", color: "#888", marginTop: "2px" }}>
-                      Fingerprint: <span style={{ color: "#ccc" }}>{fingerprintLabel(node.fingerprint)}</span>
+                    <div style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--text-muted)", marginTop: "2px" }}>
+                      Fingerprint: <span style={{ color: "var(--text-main)" }}>{fingerprintLabel(node.fingerprint)}</span>
                     </div>
                   </div>
                   <span style={{ padding: "4px 8px", background: "#2a220a", color: "#facc15", border: "1px solid #713f12", fontSize: "11px", borderRadius: "4px", fontWeight: "600" }}>
@@ -237,11 +237,11 @@ export function Nodes() {
                   </span>
                 </div>
 
-                <div style={{ background: "#0a0a0a", padding: "10px", borderRadius: "4px", border: "1px solid #222", fontSize: "11px" }}>
-                  <div style={{ fontWeight: "600", color: "#aaa", marginBottom: "4px" }}>Requested Capabilities:</div>
+                <div style={{ background: "#0a0a0a", padding: "10px", borderRadius: "4px", border: "1px solid var(--surface-border)", fontSize: "11px" }}>
+                  <div style={{ fontWeight: "600", color: "var(--text-muted)", marginBottom: "4px" }}>Requested Capabilities:</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
                     {(node.capabilities || []).map((cap) => (
-                      <span key={cap} style={{ padding: "2px 6px", background: "#222", color: "#eee", borderRadius: "3px" }}>
+                      <span key={cap} style={{ padding: "2px 6px", background: "var(--input-bg)", color: "#eee", borderRadius: "3px" }}>
                         {capabilityLabel(cap)}
                       </span>
                     ))}
@@ -251,13 +251,13 @@ export function Nodes() {
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", paddingTop: "4px" }}>
                   <button
                     onClick={() => handleRejectNode(node.id)}
-                    style={{ padding: "6px 12px", background: "#222", border: "1px solid #444", color: "#ccc", fontSize: "12px", borderRadius: "4px", cursor: "pointer" }}
+                    style={{ padding: "6px 12px", background: "var(--input-bg)", border: "1px solid var(--surface-border)", color: "var(--text-main)", fontSize: "12px", borderRadius: "4px", cursor: "pointer" }}
                   >
                     Reject
                   </button>
                   <button
                     onClick={() => handleApproveNode(node.id, node.capabilities)}
-                    style={{ padding: "6px 12px", background: "#166534", border: "none", color: "#fff", fontSize: "12px", fontWeight: "600", borderRadius: "4px", cursor: "pointer" }}
+                    style={{ padding: "6px 12px", background: "#166534", border: "none", color: "var(--text-main)", fontSize: "12px", fontWeight: "600", borderRadius: "4px", cursor: "pointer" }}
                   >
                     Approve Device / Knight
                   </button>
@@ -274,25 +274,25 @@ export function Nodes() {
       {/* Pairing Invitation Modal */}
       {showPairModal && invitation && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-          <div style={{ background: "#141414", border: "1px solid #282828", borderRadius: "8px", width: "100%", maxWidth: "400px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div style={{ background: "var(--input-bg)", border: "1px solid var(--surface-border)", borderRadius: "8px", width: "100%", maxWidth: "400px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#fff" }}>
+              <h3 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text-main)" }}>
                 📱 Pairing Invitation
               </h3>
-              <button onClick={() => setShowPairModal(false)} style={{ background: "none", border: "none", color: "#888", fontSize: "16px", cursor: "pointer" }}>✕</button>
+              <button onClick={() => setShowPairModal(false)} style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: "16px", cursor: "pointer" }}>✕</button>
             </div>
 
-            <div style={{ textAlign: "center", padding: "16px", background: "#0a0a0a", border: "1px solid #222", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "4px" }}>
-              <div style={{ fontSize: "10px", color: "#888", textTransform: "uppercase", letterSpacing: "1px" }}>Single-Use Pairing Code</div>
+            <div style={{ textAlign: "center", padding: "16px", background: "#0a0a0a", border: "1px solid var(--surface-border)", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "4px" }}>
+              <div style={{ fontSize: "10px", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "1px" }}>Single-Use Pairing Code</div>
               <div style={{ fontSize: "28px", fontFamily: "monospace", fontWeight: "700", color: "var(--accent-red)", letterSpacing: "2px" }}>
                 {invitation.code}
               </div>
-              <div style={{ fontSize: "11px", color: "#666" }}>
+              <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
                 Expires in {Math.round((invitation.expires_at - Date.now() / 1000) / 60)} minutes
               </div>
             </div>
 
-            <div style={{ fontSize: "11px", color: "#888", display: "flex", flexDirection: "column", gap: "4px" }}>
+            <div style={{ fontSize: "11px", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: "4px" }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span>Target Kingdom:</span>
                 <span style={{ color: "#eee", fontFamily: "monospace" }}>{invitation.kingdom_id}</span>
@@ -301,7 +301,7 @@ export function Nodes() {
 
             <button
               onClick={() => setShowPairModal(false)}
-              style={{ width: "100%", padding: "8px", background: "#222", color: "#ccc", border: "none", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
+              style={{ width: "100%", padding: "8px", background: "var(--input-bg)", color: "var(--text-main)", border: "none", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
             >
               Close
             </button>

@@ -55,7 +55,7 @@ export default function Tasks() {
 
       <h4>Active & Historical Tasks ({tasks.length})</h4>
       <label><input type="checkbox" checked={developerView} onChange={event => setDeveloperView(event.target.checked)}/>Show developer diagnostics for these owner-authorized tasks</label>
-      {taskData === null ? <p>Loading tasks…</p> : tasks.length === 0 ? <p style={{ color: "#888" }}>No tasks submitted yet.</p> : (
+      {taskData === null ? <p>Loading tasks…</p> : tasks.length === 0 ? <p style={{ color: "var(--text-muted)" }}>No tasks submitted yet.</p> : (
         <ul style={{ listStyle: "none", padding: 0 }}>
           {tasks.map(t => (
             <li key={t.id} className="task-record">

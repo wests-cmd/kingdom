@@ -16,7 +16,7 @@ export default function Logs() {
         <select
           value={filterType}
           onChange={e => setFilterType(e.target.value)}
-          style={{ padding: "6px 12px", background: "#222", color: "#fff", border: "1px solid var(--surface-border)", borderRadius: "4px" }}
+          style={{ padding: "6px 12px", background: "var(--input-bg)", color: "var(--text-main)", border: "1px solid var(--surface-border)", borderRadius: "4px" }}
         >
           <option value="">All Events</option>
           <option value="task.queued">task.queued</option>
@@ -31,7 +31,7 @@ export default function Logs() {
       </div>
 
       <h4>Event Log History ({events.length})</h4>
-      {events.length === 0 ? <p style={{ color: "#888" }}>No event history recorded.</p> : (
+      {events.length === 0 ? <p style={{ color: "var(--text-muted)" }}>No event history recorded.</p> : (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px" }}>
           {events.map(e => (
             <div key={e.event_id} className="card" style={{ padding: "10px 14px" }}>
