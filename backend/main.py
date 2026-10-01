@@ -23,6 +23,14 @@ app.add_middleware(
 )
 
 app.include_router(router)
+from backend.skills.portable_api import router as portable_router, initialize
+from backend.api import engine, lifecycle_manager
+initialize(engine, lifecycle_manager)
+app.include_router(portable_router)
+from backend.integrations.discord_ai_map.http import router as discord_router, initialize as initialize_discord
+from backend.skills.portable_api import service as portable_service, linker as discord_linker
+initialize_discord(portable_service, discord_linker)
+app.include_router(discord_router)
 app.include_router(ws_router)
 
 # Serve built frontend static assets if available

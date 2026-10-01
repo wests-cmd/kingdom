@@ -40,10 +40,10 @@ zero_trust = engine.security
 engine.lease_manager = task_lease_manager
 
 lifecycle_manager = SkillLifecycleManager(
-    available_tools=["http_client", "pdf_parser"],
-    available_capabilities=["model.inference", "python.exec"],
+    available_tools=["text.analyze", "code.python.analyze"],
+    available_capabilities=["compute"],
     available_models=[],
-    granted_permissions=["network.outbound", "filesystem.read"]
+    granted_permissions=[]
 )
 
 bundle_manager = SkillBundleManager(available_skills=[])

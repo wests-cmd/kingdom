@@ -47,8 +47,17 @@ class ProviderBase(ABC):
         pass
 
 class ProviderRegistry:
-    def __init__(self):
+    def __init__(self, repository=None):
         self._providers: Dict[str, ProviderBase] = {}
+        self.repository = repository
+
+    def save_catalog_entry(self, descriptor):
+        if self.repository is None:
+            raise RuntimeError("Persistent provider catalog is not configured")
+        self.repository.put("provider_catalog", descriptor["provider_id"], descriptor)
+
+    def catalog_entries(self):
+        return self.repository.list("provider_catalog") if self.repository else []
 
     def register_provider(self, provider: ProviderBase) -> None:
         self._providers[provider.provider_id] = provider

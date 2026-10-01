@@ -121,7 +121,7 @@ class RuntimeEngine:
                 capability=cap,
                 decision="DENIED",
                 reason=f"Task rejected by security firewall: {exc}",
-                metadata={"prompt_snippet": prompt[:100]},
+                metadata={"prompt_length": len(prompt)},
             )
             raise ValueError(f"Task rejected by security firewall: {exc}") from exc
 
