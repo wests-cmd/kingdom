@@ -4,6 +4,16 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from backend.security.capabilities import ALL_CAPABILITIES
+from backend.system.compatibility import (
+    CENTIPEDE_API_CONTRACT_VERSION,
+    CENTIPEDE_PROTOCOL,
+    KINGDOM_PRODUCT_VERSION,
+)
 
 INVENTORY = {
     "linux": ["Kingdom-{version}.AppImage", "kingdom-desktop_{version}_amd64.deb", "kingdom-backend-linux-x86_64"],
@@ -73,7 +83,13 @@ def verify(directory, version, commit):
             artifacts.append(artifact)
     expected = {a["filename"] for a in artifacts} | {f"{p}-manifest.json" for p in INVENTORY}
     assert {p.name for p in directory.iterdir()} == expected, "Unexpected or duplicate staging files"
-    release = {"product": "Kingdom", "release_name": "Kingdom v1TAS", "version": version,
+    release = {"product": "Kingdom", "release_name": "Kingdom v1TAS",
+               "version": KINGDOM_PRODUCT_VERSION, "release_version": version,
+               "kingdom_version": version,
+               "contract_version": CENTIPEDE_API_CONTRACT_VERSION,
+               "protocol": dict(CENTIPEDE_PROTOCOL),
+               "protocol_version": "kingdom.cluster.v1",
+               "capabilities": sorted(ALL_CAPABILITIES),
                "tag": f"v{version}", "commit": commit, "release_channel": "stable",
                "artifacts": artifacts, "limitations": ["Windows installers are unsigned.",
                "macOS Intel build is unsigned and not notarized; Apple Silicon native build is not supplied."]}

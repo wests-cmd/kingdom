@@ -36,3 +36,16 @@ def test_foreign_commit_blocks_publication(tmp_path):
     inventory(tmp_path)
     with pytest.raises(AssertionError):
         verify(tmp_path, "1.0.0", "different-commit")
+
+
+def test_release_manifest_exposes_centipede_and_kingdom_contracts(tmp_path):
+    inventory(tmp_path)
+    verify(tmp_path, "1.0.0", "source-commit")
+    release = json.loads((tmp_path / "release-manifest.json").read_text())
+    assert release["version"] == "v1TAS"
+    assert release["release_version"] == "1.0.0"
+    assert release["kingdom_version"] == "1.0.0"
+    assert release["contract_version"] == "1.4.0"
+    assert release["protocol"] == {"major": 1, "minor": 4}
+    assert release["protocol_version"] == "kingdom.cluster.v1"
+    assert "process.execute" in release["capabilities"]

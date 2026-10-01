@@ -33,6 +33,11 @@ from backend.skills.learning_engine import skill_learning_engine
 from backend.integrations.financial import financial_engine
 from backend.storage.db import db
 from backend.state import STATE
+from backend.system.compatibility import (
+    CENTIPEDE_API_CONTRACT_VERSION,
+    CENTIPEDE_PROTOCOL,
+    KINGDOM_PRODUCT_VERSION,
+)
 
 router = APIRouter(dependencies=[Depends(require_owner)])
 engine = RuntimeEngine()
@@ -190,6 +195,11 @@ def get_system_version():
 def get_system_compatibility():
     return {
         "kingdom_version": STATE.get("version", "1.0.0"),
+        "version": KINGDOM_PRODUCT_VERSION,
+        "release_version": STATE.get("version", "1.0.0"),
+        "contract_version": CENTIPEDE_API_CONTRACT_VERSION,
+        "protocol": dict(CENTIPEDE_PROTOCOL),
+        "capabilities": sorted(ALL_CAPABILITIES),
         "api_version": "v1",
         "protocol_version": "kingdom.cluster.v1",
         "event_schema_version": "1.0",

@@ -17,7 +17,16 @@ class TestKingdomAPI(unittest.TestCase):
         data = response.json()
         self.assertIn("running", data)
         self.assertIn("mode", data)
-        self.assertIn("version", data)
+        self.assertEqual(data["version"], "v1TAS")
+        self.assertEqual(data["release_version"], STATE["version"])
+        self.assertEqual(data["contract_version"], "1.4.0")
+        self.assertEqual(data["protocol"], {"major": 1, "minor": 4})
+        self.assertIn("filesystem.read", data["capabilities"])
+        self.assertIn("process.execute", data["capabilities"])
+        self.assertEqual(
+            set(data["tasks"]),
+            {"queued", "running", "completed", "failed", "cancelled"},
+        )
 
     def test_start_endpoint(self):
         with owner_client(app) as client:
@@ -43,8 +52,13 @@ class TestKingdomAPI(unittest.TestCase):
         response = self.client.get("/api/system/compatibility")
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(data["kingdom_version"], "1.0.1")
+        self.assertEqual(data["kingdom_version"], STATE["version"])
         self.assertEqual(data["protocol_version"], "kingdom.cluster.v1")
+        self.assertEqual(data["version"], "v1TAS")
+        self.assertEqual(data["release_version"], STATE["version"])
+        self.assertEqual(data["contract_version"], "1.4.0")
+        self.assertEqual(data["protocol"], {"major": 1, "minor": 4})
+        self.assertIn("process.execute", data["capabilities"])
         self.assertTrue(data["feature_flags"]["signed_rpc"])
 
     def test_version_sentinel_propagation(self):
@@ -58,7 +72,8 @@ class TestKingdomAPI(unittest.TestCase):
             self.assertEqual(res_compat["kingdom_version"], "99.99.99-sentinel")
 
             res_status = self.client.get("/status").json()
-            self.assertEqual(res_status["version"], "99.99.99-sentinel")
+            self.assertEqual(res_status["version"], "v1TAS")
+            self.assertEqual(res_status["release_version"], "99.99.99-sentinel")
         finally:
             if original_ver:
                 STATE["version"] = original_ver
