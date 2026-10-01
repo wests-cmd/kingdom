@@ -6,13 +6,17 @@
 **Release Channel:** stable
 **Authoritative Version Source:** `backend/state.py` (`STATE["version"] = "1.0.0"`)
 
+The SemVer release and the Kingdom product identity are separate values. `GET /api/system/version.version` and `/status.release_version` report `1.0.0`; the Centipede-facing `/status.version` reports `v1TAS`.
+
 ---
 
 ## 1. Release Architecture & Version Identity
 
 Kingdom enforces single-source versioning. All sub-components derive their version string from `backend/state.py` or synchronized package manifests verified by `scripts/validate_version.py`.
 
-- **Backend API:** `1.0.0` (Exposed via `GET /api/system/version` and `GET /status`)
+- **Backend release SemVer:** `1.0.0` (Exposed via `GET /api/system/version` and `/status.release_version`)
+- **Kingdom product identity:** `v1TAS` (Exposed via `/status.version` and `/api/system/compatibility.version`)
+- **Centipede API contract:** `1.4.0` using protocol `v1.x`; the separate Kingdom cluster RPC identifier remains `kingdom.cluster.v1`.
 - **Frontend UI:** `1.0.0` (`frontend/package.json`)
 - **Desktop Application Shell:** `1.0.0` (`desktop/package.json`)
 - **Mobile Gateway Client:** `1.0.0` (`apps/mobile/package.json`)
@@ -41,7 +45,13 @@ Every release manifest (`release-manifest.json`) and runtime API endpoint (`/api
 ```json
 {
   "product": "Kingdom",
-  "version": "1.0.0",
+  "version": "v1TAS",
+  "release_version": "1.0.0",
+  "kingdom_version": "1.0.0",
+  "contract_version": "1.4.0",
+  "protocol": {"major": 1, "minor": 4},
+  "protocol_version": "kingdom.cluster.v1",
+  "capabilities": ["filesystem.read", "process.execute"],
   "release_name": "Kingdom v1TAS",
   "tag": "v1.0.0",
   "compatibility": {

@@ -21,8 +21,14 @@ from backend.runtime.resilience import (
     RateLimiterEngine,
     CircuitState,
 )
+from backend.security.capabilities import ALL_CAPABILITIES
 from backend.security.zero_trust import ZeroTrust
 from backend.state import STATE
+from backend.system.compatibility import (
+    CENTIPEDE_API_CONTRACT_VERSION,
+    CENTIPEDE_PROTOCOL,
+    KINGDOM_PRODUCT_VERSION,
+)
 from backend.swarm.manager import SwarmManager
 
 
@@ -78,8 +84,19 @@ class RuntimeEngine:
         return {"status": "stopped" if stopped else "already_stopped", **self.status()}
 
     def status(self) -> dict[str, Any]:
-        return {**STATE, "scheduler_running": self.scheduler.running, "tasks": self.tasks.counts(),
-                "autonomy_level": self.execution_policy.get()["level"]}
+        return {
+            **STATE,
+            # `version` is the stable Kingdom product identity expected by
+            # Centipede. Preserve the SemVer value for update and release tooling.
+            "version": KINGDOM_PRODUCT_VERSION,
+            "release_version": STATE["version"],
+            "contract_version": CENTIPEDE_API_CONTRACT_VERSION,
+            "protocol": dict(CENTIPEDE_PROTOCOL),
+            "capabilities": sorted(ALL_CAPABILITIES),
+            "scheduler_running": self.scheduler.running,
+            "tasks": self.tasks.counts(),
+            "autonomy_level": self.execution_policy.get()["level"],
+        }
 
     def set_autonomy(self, level: int) -> dict[str, Any]:
         previous = self.execution_policy.get()["level"]
