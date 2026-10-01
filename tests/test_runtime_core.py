@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from backend.main import app
 from backend.memory.service import MemoryService
 from backend.runtime.engine import RuntimeEngine
+from backend.state import STATE
 
 
 async def wait_for_task_completion(engine: RuntimeEngine, task_id: str, timeout: float = 5.0) -> dict:
@@ -88,7 +89,12 @@ class RuntimeApiTests(unittest.TestCase):
         websocket = client.websocket_connect("/ws")
         websocket.__enter__()
         try:
-            self.assertEqual(websocket.receive_json()["type"], "runtime.snapshot")
+            snapshot = websocket.receive_json()
+            self.assertEqual(snapshot["type"], "runtime.snapshot")
+            self.assertEqual(snapshot["data"]["version"], "v1TAS")
+            self.assertEqual(snapshot["data"]["release_version"], STATE["version"])
+            self.assertEqual(snapshot["data"]["protocol"], {"major": 1, "minor": 4})
+            self.assertIn("filesystem.read", snapshot["data"]["capabilities"])
         finally:
             websocket.__exit__(None, None, None)
 
