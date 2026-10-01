@@ -51,6 +51,10 @@ if os.path.exists(frontend_dist):
     if os.path.exists(assets_dir):
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
+    branding_dir = os.path.join(frontend_dist, "branding")
+    if os.path.exists(branding_dir):
+        app.mount("/branding", StaticFiles(directory=branding_dir), name="branding")
+
     @app.get("/")
     def serve_frontend_index():
         index_file = os.path.join(frontend_dist, "index.html")

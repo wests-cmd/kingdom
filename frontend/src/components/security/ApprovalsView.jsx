@@ -51,7 +51,7 @@ export default function ApprovalsView() {
       {!loading && approvals.length === 0 && <p style={{ color: "#888" }}>No pending security approval requests.</p>}
 
       {approvals.map((req) => (
-        <div key={req.approval_id} style={{ background: "#222", padding: "12px", borderRadius: "6px", marginBottom: "8px" }}>
+        <div key={req.approval_id} style={{ background: "var(--input-bg)", padding: "12px", borderRadius: "6px", marginBottom: "8px" }}>
           <div><strong>Requested Capability:</strong> {req.capability}</div>
           <div><strong>Node:</strong> {req.requesting_node} ({req.requesting_actor})</div>
           <div><strong>Action:</strong> {req.operation}</div>

@@ -46,12 +46,12 @@ export default function Memory() {
 
       <div style={{ marginBottom: "20px" }}>
         <h4>Memory Records ({memories.length})</h4>
-        {data === null ? <p>Loading memory…</p> : memories.length === 0 ? <p style={{ color: "#888" }}>No memory records found.</p> : (
+        {data === null ? <p>Loading memory…</p> : memories.length === 0 ? <p style={{ color: "var(--text-muted)" }}>No memory records found.</p> : (
           <ul style={{ listStyle: "none", padding: 0 }}>
             {memories.map(m => (
-              <li key={m.id} style={{ background: "#222", padding: "8px 12px", borderRadius: "4px", marginBottom: "6px" }}>
+              <li key={m.id} style={{ background: "var(--input-bg)", padding: "8px 12px", borderRadius: "4px", marginBottom: "6px" }}>
                 <div><strong>{m.content}</strong></div>
-                <div style={{ fontSize: "0.8em", color: "#888" }}>Source: {m.metadata?.source || (m.metadata?.task_id ? "task" : "Unspecified")} | Trust: {m.metadata?.trust || "Unspecified"}</div>
+                <div style={{ fontSize: "0.8em", color: "var(--text-muted)" }}>Source: {m.metadata?.source || (m.metadata?.task_id ? "task" : "Unspecified")} | Trust: {m.metadata?.trust || "Unspecified"}</div>
               </li>
             ))}
           </ul>

@@ -1,4 +1,4 @@
-# KINGDOM v1TAS (v1.1.0) — Distributed AI Runtime & Orchestration Infrastructure
+# KINGDOM v1TAS (v1.1.1) — Distributed AI Runtime & Orchestration Infrastructure
 
 [![Backend CI](https://github.com/wests-cmd/kingdom/actions/workflows/ci.yml/badge.svg)](https://github.com/wests-cmd/kingdom/actions)
 [![License: CYA v2.0](https://img.shields.io/badge/License-CYA_v2.0-red.svg)](LICENSE)
@@ -9,7 +9,7 @@ Kingdom (`wests-cmd/kingdom`) is the core zero-trust distributed runtime and inf
 
 **First Stable Release:** `Kingdom v1TAS`
 **Canonical Version:** `1.0.2`
-**Git Release Tag:** `v1.1.0`
+**Git Release Tag:** `v1.1.1`
 
 ---
 
@@ -45,7 +45,7 @@ Normal users do NOT need to install Python, Node.js, or npm. The packaged Kingdo
    - **Custom Profile:** Manually select individual active Knights (Planner, Coder, Researcher, Memory, Security) and toggle the Command Center UI on/off.
 4. **Profile Persistence:** Your setup choice is stored securely in per-user data (`<userData>/local_profile.json`).
 
-This repository prepares the v1.1.0 feature release. Only builds that pass the native release gates are published; check the [GitHub Releases page](https://github.com/wests-cmd/kingdom/releases) for the currently downloadable version.
+This repository prepares the v1.1.1 appearance release. Settings offers saved palettes, custom accents, light/dark mode, spacing, display size, reduced motion and background controls using the crowned K and purple citadel artwork. See [appearance and artwork](docs/BRANDING.md). Only builds that pass the native release gates are published; check the [GitHub Releases page](https://github.com/wests-cmd/kingdom/releases) for the currently downloadable version.
 
 | Platform | Package Format | Release target | Build Artifact |
 |---|---|---|---|
@@ -54,7 +54,7 @@ This repository prepares the v1.1.0 feature release. Only builds that pass the n
 | **Windows** | `NSIS` | x86_64, unsigned | `Kingdom-Setup-1.0.2.exe` |
 | **macOS** | `DMG` | Intel x86_64, unsigned and not notarized | `Kingdom-1.0.2.dmg` |
 
-Each installer includes a backend built on its own target operating system. Verify downloads against `SHA256SUMS` and `release-manifest.json`. The release also includes native startup evidence and dashboard screenshots. Native Apple Silicon, Windows ARM64, Linux ARM64, and mobile applications are not supplied in v1.1.0. Signing and notarization are not claimed; OS trust prompts may apply.
+Each installer includes a backend built on its own target operating system. Verify downloads against `SHA256SUMS` and `release-manifest.json`. The release also includes native startup evidence and dashboard screenshots. Native Apple Silicon, Windows ARM64, Linux ARM64, and mobile applications are not supplied in v1.1.1. Signing and notarization are not claimed; OS trust prompts may apply.
 
 ---
 

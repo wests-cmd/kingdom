@@ -1,7 +1,7 @@
 {
   "name": "kingdom-desktop",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Kingdom Native Desktop Application Shell",
   "homepage": "https://github.com/wests-cmd/kingdom",
   "author": {
@@ -28,21 +28,24 @@
       "target": [
         "nsis"
       ],
-      "artifactName": "Kingdom-Setup-${version}.${ext}"
+      "artifactName": "Kingdom-Setup-${version}.${ext}",
+      "icon": "branding/kingdom.ico"
     },
     "mac": {
       "target": [
         "dmg"
       ],
       "artifactName": "Kingdom-${version}.${ext}",
-      "identity": null
+      "identity": null,
+      "icon": "branding/kingdom.icns"
     },
     "linux": {
       "target": [
         "AppImage",
         "deb"
       ],
-      "maintainer": "Kingdom Maintainers <westd613@gmail.com>"
+      "maintainer": "Kingdom Maintainers <westd613@gmail.com>",
+      "icon": "branding/kingdom-icon.png"
     },
     "extraResources": [
       {
@@ -56,7 +59,15 @@
       {
         "from": "../configs/install_profiles.json",
         "to": "configs/install_profiles.json"
+      },
+      {
+        "from": "branding/kingdom-icon.png",
+        "to": "branding/kingdom-icon.png"
       }
-    ]
+    ],
+    "nsis": {
+      "createDesktopShortcut": "always",
+      "shortcutName": "Kingdom"
+    }
   }
 }

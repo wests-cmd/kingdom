@@ -130,7 +130,8 @@ async function createWindow() {
     width: 1280,
     height: 800,
     title: 'Kingdom — Distributed AI Runtime',
-    backgroundColor: '#0d0d0d',
+    backgroundColor: '#100e15',
+    icon: path.join(app.isPackaged ? process.resourcesPath : __dirname, 'branding', 'kingdom-icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -160,7 +161,8 @@ function createSetupWindow() {
     height: 680,
     resizable: false,
     title: 'Set Up Kingdom',
-    backgroundColor: '#0d0d0d',
+    backgroundColor: '#100e15',
+    icon: path.join(app.isPackaged ? process.resourcesPath : __dirname, 'branding', 'kingdom-icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -297,6 +299,17 @@ async function runReleaseSmoke(reportPath) {
     if (preview.checksum !== exported.checksum || reimport.checksum !== exported.checksum) throw new Error('Native map roundtrip differs');
     return {catalogLoaded:true,roundtripEquivalent:true,checksum:exported.checksum};
   })()`);
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e => e.textContent === 'Settings').click()");
+  await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('.appearance-settings select')) && document.querySelector('.brand-mark')?.naturalWidth === 512"), 'packaged appearance settings and logo');
+  await mainWindow.webContents.executeJavaScript("(() => {const select=document.querySelector('.appearance-settings select'); select.value='light'; select.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  await until(() => mainWindow.webContents.executeJavaScript("document.documentElement.dataset.theme === 'light'"), 'applied light mode');
+  mainWindow.webContents.reload();
+  await until(() => !mainWindow.webContents.isLoading() && mainWindow.webContents.executeJavaScript("document.documentElement.dataset.theme === 'light' && document.querySelector('.brand-mark')?.naturalWidth === 512"), 'persisted native appearance');
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e => e.textContent === 'Settings').click()");
+  await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('.appearance-settings'))"), 'appearance reset page');
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('button')).find(e => e.textContent === 'Reset appearance').click()");
+  await until(() => mainWindow.webContents.executeJavaScript("document.documentElement.dataset.theme === 'dark'"), 'restored royal appearance');
+  report.appearance = {logoLoaded:true,lightModeApplied:true,persistedAfterReload:true,resetVerified:true};
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e => e.textContent === 'Dashboard').click()");
   await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('.card-value')) && document.body.textContent.includes('Last synchronized at')"), 'dashboard before evidence capture');
   report.dashboardLoaded = true;

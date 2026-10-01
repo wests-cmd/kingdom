@@ -42,11 +42,11 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", padding: "8px 16px", background: "#141414", border: "1px solid #282828", borderRadius: "6px" }}>
-        <div style={{ fontSize: "12px", color: "#aaa" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", padding: "8px 16px", background: "var(--input-bg)", border: "1px solid var(--surface-border)", borderRadius: "6px" }}>
+        <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
           Runtime Health Stream: <span style={{ fontWeight: "700", color: connectionState === "LIVE" ? "#4ade80" : "#f87171" }}>{connectionState}</span>
         </div>
-        <div style={{ fontSize: "11px", color: "#666" }}>
+        <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
           {lastUpdated ? `Last synchronized at ${lastUpdated}` : "Synchronizing state..."}
         </div>
       </div>

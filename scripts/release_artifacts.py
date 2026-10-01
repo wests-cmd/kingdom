@@ -108,6 +108,8 @@ Administrative APIs and live connections require owner authentication. Worker re
 
 Windows installers are unsigned. The macOS Intel installer is unsigned and not notarized; a native Apple Silicon installer is not supplied. OS trust prompts may apply. No signing or notarization claim is made.
 
+This patch adds the user-selected crowned K desktop icon and purple citadel artwork, with working device-local appearance settings: five palettes, custom accent, light/dark/device color mode, spacing, display size, reduced motion, background intensity and reset. Accent text and buttons adjust contrast automatically. Preferences persist on this browser or desktop installation.
+
 This release adds a restrained interface, live recorded activity, persisted and enforced L0-L3 task autonomy, actual runtime polling modes, and cancellation of pending task approvals. Static sample topology and unsupported autonomy/mode cards are removed.
 
 This release fixes knowledge text ingestion, draft skill teaching, worker identity displays, memory listing, task failure explanations, and log filters/timestamps. Device connections support single-use codes and locally generated QR links to a reachable HTTPS server. Browser companions require owner approval and do not gain owner/task authority; native mobile packages remain unavailable.

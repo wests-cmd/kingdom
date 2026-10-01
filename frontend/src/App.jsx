@@ -14,6 +14,8 @@ import Learning from "./pages/Learning"
 import { Nodes } from "./pages/Nodes"
 import { MobileGateway } from "./pages/MobileGateway"
 import Settings from "./pages/Settings"
+import AppearanceSettings from './pages/AppearanceSettings'
+import {AppearanceProvider} from './components/common/AppearanceProvider'
 import Logs from "./pages/Logs"
 import ConnectDevice from "./pages/ConnectDevice"
 import { realtime } from "./websocket"
@@ -24,7 +26,7 @@ import "./styles/app.css"
 export default function App() {
   const [hash, setHash] = useState(window.location.hash)
   useEffect(() => { const change = () => setHash(window.location.hash); window.addEventListener('hashchange', change); return () => window.removeEventListener('hashchange', change) }, [])
-  return hash.startsWith('#/connect') ? <ConnectDevice /> : <OwnerApp />
+  return <AppearanceProvider>{hash.startsWith('#/connect') ? <ConnectDevice /> : <OwnerApp />}</AppearanceProvider>
 }
 
 function OwnerApp() {
@@ -62,6 +64,7 @@ function OwnerApp() {
       case "Nodes": return <Nodes />
       case "Mobile": return <MobileGateway />
       case "Security": return <Settings />
+      case "Settings": return <AppearanceSettings />
       case "Logs": return <Logs />
       default: return <Dashboard />
     }

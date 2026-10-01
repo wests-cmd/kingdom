@@ -40,7 +40,7 @@ jobs:
           npm ci
           npm run build
       - name: Verify safe presentation and mobile connection contracts
-        run: node --test frontend/tests/presentation.test.js apps/mobile/mobile-client.test.js
+        run: node --test frontend/tests/*.test.js apps/mobile/mobile-client.test.js
 
   build-desktop-release:
     name: Package Desktop Release
