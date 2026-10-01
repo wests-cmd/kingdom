@@ -5,6 +5,7 @@ import Swarm from "./pages/Swarm"
 import Runtime from "./pages/Runtime"
 import Tasks from "./pages/Tasks"
 import AIMap from "./pages/AIMap"
+import SkillMaps from "./pages/SkillMaps"
 import Memory from "./pages/Memory"
 import Routing from "./pages/Routing"
 import Governance from "./pages/Governance"
@@ -52,6 +53,7 @@ function OwnerApp() {
       case "Runtime": return <Runtime />
       case "Tasks": return <Tasks />
       case "AIMap": return <AIMap />
+      case "SkillMaps": return <SkillMaps />
       case "Memory": return <Memory />
       case "Routing": return <Routing />
       case "Governance": return <Governance />
@@ -78,7 +80,7 @@ function OwnerApp() {
 
       <div className="main-container">
         <header className="topbar">
-          <div className="page-title">{currentPage}</div>
+          <div className="page-title">{currentPage === 'SkillMaps' ? 'Skill maps & Discord' : currentPage}</div>
           <div className="status-indicator">
             Kingdom:{" "}
             <span className={isConnected ? "badge-online" : "badge-offline"}>

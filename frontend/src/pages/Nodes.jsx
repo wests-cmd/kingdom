@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import DevicePairing from '../components/DevicePairing';
 import ConnectDevice from './ConnectDevice';
+import {deviceLabel,capabilityLabel,fingerprintLabel,nodeStateLabel} from '../components/common/presentation';
 
 export function Nodes() {
   const [kingdomIdentity, setKingdomIdentity] = useState(null);
@@ -165,11 +166,11 @@ export function Nodes() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
                   <div style={{ fontWeight: "700", color: "#fff", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
-                    {node.public_identity?.display_name || node.id}
-                    <span style={{ fontSize: "10px", padding: "1px 6px", background: "#222", color: "#aaa", borderRadius: "3px", textTransform: "uppercase" }}>{node.role}</span>
+                    {deviceLabel(node.public_identity?.display_name || node.id)}
+                    <span style={{ fontSize: "10px", padding: "1px 6px", background: "#222", color: "#aaa", borderRadius: "3px", textTransform: "uppercase" }}>{deviceLabel(node.role,'Remote device')}</span>
                   </div>
                   <div style={{ fontSize: "11px", fontFamily: "monospace", color: "#777", marginTop: "4px" }}>
-                    FP: {node.fingerprint || 'Local Derived'}
+                    FP: {fingerprintLabel(node.fingerprint)}
                   </div>
                 </div>
                 <span style={{
@@ -178,7 +179,7 @@ export function Nodes() {
                   color: node.node_state === 'CONNECTED' || node.node_state === 'APPROVED' ? '#4ade80' : node.node_state === 'REVOKED' ? '#f87171' : '#facc15',
                   border: node.node_state === 'CONNECTED' || node.node_state === 'APPROVED' ? '1px solid #166534' : node.node_state === 'REVOKED' ? '1px solid #7f1d1d' : '1px solid #713f12'
                 }}>
-                  {node.is_local ? `LOCAL / ${node.status || "unknown"}` : node.node_state}
+                  {node.is_local ? `LOCAL / ${nodeStateLabel(node.status)}` : nodeStateLabel(node.node_state)}
                 </span>
               </div>
 
@@ -188,7 +189,7 @@ export function Nodes() {
                   {!(node.granted_capabilities || node.capabilities || []).length && <span>None recorded</span>}
                   {(node.granted_capabilities || node.capabilities || []).map((cap, i) => (
                     <span key={i} style={{ padding: "2px 6px", background: "#222", color: "#ccc", borderRadius: "3px", fontSize: "10px" }}>
-                      {cap}
+                      {capabilityLabel(cap)}
                     </span>
                   ))}
                 </div>
@@ -225,10 +226,10 @@ export function Nodes() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
                     <div style={{ fontSize: "15px", fontWeight: "700", color: "#fff" }}>
-                      🔑 {node.id}
+                      {deviceLabel(node.id,'Pending device')}
                     </div>
                     <div style={{ fontSize: "11px", fontFamily: "monospace", color: "#888", marginTop: "2px" }}>
-                      Fingerprint: <span style={{ color: "#ccc" }}>{node.fingerprint}</span>
+                      Fingerprint: <span style={{ color: "#ccc" }}>{fingerprintLabel(node.fingerprint)}</span>
                     </div>
                   </div>
                   <span style={{ padding: "4px 8px", background: "#2a220a", color: "#facc15", border: "1px solid #713f12", fontSize: "11px", borderRadius: "4px", fontWeight: "600" }}>
@@ -241,7 +242,7 @@ export function Nodes() {
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
                     {(node.capabilities || []).map((cap) => (
                       <span key={cap} style={{ padding: "2px 6px", background: "#222", color: "#eee", borderRadius: "3px" }}>
-                        {cap}
+                        {capabilityLabel(cap)}
                       </span>
                     ))}
                   </div>
