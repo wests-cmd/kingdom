@@ -55,7 +55,7 @@ class TestKingdomAPI(unittest.TestCase):
         self.assertEqual(data["kingdom_version"], "1.0.1")
         self.assertEqual(data["protocol_version"], "kingdom.cluster.v1")
         self.assertEqual(data["version"], "v1TAS")
-        self.assertEqual(data["release_version"], "1.0.0")
+        self.assertEqual(data["release_version"], STATE["version"])
         self.assertEqual(data["contract_version"], "1.4.0")
         self.assertEqual(data["protocol"], {"major": 1, "minor": 4})
         self.assertIn("process.execute", data["capabilities"])
