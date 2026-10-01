@@ -7,7 +7,7 @@ export default function AIMap() {
 
   return (
     <div>
-      <h2>AI Intelligence Maps</h2>
+      <p>Illustrative architecture view; this graph does not show live runtime telemetry.</p><h2>AI Intelligence Maps</h2>
 
       <div style={{ display: "flex", gap: "8px", margin: "16px 0" }}>
         {mapTypes.map(t => (

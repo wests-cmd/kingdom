@@ -12,11 +12,6 @@ export function Nodes() {
   const [invitation, setInvitation] = useState(null);
   const [activeTab, setActiveTab] = useState('nodes');
 
-  // Knight Connection Form State
-  const [joinCode, setJoinCode] = useState('');
-  const [knightName, setKnightName] = useState('');
-  const [joinStatus, setJoinStatus] = useState(null);
-
   const fetchClusterState = async () => {
     try {
       setLoading(true);
@@ -258,7 +253,7 @@ export function Nodes() {
                     onClick={() => handleApproveNode(node.id, node.capabilities)}
                     style={{ padding: "6px 12px", background: "#166534", border: "none", color: "#fff", fontSize: "12px", fontWeight: "600", borderRadius: "4px", cursor: "pointer" }}
                   >
-                    Approve Knight
+                    Approve Device / Knight
                   </button>
                 </div>
               </div>

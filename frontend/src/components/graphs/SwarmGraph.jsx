@@ -16,7 +16,7 @@ export default function SwarmGraph() {
 
   return (
     <div style={{ background: "#181818", padding: "16px", borderRadius: "8px", color: "#fff", marginTop: "16px" }}>
-      <h4>Live Swarm Topology Visualizer</h4>
+      <h4>Illustrative Swarm Layout</h4>
       <svg width="500" height="300" style={{ display: "block", margin: "auto" }}>
         {links.map((l, i) => (
           <line key={i} x1={l.from.x} y1={l.from.y} x2={l.to.x} y2={l.to.y} stroke="#555" strokeWidth="2" />
