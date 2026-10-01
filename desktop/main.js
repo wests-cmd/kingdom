@@ -265,7 +265,7 @@ async function runReleaseSmoke(reportPath) {
     && mainWindow.webContents.getURL().startsWith('http://127.0.0.1')
     && await mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('#root')?.children.length)"), 'rendered dashboard');
   const apiVersion = await mainWindow.webContents.executeJavaScript("fetch('/api/system/version').then(r => r.json())");
-  if (apiVersion.version !== '1.0.0') throw new Error('Packaged backend version mismatch');
+  if (apiVersion.version !== require('./package.json').version) throw new Error('Packaged backend version mismatch');
   await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('.badge-online')) && document.body.textContent.includes('Last synchronized at')"), 'realtime connection and dashboard data');
   await mainWindow.webContents.executeJavaScript("fetch('/start', {method: 'POST', headers: {'X-Kingdom-Request': '1'}}).then(r => {if (!r.ok) throw new Error('Runtime start failed'); return r.json()})");
   await until(() => mainWindow.webContents.executeJavaScript("fetch('/status').then(r => r.json()).then(s => s.running && s.scheduler_running)"), 'running scheduler');
