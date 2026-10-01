@@ -115,7 +115,9 @@ responses never become verified skills. DNS resolution uses the operating system
 resolver; its latency is not an independently interruptible deadline.
 
 The sample requests `product_research`, `price_comparison` and `web_search`.
-Only the limited product-metadata check is supported. The actual `product-research`
+Only the limited product-metadata check is supported. Map resource preferences rank currently eligible local workers first, followed by workers in the saved profile preference for that map. Unknown or unavailable resources are ignored; ranking never grants a permission or installs a worker.
+
+The actual `product-research`
 skill, price comparison, unrestricted web search, buying, remote/federated provider
 workers, authenticated adapters and arbitrary uploaded endpoints are unsupported.
 Choose **Test reviewed providers**, inspect **Tasks**, then **Collect results**
@@ -129,6 +131,8 @@ to Kingdom's existing SQLite database. It stores maps, previews, explicit settin
 profile preferences, task bindings, challenge hashes, links and replay IDs. Existing
 tasks/memory/schema are preserved. No interaction body, bot token, webhook token
 or provider credential is persisted. Do not share your whole database as evidence.
+
+Worker details show the intersection of current grants in both active security layers. Model permission still requires a configured model provider; provider permission still requires an explicitly enabled service. Revoked workers show offline.
 
 Normal worker cards, memory/task indexes, events and routing views show curated
 summaries. Source input and generated text are deliberate task details; developer

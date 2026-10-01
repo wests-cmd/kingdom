@@ -24,12 +24,16 @@ class PortableMapService:
 
     def profiles(self, actor):
         self.authorize(actor, "view_status")
-        from pathlib import Path
-        catalog = json.loads((Path(__file__).parents[2] / "configs/install_profiles.json").read_text(encoding="utf-8"))
+        catalog = self._profile_catalog()
         return {"available": [{"profile_id": key, "name": value["name"], "knights": value["knights"]}
                               for key, value in catalog["profiles"].items()],
                 "preferences": self.repository.get("profile_preferences", actor),
-                "notice": "Preferences do not change installation, permissions or active workers."}
+                "notice": "Preferences rank eligible installed workers; they do not change installation or permissions."}
+
+    @staticmethod
+    def _profile_catalog():
+        from pathlib import Path
+        return json.loads((Path(__file__).parents[2] / "configs/install_profiles.json").read_text(encoding="utf-8"))
 
     def enable_provider(self, actor, provider_id, enabled):
         self.authorize(actor, "manage_providers")
@@ -80,6 +84,16 @@ class PortableMapService:
                 and knight.health == "healthy" and knight.current_task is None
                 and not self.engine.swarm.registry._active[role]]
 
+    def preferred_knights(self, actor, model):
+        eligible = self.compatible_knights()
+        hints = list(model.preferred_resources)
+        preference = self.repository.get("profile_preferences", actor)
+        if preference and preference.get("map_id") == model.map_id:
+            profile = self._profile_catalog()["profiles"].get(preference.get("profile_id"), {})
+            hints.extend(profile.get("knights", []))
+        ranked = list(dict.fromkeys(role for role in hints if role in eligible))
+        return ranked + [role for role in eligible if role not in ranked]
+
     def confirm(self, actor, preview_id, checksum):
         self.authorize(actor, "import_skillmaps")
         # Transaction makes confirmation single-use even under concurrent component clicks.
@@ -112,7 +126,7 @@ class PortableMapService:
         for capability in ("test_skillmaps", "run_task", "providers.test"):
             self.authorize(actor, capability)
         model = self.get(actor, map_id)
-        knights = self.compatible_knights()
+        knights = self.preferred_knights(actor, model)
         if not knights:
             raise ValueError("No available worker has the reviewed provider-test permission")
         tasks, skipped = [], [{"provider_id": p.provider_id, "status": "unsupported"} for p in model.providers[model.constraints.max_tests:]]

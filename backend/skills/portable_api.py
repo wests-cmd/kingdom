@@ -5,6 +5,8 @@ from backend.skills.portable_service import PortableMapService
 from backend.integrations.discord_ai_map.identity import DiscordIdentityLinker, DISCORD_GRANTS
 from backend.integrations.public_apis import registry, REVIEWED, refresh_catalog
 
+from backend.skills import portable_responses as schemas
+
 router = APIRouter(dependencies=[Depends(require_owner)])
 service = None
 linker = None
@@ -79,32 +81,32 @@ def boundary(call):
         raise HTTPException(503, "Public provider did not respond. Existing local records are preserved.") from exc
 
 
-@router.get("/skillmaps")
+@router.get("/skillmaps", response_model=list[schemas.MapSummary], response_model_exclude_none=True)
 def list_maps():
     return [{"map_id": row["map_id"], "checksum": row["checksum"]} for row in service.repository.list("portable_map") if row["actor"] == "owner"]
 
 
-@router.get("/profiles/preferences")
+@router.get("/profiles/preferences", response_model=schemas.ProfileCatalog, response_model_exclude_none=True)
 def profiles():
     return boundary(lambda: service.profiles("owner"))
 
 
-@router.post("/profiles/preferences")
+@router.post("/profiles/preferences", response_model=schemas.Preference, response_model_exclude_none=True)
 def profile_preferences(request: ProfilePreferences):
     return boundary(lambda: service.set_profile_preferences("owner", request.profile_id, request.map_id))
 
 
-@router.post("/skillmaps/preview")
+@router.post("/skillmaps/preview", response_model=schemas.MapPreview, response_model_exclude_none=True)
 def preview(upload: Upload):
     return boundary(lambda: service.preview("owner", upload.filename, upload.content.encode()))
 
 
-@router.post("/skillmaps/confirm")
+@router.post("/skillmaps/confirm", response_model=schemas.SavedMap, response_model_exclude_none=True)
 def confirm(request: Confirmation):
     return boundary(lambda: service.confirm("owner", request.preview_id, request.checksum))
 
 
-@router.get("/skillmaps/{map_id}/export")
+@router.get("/skillmaps/{map_id}/export", response_model=schemas.ExportedMap, response_model_exclude_none=True)
 def export(map_id: str):
     def action():
         result = service.export("owner", map_id)
@@ -120,54 +122,59 @@ def download(map_id: str):
                              "X-Content-SHA256": result["checksum"], "Cache-Control": "no-store"})
 
 
-@router.post("/skillmaps/{map_id}/test")
+@router.post("/skillmaps/{map_id}/test", response_model=schemas.TestBatch, response_model_exclude_none=True)
 def test_map(map_id: str):
     return boundary(lambda: service.submit_tests("owner", map_id))
 
 
-@router.post("/skillmaps/{map_id}/results")
+@router.post("/skillmaps/{map_id}/results", response_model=schemas.TestResults, response_model_exclude_none=True)
 def results(map_id: str):
     return boundary(lambda: service.collect_results("owner", map_id))
 
 
-@router.get("/providers/catalog")
+@router.get("/providers/catalog", response_model=schemas.ProviderCatalog, response_model_exclude_none=True)
 def providers():
     return {"discovered": registry.catalog_entries(), "reviewed": [
         {"provider_id": pid, "capabilities": spec["capabilities"], "documentation": spec["documentation"],
          "enabled": bool((service.repository.get("provider_settings", pid) or {}).get("enabled"))} for pid, spec in REVIEWED.items()]}
 
 
-@router.post("/providers/catalog/refresh")
+@router.post("/providers/catalog/refresh", response_model=schemas.CatalogRefresh, response_model_exclude_none=True)
 def refresh():
-    return boundary(refresh_catalog)
+    def action():
+        result = refresh_catalog()
+        service.engine.events.publish("provider.catalog_refreshed", {"count": result["count"]})
+        return result
+    return boundary(action)
 
 
-@router.post("/providers/{provider_id}/enable")
+@router.post("/providers/{provider_id}/enable", response_model=schemas.ProviderSetting, response_model_exclude_none=True)
 def enable_provider(provider_id: str, request: Enable):
     return boundary(lambda: service.enable_provider("owner", provider_id, request.enabled))
 
 
-@router.post("/providers/workers/{role}/permission")
+@router.post("/providers/workers/{role}/permission", response_model=schemas.WorkerSetting, response_model_exclude_none=True)
 def worker_permission(role: str, request: Enable):
     def action():
         _grant_worker(role, request.enabled)
         service.repository.put("provider_worker", role, {"role": role, "enabled": request.enabled})
+        service.engine.events.publish("provider.worker_permission_updated", {"role": role, "enabled": request.enabled})
         return {"role": role, "provider_tests_enabled": request.enabled}
     return boundary(action)
 
 
-@router.get("/discord/links")
+@router.get("/discord/links", response_model=schemas.DiscordLinks, response_model_exclude_none=True)
 def links():
     from backend.integrations.discord_ai_map.http import adapter
     return {"links": service.repository.list("discord_link"), "available_permissions": sorted(DISCORD_GRANTS),
             "configured": bool(adapter and adapter.config.enabled), "live_connection_verified": False}
 
 
-@router.post("/discord/links/confirm")
+@router.post("/discord/links/confirm", response_model=schemas.DiscordLink, response_model_exclude_none=True)
 def link_confirm(request: LinkConfirmation):
     return boundary(lambda: linker.confirm("owner", request.code, request.grants))
 
 
-@router.post("/discord/links/{user_id}/revoke")
+@router.post("/discord/links/{user_id}/revoke", response_model=schemas.Revocation, response_model_exclude_none=True)
 def revoke(user_id: str):
     return boundary(lambda: linker.revoke("owner", user_id))

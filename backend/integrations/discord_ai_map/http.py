@@ -7,6 +7,7 @@ import time
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from backend.integrations.discord_ai_map.adapter import DiscordAdapter, message
 from backend.integrations.discord_ai_map.config import DiscordConfig
+from backend.skills.portable_responses import InitialInteractionResponse
 
 router = APIRouter()
 adapter = None
@@ -25,7 +26,7 @@ def initialize(service, linker, config=None):
     logging.getLogger("httpx").addFilter(WebhookLogFilter())
 
 
-@router.post("/discord/interactions")
+@router.post("/discord/interactions", response_model=InitialInteractionResponse, response_model_exclude_none=True)
 async def interactions(request: Request, background: BackgroundTasks):
     if not adapter.config.enabled:
         raise HTTPException(503, "Discord integration is disabled")

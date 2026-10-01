@@ -15,7 +15,7 @@ class SwarmManager:
     def __init__(self, event_publisher, security: ZeroTrust | None = None):
         self._publish = event_publisher
         self.security = security or ZeroTrust()
-        self.registry = KnightRegistry()
+        self.registry = KnightRegistry(security=self.security)
         self._balancer = WorkloadBalancer()
         self._complexity = ComplexityRouter()
 

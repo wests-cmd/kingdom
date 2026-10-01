@@ -57,10 +57,11 @@ export default function Swarm() {
                 <div><strong>Health:</strong> {selectedKnight.health}</div>
                 <div><strong>Execution:</strong> {selectedKnight.is_local ? "Local Process" : "Remote Node"}</div>
                 <div><strong>Current Task:</strong> {selectedKnight.activity || "Status unavailable"}</div>
-                <div><strong>Capabilities:</strong></div>
+                <div><strong>Current permissions:</strong></div>
                 <ul style={{ paddingLeft: "16px", fontSize: "12px", color: "var(--text-muted)" }}>
-                  {(selectedKnight.capabilities || []).map((cap, i) => <li key={i}>{({"model.inference":"Generate text","memory.read":"Read knowledge","compute":"Analyze supplied text"})[cap] || "Unsupported capability"}</li>)}
+                  {(selectedKnight.capabilities || []).map((cap, i) => <li key={i}>{({"model.inference":"Model text permission","memory.read":"Read knowledge permission","compute":"Built-in text and syntax analysis","providers.test":"Reviewed provider-test permission"})[cap] || "Unsupported permission"}</li>)}
                 </ul>
+                <p className="muted">Model text needs a configured provider. Provider tests also need an enabled service.</p>
               </div>
             </div>
           ) : (

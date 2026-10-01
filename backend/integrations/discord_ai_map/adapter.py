@@ -22,7 +22,7 @@ class DiscordAdapter:
         self.config, self.service, self.linker = config, service, linker
 
     def verify(self, signature, timestamp, body):
-        if not self.config.enabled or not timestamp.isdigit() or abs(time.time() - int(timestamp)) > 300:
+        if not self.config.enabled or not re.fullmatch(r"[0-9]{1,12}", timestamp) or abs(time.time() - int(timestamp)) > 300:
             raise PermissionError("Discord request is disabled or expired")
         try:
             Ed25519PublicKey.from_public_bytes(bytes.fromhex(self.config.public_key)).verify(

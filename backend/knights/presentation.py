@@ -4,8 +4,8 @@ from pydantic import BaseModel
 
 ROLES = {"planner": "Planning", "coder": "Code analysis", "researcher": "Research",
          "memory": "Knowledge", "security": "Security"}
-CAPABILITIES = {"model.inference": "Generate text", "memory.read": "Read knowledge",
-                "compute": "Analyze supplied text"}
+CAPABILITIES = {"model.inference": "Model text permission", "memory.read": "Read knowledge permission",
+                "compute": "Built-in text and syntax analysis", "providers.test": "Reviewed provider-test permission"}
 
 
 class KnightSummary(BaseModel):
@@ -23,15 +23,19 @@ class KnightSummary(BaseModel):
     completed: int
 
 
-def knight_summary(role, knight, active, completed):
+def knight_summary(role, knight, active, completed, security=None):
     # Built-in registry keys are established by code, never peer-supplied labels.
     if role not in ROLES:
         raise ValueError("Unknown built-in worker role")
-    state = "working" if active else "ready"
     health = knight.health if isinstance(knight.health, str) and knight.health in {"healthy", "degraded", "unhealthy"} else "unknown"
-    caps = [key for key in CAPABILITIES if key in knight.capabilities]
+    layers = [knight.zero_trust] + ([security] if security is not None else [])
+    available = all((layer.nodes.get_node(role) or {}).get("active") for layer in layers)
+    from backend.security.capabilities import CapabilityEvaluator
+    caps = [key for key in CAPABILITIES if available and all(
+        CapabilityEvaluator.evaluate(layer.nodes.get_node_capabilities(role), key) for layer in layers)]
+    state = "offline" if not available or health == "unhealthy" else "unknown" if health == "unknown" else "working" if active else "ready"
     return KnightSummary(id=f"knight-{role}", name=role, display_name=ROLES[role], role=role,
                          is_local=True, status=state, health=health,
-                         activity="Processing a task" if active else "Available for tasks",
+                         activity="Worker unavailable" if state == "offline" else "Health unavailable" if state == "unknown" else "Processing a task" if active else "Available for tasks",
                          capabilities=caps, active=max(0, active),
                          completed=max(0, completed)).model_dump()

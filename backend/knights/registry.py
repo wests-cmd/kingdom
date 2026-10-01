@@ -52,7 +52,8 @@ def load_enabled_knight_roles():
 
 
 class KnightRegistry:
-    def __init__(self, enabled_roles=None):
+    def __init__(self, enabled_roles=None, security=None):
+        self.security = security
         if enabled_roles is None:
             enabled_roles = load_enabled_knight_roles()
 
@@ -88,5 +89,5 @@ class KnightRegistry:
         self._completed[name] += 1
 
     def status(self):
-        return [knight_summary(name, knight, self._active[name], self._completed[name])
+        return [knight_summary(name, knight, self._active[name], self._completed[name], self.security)
                 for name, knight in self._knights.items()]

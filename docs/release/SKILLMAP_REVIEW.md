@@ -5,21 +5,21 @@
 Reviewed the task engine, Swarm/Knights, ZeroTrust and capability registry,
 HTTP owner authentication, skills lifecycle/map, ProviderRegistry, SQLite,
 native packaging, SDK/mobile scaffold and normal frontend record views.
-The new adapters share these services and store integration records in the existing
+Saved map/resource and profile preferences rank only eligible installed workers without granting authority. The new adapters share these services and store integration records in the existing
 database. There is no separate Discord execution engine or permission authority.
 
 The historical online-Knight source-code incident was not independently reproduced.
 `BaseKnight.current_task` normally contains a task ID. The confirmed defect was
 unrestricted presentation: worker activity/capability fields were printed directly,
 intelligence indexes used raw task prompts or memory content as headings, and
-event, routing and task views printed whole internal records. Curated worker DTOs,
+event, routing and task views printed whole internal records. Worker permissions are derived from both current active security layers rather than role declarations; revoked workers show offline, and a model permission is distinguished from configured-provider availability. Curated worker DTOs,
 allowlisted device captions, generic record headings, task result summaries and
 explicit redacted developer details remove these paths. Audit prompt snippets are
 replaced by lengths. Do not describe a task ID as executable source.
 
 ## 2. Authorization and transport review
 
-Confirmed owner-protected integration APIs, explicit Discord link grants,
+Confirmed owner-protected integration APIs with explicit typed public response schemas, safe grant/revocation events, explicit Discord link grants,
 hashed five-minute single-use challenges, identity/checksum-bound import
 confirmation, signature freshness, application/server binding, atomic replay
 rejection and deferred command acknowledgement. Empty Discord grants remain empty;
@@ -64,7 +64,7 @@ a dependency lockfile version accidentally changed during the release bump.
 Dependency records were restored from main; only package-root versions changed.
 Clean frontend/desktop installs and production build passed afterward.
 
-Local final validation: `python -m pytest -q` **285 passed**;
+Local final validation: `python -m pytest -q` **290 passed**;
 `node --test frontend/tests/presentation.test.js apps/mobile/mobile-client.test.js`
 **3 passed**; frontend production build, version validator and syntax/diff checks
 passed. The one backend warning is Starlette's httpx TestClient deprecation.
