@@ -846,3 +846,5 @@ input[type=color] { width:56px; height:40px; padding:4px!important; cursor:point
 :root[data-motion=reduced] * { transition:none!important; animation:none!important; scroll-behavior:auto!important; }
 @media(max-width:1000px) { .main-container::before { left:195px; } }
 @media(max-width:650px) { .main-container::before { left:0; } .appearance-fields { grid-template-columns:1fr; } .appearance-preview { flex-direction:column; align-items:flex-start; padding:22px; } }
+
+.accent-hex { width:120px; font-family:monospace; }
