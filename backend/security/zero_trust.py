@@ -75,7 +75,7 @@ class ZeroTrust:
                     capability=capability,
                     decision="DENIED",
                     reason=reason,
-                    metadata={"prompt_snippet": prompt[:100]},
+                    metadata={"prompt_length": len(prompt)},
                 )
                 return {
                     "authorized": False,

@@ -44,7 +44,7 @@ export default function Logs() {
                 </span>
               </div>
               <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>Source: {e.source} {e.task_id ? `| Task ID: ${e.task_id}` : ""}</div>
-              <div style={{ fontSize: "12px", marginTop: "4px", overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>{JSON.stringify(e.payload)}</div>
+              <div style={{ fontSize: "12px", marginTop: "4px", overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>{e.event_type.startsWith("task.") ? "Task state updated." : e.event_type.startsWith("knight.") ? "Worker state updated." : "Kingdom recorded an activity update."}</div>
             </div>
           ))}
         </div>

@@ -1,6 +1,7 @@
 levels:
-  1: observer
-  2: limited_control
-  3: standard_control
-  4: advanced_control
-  5: system_control
+  0: observer
+  1: safe_analysis
+  2: approve_every_task
+  3: bounded_execution
+# Runtime selection is persisted in SQLite and changed through /runtime/autonomy.
+# This file documents supported levels; it does not override the saved policy.

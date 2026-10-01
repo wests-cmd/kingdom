@@ -8,6 +8,7 @@ from backend.knights.memory_knight import MemoryKnight
 from backend.knights.planner import PlannerKnight
 from backend.knights.researcher import ResearchKnight
 from backend.knights.security_knight import SecurityKnight
+from backend.knights.presentation import knight_summary
 
 _KNIGHT_CLASSES = {
     "planner": PlannerKnight,
@@ -87,16 +88,5 @@ class KnightRegistry:
         self._completed[name] += 1
 
     def status(self):
-        return [
-            {
-                "name": name,
-                "id": f"knight-{name}", "role": name, "is_local": True,
-                "capabilities": list(self._knights[name].capabilities),
-                "health": self._knights[name].health,
-                "current_task": self._knights[name].current_task,
-                "status": "working" if self._active[name] else "ready",
-                "active": self._active[name],
-                "completed": self._completed[name],
-            }
-            for name in self._knights
-        ]
+        return [knight_summary(name, knight, self._active[name], self._completed[name])
+                for name, knight in self._knights.items()]

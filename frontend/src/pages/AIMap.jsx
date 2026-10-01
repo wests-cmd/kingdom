@@ -9,7 +9,7 @@ export default function AIMap() {
   <div className="tab-row">{views.map(item => <button key={item.name} className={view.name === item.name ? 'selected' : ''} onClick={() => setView(item)}>{item.name}</button>)}</div>
   {error && <p role="alert" className="notice error">{error}</p>}
   <section className="panel"><div className="section-heading"><h2>{view.name}</h2><span className="status-chip">{data ? `${rows.length} records` : 'Loading…'}</span></div>{data && !rows.length && <p className="empty-state">No {view.name.toLowerCase()} records are available.</p>}
-   {rows.map((row,index) => <details className="record-detail" key={row.id || row.event_id || index}><summary><strong>{row.prompt || row.content || row.id || row.operation || row.skill_id || 'Record'}</strong><span className="muted">{row.status || row.decision || row.state || row.role || ''}</span></summary><pre>{JSON.stringify(row,null,2)}</pre></details>)}
+   {rows.map((row,index) => <div className="record-detail" key={row.id || row.event_id || index}><strong>{view.name} record {index + 1}</strong><span className="muted">{["queued","running","completed","failed","cancelled","ready","working","APPROVED","DENIED","WAITING_APPROVAL"].includes(row.status || row.decision || row.state) ? (row.status || row.decision || row.state) : "Recorded"}</span></div>)}
   </section>
  </div>
 }

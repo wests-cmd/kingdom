@@ -1,12 +1,44 @@
 import httpx
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote, urlsplit
 
 
 class KingdomSDK:
 
-    def __init__(self, base_url: str = "http://localhost:8000"):
+    def __init__(self, base_url: str = "http://localhost:8000", *, owner_token: str | None = None):
         self.base_url = base_url.rstrip('/')
-        self.client = httpx.Client(base_url=self.base_url, timeout=10.0)
+        parts = urlsplit(self.base_url)
+        if parts.scheme not in {"http", "https"} or not parts.hostname or parts.username or parts.password or parts.query or parts.fragment:
+            raise ValueError("Use a plain Kingdom HTTP or HTTPS server address")
+        if owner_token and not (parts.scheme == "https" or (parts.scheme == "http" and parts.hostname in {"localhost", "127.0.0.1", "::1"})):
+            raise ValueError("Owner authentication requires HTTPS or loopback HTTP")
+        headers = {"X-Kingdom-Request": "1"}
+        if owner_token:
+            headers["Authorization"] = "Bearer " + owner_token
+        self.client = httpx.Client(base_url=self.base_url, timeout=10.0, headers=headers, follow_redirects=False)
+
+    def close(self):
+        self.client.close()
+
+    def preview_skillmap(self, filename: str, content: str):
+        response = self.client.post("/skillmaps/preview", json={"filename": filename, "content": content})
+        response.raise_for_status()
+        return response.json()
+
+    def confirm_skillmap(self, preview_id: str, checksum: str):
+        response = self.client.post("/skillmaps/confirm", json={"preview_id": preview_id, "checksum": checksum})
+        response.raise_for_status()
+        return response.json()
+
+    def export_skillmap(self, map_id: str):
+        response = self.client.get(f"/skillmaps/{quote(map_id, safe='')}/export")
+        response.raise_for_status()
+        return response.json()
+
+    def test_skillmap(self, map_id: str):
+        response = self.client.post(f"/skillmaps/{quote(map_id, safe='')}/test")
+        response.raise_for_status()
+        return response.json()
 
     def get_status(self) -> Dict[str, Any]:
         res = self.client.get("/status")

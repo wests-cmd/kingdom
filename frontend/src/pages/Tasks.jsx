@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react"
 import api from "../api"
 import useLiveData from "../hooks/useLiveData"
+import TaskResult, {DebugDetails, scrubText} from '../components/common/TaskResult'
+import {workerLabel} from '../components/common/presentation'
 
 export default function Tasks() {
   const {data: taskData, error: loadError, refresh: loadTasks} = useLiveData("/tasks", 3000)
@@ -9,6 +11,7 @@ export default function Tasks() {
   const [inputData, setInputData] = useState("")
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [developerView,setDeveloperView] = useState(false)
 
   const handleCreateTask = async (e) => {
     e.preventDefault()
@@ -51,16 +54,18 @@ export default function Tasks() {
       {error && <p role="alert">{error}</p>}
 
       <h4>Active & Historical Tasks ({tasks.length})</h4>
+      <label><input type="checkbox" checked={developerView} onChange={event => setDeveloperView(event.target.checked)}/>Show developer diagnostics for these owner-authorized tasks</label>
       {taskData === null ? <p>Loading tasks…</p> : tasks.length === 0 ? <p style={{ color: "#888" }}>No tasks submitted yet.</p> : (
         <ul style={{ listStyle: "none", padding: 0 }}>
           {tasks.map(t => (
             <li key={t.id} className="task-record">
               <div className="task-meta"><span className="status-chip">{t.status}</span><span>{new Date(t.created_at).toLocaleString()}</span></div>
-              <p className="task-input">{t.prompt || t.input?.prompt || 'Task'}</p>
-              {t.error && <p role="alert"><strong>Reason:</strong> {t.error}</p>}
-              {t.assigned_knight && <p className="muted">Worker: {t.assigned_knight}</p>}
-              {t.result && <details><summary>View execution result</summary><pre>{JSON.stringify(t.result,null,2)}</pre></details>}
-              <details><summary className="muted">Task details</summary><pre>{JSON.stringify({id:t.id,metadata:t.metadata,input:t.input},null,2)}</pre></details>
+              <p className="task-input">{t.metadata?.tool === 'provider.metadata@1.0.0' ? 'Reviewed provider metadata test' : t.metadata?.tool === 'code.python.analyze@1.0.0' ? 'Python syntax analysis' : t.metadata?.tool === 'text.analyze@1.0.0' ? 'Text analysis' : 'Configured model task'}</p>
+              <details><summary>View supplied input</summary><pre>{scrubText(t.prompt || t.input?.prompt || '').slice(0,10000)}</pre></details>
+              {t.error && <p role="alert">This task did not complete. Review its permissions, provider availability and input. Developer diagnostics contain the recorded failure.</p>}
+              {t.assigned_knight && <p className="muted">Worker: {workerLabel(t.assigned_knight)}</p>}
+              {t.result && <TaskResult result={t.result}/>}
+              {developerView && <DebugDetails value={{id:t.id,metadata:t.metadata,input:t.input,result:t.result,error:t.error}}/>}
               {['queued','QUEUED','WAITING_APPROVAL'].includes(t.status) && <button onClick={() => handleCancelTask(t.id)} style={{marginTop:12}}>Cancel Task</button>}
             </li>
           ))}

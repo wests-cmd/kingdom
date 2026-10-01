@@ -30,6 +30,7 @@ class RiskLevel(str, Enum):
 
 
 CAPABILITY_RISK_MAP: dict[str, RiskLevel] = {
+    "providers.test": RiskLevel.MEDIUM,  # Reviewed, bounded public metadata GET only.
     "data.read": RiskLevel.LOW,
     "compute": RiskLevel.LOW,  # Bounded native text/syntax analysis, no external side effects.
     CAPABILITY_FILESYSTEM_READ: RiskLevel.LOW,

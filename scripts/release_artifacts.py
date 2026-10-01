@@ -108,9 +108,11 @@ Administrative APIs and live connections require owner authentication. Worker re
 
 Windows installers are unsigned. The macOS Intel installer is unsigned and not notarized; a native Apple Silicon installer is not supplied. OS trust prompts may apply. No signing or notarization claim is made.
 
-This patch adds a restrained interface, live recorded activity, persisted and enforced L0-L3 task autonomy, actual runtime polling modes, and cancellation of pending task approvals. Static sample topology and unsupported autonomy/mode cards are removed.
+This release adds a restrained interface, live recorded activity, persisted and enforced L0-L3 task autonomy, actual runtime polling modes, and cancellation of pending task approvals. Static sample topology and unsupported autonomy/mode cards are removed.
 
-This patch fixes knowledge text ingestion, draft skill teaching, worker identity displays, memory listing, task failure explanations, and log filters/timestamps. Device connections support single-use codes and locally generated QR links to a reachable HTTPS server. Browser companions require owner approval and do not gain owner/task authority; native mobile packages remain unavailable.
+This release fixes knowledge text ingestion, draft skill teaching, worker identity displays, memory listing, task failure explanations, and log filters/timestamps. Device connections support single-use codes and locally generated QR links to a reachable HTTPS server. Browser companions require owner approval and do not gain owner/task authority; native mobile packages remain unavailable.
+
+Portable JSON/YAML skill maps support strict import, preview, owner confirmation and canonical export with SHA-256. Public APIs is untrusted discovery metadata. Explicitly enabled Open Food Facts and Open-Meteo adapters run bounded read-only checks through permissioned local Knights and independent schema/hash verification. Pricing, unrestricted web search, authenticated provider adapters and arbitrary uploaded endpoints are unsupported. Discord is opt-in and disabled by default; its signed adapter and linking workflow are code-tested, but a live Discord connection has not been verified. Follow docs/DISCORD_SKILLMAPS.md for setup and deployment requirements.
 
 Verify downloaded files with `sha256sum -c SHA256SUMS` (or compare SHA-256 using your platform's tools). Exact filenames, sizes, hashes, platforms, and source commit are recorded in `release-manifest.json`.
 """

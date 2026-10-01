@@ -21,6 +21,8 @@ CAPABILITY_NODE_EXECUTE = "node.execute"
 CAPABILITY_SYSTEM_ADMIN = "system.admin"
 
 ALL_CAPABILITIES = {
+    "view_status", "view_knights", "view_skills", "import_skillmaps", "export_skillmaps",
+    "test_skillmaps", "view_providers", "manage_providers", "run_task", "providers.test",
     "compute",
     CAPABILITY_FILESYSTEM_READ,
     CAPABILITY_FILESYSTEM_WRITE,

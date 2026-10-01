@@ -43,6 +43,15 @@ def native_tools():
             "Analyze supplied text without external side effects", {"required": ["text"]}, {},
             ["compute"], [], "LOW"))
         tools.register_handler(key, handler)
+    from backend.integrations.public_apis import probe_provider
+    tools.register_tool(ToolDefinition("provider.metadata", "1.0.0", "kingdom.reviewed", "metadata",
+        "Read a reviewed provider's public metadata", {"required": ["provider_id"]}, {},
+        ["providers.test"], [], "MEDIUM"))
+    def probe(params):
+        if set(params) - {"provider_id", "timeout_seconds"} or "provider_id" not in params:
+            raise ValueError("Only a reviewed provider identifier is allowed")
+        return probe_provider(params["provider_id"], params.get("timeout_seconds", 10))
+    tools.register_handler("provider.metadata@1.0.0", probe)
     return tools
 
 
@@ -82,6 +91,17 @@ def verify_request_result(task, result, allow_local_model=True):
     metadata = task.get("metadata", {})
     tool = metadata.get("tool")
     if tool:
+        if tool == "provider.metadata@1.0.0":
+            from backend.integrations.public_apis import validate_provider_response
+            if result.get("kind") != "native_tool" or result.get("tool") != tool:
+                raise ValueError("Mismatched provider execution outcome")
+            output = result.get("output", {})
+            expected = validate_provider_response(metadata["tool_parameters"]["provider_id"],
+                output.get("body", "").encode(), output.get("content_type"))
+            if expected != output.get("summary") or output.get("http_status") != 200 or output.get("tls_verified") is not True or output.get("dns_public") is not True:
+                raise ValueError("Independent provider response validation failed")
+            return {"state": "VERIFIED", "method": "independent_response_schema_and_hash",
+                    "provider_id": expected["provider_id"], "scope": "Reviewed metadata response; no external writes"}
         handler = HANDLERS.get(tool)
         if not handler or result.get("kind") != "native_tool" or result.get("tool") != tool:
             raise ValueError("Unrecognized or mismatched execution tool")

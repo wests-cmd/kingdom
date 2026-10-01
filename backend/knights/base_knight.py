@@ -58,7 +58,7 @@ class BaseKnight:
                 self._sync_to_repo()
                 return {
                     "knight": self.id,
-                    "task": task,
+                    "task_id": task.get("id"),
                     "status": "unauthorized",
                     "reason": validation.get("reason")
                 }

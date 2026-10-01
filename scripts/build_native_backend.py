@@ -18,5 +18,6 @@ subprocess.run([
     "--collect-submodules", "uvicorn", "--collect-submodules", "backend",
     "--add-data", f"{root / 'frontend' / 'dist'}:frontend/dist",
     "--add-data", f"{root / 'migrations'}:migrations",
+    "--add-data", f"{root / 'configs' / 'install_profiles.json'}:configs",
     str(root / "scripts" / "desktop_backend.py"),
 ], cwd=root, check=True)

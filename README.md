@@ -1,4 +1,4 @@
-# KINGDOM v1TAS (v1.0.2) — Distributed AI Runtime & Orchestration Infrastructure
+# KINGDOM v1TAS (v1.1.0) — Distributed AI Runtime & Orchestration Infrastructure
 
 [![Backend CI](https://github.com/wests-cmd/kingdom/actions/workflows/ci.yml/badge.svg)](https://github.com/wests-cmd/kingdom/actions)
 [![License: CYA v2.0](https://img.shields.io/badge/License-CYA_v2.0-red.svg)](LICENSE)
@@ -9,7 +9,7 @@ Kingdom (`wests-cmd/kingdom`) is the core zero-trust distributed runtime and inf
 
 **First Stable Release:** `Kingdom v1TAS`
 **Canonical Version:** `1.0.2`
-**Git Release Tag:** `v1.0.2`
+**Git Release Tag:** `v1.1.0`
 
 ---
 
@@ -45,7 +45,7 @@ Normal users do NOT need to install Python, Node.js, or npm. The packaged Kingdo
    - **Custom Profile:** Manually select individual active Knights (Planner, Coder, Researcher, Memory, Security) and toggle the Command Center UI on/off.
 4. **Profile Persistence:** Your setup choice is stored securely in per-user data (`<userData>/local_profile.json`).
 
-This repository prepares the v1.0.2 patch. Only builds that pass the native release gates are published; check the [GitHub Releases page](https://github.com/wests-cmd/kingdom/releases) for the currently downloadable version.
+This repository prepares the v1.1.0 feature release. Only builds that pass the native release gates are published; check the [GitHub Releases page](https://github.com/wests-cmd/kingdom/releases) for the currently downloadable version.
 
 | Platform | Package Format | Release target | Build Artifact |
 |---|---|---|---|
@@ -54,7 +54,7 @@ This repository prepares the v1.0.2 patch. Only builds that pass the native rele
 | **Windows** | `NSIS` | x86_64, unsigned | `Kingdom-Setup-1.0.2.exe` |
 | **macOS** | `DMG` | Intel x86_64, unsigned and not notarized | `Kingdom-1.0.2.dmg` |
 
-Each installer includes a backend built on its own target operating system. Verify downloads against `SHA256SUMS` and `release-manifest.json`. The release also includes native startup evidence and dashboard screenshots. Native Apple Silicon, Windows ARM64, Linux ARM64, and mobile applications are not supplied in v1.0.2. Signing and notarization are not claimed; OS trust prompts may apply.
+Each installer includes a backend built on its own target operating system. Verify downloads against `SHA256SUMS` and `release-manifest.json`. The release also includes native startup evidence and dashboard screenshots. Native Apple Silicon, Windows ARM64, Linux ARM64, and mobile applications are not supplied in v1.1.0. Signing and notarization are not claimed; OS trust prompts may apply.
 
 ---
 
@@ -170,3 +170,7 @@ Open Devices & Knowledge or Nodes & Cluster → Connect a phone / device. Create
 ### Live controls and records
 
 Governance saves and enforces an autonomy policy for new local and remote task dispatch. Runtime controls start/stop local queue processing and change actual polling cadence. Intelligence records, worker activity, memory, logs, and provider health display backend data. See [runtime controls and limitations](docs/runtime-controls.md).
+
+## Portable skill maps and Discord
+
+The owner dashboard includes real map import, preview, confirmation, canonical export, profile preferences and governed reviewed-provider tests. Discord is optional and disabled by default. Follow [the setup and security guide](docs/DISCORD_SKILLMAPS.md). Public API directory entries are discovery metadata; only explicitly enabled reviewed adapters can run. Pricing, unrestricted web search and live Discord certification are not supplied by importing a map.

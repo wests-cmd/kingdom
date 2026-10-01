@@ -3,11 +3,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.api import router
 from backend.websocket import ws_router
 from backend.state import STATE
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 app = FastAPI(
     title="Kingdom v1TAS",
     version=STATE.get("version", "1.0.0")
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def invalid_request(_request, _exception):
+    # Pydantic's default response includes rejected input, which may contain secrets.
+    return JSONResponse(status_code=422, content={"detail": "Invalid request format; check required fields and types"})
 
 import os
 
@@ -23,6 +31,14 @@ app.add_middleware(
 )
 
 app.include_router(router)
+from backend.skills.portable_api import router as portable_router, initialize
+from backend.api import engine, lifecycle_manager
+initialize(engine, lifecycle_manager)
+app.include_router(portable_router)
+from backend.integrations.discord_ai_map.http import router as discord_router, initialize as initialize_discord
+from backend.skills.portable_api import service as portable_service, linker as discord_linker
+initialize_discord(portable_service, discord_linker)
+app.include_router(discord_router)
 app.include_router(ws_router)
 
 # Serve built frontend static assets if available

@@ -26,6 +26,11 @@ class SwarmManager:
     async def execute(self, task):
         subtasks = self._decompose(task["prompt"], task["metadata"].get("subtasks")) if task["metadata"].get("subtasks") else [task["prompt"]]
         assignments = [self._balancer.select_knight(subtask, list(self.registry._knights)) for subtask in subtasks]
+        requested = task["metadata"].get("requested_knight")
+        if requested:
+            if requested not in self.registry._knights:
+                raise ValueError("Requested worker is not available")
+            assignments = [requested] * len(subtasks)
         plan = {
             "task_id": task["id"],
             "complexity": self._complexity.classify(task["prompt"]),
