@@ -5,7 +5,7 @@
 Reviewed the task engine, Swarm/Knights, ZeroTrust and capability registry,
 HTTP owner authentication, skills lifecycle/map, ProviderRegistry, SQLite,
 native packaging, SDK/mobile scaffold and normal frontend record views.
-The new adapters share these services and store integration records in the existing
+Saved map/resource and profile preferences rank only eligible installed workers without granting authority. The new adapters share these services and store integration records in the existing
 database. There is no separate Discord execution engine or permission authority.
 
 The historical online-Knight source-code incident was not independently reproduced.
@@ -64,7 +64,7 @@ a dependency lockfile version accidentally changed during the release bump.
 Dependency records were restored from main; only package-root versions changed.
 Clean frontend/desktop installs and production build passed afterward.
 
-Local final validation: `python -m pytest -q` **287 passed**;
+Local final validation: `python -m pytest -q` **290 passed**;
 `node --test frontend/tests/presentation.test.js apps/mobile/mobile-client.test.js`
 **3 passed**; frontend production build, version validator and syntax/diff checks
 passed. The one backend warning is Starlette's httpx TestClient deprecation.

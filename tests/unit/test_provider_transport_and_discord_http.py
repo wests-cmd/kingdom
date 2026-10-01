@@ -60,6 +60,14 @@ def test_discord_cannot_fetch_arbitrary_attachment(workflow):
         adapter.download_attachment({"url": "https://127.0.0.1/private", "filename": "map.json"})
 
 
+def test_malformed_timestamp_headers_fail_authentication(workflow):
+    service, linker = workflow
+    adapter=http.DiscordAdapter(DiscordConfig(True,'987'),service,linker)
+    for timestamp in ['²','1'*5000]:
+        with pytest.raises(PermissionError):
+            adapter.verify('',timestamp,b'{}')
+
+
 def test_busy_unhealthy_and_revoked_workers_are_ineligible(workflow):
     service, _ = workflow
     role = next(iter(service.engine.swarm.registry._knights))

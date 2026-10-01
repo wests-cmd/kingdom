@@ -40,6 +40,36 @@ def import_map(service, actor="owner"):
     return preview
 
 
+def test_resource_preference_never_grants_worker_authority(workflow):
+    service, _ = workflow
+    import_map(service)
+    for role in ['planner','researcher']:
+        worker=service.engine.swarm.registry.get(role)
+        for security in [service.engine.security,worker.zero_trust]:
+            security.nodes.update_node_capabilities(role,security.nodes.get_node_capabilities(role)|{'providers.test'})
+    service.enable_provider('owner','openfoodfacts',True)
+    submitted=service.submit_tests('owner','product-research')
+    assert service.engine.tasks.get(submitted['tasks'][0]['task_id'])['metadata']['requested_knight']=='researcher'
+    service.engine.security.nodes.revoke_node('researcher')
+    submitted=service.submit_tests('owner','product-research')
+    assert service.engine.tasks.get(submitted['tasks'][0]['task_id'])['metadata']['requested_knight']=='planner'
+
+
+def test_saved_profile_preference_ranks_only_installed_authorized_workers(workflow):
+    service, _ = workflow
+    data=json.loads(FIXTURE.read_text(encoding='utf-8'));data['preferred_resources']=[]
+    preview=service.preview('owner',FIXTURE.name,json.dumps(data).encode())
+    service.confirm('owner',preview['preview_id'],preview['checksum'])
+    for role in ['coder','memory']:
+        worker=service.engine.swarm.registry.get(role)
+        for security in [service.engine.security,worker.zero_trust]:
+            security.nodes.update_node_capabilities(role,security.nodes.get_node_capabilities(role)|{'providers.test'})
+    assert service.preferred_knights('owner',service.get('owner','product-research'))==['coder','memory']
+    service.set_profile_preferences('owner','research','product-research')
+    assert service.preferred_knights('owner',service.get('owner','product-research'))==['memory','coder']
+    assert service.engine.swarm.registry.get('researcher').zero_trust.nodes.get_node_capabilities('researcher').isdisjoint({'providers.test'})
+
+
 def test_explicit_link_grants_revocation_and_restart(workflow):
     service, linker = workflow
     with pytest.raises(PermissionError):
