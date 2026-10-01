@@ -155,7 +155,7 @@ class DiscordAdapter:
                 payload = message("Skill-map export. SHA-256: " + result["checksum"])["data"]
                 payload["attachments"] = [{"id": 0, "filename": result["filename"]}]
                 files = {"files[0]": (result["filename"], result["payload"], "application/json")}
-        except (ValueError, PermissionError, KeyError):
+        except (ValueError, PermissionError, KeyError, OSError):
             payload = message("Operation failed. Check permissions, schema, provider state and preview expiry in Kingdom.")["data"]
         try:
             async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
