@@ -82,7 +82,7 @@ npm --prefix frontend ci
 npm --prefix frontend run dev
 ```
 
-For Windows PowerShell, activate the environment with `venv\Scripts\Activate.ps1`. For a production frontend build, use `npm --prefix frontend run build`. The repository also supplies `scripts/install.sh` and Docker configuration for operators.
+For Windows PowerShell, activate the environment with `venv\Scripts\Activate.ps1`. For a production frontend build, use `npm --prefix frontend run build`. The repository also supplies `scripts/install.sh`. Docker operators should follow the [commander and worker enrollment guide](docs/docker-cluster.md); workers require separate pairing invitations and explicit owner approval.
 
 Server administrative APIs require the private `data/owner-token` or `KINGDOM_OWNER_TOKEN`. Keep credentials in the credential broker/process environment; do not put them in tasks or maps. Configure only the network access you need. `.env.example` is a template, and `configs/install_profiles.json` supplies the install profile catalog. Optional Discord deployment requires the signed public callback described in [its setup guide](docs/DISCORD_SKILLMAPS.md); a private Tailscale address cannot receive Discord callbacks.
 
