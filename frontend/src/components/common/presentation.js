@@ -17,5 +17,5 @@ export function nodeStateLabel(value) {
 }
 export function workerLabel(value) {
  const labels = {planner:'Planning',coder:'Coding',researcher:'Research',memory:'Memory',security:'Security'}
- return labels[value] || 'Registered worker'
+ return typeof value === 'string' && Object.hasOwn(labels,value) ? labels[value] : 'Registered worker'
 }

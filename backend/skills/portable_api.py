@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 from backend.security.http_auth import require_owner
 from backend.skills.portable_service import PortableMapService
@@ -110,6 +110,14 @@ def export(map_id: str):
         result = service.export("owner", map_id)
         return result | {"payload": result["payload"].decode()}
     return boundary(action)
+
+
+@router.get("/skillmaps/{map_id}/download")
+def download(map_id: str):
+    result = boundary(lambda: service.export("owner", map_id))
+    return Response(result["payload"], media_type="application/json",
+                    headers={"Content-Disposition": f'attachment; filename="{result["filename"]}"',
+                             "X-Content-SHA256": result["checksum"], "Cache-Control": "no-store"})
 
 
 @router.post("/skillmaps/{map_id}/test")

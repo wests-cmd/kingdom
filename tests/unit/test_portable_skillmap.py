@@ -16,6 +16,19 @@ def test_canonical_export_reimport_equivalence():
     assert map_checksum(original) == map_checksum(again)
 
 
+@pytest.mark.parametrize('value',[1,False,'true'])
+def test_readonly_is_literal_boolean(value):
+    data=json.loads(FIXTURE.read_text(encoding='utf-8'))
+    data['constraints']['read_only']=value
+    with pytest.raises(ValueError):
+        parse_map('map.json',json.dumps(data).encode())
+
+
+def test_duplicate_yaml_fields_rejected():
+    with pytest.raises(ValueError):
+        parse_map('map.yaml',b'schema_version: "1.0"\nmap_id: alpha\nmap_id: beta\n')
+
+
 @pytest.mark.parametrize("filename,payload", [
     ("../map.json", b"{}"), ("C:\\map.json", b"{}"), ("map.exe", b"{}"),
     ("map.json", b"x" * 262145), ("map.json", b'{"map_id":"a","map_id":"b"}'),

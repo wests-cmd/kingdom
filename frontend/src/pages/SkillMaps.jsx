@@ -35,10 +35,9 @@ export default function SkillMaps() {
  async function exportMap(mapId) {
   await action(async () => {
    const response = await api.get(`/skillmaps/${encodeURIComponent(mapId)}/export`)
-   const blob = new Blob([response.data.payload],{type:'application/json'})
-   const url = URL.createObjectURL(blob)
-   const anchor = document.createElement('a');anchor.href=url;anchor.download=response.data.filename;anchor.click()
-   setTimeout(() => URL.revokeObjectURL(url),1000)
+   const anchor = document.createElement('a')
+   anchor.href=`/skillmaps/${encodeURIComponent(mapId)}/download`;anchor.download=response.data.filename
+   document.body.appendChild(anchor);anchor.click();anchor.remove()
    setNotice(`Exported ${response.data.filename}. SHA-256: ${response.data.checksum}`)
   })
  }

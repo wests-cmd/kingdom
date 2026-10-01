@@ -3,11 +3,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.api import router
 from backend.websocket import ws_router
 from backend.state import STATE
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 app = FastAPI(
     title="Kingdom v1TAS",
     version=STATE.get("version", "1.0.0")
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def invalid_request(_request, _exception):
+    # Pydantic's default response includes rejected input, which may contain secrets.
+    return JSONResponse(status_code=422, content={"detail": "Invalid request format; check required fields and types"})
 
 import os
 
