@@ -116,7 +116,7 @@ export function MobileGateway() {
               <label htmlFor="sot" style={{ fontSize: "12px", color: "var(--text-main)" }}>Mark as Source of Truth Document</label>
             </div>
 
-            <button type="submit" style={{ padding: "8px", background: "var(--accent-red)", color: "var(--text-main)", border: "none", borderRadius: "4px", fontWeight: "600", fontSize: "12px", cursor: "pointer" }}>
+            <button type="submit" style={{ padding: "8px", background: "var(--accent-primary)", color: "var(--accent-on-primary)", border: "none", borderRadius: "4px", fontWeight: "600", fontSize: "12px", cursor: "pointer" }}>
               Ingest Knowledge
             </button>
           </form>
@@ -174,7 +174,7 @@ export function MobileGateway() {
               />
             </div>
 
-            <button type="submit" style={{ padding: "8px", background: "var(--accent-red)", color: "#191c1a", border: "none", borderRadius: "4px", fontWeight: "600", fontSize: "12px", cursor: "pointer" }}>
+            <button type="submit" style={{ padding: "8px", background: "var(--accent-primary)", color: "var(--accent-on-primary)", border: "none", borderRadius: "4px", fontWeight: "600", fontSize: "12px", cursor: "pointer" }}>
               Teach Skill
             </button>
           </form>

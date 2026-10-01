@@ -99,7 +99,7 @@ export function Nodes() {
           </button>
           <button
             onClick={handleCreateInvitation}
-            style={{ padding: "6px 14px", background: "var(--accent-red)", color: "var(--text-main)", border: "none", borderRadius: "4px", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}
+            style={{ padding: "6px 14px", background: "var(--accent-primary)", color: "var(--accent-on-primary)", border: "none", borderRadius: "4px", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}
           >
             Invite a compute worker
           </button>
@@ -137,22 +137,22 @@ export function Nodes() {
       <div style={{ display: "flex", borderBottom: "1px solid var(--surface-border)", fontSize: "13px", fontWeight: "500" }}>
         <button
           onClick={() => setActiveTab('nodes')}
-          style={{ padding: "8px 16px", border: "none", borderBottom: activeTab === 'nodes' ? "2px solid var(--accent-red)" : "2px solid transparent", background: "none", color: activeTab === 'nodes' ? "var(--accent-red)" : "#888", cursor: "pointer" }}
+          style={{ padding: "8px 16px", border: "none", borderBottom: activeTab === 'nodes' ? "2px solid var(--accent-red)" : "2px solid transparent", background: "none", color: activeTab === 'nodes' ? "var(--accent-red)" : "var(--text-muted)", cursor: "pointer" }}
         >
           Active Federation ({nodes.length})
         </button>
         <button
           onClick={() => setActiveTab('pending')}
-          style={{ padding: "8px 16px", border: "none", borderBottom: activeTab === 'pending' ? "2px solid var(--accent-red)" : "2px solid transparent", background: "none", color: activeTab === 'pending' ? "var(--accent-red)" : "#888", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
+          style={{ padding: "8px 16px", border: "none", borderBottom: activeTab === 'pending' ? "2px solid var(--accent-red)" : "2px solid transparent", background: "none", color: activeTab === 'pending' ? "var(--accent-red)" : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
         >
           Pending Approvals
           {pendingNodes.length > 0 && (
-            <span style={{ padding: "2px 6px", background: "var(--accent-red)", color: "var(--text-main)", fontSize: "10px", borderRadius: "10px" }}>{pendingNodes.length}</span>
+            <span style={{ padding: "2px 6px", background: "var(--accent-primary)", color: "var(--accent-on-primary)", fontSize: "10px", borderRadius: "10px" }}>{pendingNodes.length}</span>
           )}
         </button>
         <button
           onClick={() => setActiveTab('join')}
-          style={{ padding: "8px 16px", border: "none", borderBottom: activeTab === 'join' ? "2px solid var(--accent-red)" : "2px solid transparent", background: "none", color: activeTab === 'join' ? "var(--accent-red)" : "#888", cursor: "pointer" }}
+          style={{ padding: "8px 16px", border: "none", borderBottom: activeTab === 'join' ? "2px solid var(--accent-red)" : "2px solid transparent", background: "none", color: activeTab === 'join' ? "var(--accent-red)" : "var(--text-muted)", cursor: "pointer" }}
         >
           Connect a phone / device
         </button>
