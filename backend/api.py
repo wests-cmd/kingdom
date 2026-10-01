@@ -69,6 +69,9 @@ class TaskRequest(BaseModel):
 class ModeRequest(BaseModel):
     mode: str
 
+class AutonomyRequest(BaseModel):
+    level: int = Field(ge=0, le=3, strict=True)
+
 class ModelRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=10_000)
     model: str | None = None
@@ -128,11 +131,11 @@ class NodeCapabilitiesRequest(BaseModel):
     granted_capabilities: list[str]
 
 class MobilePairRequest(BaseModel):
-    code: str
-    device_id: str
-    device_name: str
-    device_public_key_hex: str
-    signature: str
+    code: str = Field(min_length=1, max_length=64)
+    device_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+    device_name: str = Field(min_length=1, max_length=100)
+    device_public_key_hex: str = Field(min_length=64, max_length=64, pattern=r"^[a-fA-F0-9]+$")
+    signature: str = Field(min_length=128, max_length=128, pattern=r"^[a-fA-F0-9]+$")
 
 class TeachSkillRequest(BaseModel):
     name: str
@@ -436,6 +439,14 @@ async def stop():
 def mode():
     return {"mode": engine.get_mode()}
 
+@router.get("/runtime/policy")
+def get_execution_policy():
+    return engine.execution_policy.get()
+
+@router.put("/runtime/policy")
+def update_execution_policy(request: AutonomyRequest):
+    return engine.set_autonomy(request.level)
+
 @router.put("/mode")
 def set_mode(request: ModeRequest):
     try:
@@ -486,8 +497,9 @@ def cancel_task(task_id: str):
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 @router.get("/events")
-def event_history(limit: int = Query(default=50, ge=1, le=200)):
-    return engine.events.history(limit)
+def event_history(limit: int = Query(default=50, ge=1, le=200), event_type: str | None = None):
+    events = engine.events.history(200 if event_type else limit)
+    return [event for event in events if not event_type or event["event_type"] == event_type][-limit:]
 
 @router.get("/knights")
 def knights():
@@ -739,6 +751,10 @@ def security_deny(approval_id: str, request: SecurityApprovalDecisionRequest | N
     reason = request.reason if request else "Denied by administrator"
     try:
         req = engine.security.approvals.deny(approval_id, reason=reason, denier=denier)
+        for task in engine.tasks.list("WAITING_APPROVAL"):
+            if task.get("metadata", {}).get("approval_id") == approval_id:
+                cancelled = engine.tasks.transition_task(task["id"], "cancelled", {"error": reason})
+                engine.events.publish("task.cancelled", cancelled)
         engine.security.audit.record(
             actor=denier,
             operation="deny",
@@ -816,6 +832,8 @@ def handle_cluster_rpc(request: RPCMessageRequest):
         return {"status": "ok", "ping": res}
 
     elif msg_type == "task_poll":
+        if engine.execution_policy.get()["level"] == 0:
+            return {"status": "ok", "tasks": []}
         tasks = engine.tasks.list("queued")
         assigned_tasks = []
         for t in tasks:
@@ -825,7 +843,7 @@ def handle_cluster_rpc(request: RPCMessageRequest):
             required_capability = meta.get("capability", "compute")
             if is_remote and (assigned_k == sender_id or assigned_k is None) and capability_authorizer.is_capability_granted(sender_id, required_capability):
                 task_id = t["id"]
-                claimed = engine.tasks.claim_remote_atomically(task_id, sender_id, required_capability, task_lease_manager)
+                claimed = engine.dispatch_remote_task(task_id, sender_id, required_capability, task_lease_manager)
                 if claimed:
                     assigned_tasks.append(claimed)
                     break
@@ -982,6 +1000,15 @@ def process_mobile_pairing(request: MobilePairRequest):
     if not res.get("success"):
         raise HTTPException(status_code=400, detail=res.get("error"))
     return res
+
+@router.post("/mobile/session/status")
+def mobile_session_status(request: Request):
+    authorization = request.headers.get("Authorization", "")
+    token = authorization[7:] if authorization.startswith("Bearer ") else ""
+    result = mobile_pairing_manager.session_status(token)
+    if not result.get("success"):
+        raise HTTPException(status_code=401, detail=result.get("error"))
+    return result
 
 # --- GOVERNED FINANCIAL ENDPOINTS ---
 

@@ -149,6 +149,9 @@ class ApprovalEngine:
     def deny(self, approval_id: str, reason: str = "Denied by administrator", denier: str = "admin"):
         return self._decide(approval_id, "denied", denier, reason)
 
+    def cancel(self, approval_id: str):
+        return self._decide(approval_id, "cancelled", "owner", "Associated task cancelled")
+
     def is_approved(self, approval_id: str) -> bool:
         req = self.get_request(approval_id)
         return req is not None and req["status"] == "approved"

@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import urllib.request
+from validate_version import get_authoritative_version
 
 binary = Path(sys.argv[1]).resolve()
 report = Path(sys.argv[2]).resolve()
@@ -37,7 +38,7 @@ with tempfile.TemporaryDirectory(prefix="kingdom-native-") as directory:
                 raise RuntimeError("Frozen backend readiness timed out: " + log.read_text(errors="replace"))
             with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/system/version") as response:
                 version = json.load(response)
-            assert version["version"] == "1.0.0", version
+            assert version["version"] == get_authoritative_version(str(Path(__file__).resolve().parents[1])), version
             with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as response:
                 html = response.read().decode()
             assert '<div id="root">' in html, html[:200]

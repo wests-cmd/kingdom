@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from typing import Any
+from threading import RLock
 
 from backend.events.event_bus import EventBus
 from backend.intelligence.ai_map import AIMap
 from backend.memory.service import MemoryService
 from backend.models.service import ModelService
 from backend.runtime.modes import MODES
+from backend.runtime.policy import ExecutionPolicy
 from backend.runtime.scheduler import Scheduler
 from backend.runtime.tasks import TaskManager
 from backend.runtime.resilience import (
@@ -38,6 +40,8 @@ class RuntimeEngine:
         self.circuit_breaker = CircuitBreakerEngine()
         self.dlq = DeadLetterQueue()
         self.rate_limiter = RateLimiterEngine()
+        self.execution_policy = ExecutionPolicy()
+        self.dispatch_lock = RLock()
 
     async def initialize(self) -> dict[str, Any]:
         return await self.start()
@@ -74,7 +78,14 @@ class RuntimeEngine:
         return {"status": "stopped" if stopped else "already_stopped", **self.status()}
 
     def status(self) -> dict[str, Any]:
-        return {**STATE, "scheduler_running": self.scheduler.running, "tasks": self.tasks.counts()}
+        return {**STATE, "scheduler_running": self.scheduler.running, "tasks": self.tasks.counts(),
+                "autonomy_level": self.execution_policy.get()["level"]}
+
+    def set_autonomy(self, level: int) -> dict[str, Any]:
+        previous = self.execution_policy.get()["level"]
+        result = self.execution_policy.set(level)
+        self.events.publish("runtime.autonomy_changed", {"previous": previous, "level": level, "actor": "owner"})
+        return result
 
     def get_mode(self) -> str:
         return STATE["mode"]
@@ -120,31 +131,28 @@ class RuntimeEngine:
 
     def cancel_task(self, task_id: str) -> dict[str, Any]:
         task = self.tasks.cancel(task_id)
+        approval = task.get("metadata", {}).get("approval_id")
+        if approval:
+            try:
+                self.security.approvals.cancel(approval)
+            except (KeyError, ValueError):
+                pass  # A decided request cannot execute a cancelled task.
         self.events.publish("task.cancelled", task)
         return task
 
     async def _process_next_task(self) -> None:
+        # Modes affect polling cadence, not authority or capability grants.
+        self.scheduler._interval_seconds = {"persistent": 0.1, "burst": 0.02, "adaptive": 0.1 if self.tasks.counts().get("queued", 0) else 0.5}.get(STATE["mode"], 0.1)
+        if self.execution_policy.get()["level"] == 0:
+            return
         self.recover_remote_tasks()
         task = self.tasks.claim_next()
         if task is None:
             return
         self.events.publish("task.running", task)
         try:
-            actor = task["metadata"].get("actor", "system")
-            capability = task["metadata"].get("capability", "node.execute")
-            approval_id = task["metadata"].get("approval_id")
-
             # Zero-trust policy check before executing task
-            auth_res = self.security.authorize(
-                actor_id=actor,
-                token=(self.security.nodes.get_node(actor) or {}).get("token"),
-                capability=capability,
-                operation=f"Execute task {task['id']}",
-                prompt=task["prompt"],
-                approval_id=approval_id,
-                parameters={"task_id": task["id"], "prompt": task["prompt"],
-                            "metadata": {k: v for k, v in task["metadata"].items() if k != "approval_id"}},
-            )
+            auth_res = self.authorize_task(task)
             if not auth_res["authorized"] and auth_res.get("approval_id"):
                 waiting = self.tasks.transition_task(task["id"], "WAITING_APPROVAL",
                     {"metadata": {**task["metadata"], "approval_id": auth_res["approval_id"]}})
@@ -164,17 +172,41 @@ class RuntimeEngine:
             if recovered["status"] == "failed":
                 self.memory.record_task(recovered)
                 actor_id = task.get("metadata", {}).get("actor", "system")
-                # Dead letter queue recording for permanently failed task
-                self.dlq.push(
-                    task_id=task["id"],
-                    actor=actor_id,
-                    operation=f"Execute task {task['id']}",
-                    failure_reason=str(exc),
-                    retry_count=recovered.get("retries", 0),
-                    metadata=task.get("metadata", {})
-                )
+                self.dlq.push(task_id=task["id"], actor=actor_id, operation=f"Execute task {task['id']}",
+                              failure_reason=str(exc), retry_count=recovered.get("retries", 0), metadata=task.get("metadata", {}))
             event_type = "task.requeued" if recovered["status"] == "queued" else "task.failed"
             self.events.publish(event_type, recovered)
+
+    def authorize_task(self, task):
+        """Same exact owner approval boundary for local execution and remote dispatch."""
+        actor = task["metadata"].get("actor", "system")
+        capability = task["metadata"].get("capability", "node.execute")
+        approval_id = task["metadata"].get("approval_id")
+        return self.security.authorize(
+                actor_id=actor,
+                token=(self.security.nodes.get_node(actor) or {}).get("token"),
+                capability=capability,
+                operation=f"Execute task {task['id']}",
+                prompt=task["prompt"],
+                approval_id=approval_id,
+                require_human_approval=self.execution_policy.requires_approval(task),
+                parameters={"task_id": task["id"], "prompt": task["prompt"],
+                            "metadata": {k: v for k, v in task["metadata"].items() if k != "approval_id"}},
+            )
+
+    def dispatch_remote_task(self, task_id, node_id, capability, leases):
+        with self.dispatch_lock:
+            task = self.tasks.get(task_id)
+            if self.execution_policy.get()["level"] == 0 or not task or task["status"].lower() != "queued":
+                return None
+            auth = self.authorize_task(task)
+            if not auth["authorized"]:
+                if auth.get("approval_id"):
+                    waiting = self.tasks.transition_task(task_id, "WAITING_APPROVAL",
+                        {"metadata": {**task["metadata"], "approval_id": auth["approval_id"]}})
+                    self.events.publish("task.waiting_approval", waiting)
+                return None
+            return self.tasks.claim_remote_atomically(task_id, node_id, capability, leases)
 
     def recover_remote_tasks(self):
         from backend.cluster.task_leasing import task_lease_manager

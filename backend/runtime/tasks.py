@@ -27,7 +27,7 @@ VALID_TASK_TRANSITIONS = {
     "WAITING_AUTHORIZATION": ["AUTHORIZED", "BLOCKED", "CANCELLED"],
     "WAITING_APPROVAL": ["APPROVED", "DENIED", "QUEUED", "BLOCKED", "CANCELLED"],
     "AUTHORIZED": ["QUEUED", "LEASED", "RUNNING", "CANCELLED"],
-    "QUEUED": ["LEASED", "RUNNING", "CANCELLED", "EXPIRED"],
+    "QUEUED": ["WAITING_APPROVAL", "LEASED", "RUNNING", "CANCELLED", "EXPIRED"],
     "LEASED": ["RUNNING", "CANCELLED", "EXPIRED", "RECOVERY_REQUIRED"],
     "RUNNING": ["WAITING_APPROVAL", "VERIFYING", "SUCCEEDED", "COMPLETED", "FAILED", "QUEUED", "RECOVERY_REQUIRED", "CANCELLED"],
     "VERIFYING": ["SUCCEEDED", "COMPLETED", "FAILED", "RECOVERY_REQUIRED"],
@@ -234,8 +234,8 @@ class TaskManager:
         task = self._tasks.get(task_id)
         if task is None:
             raise KeyError(task_id)
-        if task["status"] not in ["queued", "QUEUED"]:
-            raise ValueError("Only queued tasks can be cancelled")
+        if task["status"] not in ["queued", "QUEUED", "WAITING_APPROVAL"]:
+            raise ValueError("Only queued tasks or tasks waiting for approval can be cancelled")
         task = deepcopy(task)
         task.update(status="cancelled", cancellation_requested=True, completed_at=_timestamp())
         task["version"] = task.get("version", 1) + 1

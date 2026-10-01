@@ -14,7 +14,8 @@ def test_e2e_desktop_mobile_pairing_lifecycle_and_reconnect():
     code = ch["code"]
 
     # 2. Phone signs challenge
-    phone = KnightIdentity.get_or_create("e2e-phone-01", "User iPhone")
+    from uuid import uuid4
+    phone = KnightIdentity("e2e-phone-" + uuid4().hex, "User iPhone")
     msg = f"{code}:{phone.node_id}:{k_commander.node_id}".encode("utf-8")
     sig = phone.sign_message(msg).hex()
 

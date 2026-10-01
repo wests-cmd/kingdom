@@ -1,5 +1,6 @@
 import pytest
 import time
+from uuid import uuid4
 from backend.cluster.identity import KingdomIdentity, KnightIdentity
 from backend.cluster.mobile_pairing import mobile_pairing_manager, MobileDeviceState
 from backend.memory.ingestion import knowledge_ingestor
@@ -14,7 +15,7 @@ def test_mobile_pairing_and_revocation_lifecycle():
     code = ch["code"]
 
     # Generate mobile device keys
-    kn_device = KnightIdentity.get_or_create("mbl-iphone-01", "John iPhone")
+    kn_device = KnightIdentity("mbl-iphone-" + uuid4().hex, "John iPhone")
     msg = f"{code}:{kn_device.node_id}:{k_identity.node_id}".encode("utf-8")
     sig = kn_device.sign_message(msg).hex()
 

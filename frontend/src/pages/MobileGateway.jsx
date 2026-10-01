@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { api } from "../api";
+import React, { useState } from "react";
+import api from "../api";
+import DevicePairing from "../components/DevicePairing";
 
 export function MobileGateway() {
-  const [challenge, setChallenge] = useState(null);
-  const [pairedDevices, setPairedDevices] = useState([]);
   const [uploadContent, setUploadContent] = useState("");
   const [filename, setFilename] = useState("pricing_sheet.txt");
   const [domain, setDomain] = useState("Invoices");
@@ -15,19 +14,6 @@ export function MobileGateway() {
   const [skillDesc, setSkillDesc] = useState("");
   const [exampleText, setExampleText] = useState("");
   const [teachResult, setTeachResult] = useState(null);
-
-  const fetchChallenge = async () => {
-    try {
-      const res = await api.post("/mobile/challenge?ttl_seconds=300");
-      setChallenge(res.data);
-    } catch (err) {
-      console.error("Failed to generate mobile challenge:", err);
-    }
-  };
-
-  useEffect(() => {
-    fetchChallenge();
-  }, []);
 
   const handleUploadKnowledge = async (e) => {
     e.preventDefault();
@@ -70,31 +56,16 @@ export function MobileGateway() {
           📱 Mobile Gateway & Knowledge Teaching Console
         </h1>
         <p style={{ fontSize: "12px", color: "#888", marginTop: "4px" }}>
-          Pair mobile devices, ingest universal documents/photos, and teach Kingdom new operational workflows.
+          Pair mobile devices, save pasted document text, and teach Kingdom new operational workflows.
         </p>
       </div>
 
-      {/* Challenge Banner */}
-      {challenge && (
-        <div style={{ padding: "16px", background: "#141414", border: "1px solid #282828", borderRadius: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <div style={{ fontSize: "10px", color: "var(--accent-red)", fontWeight: "700", textTransform: "uppercase" }}>Mobile Pairing Challenge</div>
-            <div style={{ fontSize: "24px", fontFamily: "monospace", fontWeight: "700", color: "#fff", tracking: "2px" }}>
-              {challenge.code}
-            </div>
-            <div style={{ fontSize: "11px", color: "#666" }}>Scan or enter on Kingdom Mobile App</div>
-          </div>
-          <button onClick={fetchChallenge} style={{ padding: "6px 12px", background: "#222", color: "#ccc", border: "1px solid #444", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}>
-            🔄 Refresh Challenge
-          </button>
-        </div>
-      )}
-
+      <DevicePairing />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-        {/* Universal Knowledge Ingestion (+ Add) */}
+        {/* Add Knowledge Text */}
         <div style={{ padding: "16px", background: "#141414", border: "1px solid #282828", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "12px" }}>
           <h2 style={{ fontSize: "15px", fontWeight: "700", color: "#fff" }}>
-            📄 Universal Knowledge Ingestion (+ Add)
+            📄 Add Knowledge Text
           </h2>
           <form onSubmit={handleUploadKnowledge} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <div>
@@ -164,7 +135,7 @@ export function MobileGateway() {
         {/* Teach Kingdom Workflow */}
         <div style={{ padding: "16px", background: "#141414", border: "1px solid #282828", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "12px" }}>
           <h2 style={{ fontSize: "15px", fontWeight: "700", color: "#fff" }}>
-            🎓 Teach Kingdom New Skill / Workflow
+            🎓 Create a Draft Skill / Workflow
           </h2>
           <form onSubmit={handleTeachSkill} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react"
 import api from "../api"
 
 export default function Settings() {
-  const [security, setSecurity] = useState({})
+  const [security, setSecurity] = useState(null)
   const [audit, setAudit] = useState([])
 
   useEffect(() => {
@@ -18,20 +18,20 @@ export default function Settings() {
         <div className="card">
           <div className="card-title">Zero Trust Model</div>
           <div className="card-value" style={{ color: "var(--accent-green)" }}>
-            {security.zero_trust ? "ENFORCED" : "INACTIVE"}
+            {security === null ? "Loading / unavailable" : security.zero_trust ? "ENFORCED" : "INACTIVE"}
           </div>
         </div>
 
         <div className="card">
           <div className="card-title">Default Policy</div>
           <div className="card-value" style={{ color: "var(--accent-red)" }}>
-            {security.deny_by_default ? "DENY-BY-DEFAULT" : "ALLOW"}
+            {security === null ? "Loading / unavailable" : security.deny_by_default ? "DENY-BY-DEFAULT" : "ALLOW"}
           </div>
         </div>
 
         <div className="card">
           <div className="card-title">Capabilities Count</div>
-          <div className="card-value">{security.capabilities_count ?? "Unavailable"}</div>
+          <div className="card-value">{security?.capabilities_count ?? "Unavailable"}</div>
         </div>
       </div>
 

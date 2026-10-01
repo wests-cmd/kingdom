@@ -41,7 +41,7 @@ class OwnerAuthentication:
 owner_auth = OwnerAuthentication()
 
 PUBLIC_GET = {"/health/live", "/health/ready", "/api/system/version", "/api/system/compatibility", "/nodes/identity"}
-PUBLIC_POST = {"/nodes/pair", "/nodes/rpc"}
+PUBLIC_POST = {"/nodes/pair", "/nodes/rpc", "/mobile/pair", "/mobile/session/status"}
 
 
 def require_owner(request: Request):
