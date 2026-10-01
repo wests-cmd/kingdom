@@ -63,4 +63,5 @@ class DiscordIdentityLinker:
         link["revoked"] = True
         self.repository.put("discord_link", user_id, link)
         self.service.engine.security.nodes.revoke_node(link["actor"])
+        self.service.engine.events.publish("discord.identity_revoked", {"state": "revoked"})
         return {"state": "revoked"}

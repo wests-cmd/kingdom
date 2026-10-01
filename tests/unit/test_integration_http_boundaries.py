@@ -32,3 +32,13 @@ def test_download_is_authenticated_canonical_attachment(workflow, monkeypatch):
     assert response.headers['content-disposition'] == 'attachment; filename="product-research.skillmap.json"'
     from fastapi.testclient import TestClient
     assert TestClient(app).get('/skillmaps/product-research/download').status_code == 401
+
+
+def test_integration_json_responses_have_declared_public_schemas():
+    schema=app.openapi()
+    for path, methods in schema['paths'].items():
+        if path.startswith(('/skillmaps','/profiles/preferences','/providers','/discord')) and not path.endswith('/download'):
+            for method, operation in methods.items():
+                if method in {'get','post'}:
+                    public=operation['responses']['200']['content']['application/json']['schema']
+                    assert public and public != {}, path

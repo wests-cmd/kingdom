@@ -19,7 +19,7 @@ replaced by lengths. Do not describe a task ID as executable source.
 
 ## 2. Authorization and transport review
 
-Confirmed owner-protected integration APIs, explicit Discord link grants,
+Confirmed owner-protected integration APIs with explicit typed public response schemas, safe grant/revocation events, explicit Discord link grants,
 hashed five-minute single-use challenges, identity/checksum-bound import
 confirmation, signature freshness, application/server binding, atomic replay
 rejection and deferred command acknowledgement. Empty Discord grants remain empty;
@@ -64,7 +64,7 @@ a dependency lockfile version accidentally changed during the release bump.
 Dependency records were restored from main; only package-root versions changed.
 Clean frontend/desktop installs and production build passed afterward.
 
-Local final validation: `python -m pytest -q` **286 passed**;
+Local final validation: `python -m pytest -q` **287 passed**;
 `node --test frontend/tests/presentation.test.js apps/mobile/mobile-client.test.js`
 **3 passed**; frontend production build, version validator and syntax/diff checks
 passed. The one backend warning is Starlette's httpx TestClient deprecation.
