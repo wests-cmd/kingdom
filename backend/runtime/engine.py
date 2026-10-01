@@ -141,10 +141,10 @@ class RuntimeEngine:
         return task
 
     async def _process_next_task(self) -> None:
-        if self.execution_policy.get()["level"] == 0:
-            return
         # Modes affect polling cadence, not authority or capability grants.
         self.scheduler._interval_seconds = {"persistent": 0.1, "burst": 0.02, "adaptive": 0.1 if self.tasks.counts().get("queued", 0) else 0.5}.get(STATE["mode"], 0.1)
+        if self.execution_policy.get()["level"] == 0:
+            return
         self.recover_remote_tasks()
         task = self.tasks.claim_next()
         if task is None:

@@ -73,7 +73,7 @@ export default function Dashboard() {
 
         <div className="card">
           <div className="card-title">Active Tasks</div>
-          <div className="card-value">{tasks.filter(t => t.status === "queued" || t.status === "running").length}</div>
+          <div className="card-value">{tasks.filter(t => ["queued","running","leased","waiting_approval","recovery_required"].includes(t.status.toLowerCase())).length}</div>
         </div>
 
         <div className="card">

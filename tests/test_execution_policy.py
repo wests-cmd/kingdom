@@ -103,6 +103,7 @@ def test_runtime_modes_change_real_queue_polling_cadence(engine):
  from backend.state import STATE
  previous=STATE['mode']
  try:
+  engine.set_autonomy(0)
   engine.set_mode('burst');asyncio.run(engine._process_next_task());assert engine.scheduler._interval_seconds==0.02
   engine.set_mode('persistent');asyncio.run(engine._process_next_task());assert engine.scheduler._interval_seconds==0.1
   engine.set_mode('adaptive');asyncio.run(engine._process_next_task());assert engine.scheduler._interval_seconds==0.5
