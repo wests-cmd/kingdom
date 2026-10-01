@@ -4,6 +4,9 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from backend.security.capabilities import ALL_CAPABILITIES
 from backend.system.compatibility import (
