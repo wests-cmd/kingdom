@@ -12,9 +12,7 @@ export default function Swarm() {
       .then(res => {
         const list = res.data?.knights || (Array.isArray(res.data) ? res.data : [])
         setKnights(list)
-        if (!selectedKnight && list.length > 0) {
-          setSelectedKnight(list[0])
-        }
+        setSelectedKnight(previous => list.find(knight => knight.id === previous?.id) || list[0] || null)
       })
       .catch(() => setKnights([]))
       .finally(() => setLoading(false))

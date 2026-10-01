@@ -108,7 +108,7 @@ class MobilePairingManager:
             "id": device_id,
             "role": "mobile_gateway",
             "node_state": NodeState.PENDING_APPROVAL.value,
-            "capabilities": ["mobile.voice_input", "mobile.document_upload", "mobile.approval_view"],
+            "capabilities": [],  # Browser companion currently supports only its own pairing status.
             "granted_capabilities": [],  # No capabilities before explicit owner approval.
             "public_identity": {
                 "node_id": device_id,

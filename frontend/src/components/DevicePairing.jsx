@@ -4,11 +4,12 @@ import api from '../api'
 
 export default function DevicePairing() {
   const [challenge, setChallenge] = useState(null)
-  const [address, setAddress] = useState(window.location.protocol === 'https:' ? window.location.origin : '')
+  const [address, setAddress] = useState(window.location.protocol === 'https:' ? window.location.origin : localStorage.getItem('kingdom-device-address') || '')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [now, setNow] = useState(Date.now())
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer) }, [])
+  useEffect(() => { localStorage.setItem('kingdom-device-address', address) }, [address])
   const create = async () => {
     setBusy(true); setError('')
     try { setChallenge((await api.post('/mobile/challenge?ttl_seconds=300')).data) }

@@ -161,7 +161,7 @@ export function Nodes() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
                   <div style={{ fontWeight: "700", color: "#fff", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
-                    {node.id}
+                    {node.public_identity?.display_name || node.id}
                     <span style={{ fontSize: "10px", padding: "1px 6px", background: "#222", color: "#aaa", borderRadius: "3px", textTransform: "uppercase" }}>{node.role}</span>
                   </div>
                   <div style={{ fontSize: "11px", fontFamily: "monospace", color: "#777", marginTop: "4px" }}>
