@@ -1,12 +1,12 @@
-# Kingdom v1TAS (v1.0.0) — Release Certification & Maintenance Documentation
+# Kingdom v1TAS (v1.0.1) — Release Certification & Maintenance Documentation
 
 **Display Name:** Kingdom v1TAS
-**Semantic Version:** 1.0.0
-**Git Release Tag:** v1.0.0
+**Semantic Version:** 1.0.1
+**Git Release Tag:** v1.0.1
 **Release Channel:** stable
-**Authoritative Version Source:** `backend/state.py` (`STATE["version"] = "1.0.0"`)
+**Authoritative Version Source:** `backend/state.py` (`STATE["version"] = "1.0.1"`)
 
-The SemVer release and the Kingdom product identity are separate values. `GET /api/system/version.version` and `/status.release_version` report `1.0.0`; the Centipede-facing `/status.version` reports `v1TAS`.
+The SemVer release and the Kingdom product identity are separate values. `GET /api/system/version.version` and `/status.release_version` report `1.0.1`; the Centipede-facing `/status.version` reports `v1TAS`.
 
 ---
 
@@ -14,13 +14,12 @@ The SemVer release and the Kingdom product identity are separate values. `GET /a
 
 Kingdom enforces single-source versioning. All sub-components derive their version string from `backend/state.py` or synchronized package manifests verified by `scripts/validate_version.py`.
 
-- **Backend release SemVer:** `1.0.0` (Exposed via `GET /api/system/version` and `/status.release_version`)
+- **Backend release SemVer:** `1.0.1` (Exposed via `GET /api/system/version` and `/status.release_version`)
 - **Kingdom product identity:** `v1TAS` (Exposed via `/status.version` and `/api/system/compatibility.version`)
 - **Centipede API contract:** `1.4.0` using protocol `v1.x`; the separate Kingdom cluster RPC identifier remains `kingdom.cluster.v1`.
-- **Frontend UI:** `1.0.0` (`frontend/package.json`)
-- **Desktop Application Shell:** `1.0.0` (`desktop/package.json`)
-- **Mobile Gateway Client:** `1.0.0` (`apps/mobile/package.json`)
-- **Docker Metadata:** `1.0.0` (`docker-compose.yml`)
+- **Frontend UI:** `1.0.1` (`frontend/package.json`)
+- **Desktop Application Shell:** `1.0.1` (`desktop/package.json`)
+- **Mobile Gateway Client:** `1.0.1` (`apps/mobile/package.json`)
 
 ---
 
@@ -30,9 +29,11 @@ The release automation pipeline (`.github/workflows/release.yml`) builds and pub
 
 | Artifact Filename | Platform / Arch | Package Type | Checksum |
 |---|---|---|---|
-| `Kingdom-1.0.0.AppImage` | Linux x86_64 | Native Desktop AppImage | Verified in `SHA256SUMS` |
-| `kingdom-desktop_1.0.0_amd64.deb` | Linux x86_64 | Debian Package | Verified in `SHA256SUMS` |
+| `Kingdom-1.0.1.AppImage` | Linux x86_64 | Native Desktop AppImage | Verified in `SHA256SUMS` |
+| `kingdom-desktop_1.0.1_amd64.deb` | Linux x86_64 | Debian Package | Verified in `SHA256SUMS` |
 | `kingdom-backend-linux-x86_64` | Linux x86_64 | PyInstaller Standalone Binary | Verified in `SHA256SUMS` |
+| `Kingdom-Setup-1.0.1.exe` | Windows x86_64 | Native Desktop Installer | Verified in `SHA256SUMS` |
+| `Kingdom-1.0.1.dmg` | macOS Intel x86_64 | Native Desktop Installer | Verified in `SHA256SUMS` |
 | `SHA256SUMS` | Multi-platform | Cryptographic Checksum File | Verified via `sha256sum -c` |
 | `release-manifest.json` | Multi-platform | Machine-readable Release Manifest | Validated against semver |
 
@@ -40,20 +41,20 @@ The release automation pipeline (`.github/workflows/release.yml`) builds and pub
 
 ## 3. Centipede OS Compatibility Protocol
 
-Every release manifest (`release-manifest.json`) and runtime API endpoint (`/api/system/compatibility`) exposes Centipede OS compatibility metadata:
+The consolidated release manifest (`release-manifest.json`), `/status`, and `/api/system/compatibility` expose the Centipede-facing identity and contract while preserving Kingdom's separate cluster protocol identifier:
 
 ```json
 {
   "product": "Kingdom",
   "version": "v1TAS",
-  "release_version": "1.0.0",
-  "kingdom_version": "1.0.0",
+  "release_version": "1.0.1",
+  "kingdom_version": "1.0.1",
   "contract_version": "1.4.0",
   "protocol": {"major": 1, "minor": 4},
   "protocol_version": "kingdom.cluster.v1",
   "capabilities": ["filesystem.read", "process.execute"],
   "release_name": "Kingdom v1TAS",
-  "tag": "v1.0.0",
+  "tag": "v1.0.1",
   "compatibility": {
     "kingdom_api_version": "v1",
     "centipede_protocol_version": "v1",
