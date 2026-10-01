@@ -52,7 +52,7 @@ class TestKingdomAPI(unittest.TestCase):
         response = self.client.get("/api/system/compatibility")
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(data["kingdom_version"], "1.0.1")
+        self.assertEqual(data["kingdom_version"], STATE["version"])
         self.assertEqual(data["protocol_version"], "kingdom.cluster.v1")
         self.assertEqual(data["version"], "v1TAS")
         self.assertEqual(data["release_version"], STATE["version"])
