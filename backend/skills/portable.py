@@ -95,7 +95,7 @@ UniqueSafeLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
 
 
 def parse_map(filename: str, payload: bytes) -> PortableSkillMap:
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,100}\.(?:json|yaml|yml)", filename) or ".." in filename:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_. ()-]{0,100}\.(?:json|yaml|yml)", filename, re.I) or ".." in filename:
         raise ValueError("Use a plain JSON or YAML filename without paths")
     if not payload or len(payload) > MAX_UPLOAD:
         raise ValueError("Skill maps must contain 1 to 262144 bytes")
@@ -103,7 +103,7 @@ def parse_map(filename: str, payload: bytes) -> PortableSkillMap:
         text = payload.decode("utf-8")
         if UNSAFE.search(text) or "\x00" in text:
             raise ValueError("Secrets, endpoints and executable instructions are not portable preferences")
-        if filename.endswith(".json"):
+        if filename.lower().endswith(".json"):
             value = json.loads(text, object_pairs_hook=_no_duplicates,
                                parse_constant=lambda _: (_ for _ in ()).throw(ValueError("Non-finite number")))
         else:

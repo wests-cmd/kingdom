@@ -29,6 +29,11 @@ def test_duplicate_yaml_fields_rejected():
         parse_map('map.yaml',b'schema_version: "1.0"\nmap_id: alpha\nmap_id: beta\n')
 
 
+def test_browser_duplicate_download_filename_reimports():
+    original=parse_map(FIXTURE.name,FIXTURE.read_bytes())
+    assert map_checksum(parse_map('product-research.skillmap (1).JSON',canonical_map(original))) == map_checksum(original)
+
+
 @pytest.mark.parametrize("filename,payload", [
     ("../map.json", b"{}"), ("C:\\map.json", b"{}"), ("map.exe", b"{}"),
     ("map.json", b"x" * 262145), ("map.json", b'{"map_id":"a","map_id":"b"}'),
