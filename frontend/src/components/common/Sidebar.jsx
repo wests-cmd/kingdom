@@ -1,51 +1,12 @@
-import React, { useState, useEffect } from "react"
-import { api } from "../../api"
-
-export default function Sidebar({ currentPage, setCurrentPage }) {
-  const [runningVersion, setRunningVersion] = useState("Loading…")
-
-  useEffect(() => {
-    api.getSystemVersion()
-      .then(data => {
-        if (data && data.version) {
-          setRunningVersion(`v${data.version}`)
-        }
-      })
-      .catch(() => {})
-  }, [])
-  const navItems = [
-    { id: "Dashboard", label: "Dashboard" },
-    { id: "Swarm", label: "Swarm" },
-    { id: "Runtime", label: "Runtime" },
-    { id: "Tasks", label: "Tasks" },
-    { id: "AIMap", label: "AI Map" },
-    { id: "Memory", label: "Memory" },
-    { id: "Routing", label: "Routing" },
-    { id: "Governance", label: "Governance" },
-    { id: "Skills", label: "Skills" },
-    { id: "Learning", label: "Learning Center" },
-    { id: "Nodes", label: "Nodes & Cluster" },
-    { id: "Mobile", label: "Mobile Gateway & Knowledge" },
-    { id: "Security", label: "Security" },
-    { id: "Logs", label: "Logs & Activity" }
-  ]
-
-  return (
-    <aside className="sidebar">
-      <div className="sidebar-logo">
-        KINGDOM <span>{runningVersion}</span>
-      </div>
-      <ul className="sidebar-nav">
-        {navItems.map(item => (
-          <li
-            key={item.id}
-            className={`sidebar-item ${currentPage === item.id ? "active" : ""}`}
-            onClick={() => setCurrentPage(item.id)}
-          >
-            {item.label}
-          </li>
-        ))}
-      </ul>
-    </aside>
-  )
+import React, { useState, useEffect } from 'react'
+import { api } from '../../api'
+const groups = [
+ {name:'Operate',items:[['Dashboard','Dashboard'],['Tasks','Tasks'],['Swarm','Swarm'],['Runtime','Runtime']]},
+ {name:'Knowledge',items:[['AIMap','Intelligence records'],['Memory','Memory'],['Routing','Routing'],['Skills','Skills'],['Learning','Learning Center']]},
+ {name:'Manage',items:[['Governance','Governance'],['Nodes','Nodes & Cluster'],['Mobile','Devices & Knowledge'],['Security','Security'],['Logs','Logs & Activity']]}
+]
+export default function Sidebar({currentPage,setCurrentPage}) {
+ const [version,setVersion] = useState('Loading…')
+ useEffect(() => {api.getSystemVersion().then(data => setVersion(data.version ? `v${data.version}` : 'Unavailable')).catch(() => setVersion('Unavailable'))},[])
+ return <aside className="sidebar"><div className="sidebar-logo"><svg className="brand-mark" viewBox="0 0 28 32" aria-hidden="true"><path d="M3 3h22v17L14 29 3 20Z" fill="none" stroke="currentColor" strokeWidth="1.5"/><path d="M9 9v12m1-6 9-6m-9 6 9 6" fill="none" stroke="currentColor" strokeWidth="1.5"/></svg>KINGDOM</div><nav aria-label="Main navigation">{groups.map(group => <div className="nav-group" key={group.name}><p className="nav-group-title">{group.name}</p><ul className="sidebar-nav">{group.items.map(([id,label]) => <li key={id}><button className={`sidebar-item ${currentPage === id ? 'active' : ''}`} aria-current={currentPage === id ? 'page' : undefined} onClick={() => setCurrentPage(id)}>{label}</button></li>)}</ul></div>)}</nav><div className="sidebar-footer"><span>Local control</span><span>{version}</span></div></aside>
 }

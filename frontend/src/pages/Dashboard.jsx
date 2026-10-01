@@ -10,7 +10,7 @@ export default function Dashboard() {
   const [tasks, setTasks] = useState([])
   const [security, setSecurity] = useState({})
 
-  const [connectionState, setConnectionState] = useState("LIVE")
+  const [connectionState, setConnectionState] = useState("CONNECTING")
   const [lastUpdated, setLastUpdated] = useState(null)
 
   const fetchDashboardData = () => {
@@ -55,14 +55,14 @@ export default function Dashboard() {
         <div className="card">
           <div className="card-title">System Status</div>
           <div className="card-value" style={{ color: status.running ? "var(--accent-green)" : "var(--text-muted)" }}>
-            {status.running ? "ACTIVE" : "STOPPED"}
+            {lastUpdated ? status.running ? "ACTIVE" : "STOPPED" : "Loading…"}
           </div>
         </div>
 
         <div className="card">
           <div className="card-title">Runtime Mode</div>
           <div className="card-value" style={{ textTransform: "capitalize" }}>
-            {status.mode || "adaptive"}
+            {status.mode || "Loading…"}
           </div>
         </div>
 

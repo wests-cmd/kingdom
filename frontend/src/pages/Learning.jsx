@@ -4,6 +4,7 @@ import { fetchSkills, fetchLearningActivity, promoteProposal, triggerRollback } 
 export default function Learning() {
   const [activity, setActivity] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     loadActivity();
@@ -14,7 +15,7 @@ export default function Learning() {
       const data = await fetchLearningActivity();
       setActivity(data);
     } catch (err) {
-      console.error("Failed loading learning activity", err);
+      setError("Could not load learning records. Check the Kingdom connection.");
     } finally {
       setLoading(false);
     }
@@ -43,10 +44,11 @@ export default function Learning() {
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <header className="border-b border-neutral-800 pb-4">
-        <h1 className="text-2xl font-bold text-white tracking-wide">LEARNING CENTER</h1>
-        <p className="text-sm text-neutral-400">Continuous Improvement, Evidence Collection & Autonomous Optimization Policy</p>
+        <h1 className="text-2xl font-bold text-white tracking-wide">Learning Center</h1>
+        <p className="text-sm text-neutral-400">Recorded proposals, experiments, promotions, and rollbacks</p>
       </header>
 
+      {error && <p role="alert">{error}</p>}
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-neutral-900 border border-neutral-800 p-4 rounded-lg">

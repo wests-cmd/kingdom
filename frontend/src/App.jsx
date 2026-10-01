@@ -80,9 +80,9 @@ function OwnerApp() {
         <header className="topbar">
           <div className="page-title">{currentPage}</div>
           <div className="status-indicator">
-            Connection:{" "}
+            Kingdom:{" "}
             <span className={isConnected ? "badge-online" : "badge-offline"}>
-              {isConnected ? "ONLINE (REALTIME)" : "DISCONNECTED"}
+              {isConnected ? "Connected" : "Disconnected"}
             </span>
           </div>
         </header>

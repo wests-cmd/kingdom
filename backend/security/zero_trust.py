@@ -53,6 +53,7 @@ class ZeroTrust:
         token: str | None = None,
         parameters: dict[str, Any] | None = None,
         approval_id: str | None = None,
+        require_human_approval: bool = False,
     ) -> dict[str, Any]:
         """
         Policy enforcement point:
@@ -127,7 +128,7 @@ class ZeroTrust:
         # 4. Risk Classification & Approval check
         risk = self.risk_classifier.classify_operation(capability, parameters)
 
-        if self.approvals.requires_approval(capability, risk):
+        if require_human_approval or self.approvals.requires_approval(capability, risk):
             # Verify explicit approval_id capability scope and actor identity binding
             if approval_id:
                 if self.approvals.consume(approval_id, actor_id=actor_id, capability=capability,
@@ -151,12 +152,12 @@ class ZeroTrust:
             appr_req = self.approvals.create_request(
                 capability=capability,
                 operation=operation,
-                reason=f"High risk action requires approval: {operation}",
+                reason=f"Execution policy requires individual approval: {operation}" if require_human_approval else f"High risk action requires approval: {operation}",
                 requesting_actor=actor_id,
                 risk_level=risk,
                 parameters=parameters,
             )
-            reason = f"Operation is HIGH risk and pending human approval (Approval ID: {appr_req['id']})"
+            reason = f"Operation is pending human approval (Approval ID: {appr_req['id']})"
             self.audit.record(
                 actor=actor_id,
                 operation=operation,

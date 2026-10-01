@@ -1,34 +1,20 @@
 import React, { useState, useEffect } from "react"
-import api from "../api"
+import useLiveData from "../hooks/useLiveData"
 import SwarmGraph from "../components/graphs/SwarmGraph"
 
 export default function Swarm() {
-  const [knights, setKnights] = useState([])
-  const [selectedKnight, setSelectedKnight] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  const fetchKnights = () => {
-    api.get("/knights")
-      .then(res => {
-        const list = res.data?.knights || (Array.isArray(res.data) ? res.data : [])
-        setKnights(list)
-        setSelectedKnight(previous => list.find(knight => knight.id === previous?.id) || list[0] || null)
-      })
-      .catch(() => setKnights([]))
-      .finally(() => setLoading(false))
-  }
-
-  useEffect(() => {
-    fetchKnights()
-    const interval = setInterval(fetchKnights, 4000)
-    return () => clearInterval(interval)
-  }, [])
+  const {data,error} = useLiveData("/knights",4000)
+  const knights = data?.knights || (Array.isArray(data) ? data : [])
+  const loading = !data
+  const [selectedKnight,setSelectedKnight] = useState(null)
+  useEffect(() => {setSelectedKnight(previous => knights.find(knight => knight.id === previous?.id) || knights[0] || null)},[data])
 
   return (
     <div>
-      <h2>Swarm & Node Orchestration</h2>
+      <h2>Workers</h2>
+      {error && <p role="alert">{error}</p>}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: "20px", margin: "16px 0" }}>
+      <div className="worker-inspector-layout">
         <div>
           <h4>Cluster Nodes ({knights.length})</h4>
           {loading ? <p style={{ color: "#888" }}>Loading node cluster...</p> : (

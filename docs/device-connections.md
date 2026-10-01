@@ -1,6 +1,6 @@
 # Connect a phone or another device
 
-In Kingdom, open **Mobile Gateway & Knowledge** or **Nodes & Cluster → Connect a phone / device**. Select **Create connection code**. Codes are single-use and expire after five minutes.
+In Kingdom, open **Devices & Knowledge** or **Nodes & Cluster → Connect a phone / device**. Select **Create connection code**. Codes are single-use and expire after five minutes.
 
 For a phone, enter the HTTPS address of your Kingdom server that the phone can reach. Scan the displayed QR with the phone camera. Alternatively open `https://YOUR-KINGDOM/#/connect` on the device and enter the connection code and device name. QR generation happens locally; no third-party QR service receives the code.
 

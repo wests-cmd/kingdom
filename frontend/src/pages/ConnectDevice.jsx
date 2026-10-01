@@ -46,7 +46,7 @@ export default function ConnectDevice() {
     } catch (error) { setMessage(error.message) }
     finally { setBusy(false) }
   }
-  return <main style={{ maxWidth: 520, margin: '32px auto', padding: 24, color: '#eee' }}>
+  return <main className="connect-page">
     <h1>Connect this device to Kingdom</h1>
     <p>Scan the QR code from Kingdom or enter its single-use connection code here. Your owner access code is never needed on this page.</p>
     {!session && <form onSubmit={pair} style={{ display: 'grid', gap: 16 }}>

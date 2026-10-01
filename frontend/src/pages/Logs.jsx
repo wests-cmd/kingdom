@@ -1,26 +1,15 @@
 import React, { useState, useEffect } from "react"
-import api from "../api"
+import useLiveData from "../hooks/useLiveData"
 
 export default function Logs() {
-  const [events, setEvents] = useState([])
   const [filterType, setFilterType] = useState("")
-
-  const fetchEvents = () => {
-    const url = filterType ? `/events?event_type=${encodeURIComponent(filterType)}` : "/events"
-    api.get(url)
-      .then(res => setEvents(res.data || []))
-      .catch(() => setEvents([]))
-  }
-
-  useEffect(() => {
-    fetchEvents()
-    const interval = setInterval(fetchEvents, 3000)
-    return () => clearInterval(interval)
-  }, [filterType])
+  const {data, error} = useLiveData(filterType ? `/events?event_type=${encodeURIComponent(filterType)}` : "/events",3000)
+  const events = data || []
 
   return (
     <div>
       <h2>Operational Event Timeline</h2>
+      {error && <p role="alert">{error}</p>}
 
       <div style={{ margin: "16px 0", display: "flex", gap: "12px", alignItems: "center" }}>
         <label style={{ fontSize: "12px", color: "var(--text-muted)" }}>Filter Event Type:</label>
@@ -30,9 +19,9 @@ export default function Logs() {
           style={{ padding: "6px 12px", background: "#222", color: "#fff", border: "1px solid var(--surface-border)", borderRadius: "4px" }}
         >
           <option value="">All Events</option>
-          <option value="task.created">task.created</option>
-          <option value="task.assigned">task.assigned</option>
-          <option value="task.started">task.started</option>
+          <option value="task.queued">task.queued</option>
+          <option value="task.waiting_approval">task.waiting_approval</option>
+          <option value="task.running">task.running</option>
           <option value="task.completed">task.completed</option>
           <option value="task.failed">task.failed</option>
           <option value="task.cancelled">task.cancelled</option>

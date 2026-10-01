@@ -8,13 +8,14 @@ export function Nodes() {
   const [nodes, setNodes] = useState([]);
   const [pendingNodes, setPendingNodes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error,setError] = useState("");
   const [showPairModal, setShowPairModal] = useState(false);
   const [invitation, setInvitation] = useState(null);
   const [activeTab, setActiveTab] = useState('nodes');
 
   const fetchClusterState = async () => {
     try {
-      setLoading(true);
+      setError("");
       const [idData, nodesData, pendingData] = await Promise.all([
         api.getKingdomIdentity(),
         api.listClusterNodes(),
@@ -24,7 +25,7 @@ export function Nodes() {
       setNodes(nodesData || []);
       setPendingNodes(pendingData || []);
     } catch (err) {
-      console.error('Failed to fetch cluster state:', err);
+      setError('Could not refresh device records. Check the Kingdom connection.');
     } finally {
       setLoading(false);
     }
@@ -32,6 +33,8 @@ export function Nodes() {
 
   useEffect(() => {
     fetchClusterState();
+    const timer = setInterval(fetchClusterState,5000);
+    return () => clearInterval(timer);
   }, []);
 
   const handleCreateInvitation = async () => {
@@ -75,6 +78,7 @@ export function Nodes() {
 
   return (
     <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "24px" }}>
+      {error && <p role="alert">{error}</p>}
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "16px" }}>
         <div>

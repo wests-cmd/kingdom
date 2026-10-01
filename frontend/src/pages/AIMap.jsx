@@ -1,35 +1,15 @@
-import React, { useState } from "react"
-import AIMapGraph from "../components/graphs/AIMapGraph"
-
+import React, { useState } from 'react'
+import useLiveData from '../hooks/useLiveData'
+const views = [{name:'Tasks',path:'/tasks'},{name:'Memory',path:'/memory'},{name:'Workers',path:'/knights'},{name:'Security',path:'/security/audit?limit=50'},{name:'Learning',path:'/learning/activity'}]
 export default function AIMap() {
-  const [activeType, setActiveType] = useState("Task Map")
-  const mapTypes = ["Task Map", "Memory Map", "Swarm Map", "Security Map", "Evolution Map"]
-
-  return (
-    <div>
-      <p>Illustrative architecture view; this graph does not show live runtime telemetry.</p><h2>AI Intelligence Maps</h2>
-
-      <div style={{ display: "flex", gap: "8px", margin: "16px 0" }}>
-        {mapTypes.map(t => (
-          <button
-            key={t}
-            className={activeType === t ? "primary-red" : ""}
-            onClick={() => setActiveType(t)}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      <div className="card" style={{ marginBottom: "16px" }}>
-        <div className="card-title">Active Map Spec</div>
-        <div style={{ fontSize: "14px", fontWeight: "600" }}>{activeType} (Schema v1.0)</div>
-        <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
-          Structured intelligence graph containing relationships, weights, trust provenance, and cognitive routing outcomes.
-        </div>
-      </div>
-
-      <AIMapGraph />
-    </div>
-  )
+ const [view,setView] = useState(views[0])
+ const {data,error,updated} = useLiveData(view.path)
+ const rows = Array.isArray(data) ? data : view.name === 'Workers' ? data?.knights || [] : view.name === 'Learning' ? data?.proposals || [] : data?.logs || []
+ return <div className="page-stack"><div className="page-heading"><div><p className="eyebrow">Recorded activity</p><h1>Intelligence records</h1><p>Inspect the records Kingdom actually holds. No generated topology or simulated connections.</p></div><span className="sync-note">{updated ? updated.toLocaleTimeString() : 'Loading…'}</span></div>
+  <div className="tab-row">{views.map(item => <button key={item.name} className={view.name === item.name ? 'selected' : ''} onClick={() => setView(item)}>{item.name}</button>)}</div>
+  {error && <p role="alert" className="notice error">{error}</p>}
+  <section className="panel"><div className="section-heading"><h2>{view.name}</h2><span className="status-chip">{data ? `${rows.length} records` : 'Loading…'}</span></div>{data && !rows.length && <p className="empty-state">No {view.name.toLowerCase()} records are available.</p>}
+   {rows.map((row,index) => <details className="record-detail" key={row.id || row.event_id || index}><summary><strong>{row.prompt || row.content || row.id || row.operation || row.skill_id || 'Record'}</strong><span className="muted">{row.status || row.decision || row.state || row.role || ''}</span></summary><pre>{JSON.stringify(row,null,2)}</pre></details>)}
+  </section>
+ </div>
 }

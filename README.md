@@ -145,7 +145,7 @@ docker-compose down
 
 - `configs/install_profiles.json`: Read-only install profile catalog definition.
 - `configs/default.yaml`: Base system settings, logging, and storage paths.
-- `configs/control_levels.yaml`: Autonomous governance control levels (L0 to L5).
+- `configs/control_levels.yaml`: Design reference only. Enforced task autonomy is configured in Governance (L0 to L3); see docs/runtime-controls.md.
 - `configs/runtime.yaml`: Default model and execution parameters.
 - `.env.example`: Template for environment-specific secrets.
 
@@ -165,4 +165,8 @@ Kingdom is distributed under the custom **CYA License v2.0** ([Kingdom License](
 
 ## Device connection codes and QR
 
-Open Mobile Gateway & Knowledge or Nodes & Cluster → Connect a phone / device. Create a five-minute, single-use connection code. With a reachable HTTPS Kingdom address, scan the QR or open `/#/connect` and enter the code. Approve the device in Pending Approvals. The browser companion checks its own status; it has no owner or task-execution authority. See [device connection instructions](docs/device-connections.md). Desktop loopback alone cannot be reached by a phone. Native mobile installers remain unavailable.
+Open Devices & Knowledge or Nodes & Cluster → Connect a phone / device. Create a five-minute, single-use connection code. With a reachable HTTPS Kingdom address, scan the QR or open `/#/connect` and enter the code. Approve the device in Pending Approvals. The browser companion checks its own status; it has no owner or task-execution authority. See [device connection instructions](docs/device-connections.md). Desktop loopback alone cannot be reached by a phone. Native mobile installers remain unavailable.
+
+### Live controls and records
+
+Governance saves and enforces an autonomy policy for new local and remote task dispatch. Runtime controls start/stop local queue processing and change actual polling cadence. Intelligence records, worker activity, memory, logs, and provider health display backend data. See [runtime controls and limitations](docs/runtime-controls.md).

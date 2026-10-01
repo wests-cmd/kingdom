@@ -1,24 +1,14 @@
 import React, { useState, useEffect } from "react"
 import api from "../api"
+import useLiveData from "../hooks/useLiveData"
 
 export default function Tasks() {
-  const [tasks, setTasks] = useState([])
+  const {data: taskData, error: loadError, refresh: loadTasks} = useLiveData("/tasks", 3000)
+  const tasks = taskData || []
   const [taskMode, setTaskMode] = useState("text.analyze@1.0.0")
   const [inputData, setInputData] = useState("")
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
-
-  const loadTasks = () => {
-    api.get("/tasks")
-      .then(res => setTasks(res.data || []))
-      .catch(() => setTasks([]))
-  }
-
-  useEffect(() => {
-    loadTasks()
-    const interval = setInterval(loadTasks, 3000)
-    return () => clearInterval(interval)
-  }, [])
 
   const handleCreateTask = async (e) => {
     e.preventDefault()
@@ -44,8 +34,10 @@ export default function Tasks() {
   return (
     <div>
       <h2>Task Management</h2>
+      <p className="muted" style={{marginBottom:20}}>Submit work, inspect verified results, or cancel tasks that have not started.</p>
+      {loadError && <p role="alert">{loadError}</p>}
 
-      <form onSubmit={handleCreateTask} style={{ marginBottom: "16px" }}>
+      <form className="task-form" onSubmit={handleCreateTask} style={{ marginBottom: "24px" }}>
         <label>Task <select value={taskMode} onChange={e => setTaskMode(e.target.value)}><option value="text.analyze@1.0.0">Analyze text</option><option value="code.python.analyze@1.0.0">Check Python syntax</option><option value="">Ask your configured AI</option></select></label>
         <input
           type="text"
@@ -59,21 +51,17 @@ export default function Tasks() {
       {error && <p role="alert">{error}</p>}
 
       <h4>Active & Historical Tasks ({tasks.length})</h4>
-      {tasks.length === 0 ? <p style={{ color: "#888" }}>No tasks submitted yet.</p> : (
+      {taskData === null ? <p>Loading tasks…</p> : tasks.length === 0 ? <p style={{ color: "#888" }}>No tasks submitted yet.</p> : (
         <ul style={{ listStyle: "none", padding: 0 }}>
           {tasks.map(t => (
-            <li key={t.id} style={{ background: "#222", padding: "10px", borderRadius: "6px", marginBottom: "8px" }}>
-              <div><strong>Task ID:</strong> {t.id}</div>
-              <div><strong>Status:</strong> <span style={{ color: t.status === "completed" ? "lightgreen" : t.status === "failed" ? "red" : "orange" }}>{t.status}</span></div>
-              <div><strong>Input:</strong> {JSON.stringify(t.input)}</div>
-              {t.error && <div role="alert"><strong>Reason:</strong> {t.error}</div>}
-              {t.assigned_knight && <div><strong>Assigned Knight:</strong> {t.assigned_knight}</div>}
-              {t.result && <div><strong>Result:</strong> {JSON.stringify(t.result)}</div>}
-              {t.status === "queued" ? (
-                <button onClick={() => handleCancelTask(t.id)} style={{ marginTop: "6px", background: "red", color: "#fff", border: "none", padding: "4px 8px", borderRadius: "4px", cursor: "pointer" }}>
-                  Cancel Task
-                </button>
-              ) : null}
+            <li key={t.id} className="task-record">
+              <div className="task-meta"><span className="status-chip">{t.status}</span><span>{new Date(t.created_at).toLocaleString()}</span></div>
+              <p className="task-input">{t.prompt || t.input?.prompt || 'Task'}</p>
+              {t.error && <p role="alert"><strong>Reason:</strong> {t.error}</p>}
+              {t.assigned_knight && <p className="muted">Worker: {t.assigned_knight}</p>}
+              {t.result && <details><summary>View execution result</summary><pre>{JSON.stringify(t.result,null,2)}</pre></details>}
+              <details><summary className="muted">Task details</summary><pre>{JSON.stringify({id:t.id,metadata:t.metadata,input:t.input},null,2)}</pre></details>
+              {['queued','QUEUED','WAITING_APPROVAL'].includes(t.status) && <button onClick={() => handleCancelTask(t.id)} style={{marginTop:12}}>Cancel Task</button>}
             </li>
           ))}
         </ul>

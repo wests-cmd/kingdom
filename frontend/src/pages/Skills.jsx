@@ -7,6 +7,7 @@ export default function Skills() {
   const [selectedSkill, setSelectedSkill] = useState(null);
   const [readiness, setReadiness] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     loadData();
@@ -19,7 +20,7 @@ export default function Skills() {
       setSkills(skillList || []);
       setSkillMap(mapData);
     } catch (err) {
-      console.error("Failed loading skills", err);
+      setError("Could not load the skill catalog. Check the Kingdom connection.");
     } finally {
       setLoading(false);
     }
@@ -27,11 +28,13 @@ export default function Skills() {
 
   const handleSelect = async (skill) => {
     setSelectedSkill(skill);
+    setReadiness(null);
+    setError("");
     try {
       const res = await checkSkillReadiness(skill.id);
       setReadiness(res);
     } catch (err) {
-      console.error("Readiness check failed", err);
+      setError("Readiness could not be checked. Please try again.");
     }
   };
 
@@ -40,14 +43,16 @@ export default function Skills() {
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <header className="border-b border-neutral-800 pb-4">
-        <h1 className="text-2xl font-bold text-white tracking-wide">AI SKILL MAP & MANAGEMENT</h1>
-        <p className="text-sm text-neutral-400">Typed & Versioned Skill Intelligence Lifecycle, Dependency Engine & Bundles</p>
+        <h1 className="text-2xl font-bold text-white tracking-wide">Skills</h1>
+        <p className="text-sm text-neutral-400">Registered skills, requirements, and actual readiness checks</p>
       </header>
 
+      {error && <p role="alert">{error}</p>}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-3 lg:col-span-1">
           <h2 className="text-lg font-semibold text-white">Skill Catalog ({skills.length})</h2>
           <div className="space-y-2 overflow-y-auto max-h-[600px] pr-1">
+            {!skills.length && !error && <p className="empty-state">No skills are registered. Create a draft under Devices & Knowledge.</p>}
             {skills.map((s) => (
               <div
                 key={s.id}
@@ -107,7 +112,7 @@ export default function Skills() {
               </div>
 
               <div className="border border-neutral-800 rounded p-4 bg-neutral-950 space-y-3">
-                <h3 className="text-sm font-bold text-neutral-300 uppercase tracking-wider">"DO I HAVE EVERYTHING?" — READINESS REPORT</h3>
+                <h3 className="text-sm font-bold text-neutral-300 uppercase tracking-wider">Readiness report</h3>
                 {readiness ? (
                   <div>
                     <div className="flex items-center space-x-3">
