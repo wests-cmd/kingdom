@@ -91,7 +91,9 @@ class KnightRegistry:
             {
                 "name": name,
                 "id": f"knight-{name}", "role": name, "is_local": True,
-                "capabilities": [f"{name}.execute", "model.inference", "memory.read"],
+                "capabilities": list(self._knights[name].capabilities),
+                "health": self._knights[name].health,
+                "current_task": self._knights[name].current_task,
                 "status": "working" if self._active[name] else "ready",
                 "active": self._active[name],
                 "completed": self._completed[name],

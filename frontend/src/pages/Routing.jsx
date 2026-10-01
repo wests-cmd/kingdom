@@ -5,6 +5,7 @@ export default function Routing() {
   return (
     <div>
       <h2>Adaptive Model & Task Routing</h2>
+      <p>Illustrative routing design; provider selection and latency measurements are not displayed here.</p>
 
       <div className="card" style={{ margin: "16px 0" }}>
         <div className="card-title">Routing Pipeline Spec</div>
