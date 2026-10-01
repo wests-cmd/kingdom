@@ -1,0 +1,270 @@
+{
+  "$defs": {
+    "MapConstraints": {
+      "additionalProperties": false,
+      "properties": {
+        "read_only": {
+          "const": true,
+          "default": true,
+          "title": "Read Only",
+          "type": "boolean"
+        },
+        "timeout_seconds": {
+          "default": 10,
+          "maximum": 15,
+          "minimum": 1,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        },
+        "max_tests": {
+          "default": 5,
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Max Tests",
+          "type": "integer"
+        }
+      },
+      "title": "MapConstraints",
+      "type": "object"
+    },
+    "MapMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "default": "Untitled skill map",
+          "maxLength": 500,
+          "title": "Title",
+          "type": "string"
+        },
+        "author": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Author",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Description",
+          "type": "string"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        }
+      },
+      "title": "MapMetadata",
+      "type": "object"
+    },
+    "PortableSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "skill_id": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+          "title": "Skill Id",
+          "type": "string"
+        },
+        "capabilities": {
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "provider_ids": {
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Provider Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "skill_id"
+      ],
+      "title": "PortableSkill",
+      "type": "object"
+    },
+    "ProviderEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "provider_id": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "verified",
+            "failed",
+            "unsupported",
+            "disabled"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "response_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Response Sha256"
+        },
+        "capabilities": {
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Capabilities",
+          "type": "array"
+        }
+      },
+      "required": [
+        "provider_id",
+        "status"
+      ],
+      "title": "ProviderEvidence",
+      "type": "object"
+    },
+    "ProviderRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "provider_id": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "capabilities": {
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "credential_ref": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credential Ref"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "provider_id"
+      ],
+      "title": "ProviderRequirement",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "map_id": {
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+      "title": "Map Id",
+      "type": "string"
+    },
+    "capabilities": {
+      "items": {
+        "maxLength": 64,
+        "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+        "type": "string"
+      },
+      "maxItems": 100,
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "skills": {
+      "items": {
+        "$ref": "#/$defs/PortableSkill"
+      },
+      "maxItems": 100,
+      "title": "Skills",
+      "type": "array"
+    },
+    "providers": {
+      "items": {
+        "$ref": "#/$defs/ProviderRequirement"
+      },
+      "maxItems": 100,
+      "title": "Providers",
+      "type": "array"
+    },
+    "preferred_resources": {
+      "items": {
+        "maxLength": 64,
+        "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+        "type": "string"
+      },
+      "maxItems": 30,
+      "title": "Preferred Resources",
+      "type": "array"
+    },
+    "constraints": {
+      "$ref": "#/$defs/MapConstraints"
+    },
+    "metadata": {
+      "$ref": "#/$defs/MapMetadata"
+    },
+    "test_results": {
+      "items": {
+        "$ref": "#/$defs/ProviderEvidence"
+      },
+      "maxItems": 100,
+      "title": "Test Results",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "map_id"
+  ],
+  "title": "PortableSkillMap",
+  "type": "object"
+}

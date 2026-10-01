@@ -170,3 +170,7 @@ Open Devices & Knowledge or Nodes & Cluster → Connect a phone / device. Create
 ### Live controls and records
 
 Governance saves and enforces an autonomy policy for new local and remote task dispatch. Runtime controls start/stop local queue processing and change actual polling cadence. Intelligence records, worker activity, memory, logs, and provider health display backend data. See [runtime controls and limitations](docs/runtime-controls.md).
+
+## Portable skill maps and Discord
+
+The owner dashboard includes real map import, preview, confirmation, canonical export, profile preferences and governed reviewed-provider tests. Discord is optional and disabled by default. Follow [the setup and security guide](docs/DISCORD_SKILLMAPS.md). Public API directory entries are discovery metadata; only explicitly enabled reviewed adapters can run. Pricing, unrestricted web search and live Discord certification are not supplied by importing a map.

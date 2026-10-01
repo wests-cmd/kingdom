@@ -1,0 +1,28 @@
+schema_version: '1.0'
+map_id: product-research
+capabilities:
+- product_research
+- price_comparison
+- web_search
+skills:
+- skill_id: product-research
+  capabilities:
+  - product_research
+  - price_comparison
+  - web_search
+  provider_ids:
+  - openfoodfacts
+providers:
+- provider_id: openfoodfacts
+  capabilities:
+  - product_research
+  required: true
+preferred_resources:
+- researcher
+constraints:
+  read_only: true
+  timeout_seconds: 10
+  max_tests: 5
+metadata:
+  title: Product research
+  description: Compare product metadata using reviewed read-only providers.

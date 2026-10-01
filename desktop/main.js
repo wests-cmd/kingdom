@@ -281,7 +281,24 @@ async function runReleaseSmoke(reportPath) {
   const verifiedTask = await until(() => mainWindow.webContents.executeJavaScript("fetch('/tasks').then(r => r.json()).then(tasks => tasks.find(t => t.prompt === 'native release verification' && t.status === 'completed'))"), 'real verified native task');
   if (verifiedTask.result.results[0].outcome.output.words !== 3 || verifiedTask.result.results[0].verification.state !== 'VERIFIED') throw new Error('Native task outcome verification failed');
   report.taskExecuted = {taskId: verifiedTask.id, words: 3, verification: 'VERIFIED'};
+  report.portableMaps = await mainWindow.webContents.executeJavaScript(`(async () => {
+    async function request(url, body) {
+      const response = await fetch(url, body ? {method:'POST', headers:{'X-Kingdom-Request':'1','Content-Type':'application/json'}, body:JSON.stringify(body)} : {});
+      if (!response.ok) throw new Error('Packaged map workflow failed');
+      return response.json();
+    }
+    const profiles = await request('/profiles/preferences');
+    if (!profiles.available.some(profile => profile.profile_id === 'developer')) throw new Error('Frozen profile catalog missing');
+    const content = JSON.stringify({schema_version:'1.0',map_id:'native-smoke',capabilities:['product_research'],providers:[{provider_id:'openfoodfacts',capabilities:['product_research']}]});
+    const preview = await request('/skillmaps/preview',{filename:'native-smoke.json',content});
+    await request('/skillmaps/confirm',{preview_id:preview.preview_id,checksum:preview.checksum});
+    const exported = await request('/skillmaps/native-smoke/export');
+    const reimport = await request('/skillmaps/preview',{filename:exported.filename,content:exported.payload});
+    if (preview.checksum !== exported.checksum || reimport.checksum !== exported.checksum) throw new Error('Native map roundtrip differs');
+    return {catalogLoaded:true,roundtripEquivalent:true,checksum:exported.checksum};
+  })()`);
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e => e.textContent === 'Dashboard').click()");
+  await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('.card-value')) && document.body.textContent.includes('Last synchronized at')"), 'dashboard before evidence capture');
   report.dashboardLoaded = true;
   report.profilePersisted = Boolean(loadSavedProfile());
   report.version = apiVersion.version;
