@@ -128,11 +128,11 @@ class NodeCapabilitiesRequest(BaseModel):
     granted_capabilities: list[str]
 
 class MobilePairRequest(BaseModel):
-    code: str
-    device_id: str
-    device_name: str
-    device_public_key_hex: str
-    signature: str
+    code: str = Field(min_length=1, max_length=64)
+    device_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+    device_name: str = Field(min_length=1, max_length=100)
+    device_public_key_hex: str = Field(min_length=64, max_length=64, pattern=r"^[a-fA-F0-9]+$")
+    signature: str = Field(min_length=128, max_length=128, pattern=r"^[a-fA-F0-9]+$")
 
 class TeachSkillRequest(BaseModel):
     name: str

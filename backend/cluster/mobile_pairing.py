@@ -41,6 +41,8 @@ class MobilePairingManager:
         expires_at = now + ttl_seconds
         self._pairing_challenges = {code: item for code, item in self._pairing_challenges.items()
                                     if not item["used"] and item["expires_at"] > now}
+        self._active_sessions = {token: item for token, item in self._active_sessions.items()
+                                 if item["expires_at"] > now}
         if len(self._pairing_challenges) >= 100:
             oldest = min(self._pairing_challenges, key=lambda code: self._pairing_challenges[code]["created_at"])
             del self._pairing_challenges[oldest]
