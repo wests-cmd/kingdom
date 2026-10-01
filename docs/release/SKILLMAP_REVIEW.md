@@ -12,7 +12,7 @@ The historical online-Knight source-code incident was not independently reproduc
 `BaseKnight.current_task` normally contains a task ID. The confirmed defect was
 unrestricted presentation: worker activity/capability fields were printed directly,
 intelligence indexes used raw task prompts or memory content as headings, and
-event, routing and task views printed whole internal records. Curated worker DTOs,
+event, routing and task views printed whole internal records. Worker permissions are derived from both current active security layers rather than role declarations; revoked workers show offline, and a model permission is distinguished from configured-provider availability. Curated worker DTOs,
 allowlisted device captions, generic record headings, task result summaries and
 explicit redacted developer details remove these paths. Audit prompt snippets are
 replaced by lengths. Do not describe a task ID as executable source.
@@ -64,7 +64,7 @@ a dependency lockfile version accidentally changed during the release bump.
 Dependency records were restored from main; only package-root versions changed.
 Clean frontend/desktop installs and production build passed afterward.
 
-Local final validation: `python -m pytest -q` **285 passed**;
+Local final validation: `python -m pytest -q` **286 passed**;
 `node --test frontend/tests/presentation.test.js apps/mobile/mobile-client.test.js`
 **3 passed**; frontend production build, version validator and syntax/diff checks
 passed. The one backend warning is Starlette's httpx TestClient deprecation.

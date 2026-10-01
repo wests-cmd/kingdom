@@ -130,6 +130,8 @@ profile preferences, task bindings, challenge hashes, links and replay IDs. Exis
 tasks/memory/schema are preserved. No interaction body, bot token, webhook token
 or provider credential is persisted. Do not share your whole database as evidence.
 
+Worker details show the intersection of current grants in both active security layers. Model permission still requires a configured model provider; provider permission still requires an explicitly enabled service. Revoked workers show offline.
+
 Normal worker cards, memory/task indexes, events and routing views show curated
 summaries. Source input and generated text are deliberate task details; developer
 diagnostics require explicit opt-in and redact common credential fields. A task
