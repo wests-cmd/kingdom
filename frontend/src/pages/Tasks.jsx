@@ -22,7 +22,7 @@ export default function Tasks() {
 
   const handleCreateTask = async (e) => {
     e.preventDefault()
-    if (!inputData.trim()) return
+    if (!inputData.trim()) { setError("Enter a task description before submitting."); return }
     setSubmitting(true)
     setError("")
     try {
@@ -66,6 +66,7 @@ export default function Tasks() {
               <div><strong>Task ID:</strong> {t.id}</div>
               <div><strong>Status:</strong> <span style={{ color: t.status === "completed" ? "lightgreen" : t.status === "failed" ? "red" : "orange" }}>{t.status}</span></div>
               <div><strong>Input:</strong> {JSON.stringify(t.input)}</div>
+              {t.error && <div role="alert"><strong>Reason:</strong> {t.error}</div>}
               {t.assigned_knight && <div><strong>Assigned Knight:</strong> {t.assigned_knight}</div>}
               {t.result && <div><strong>Result:</strong> {JSON.stringify(t.result)}</div>}
               {t.status === "queued" ? (

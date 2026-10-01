@@ -486,8 +486,9 @@ def cancel_task(task_id: str):
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 @router.get("/events")
-def event_history(limit: int = Query(default=50, ge=1, le=200)):
-    return engine.events.history(limit)
+def event_history(limit: int = Query(default=50, ge=1, le=200), event_type: str | None = None):
+    events = engine.events.history(200 if event_type else limit)
+    return [event for event in events if not event_type or event["event_type"] == event_type][-limit:]
 
 @router.get("/knights")
 def knights():
@@ -982,6 +983,15 @@ def process_mobile_pairing(request: MobilePairRequest):
     if not res.get("success"):
         raise HTTPException(status_code=400, detail=res.get("error"))
     return res
+
+@router.post("/mobile/session/status")
+def mobile_session_status(request: Request):
+    authorization = request.headers.get("Authorization", "")
+    token = authorization[7:] if authorization.startswith("Bearer ") else ""
+    result = mobile_pairing_manager.session_status(token)
+    if not result.get("success"):
+        raise HTTPException(status_code=401, detail=result.get("error"))
+    return result
 
 # --- GOVERNED FINANCIAL ENDPOINTS ---
 

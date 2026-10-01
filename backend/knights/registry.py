@@ -90,6 +90,8 @@ class KnightRegistry:
         return [
             {
                 "name": name,
+                "id": f"knight-{name}", "role": name, "is_local": True,
+                "capabilities": [f"{name}.execute", "model.inference", "memory.read"],
                 "status": "working" if self._active[name] else "ready",
                 "active": self._active[name],
                 "completed": self._completed[name],

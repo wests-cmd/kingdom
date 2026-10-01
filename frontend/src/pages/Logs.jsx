@@ -51,11 +51,11 @@ export default function Logs() {
                   {e.event_type}
                 </span>
                 <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                  {new Date(e.timestamp * 1000).toLocaleTimeString()}
+                  {new Date(typeof e.timestamp === "number" ? e.timestamp * 1000 : e.timestamp).toLocaleTimeString()}
                 </span>
               </div>
               <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>Source: {e.source} {e.task_id ? `| Task ID: ${e.task_id}` : ""}</div>
-              <div style={{ fontSize: "12px", marginTop: "4px" }}>{JSON.stringify(e.payload)}</div>
+              <div style={{ fontSize: "12px", marginTop: "4px", overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>{JSON.stringify(e.payload)}</div>
             </div>
           ))}
         </div>

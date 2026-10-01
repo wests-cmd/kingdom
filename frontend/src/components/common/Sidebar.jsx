@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react"
 import { api } from "../../api"
 
 export default function Sidebar({ currentPage, setCurrentPage }) {
-  const [runningVersion, setRunningVersion] = useState("v1.0.0")
+  const [runningVersion, setRunningVersion] = useState("Loading…")
 
   useEffect(() => {
     api.getSystemVersion()

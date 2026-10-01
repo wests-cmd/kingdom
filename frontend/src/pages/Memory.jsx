@@ -8,7 +8,7 @@ export default function Memory() {
   const [newContent, setNewContent] = useState("")
 
   const loadMemories = (q = "") => {
-    api.get(`/memory/search?query=${encodeURIComponent(q)}`)
+    api.get(q.trim() ? `/memory/search?query=${encodeURIComponent(q)}` : "/memory")
       .then(res => setMemories(res.data || []))
       .catch(() => setMemories([]))
   }
@@ -20,7 +20,7 @@ export default function Memory() {
   const handleAdd = async (e) => {
     e.preventDefault()
     if (!newContent.trim()) return
-    await api.post("/memory", { content: newContent, source: "user" })
+    await api.post("/memory", { content: newContent, metadata: { source: "user", trust: "user-supplied" } })
     setNewContent("")
     loadMemories(query)
   }
@@ -57,7 +57,7 @@ export default function Memory() {
             {memories.map(m => (
               <li key={m.id} style={{ background: "#222", padding: "8px 12px", borderRadius: "4px", marginBottom: "6px" }}>
                 <div><strong>{m.content}</strong></div>
-                <div style={{ fontSize: "0.8em", color: "#888" }}>Source: {m.source} | Trust: {m.trust}</div>
+                <div style={{ fontSize: "0.8em", color: "#888" }}>Source: {m.metadata?.source || (m.metadata?.task_id ? "task" : "Unspecified")} | Trust: {m.metadata?.trust || "Unspecified"}</div>
               </li>
             ))}
           </ul>

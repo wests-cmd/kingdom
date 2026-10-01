@@ -1,4 +1,4 @@
-# KINGDOM v1TAS (v1.0.0) — Distributed AI Runtime & Orchestration Infrastructure
+# KINGDOM v1TAS (v1.0.1) — Distributed AI Runtime & Orchestration Infrastructure
 
 [![Backend CI](https://github.com/wests-cmd/kingdom/actions/workflows/ci.yml/badge.svg)](https://github.com/wests-cmd/kingdom/actions)
 [![License: CYA v2.0](https://img.shields.io/badge/License-CYA_v2.0-red.svg)](LICENSE)
@@ -8,8 +8,8 @@
 Kingdom (`wests-cmd/kingdom`) is the core zero-trust distributed runtime and infrastructure layer for the Centipede ecosystem. It provides distributed task execution, swarm orchestration, capability security, persistent memory, typed AI skill intelligence, continuous learning, and live operational APIs.
 
 **First Stable Release:** `Kingdom v1TAS`
-**Canonical Version:** `1.0.0`
-**Git Release Tag:** `v1.0.0`
+**Canonical Version:** `1.0.1`
+**Git Release Tag:** `v1.0.1`
 
 ---
 
@@ -45,16 +45,16 @@ Normal users do NOT need to install Python, Node.js, or npm. The packaged Kingdo
    - **Custom Profile:** Manually select individual active Knights (Planner, Coder, Researcher, Memory, Security) and toggle the Command Center UI on/off.
 4. **Profile Persistence:** Your setup choice is stored securely in per-user data (`<userData>/local_profile.json`).
 
-Published downloads and verification files are listed on the [v1.0.0 release](https://github.com/wests-cmd/kingdom/releases/tag/v1.0.0). A configured package target alone does not establish availability; publication requires the native release checks to pass.
+The v1.0.1 patch is published only after its native release gates pass. Previously verified downloads remain on the [v1.0.0 release](https://github.com/wests-cmd/kingdom/releases/tag/v1.0.0). A configured package target alone does not establish availability; publication requires the native release checks to pass.
 
 | Platform | Package Format | Release target | Build Artifact |
 |---|---|---|---|
-| **Linux** | `AppImage` | x86_64 | `Kingdom-1.0.0.AppImage` |
-| **Linux** | `DEB` | amd64 | `kingdom-desktop_1.0.0_amd64.deb` |
-| **Windows** | `NSIS` | x86_64, unsigned | `Kingdom-Setup-1.0.0.exe` |
-| **macOS** | `DMG` | Intel x86_64, unsigned and not notarized | `Kingdom-1.0.0.dmg` |
+| **Linux** | `AppImage` | x86_64 | `Kingdom-1.0.1.AppImage` |
+| **Linux** | `DEB` | amd64 | `kingdom-desktop_1.0.1_amd64.deb` |
+| **Windows** | `NSIS` | x86_64, unsigned | `Kingdom-Setup-1.0.1.exe` |
+| **macOS** | `DMG` | Intel x86_64, unsigned and not notarized | `Kingdom-1.0.1.dmg` |
 
-Each installer includes a backend built on its own target operating system. Verify downloads against `SHA256SUMS` and `release-manifest.json`. The release also includes native startup evidence and dashboard screenshots. Native Apple Silicon, Windows ARM64, and Linux ARM64 installers are not supplied in v1.0.0. Signing and notarization are not claimed; OS trust prompts may apply.
+Each installer includes a backend built on its own target operating system. Verify downloads against `SHA256SUMS` and `release-manifest.json`. The release also includes native startup evidence and dashboard screenshots. Native Apple Silicon, Windows ARM64, and Linux ARM64 installers are not supplied in v1.0.1. Signing and notarization are not claimed; OS trust prompts may apply.
 
 ---
 
@@ -162,3 +162,7 @@ Kingdom is distributed under the custom **CYA License v2.0** ([Kingdom License](
 2. **Commercial Restrictions**: Commercial use (selling, sublicensing, paid products/services, revenue-generating systems) is strictly prohibited without prior written approval.
 3. **Commercial Approval**: To request commercial licensing approval, contact the copyright holder via GitHub (`https://github.com/wests-cmd`).
 4. **Authoritative Terms**: Read the complete, authoritative legal terms in the root [LICENSE](./LICENSE) file and commercial policy guidelines in [COMMERCIAL_USE.md](./COMMERCIAL_USE.md).
+
+## Device connection codes and QR
+
+Open Mobile Gateway & Knowledge or Nodes & Cluster → Connect a phone / device. Create a five-minute, single-use connection code. With a reachable HTTPS Kingdom address, scan the QR or open `/#/connect` and enter the code. Approve the device in Pending Approvals. The browser companion checks its own status; it has no owner or task-execution authority. See [device connection instructions](docs/device-connections.md). Desktop loopback alone cannot be reached by a phone. Native mobile installers remain unavailable.

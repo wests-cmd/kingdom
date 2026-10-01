@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { api } from "../api";
+import api from "../api";
+import DevicePairing from "../components/DevicePairing";
 
 export function MobileGateway() {
   const [challenge, setChallenge] = useState(null);
@@ -26,7 +27,7 @@ export function MobileGateway() {
   };
 
   useEffect(() => {
-    fetchChallenge();
+    // Pairing codes are created only when the owner explicitly requests one.
   }, []);
 
   const handleUploadKnowledge = async (e) => {
@@ -74,6 +75,7 @@ export function MobileGateway() {
         </p>
       </div>
 
+      <DevicePairing />
       {/* Challenge Banner */}
       {challenge && (
         <div style={{ padding: "16px", background: "#141414", border: "1px solid #282828", borderRadius: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>

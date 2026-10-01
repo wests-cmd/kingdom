@@ -14,12 +14,19 @@ import { Nodes } from "./pages/Nodes"
 import { MobileGateway } from "./pages/MobileGateway"
 import Settings from "./pages/Settings"
 import Logs from "./pages/Logs"
+import ConnectDevice from "./pages/ConnectDevice"
 import { realtime } from "./websocket"
 import api from "./api"
 import { initializeSession, setAccessCode } from "./session"
 import "./styles/app.css"
 
 export default function App() {
+  const [hash, setHash] = useState(window.location.hash)
+  useEffect(() => { const change = () => setHash(window.location.hash); window.addEventListener('hashchange', change); return () => window.removeEventListener('hashchange', change) }, [])
+  return hash.startsWith('#/connect') ? <ConnectDevice /> : <OwnerApp />
+}
+
+function OwnerApp() {
   const [currentPage, setCurrentPage] = useState("Dashboard")
   const [isConnected, setIsConnected] = useState(false)
   const [authorized, setAuthorized] = useState(false)
@@ -59,6 +66,7 @@ export default function App() {
   }
 
   if (!authorized) return <main className="content"><h1>Connect to Kingdom</h1>
+    <p>Adding a phone or another device? <a href="/#/connect">Enter a device connection code</a>.</p>
     <p>Desktop access is automatic. For a server, use the owner access code from the server's data/owner-token file or your administrator.</p>
     <form onSubmit={e => { e.preventDefault(); setAccessCode(accessCode); connect() }}>
       <label>Owner access code <input type="password" autoComplete="off" value={accessCode} onChange={e => setCode(e.target.value)} /></label>
