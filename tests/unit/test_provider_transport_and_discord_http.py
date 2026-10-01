@@ -126,3 +126,37 @@ def test_export_attachment_delivery_uses_canonical_bytes_without_test_grant(work
     assert mime == 'application/json'
     assert canonical_map(parse_map(filename,content)) == content
     assert service.repository.list('map_test') == []
+
+
+def test_discord_import_preview_button_confirmation_and_export(workflow, monkeypatch):
+    from .test_discord_skillmap_workflow import FIXTURE
+    from backend.integrations.discord_ai_map import adapter as adapter_module
+    service, linker = workflow
+    challenge=linker.challenge('123')
+    actor=linker.confirm('owner',challenge['code'],['import_skillmaps','export_skillmaps'])['actor']
+    captured=[]
+    class Client:
+        def __init__(self,**kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self,*args): pass
+        async def post(self,url,**kwargs):
+            captured.append(kwargs)
+            return type('Response',(),{'status_code':200})()
+    monkeypatch.setattr(adapter_module.httpx,'AsyncClient',Client)
+    adapter=http.DiscordAdapter(DiscordConfig(True,'987'),service,linker)
+    monkeypatch.setattr(adapter,'download_attachment',lambda attachment: FIXTURE.read_bytes())
+    interaction={'application_id':'987','type':2,'user':{'id':'123'},'token':'controlled-test-token',
+                 'data':{'name':'skillmap','options':[{'name':'import','options':[{'name':'file','value':'456'}]}],
+                         'resolved':{'attachments':{'456':{'filename':FIXTURE.name,'size':FIXTURE.stat().st_size,
+                                                         'url':'https://cdn.discordapp.com/attachments/123/456/map.json'}}}}}
+    asyncio.run(adapter.deliver_interaction(interaction))
+    preview=captured[-1]['json']
+    assert '1 unsupported' in preview['content'] and preview['flags']==64
+    assert service.repository.list('portable_map')==[]
+    custom_id=preview['components'][0]['components'][0]['custom_id']
+    confirmation=interaction | {'type':3,'data':{'custom_id':custom_id}}
+    asyncio.run(adapter.deliver_interaction(confirmation))
+    assert service.get(actor,'product-research').providers[0].provider_id=='openfoodfacts'
+    assert service.lifecycle.skills=={}
+    asyncio.run(adapter.deliver_interaction(interaction | {'data':{'name':'skillmap','options':[{'name':'export','options':[{'name':'map_id','value':'product-research'}]}]}}))
+    assert captured[-1]['files']['files[0]'][1] == service.export(actor,'product-research')['payload']
