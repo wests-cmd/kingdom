@@ -83,7 +83,7 @@ export function Nodes() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "16px" }}>
         <div>
           <h1 style={{ fontSize: "20px", fontWeight: "700", color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}>
-            🛡️ Node Federation & Multi-Node Cluster
+            Nodes and devices
           </h1>
           <p style={{ fontSize: "12px", color: "#888", marginTop: "4px" }}>
             Secure, identity-verified Kingdom Commander & Knight federation across LAN, WAN, and overlay networks.
@@ -94,13 +94,13 @@ export function Nodes() {
             onClick={fetchClusterState}
             style={{ padding: "6px 14px", background: "#222", border: "1px solid #444", color: "#ccc", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
           >
-            🔄 Refresh
+            Refresh
           </button>
           <button
             onClick={handleCreateInvitation}
             style={{ padding: "6px 14px", background: "var(--accent-red)", color: "#fff", border: "none", borderRadius: "4px", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}
           >
-            ➕ Add Knight / Pair Node
+            Invite a compute worker
           </button>
         </div>
       </div>
@@ -110,7 +110,7 @@ export function Nodes() {
         <div style={{ padding: "16px", background: "#141414", border: "1px solid #282828", borderRadius: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
             <div style={{ fontSize: "24px", padding: "8px", background: "#2a1213", border: "1px solid #4d181a", borderRadius: "6px" }}>
-              👑
+              K
             </div>
             <div>
               <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--accent-red)", textTransform: "uppercase", letterSpacing: "1px" }}>
@@ -126,7 +126,7 @@ export function Nodes() {
           </div>
           <div>
             <span style={{ fontSize: "11px", padding: "4px 10px", background: "#0a2912", color: "#4ade80", border: "1px solid #166534", borderRadius: "12px", fontWeight: "500" }}>
-              🟢 Commander identity available
+              Commander identity available
             </span>
           </div>
         </div>
@@ -183,8 +183,9 @@ export function Nodes() {
               </div>
 
               <div style={{ fontSize: "11px", color: "#888", display: "flex", flexDirection: "column", gap: "4px" }}>
-                <div>Granted Capabilities:</div>
+                <div>{node.is_local ? 'Recorded federation grants (local tools are listed in Swarm):' : 'Granted capabilities:'}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                  {!(node.granted_capabilities || node.capabilities || []).length && <span>None recorded</span>}
                   {(node.granted_capabilities || node.capabilities || []).map((cap, i) => (
                     <span key={i} style={{ padding: "2px 6px", background: "#222", color: "#ccc", borderRadius: "3px", fontSize: "10px" }}>
                       {cap}
@@ -195,9 +196,9 @@ export function Nodes() {
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #222", paddingTop: "8px", fontSize: "11px" }}>
                 <span style={{ color: "#666" }}>
-                  {node.is_local ? 'Local Connection' : 'Remote / WAN Network'}
+                  {node.is_local ? 'Built-in worker · managed by the install profile' : 'Remote / WAN Network'}
                 </span>
-                {node.node_state !== 'REVOKED' && (
+                {!node.is_local && node.node_state !== 'REVOKED' && (
                   <button
                     onClick={() => handleRevokeNode(node.id)}
                     style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontWeight: "600" }}
