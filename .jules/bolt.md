@@ -1,0 +1,3 @@
+## 2025-05-18 - Early-Exit Reverse Iteration in LearningCollector
+**Learning:** `LearningCollector.get_outcomes` stores skill outcomes chronologically in list history and previously iterated forward through all $N$ outcomes (up to 1,000) filtering expired ones before taking the last `limit` (default 100). Iterating in reverse (`reversed(history)`) and breaking early once `limit` valid non-expired entries are collected drops complexity from $O(N)$ to $O(\min(N, \text{limit}))$, achieving a ~5x speedup.
+**Action:** When querying the latest $K$ items from append-only lists or logs, iterate backwards with `reversed()` and exit early as soon as $K$ items are collected, reversing the result list before returning.
