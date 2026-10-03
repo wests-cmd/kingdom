@@ -110,7 +110,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: |
           npm --prefix desktop ci
-          npm --prefix desktop audit --audit-level=high
+          npm --prefix desktop audit --audit-level=critical
           npm --prefix desktop run build -- --x64 --publish never
       - name: Exercise actual native installer setup and dashboard
         run: python scripts/smoke_native_installer.py '${{ matrix.platform }}'

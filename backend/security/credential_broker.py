@@ -60,7 +60,8 @@ class CredentialBroker:
             sanitized_dict = {}
             for k, v in payload.items():
                 sanitized_val = self.sanitize_payload_for_llm(v)
-                if any(s in k.lower() for s in ["token", "secret", "password", "key", "credential", "auth"]):
+                key_str = str(k).lower()
+                if any(s in key_str for s in ["token", "secret", "password", "key", "credential", "auth"]):
                     if isinstance(sanitized_val, str) and "[REDACTED_BEARER_TOKEN]" in sanitized_val:
                         sanitized_dict[k] = "[REDACTED_BEARER_TOKEN]"
                     elif isinstance(v, str) and any(pattern.search(v) for pattern in self.TOKEN_PATTERNS):
@@ -72,6 +73,11 @@ class CredentialBroker:
             return sanitized_dict
         elif isinstance(payload, (list, tuple, set)):
             sanitized_items = [self.sanitize_payload_for_llm(item) for item in payload]
+            if isinstance(payload, set):
+                try:
+                    return set(sanitized_items)
+                except TypeError:
+                    return sanitized_items
             return type(payload)(sanitized_items)
         elif isinstance(payload, str):
             res = payload
