@@ -69,8 +69,5 @@
       "createDesktopShortcut": "always",
       "shortcutName": "Kingdom"
     }
-  },
-  "overrides": {
-    "http-cache-semantics": "^4.2.2"
   }
 }
