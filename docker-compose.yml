@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   kingdom-commander:
     build: .
@@ -32,6 +30,9 @@ services:
     volumes:
       - knight-a-data:/app/data
     restart: unless-stopped
+    # The daemon serves no HTTP endpoint. Container running != enrolled/approved.
+    healthcheck:
+      disable: true
     depends_on:
       kingdom-commander:
         condition: service_healthy
@@ -50,6 +51,9 @@ services:
     volumes:
       - knight-b-data:/app/data
     restart: unless-stopped
+    # Check approval and heartbeat in Nodes & Cluster instead.
+    healthcheck:
+      disable: true
     depends_on:
       kingdom-commander:
         condition: service_healthy
