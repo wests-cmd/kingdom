@@ -15,6 +15,9 @@ import { Nodes } from "./pages/Nodes"
 import { MobileGateway } from "./pages/MobileGateway"
 import Settings from "./pages/Settings"
 import AppearanceSettings from './pages/AppearanceSettings'
+import AccessibilitySettings from './components/common/AccessibilitySettings'
+import AppearanceSync from './components/common/AppearanceSync'
+import Recovery from './pages/Recovery'
 import {AppearanceProvider} from './components/common/AppearanceProvider'
 import Logs from "./pages/Logs"
 import ConnectDevice from "./pages/ConnectDevice"
@@ -35,6 +38,7 @@ function OwnerApp() {
   const [authorized, setAuthorized] = useState(false)
   const [accessCode, setCode] = useState("")
   const [error, setError] = useState("")
+  useEffect(()=>{if(authorized)document.getElementById('main-content')?.focus()},[currentPage,authorized])
   const connect = async () => {
     try { await api.post("/auth/session"); setAuthorized(true); setError("") }
     catch { setError("Enter the owner access code supplied by your Kingdom installation.") }
@@ -65,6 +69,7 @@ function OwnerApp() {
       case "Mobile": return <MobileGateway />
       case "Security": return <Settings />
       case "Settings": return <AppearanceSettings />
+      case "Recovery": return <Recovery />
       case "Logs": return <Logs />
       default: return <Dashboard />
     }
@@ -76,9 +81,10 @@ function OwnerApp() {
     <form onSubmit={e => { e.preventDefault(); setAccessCode(accessCode); connect() }}>
       <label>Owner access code <input type="password" autoComplete="off" value={accessCode} onChange={e => setCode(e.target.value)} /></label>
       <button type="submit">Connect</button>
-    </form>{error && <p role="alert">{error}</p>}</main>
+    </form>{error && <p role="alert">{error}</p>}<details><summary>Accessibility settings</summary><AccessibilitySettings /></details></main>
   return (
     <div className="layout">
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
 
       <div className="main-container">
@@ -98,8 +104,9 @@ function OwnerApp() {
           </div>
         )}
 
-        <main className="content">
+        <main className="content" id="main-content" tabIndex={-1} aria-label={currentPage === 'SkillMaps' ? 'Skill maps and Discord' : currentPage}>
           {renderPage()}
+          <AppearanceSync />
         </main>
       </div>
     </div>

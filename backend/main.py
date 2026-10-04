@@ -31,6 +31,10 @@ app.add_middleware(
 )
 
 app.include_router(router)
+from backend.accessibility import router as accessibility_router
+app.include_router(accessibility_router)
+from backend.recovery import router as recovery_router
+app.include_router(recovery_router)
 from backend.skills.portable_api import router as portable_router, initialize
 from backend.api import engine, lifecycle_manager
 initialize(engine, lifecycle_manager)
