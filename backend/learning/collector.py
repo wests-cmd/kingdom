@@ -39,13 +39,23 @@ class LearningCollector:
         history = self.outcomes.get(key, [])
         now = time.time()
 
-        valid_history = []
-        for o in history:
+        # Preserve the existing slice contract for zero and negative limits.
+        if limit <= 0:
+            valid_history = [o for o in history if not (ignore_expired and o.valid_until and o.valid_until < now)]
+            return valid_history[-limit:]
+
+        # Scan recent entries first and stop once enough valid outcomes are found.
+        valid_reversed = []
+        for o in reversed(history):
             if ignore_expired and o.valid_until and o.valid_until < now:
                 continue
-            valid_history.append(o)
+            valid_reversed.append(o)
+            if len(valid_reversed) >= limit:
+                break
 
-        return valid_history[-limit:]
+        # Restore chronological (oldest-to-newest) ordering for returned items
+        valid_reversed.reverse()
+        return valid_reversed
 
     def compute_metrics(
         self,
