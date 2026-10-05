@@ -4,24 +4,24 @@
 
 A desktop command center for local workers, governed tasks and persistent knowledge. Start with the installer for your computer; **Python and Node.js are included, so you do not need to install them separately.**
 
-**Current stable release: [Kingdom v1TAS · v1.1.1](https://github.com/wests-cmd/kingdom/releases/tag/v1.1.1)**
+**Current stable release: [Kingdom v1TAS · v1.1.2](https://github.com/wests-cmd/kingdom/releases/tag/v1.1.2)**
 
 [Join the Kingdom Discord](https://discord.gg/4b8f9YS2Wp) · [All releases](https://github.com/wests-cmd/kingdom/releases) · [Report a problem](https://github.com/wests-cmd/kingdom/issues)
 
 ## Download Kingdom
 
-Choose **one** installer that matches your computer. These are the published v1.1.1 files.
+Choose **one** installer that matches your computer. These are the published v1.1.2 files.
 
 | Your computer | Download | What to do next |
 | --- | --- | --- |
-| **Windows — Intel/AMD 64-bit** | **[Download Windows installer](https://github.com/wests-cmd/kingdom/releases/download/v1.1.1/Kingdom-Setup-1.1.1.exe)** | Run `Kingdom-Setup-1.1.1.exe`, then open the Kingdom desktop shortcut. |
-| **macOS — Intel** | **[Download Mac DMG](https://github.com/wests-cmd/kingdom/releases/download/v1.1.1/Kingdom-1.1.1.dmg)** | Open the DMG, drag Kingdom into Applications, then launch it. |
-| **Linux — Intel/AMD 64-bit** | **[Download AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.1.1/Kingdom-1.1.1.AppImage)** | Allow the downloaded file to run as a program in its file properties, then open it. |
-| **Ubuntu / Debian — amd64** | **[Download DEB package](https://github.com/wests-cmd/kingdom/releases/download/v1.1.1/kingdom-desktop_1.1.1_amd64.deb)** | Open it with your distribution's package installer, then launch Kingdom. |
+| **Windows — Intel/AMD 64-bit** | **[Download Windows installer](https://github.com/wests-cmd/kingdom/releases/download/v1.1.2/Kingdom-Setup-1.1.2.exe)** | Run `Kingdom-Setup-1.1.2.exe`, then open the Kingdom desktop shortcut. |
+| **macOS — Intel** | **[Download Mac DMG](https://github.com/wests-cmd/kingdom/releases/download/v1.1.2/Kingdom-1.1.2.dmg)** | Open the DMG, drag Kingdom into Applications, then launch it. |
+| **Linux — Intel/AMD 64-bit** | **[Download AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.1.2/Kingdom-1.1.2.AppImage)** | Allow the downloaded file to run as a program in its file properties, then open it. |
+| **Ubuntu / Debian — amd64** | **[Download DEB package](https://github.com/wests-cmd/kingdom/releases/download/v1.1.2/kingdom-desktop_1.1.2_amd64.deb)** | Open it with your distribution's package installer, then launch Kingdom. |
 
 **Before installing:** Windows and macOS builds are unsigned; the Mac build is not notarized. Your operating system may show a trust prompt. Native Apple Silicon, Windows ARM64, Linux ARM64, Android and iOS installers are **not supplied**. Mac DMG testing covers Intel Macs; Apple Silicon compatibility is not certified.
 
-**Check your download:** [SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.1.1/SHA256SUMS) and [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.1.1/release-manifest.json) list the exact files and hashes. The [release page](https://github.com/wests-cmd/kingdom/releases/tag/v1.1.1) also contains native startup evidence and screenshots. Choose an installer above rather than GitHub's “Source code” archive or a standalone backend file.
+**Check your download:** [SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.1.2/SHA256SUMS) and [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.1.2/release-manifest.json) list the exact files and hashes. The [release page](https://github.com/wests-cmd/kingdom/releases/tag/v1.1.2) also contains native startup evidence and screenshots. Choose an installer above rather than GitHub's “Source code” archive or a standalone backend file.
 
 ## Your first five minutes
 
@@ -29,7 +29,7 @@ Choose **one** installer that matches your computer. These are the published v1.
 2. Choose the workers you need. Desktop mode opens the command center and signs in to its own bundled backend automatically. Server mode runs without the desktop window.
 3. Open **Runtime** and start the runtime when you are ready to process work.
 4. In **Tasks**, choose **Analyze text**, enter a short piece of text and submit it. Check the completed result. Python syntax checks are also available without a cloud account.
-5. Open **Settings** to choose a palette or custom color, light/dark/device mode, spacing, display size, motion and castle background strength. These choices save on this device.
+5. Open **Settings** to choose a palette or custom color, light/dark/device mode, spacing, display size, motion and castle background strength. Choose high contrast, larger controls, strong keyboard focus or an interface size up to 200%. Preferences save locally and to this Kingdom owner.
 
 AI text generation needs a configured model provider. Joining Discord, selecting a profile or importing a skill map does not configure a model or grant new permissions. A generated answer is not proof that an external action occurred. Broker connections, live market data and trade execution are unavailable.
 
@@ -56,11 +56,15 @@ The desktop's **optional runtime slash-command adapter** is a separate integrati
 ## What Kingdom can do
 
 - Manage installed local workers and persist tasks, memory and activity in SQLite.
+- Review and explicitly approve a runtime restart in **Recovery**, with expiring single-use plans and recorded outcomes.
+- Preserve workflow checkpoint snapshots and consumed budgets across process restarts; loading a checkpoint does not execute or authorize a workflow.
 - Apply human approvals and deny-by-default capability permissions; enforce task autonomy through **Governance**.
 - Import JSON/YAML skill maps with preview, owner confirmation, canonical export and SHA-256. Maps are preferences, not executable code or permission grants.
 - Run explicitly enabled, bounded, read-only Open Food Facts and Open-Meteo checks through authorized workers. Public API directory entries are discovery metadata, not verified adapters.
 
 [Runtime controls and limitations](docs/runtime-controls.md) · [Portable maps and providers](docs/DISCORD_SKILLMAPS.md) · [Appearance and artwork](docs/BRANDING.md)
+
+The [AgentScope additions list](docs/AGENTSCOPE_ADDITIONS.md) and [implementation progress](docs/AGENTSCOPE_PROGRESS.md) track remaining work. This release implements part of that list; full assistive-technology certification, signed live updates and complete workflow resume remain open.
 
 ## Developers and server operators
 
