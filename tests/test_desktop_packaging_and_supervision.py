@@ -15,7 +15,7 @@ def test_desktop_package_json_manifest():
 
     data = json.loads(desktop_pkg.read_text())
     assert data["name"] == "kingdom-desktop"
-    assert data["version"] == "1.1.1"
+    assert data["version"] == "1.1.2"
     assert "electron" in data["devDependencies"]
     assert "build" in data
     assert "win" in data["build"]
