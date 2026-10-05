@@ -14,6 +14,7 @@ The authoritative scope is [the 55 Kingdom additions plus accessibility](AGENTSC
 
 - Clean Docker production build, including the frontend build.
 - 294 Python tests passed on Windows and in a network-isolated Linux Docker container.
+- The durable checkpoint batch increases that suite to 296 tests, passing on Windows and in Linux Docker. The first checkpoint Docker run had one distributed lease failure during a VM wall-clock discontinuity; retained event timestamps show the clock moving backward and then forward beyond the lease expiry. The isolated process test and full suite both passed after stabilization. Clock-discontinuity recovery remains an item for the partition/chaos matrix.
 - Six frontend tests passed in Docker, including stored preference validation, CSS injection rejection and contrast checks.
 - Browser user test at 200%: pre-login controls, owner sign-in retaining preferences, settings saved, no document horizontal overflow at the tested desktop width, keyboard Enter to review/approve a real runtime restart, and recorded verified outcome. The test used an isolated container, not the owner's installed database.
 - Preference reload across container restart verified. Screenshots and Docker XML evidence are retained in the workspace `outputs/agentscope` directory.
