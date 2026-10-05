@@ -8,6 +8,7 @@ The authoritative scope is [the 55 Kingdom additions plus accessibility](AGENTSC
 - **56, durable preferences (partial):** validated owner-only SQLite preferences, independent of permissions. Local preferences remain usable without backend access. New default devices can load the owner's saved preferences; existing local customization takes priority. Saves are serialized to avoid older requests overwriting newer settings.
 - **1 and 50, operational recovery (partial):** actual readiness/runtime status, persisted restart plans, explicit owner approval, five-minute expiry, single-use claims, a single running repair, recorded outcome and restart verification. This action uses the existing runtime stop/start services. It does not patch code, change policy or install updates. An interrupted running repair blocks another repair pending investigation.
 - **54, truthful repair reporting (partial):** legacy repair/recovery placeholders now report unsupported instead of falsely reporting success.
+- **19–20, durable workflow checkpoints (partial):** the existing checkpoint manager now saves validated, versioned snapshots to SQLite, including completed steps, contract state and consumed budgets. A separate-process test verifies restart restoration. Invalid writes preserve the previous snapshot, and unsupported stored formats fail closed. Loading a snapshot does not execute a workflow or authorize a resume.
 
 ## Verification
 
@@ -27,7 +28,7 @@ All 56 requirements remain open for their full acceptance criteria. Reuse existi
 | --- | --- |
 | 1–4, 50–51 | Operational restart added; transactional server updater exists. Signed live/component updates, known-good certification, repair memory, safe deployment and update dashboard still require work. |
 | 5–18, 22 | Runtime, workers, scheduler and routing exist. Full commander teams, delegation/handoff contracts, verifier aggregation, reassignment and resource-budget enforcement need end-to-end audit and implementation. |
-| 19–23 | Workflow contracts and budgets exist. The current checkpoint manager holds data in memory; durable workflows/checkpoints and restart evidence remain a priority. |
+| 19–23 | Workflow contracts, budgets and durable checkpoint snapshots exist. Full workflow execution/resume integration, current permission revalidation, checkpoints around every side effect and history/rollback remain open. |
 | 24–28, 31 | Capability, approval, zero-trust, policy and model routing services exist. Audit every execution path and revocation/fallback boundary against the list. |
 | 29–30 | MCP integration exists; protocol-complete governed MCP/A2A gateways are not certified. |
 | 32–36 | Portable skill maps, trust/install tests, profiles and API discovery exist. Complete quarantine/sandbox lifecycle and catalog freshness evidence. |
