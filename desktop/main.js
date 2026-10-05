@@ -300,11 +300,21 @@ async function runReleaseSmoke(reportPath) {
     return {catalogLoaded:true,roundtripEquivalent:true,checksum:exported.checksum};
   })()`);
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e => e.textContent === 'Settings').click()");
-  await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('.appearance-settings select')) && document.querySelector('.brand-mark')?.naturalWidth === 512"), 'packaged appearance settings and logo');
-  await mainWindow.webContents.executeJavaScript("(() => {const select=document.querySelector('.appearance-settings select'); select.value='light'; select.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('#appearance-mode')) && document.querySelector('.brand-mark')?.naturalWidth === 512"), 'packaged appearance settings and logo');
+  await mainWindow.webContents.executeJavaScript("(() => {const select=document.querySelector('#appearance-mode'); select.value='light'; select.dispatchEvent(new Event('change',{bubbles:true}));})()");
   await until(() => mainWindow.webContents.executeJavaScript("document.documentElement.dataset.theme === 'light'"), 'applied light mode');
   mainWindow.webContents.reload();
   await until(() => !mainWindow.webContents.isLoading() && mainWindow.webContents.executeJavaScript("document.documentElement.dataset.theme === 'light' && document.querySelector('.brand-mark')?.naturalWidth === 512"), 'persisted native appearance');
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e => e.textContent === 'Settings').click()");
+  await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('#accessibility-scale'))"), 'native accessibility controls');
+  for (const [id, value] of [['accessibility-contrast','high'],['accessibility-scale','200']]) {
+    await mainWindow.webContents.executeJavaScript(`(() => {const select=document.getElementById(${JSON.stringify(id)}); select.value=${JSON.stringify(value)}; select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  }
+  await until(() => mainWindow.webContents.executeJavaScript("document.documentElement.dataset.contrast === 'high' && document.documentElement.dataset.largeDisplay === 'true' && document.documentElement.scrollWidth <= document.documentElement.clientWidth"), 'native high contrast and 200 percent layout');
+  await until(() => mainWindow.webContents.executeJavaScript("fetch('/preferences/accessibility').then(r => {if(!r.ok) throw new Error('Owner preference read failed');return r.json()}).then(p => p.preferences?.scale === 200 && p.preferences?.contrast === 'high')"), 'durable native accessibility preferences');
+  mainWindow.webContents.reload();
+  await until(() => !mainWindow.webContents.isLoading() && mainWindow.webContents.executeJavaScript("document.documentElement.dataset.contrast === 'high' && document.documentElement.dataset.largeDisplay === 'true' && Boolean(document.querySelector('.badge-online'))"), 'accessibility after native reload');
+  report.accessibility = {highContrastApplied:true,scale200Applied:true,noHorizontalOverflow:true,ownerPreferencesSaved:true,persistedAfterReload:true};
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e => e.textContent === 'Settings').click()");
   await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('.appearance-settings'))"), 'appearance reset page');
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('button')).find(e => e.textContent === 'Reset appearance').click()");
