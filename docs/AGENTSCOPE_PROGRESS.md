@@ -18,8 +18,10 @@ The authoritative scope is [the 55 Kingdom additions plus accessibility](AGENTSC
 - Six frontend tests passed in Docker, including stored preference validation, CSS injection rejection and contrast checks.
 - Browser user test at 200%: pre-login controls, owner sign-in retaining preferences, settings saved, no document horizontal overflow at the tested desktop width, keyboard Enter to review/approve a real runtime restart, and recorded verified outcome. The test used an isolated container, not the owner's installed database.
 - Preference reload across container restart verified. Screenshots and Docker XML evidence are retained in the workspace `outputs/agentscope` directory.
+- Final v1.1.2 batch: 305 backend tests passed on Windows and Linux Docker; eight frontend/mobile tests passed. All three native installer checks passed on the final PR head. The publication gate also requires native high-contrast, 200% size, no horizontal overflow, owner preference storage and reload evidence.
+- The updated browser user test verified a three-word text-analysis result, keyboard worker selection, reviewed and separately approved runtime recovery, and accessibility controls while the test backend was stopped. Local selections survived reload and reconnection.
 
-These checks are not a full screen-reader, switch, dwell, eye-tracking, speech/caption or WCAG certification. Native packaging must pass the repository CI before this source batch is merged. Existing v1.1.1 installers do not contain this batch.
+These checks are not a full screen-reader, switch, dwell, eye-tracking, speech/caption or WCAG certification. The v1.1.2 native publication workflow verifies the merged source independently, publishes platform evidence and screenshots, and checks downloaded release bytes against SHA-256 before publication. Existing v1.1.1 installers do not contain this batch.
 
 ## Remaining work and existing foundations
 
