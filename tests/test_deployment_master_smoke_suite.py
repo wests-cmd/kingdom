@@ -3,7 +3,7 @@ from tests.auth_support import owner_client
 Kingdom Deployment Master Smoke & Health Suite.
 Validates:
 - Clean machine startup & runtime health checks (/health/live, /health/ready, /system/check)
-- Version consistency across single source of truth (1.1.1)
+- Version consistency across single source of truth (1.1.2)
 - Database migration execution, backup creation, and rollback safety
 - Zero-Trust security endpoint availability and audit logging
 """
@@ -26,7 +26,7 @@ def test_single_source_version_truth():
     assert res.status_code == 200
     data = res.json()
     assert data["version"] == STATE["version"]
-    assert data["version"] == "1.1.1"
+    assert data["version"] == "1.1.2"
 
 
 def test_health_liveness_and_readiness_endpoints():
@@ -56,7 +56,7 @@ def test_system_check_and_diagnostics_export():
     res_diag = client.get("/diagnostics/export")
     assert res_diag.status_code == 200
     diag = res_diag.json()
-    assert diag["kingdom_version"] == "1.1.1"
+    assert diag["kingdom_version"] == "1.1.2"
     assert "commander_identity" in diag
 
 
@@ -70,4 +70,4 @@ def test_deployment_updater_backup_and_migration():
     # Updater check
     update_res = updater_engine.check_updates()
     assert "update_available" in update_res
-    assert update_res["current_version"] == "1.1.1"
+    assert update_res["current_version"] == "1.1.2"

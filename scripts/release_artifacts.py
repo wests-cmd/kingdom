@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import shutil
 import sys
@@ -27,6 +28,22 @@ def digest(path):
         return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
+def verify_accessibility_evidence(evidence, version):
+    matched = re.fullmatch(r'(\d+)\.(\d+)\.(\d+)(?:-[a-zA-Z0-9.]+)?', version)
+    if not matched:
+        raise ValueError('Invalid release evidence version')
+    if tuple(map(int, matched.groups())) < (1, 1, 2):
+        return  # Older published releases predate this acceptance gate.
+    required = {
+        'appearance': ('logoLoaded','lightModeApplied','persistedAfterReload','resetVerified'),
+        'accessibility': ('highContrastApplied','scale200Applied','noHorizontalOverflow','ownerPreferencesSaved','persistedAfterReload'),
+    }
+    for group, checks in required.items():
+        data = evidence.get(group)
+        if not isinstance(data, dict) or any(data.get(check) is not True for check in checks):
+            raise RuntimeError(f'Native {group} evidence incomplete')
+
+
 def stage(platform, version, commit):
     destination = Path("release_staging")
     destination.mkdir(exist_ok=True)
@@ -50,6 +67,8 @@ def stage(platform, version, commit):
             raise RuntimeError("Native task outcome evidence incomplete")
         if kind == "desktop" and evidence.get("arch") != "x64":
             raise RuntimeError("Smoke evidence architecture mismatch")
+        if kind == "desktop":
+            verify_accessibility_evidence(evidence, version)
         if kind == "backend" and not evidence.get("frontend_served"):
             raise RuntimeError("Backend smoke evidence incomplete")
         if kind == "dependencies" and (not evidence.get("audited") or evidence.get("findings")
@@ -74,6 +93,10 @@ def verify(directory, version, commit):
         assert manifest["platform"] == platform and manifest["tag"] == f"v{version}"
         names = {item["filename"] for item in manifest["artifacts"]}
         assert {name.format(version=version) for name in templates} <= names
+        desktop_evidence = json.loads((directory / f'{platform}-desktop-evidence.json').read_text())
+        assert desktop_evidence.get('version') == version
+        assert desktop_evidence.get('platform') == {'linux':'linux','windows':'win32','macos':'darwin'}[platform]
+        verify_accessibility_evidence(desktop_evidence, version)
         for artifact in manifest["artifacts"]:
             name = artifact["filename"]
             assert Path(name).name == name and name not in {".", ".."}

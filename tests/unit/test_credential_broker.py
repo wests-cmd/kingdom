@@ -48,3 +48,29 @@ def test_credential_revocation():
 
     with pytest.raises(KeyError):
         broker.execute_with_credential(handle, lambda c: c)
+
+def test_sanitization_non_string_keys_and_unhashable_sets():
+    broker = CredentialBroker()
+    payload_with_int_keys = {
+        200: "ok",
+        404: "not found",
+        "secret_key_100": "ghp_SECRET_TOKEN_123456"
+    }
+    sanitized = broker.sanitize_payload_for_llm(payload_with_int_keys)
+    assert sanitized[200] == "ok"
+    assert sanitized[404] == "not found"
+    assert sanitized["secret_key_100"] == "[REDACTED_BEARER_TOKEN]"
+
+    class CustomItem:
+        pass
+
+    class SubBroker(CredentialBroker):
+        def sanitize_payload_for_llm(self, payload):
+            if isinstance(payload, CustomItem):
+                return {"token": "[REDACTED_BEARER_TOKEN]"}
+            return super().sanitize_payload_for_llm(payload)
+
+    sub_broker = SubBroker()
+    unhashable_set_payload = {CustomItem()}
+    sanitized_set = sub_broker.sanitize_payload_for_llm(unhashable_set_payload)
+    assert sanitized_set == [{"token": "[REDACTED_BEARER_TOKEN]"}]

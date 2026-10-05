@@ -10,6 +10,8 @@ export function applyAppearance(settings) {
   root.dataset.theme=dark?'dark':'light'
   root.dataset.density=settings.density
   root.dataset.motion=settings.motion
+  for(const key of ['contrast','targets','focus','pointer','reading','distraction'])root.dataset[key]=settings[key]
+  root.dataset.largeDisplay=settings.scale>125?'true':'false'
   root.style.colorScheme=dark?'dark':'light'
 }
 export function initializeAppearance() {applyAppearance(storedAppearance())}

@@ -7,6 +7,11 @@ from scripts.release_artifacts import INVENTORY, digest, verify
 def inventory(tmp_path):
     for platform, names in INVENTORY.items():
         artifacts = []
+        evidence = tmp_path / f"{platform}-desktop-evidence.json"
+        evidence.write_text(json.dumps({"version": "1.0.0", "platform": {
+            "linux": "linux", "windows": "win32", "macos": "darwin"}[platform]}))
+        artifacts.append({"filename": evidence.name, "size": evidence.stat().st_size,
+                          "sha256": digest(evidence), "platform": platform, "arch": "x86_64"})
         for template in names:
             name = template.format(version="1.0.0")
             file = tmp_path / name

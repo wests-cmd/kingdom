@@ -4,5 +4,7 @@ class PartialRepair:
 
         return {
             "component": component,
-            "repaired": True
+            "repaired": False,
+            "status": "unsupported",
+            "reason": "No repair was executed or verified. Use the owner-approved operational recovery controller."
         }

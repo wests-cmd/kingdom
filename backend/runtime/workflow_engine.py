@@ -1,8 +1,11 @@
 import time
 import secrets
+import json
 from enum import Enum
 from typing import Dict, List, Optional, Any, Callable
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Literal
+from backend.storage.integration_repository import IntegrationRepository
 
 
 class AutonomyLevel(int, Enum):
@@ -76,15 +79,26 @@ class WorkflowContract(BaseModel):
     compensating_actions: List[Dict[str, Any]] = Field(default_factory=list)
 
 
+class StoredCheckpoint(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    format_version: Literal[1] = 1
+    workflow: Optional[WorkflowContract] = None
+    step_index: int = Field(ge=0)
+    state: Dict[str, Any] = Field(default_factory=dict)
+    timestamp: float
+
+
 class CheckpointManager:
 
-    def __init__(self):
+    def __init__(self, database=None):
+        self.repository = IntegrationRepository(database)
         self.checkpoints: Dict[str, Any] = {}
 
     def save_checkpoint(self, workflow_or_id: Any, step_index: Optional[int] = None, state: Optional[Dict[str, Any]] = None) -> None:
         if isinstance(workflow_or_id, WorkflowContract):
             wf = workflow_or_id
-            self.checkpoints[wf.workflow_id] = {
+            workflow_id = wf.workflow_id
+            checkpoint = {
                 "workflow": wf.model_copy(deep=True),
                 "step_index": len(wf.completed_steps),
                 "state": {"completed_steps": wf.completed_steps},
@@ -92,14 +106,28 @@ class CheckpointManager:
             }
         else:
             workflow_id = str(workflow_or_id)
-            self.checkpoints[workflow_id] = {
+            checkpoint = {
                 "step_index": step_index if step_index is not None else 0,
                 "state": state if state is not None else {},
                 "timestamp": time.time()
             }
+        validated = StoredCheckpoint.model_validate(checkpoint)
+        # Reject non-finite / non-JSON state before committing or changing the cache.
+        json.dumps(validated.model_dump(mode='python'), allow_nan=False)
+        stored = validated.model_dump(mode='json', exclude_none=True)
+        self.repository.put('workflow_checkpoint', workflow_id, stored)
+        self.checkpoints[workflow_id] = self._decode(stored)
+
+    @staticmethod
+    def _decode(stored):
+        validated = StoredCheckpoint.model_validate(stored)
+        result = {'step_index':validated.step_index, 'state':validated.state, 'timestamp':validated.timestamp}
+        if validated.workflow is not None:
+            result['workflow'] = validated.workflow
+        return result
 
     def load_checkpoint(self, workflow_id: str) -> Optional[Any]:
-        checkpoint = self.checkpoints.get(workflow_id)
+        checkpoint = self.get_latest_checkpoint(workflow_id)
         if not checkpoint:
             return None
         if "workflow" in checkpoint:
@@ -107,7 +135,13 @@ class CheckpointManager:
         return checkpoint
 
     def get_latest_checkpoint(self, workflow_id: str) -> Optional[Dict[str, Any]]:
-        return self.checkpoints.get(workflow_id)
+        stored = self.repository.get('workflow_checkpoint', workflow_id)
+        if stored is None:
+            return None
+        # Loading data is not permission to resume or execute a workflow.
+        checkpoint = self._decode(stored)
+        self.checkpoints[workflow_id] = checkpoint
+        return self._decode(stored)
 
 
 class CompensationEngine:

@@ -20,22 +20,24 @@ export default function Swarm() {
           {loading ? <p style={{ color: "var(--text-muted)" }}>Loading node cluster...</p> : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "12px", marginTop: "10px" }}>
               {knights.map(k => (
-                <div
-                  key={k.display_name}
+                <button
+                  key={k.id}
                   onClick={() => setSelectedKnight(k)}
+                  aria-pressed={selectedKnight?.id === k.id}
                   className="card"
                   style={{
                     cursor: "pointer",
+                    textAlign: "left",
                     border: selectedKnight?.id === k.id ? "1px solid var(--accent-red)" : "1px solid var(--surface-border)",
                     background: selectedKnight?.id === k.id ? "#221516" : "var(--surface-dark)"
                   }}
                 >
-                  <div style={{ fontWeight: "700", marginBottom: "4px" }}>{k.display_name}</div>
-                  <div style={{ fontSize: "12px", color: "var(--text-muted)", textTransform: "capitalize" }}>Role: {k.role}</div>
-                  <div style={{ fontSize: "12px", marginTop: "6px" }}>
+                  <span style={{ display: "block", fontWeight: "700", marginBottom: "4px" }}>{k.display_name}</span>
+                  <span style={{ display: "block", fontSize: "12px", color: "var(--text-muted)", textTransform: "capitalize" }}>Role: {k.role}</span>
+                  <span style={{ display: "block", fontSize: "12px", marginTop: "6px" }}>
                     State: <span style={{ color: k.status === "idle" ? "var(--accent-green)" : k.status === "offline" ? "var(--accent-red)" : "var(--accent-orange)" }}>{k.status}</span>
-                  </div>
-                </div>
+                  </span>
+                </button>
               ))}
             </div>
           )}

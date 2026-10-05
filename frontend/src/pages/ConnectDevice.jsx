@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import AccessibilitySettings from '../components/common/AccessibilitySettings'
 
 const hex = bytes => Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('')
 
@@ -57,5 +58,6 @@ export default function ConnectDevice() {
     {session && <button onClick={checkStatus} disabled={busy}>Check approval status</button>}
     {message && <p role="status">{message}</p>}
     <p>Connections expire after 24 hours or when Kingdom restarts. Native Android/iOS apps are not included; this is a browser companion.</p>
+    <details><summary>Accessibility settings</summary><AccessibilitySettings /></details>
   </main>
 }
