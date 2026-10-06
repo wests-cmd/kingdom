@@ -4,7 +4,7 @@ import argparse,os,re,subprocess
 def verify_identity(output,expected):
     expected=re.sub(r'[:\s]','',expected).lower()
     if not re.fullmatch(r'[0-9a-f]{64}',expected):raise ValueError('Invalid pinned certificate fingerprint')
-    actual=set(value.lower() for value in re.findall(r'^Signer[^\n]*certificate SHA-256 digest:\s*([0-9a-fA-F]{64})\s*$',output,re.MULTILINE))
+    actual=set(value.lower() for value in re.findall(r'^(?:V[1-4] )?Signer[^\n]*certificate SHA-256 digest:\s*([0-9a-fA-F]{64})\s*$',output,re.MULTILINE))
     if actual!={expected}:raise ValueError('APK publisher certificate does not match the pinned identity')
     return expected
 
