@@ -1,0 +1,193 @@
+name: Verified Kingdom mobile companion
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/mobile-signing-both]
+    paths: ['apps/mobile/native/**', '.github/workflows/mobile.yml']
+permissions:
+  contents: read
+jobs:
+  android-release:
+    name: Signed Android release APK
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'feat/mobile-signing-both')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          accept-android-sdk-licenses: true
+      - name: Install Android SDK platform and build tools
+        run: sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0' 'platform-tools'
+      - run: npm ci && npm test && npm run build && npx cap sync android
+        working-directory: apps/mobile/native
+      - name: Decode Android release signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64" || { echo 'Missing ANDROID_KEYSTORE_BASE64 secret.' >&2; exit 1; }
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/kingdom-release.keystore"
+          test -s "$RUNNER_TEMP/kingdom-release.keystore"
+      - name: Build and verify signed APK
+        working-directory: apps/mobile/native/android
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/kingdom-release.keystore
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_EXPECTED_CERT_SHA256: ${{ vars.ANDROID_EXPECTED_CERT_SHA256 }}
+        run: |
+          test -n "$ANDROID_KEY_ALIAS" -a -n "$ANDROID_KEYSTORE_PASSWORD" -a -n "$ANDROID_KEY_PASSWORD"
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --verbose app/build/outputs/apk/release/app-release.apk
+          test -n "$ANDROID_EXPECTED_CERT_SHA256" || { echo 'Missing ANDROID_EXPECTED_CERT_SHA256 repository variable.' >&2; exit 1; }
+          ACTUAL_CERT_SHA256=$("$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk | sed -n 's/.*Signer #1 certificate SHA-256 digest: //p' | head -1 | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
+          EXPECTED_CERT_SHA256=$(printf '%s' "$ANDROID_EXPECTED_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
+          test "$ACTUAL_CERT_SHA256" = "$EXPECTED_CERT_SHA256" || { echo 'APK certificate fingerprint differs from the pinned publisher certificate.' >&2; exit 1; }
+          mkdir -p ../platform-output/android
+          VERSION=$(node -p "require('../package.json').version")
+          cp app/build/outputs/apk/release/app-release.apk "../platform-output/android/kingdom-android-${VERSION}-release.apk"
+          sha256sum ../platform-output/android/*.apk > ../platform-output/android/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kingdom-android-release-apk
+          path: apps/mobile/native/platform-output/android/
+          if-no-files-found: error
+
+      - name: Enable hardware acceleration for emulator smoke test
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Launch the signed APK on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: |
+            adb install apps/mobile/native/android/app/build/outputs/apk/release/app-release.apk
+            adb shell am start -W -n com.westscmd.kingdom/.MainActivity
+            sleep 8
+            adb shell dumpsys activity activities > apps/mobile/native/platform-output/android/activity.txt
+            grep -q 'com.westscmd.kingdom' apps/mobile/native/platform-output/android/activity.txt
+            adb shell uiautomator dump /sdcard/kingdom-ui.xml
+            adb pull /sdcard/kingdom-ui.xml apps/mobile/native/platform-output/android/kingdom-ui.xml
+            grep -q 'Kingdom HTTPS address' apps/mobile/native/platform-output/android/kingdom-ui.xml
+            adb exec-out screencap -p > apps/mobile/native/platform-output/android/kingdom-android.png
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kingdom-android-device-evidence
+          path: apps/mobile/native/platform-output/android/
+  ios-simulator:
+    name: iOS Simulator app (not for iPhone distribution)
+    runs-on: macos-15
+
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci && npm test && npm run build && npx cap sync ios
+        working-directory: apps/mobile/native
+      - name: Build simulator app
+        working-directory: apps/mobile/native
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/ios-simulator CODE_SIGNING_ALLOWED=NO build
+          mkdir -p platform-output/ios-simulator
+          ditto -c -k --sequesterRsrc --keepParent build/ios-simulator/Build/Products/Release-iphonesimulator/App.app platform-output/ios-simulator/kingdom-ios-simulator.zip
+          shasum -a 256 platform-output/ios-simulator/kingdom-ios-simulator.zip > platform-output/ios-simulator/SHA256SUMS
+      - name: Boot iPhone Simulator and smoke test Kingdom
+        working-directory: apps/mobile/native
+        run: |
+          DEVICE_UDID=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(device["udid"] for values in devices.values() for device in values if device["name"].startswith("iPhone ")))')
+          test -n "$DEVICE_UDID"
+          xcrun simctl boot "$DEVICE_UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$DEVICE_UDID" -b
+          xcrun simctl install "$DEVICE_UDID" build/ios-simulator/Build/Products/Release-iphonesimulator/App.app
+          xcrun simctl launch --terminate-running-process "$DEVICE_UDID" com.westscmd.kingdom
+          sleep 10
+          xcrun simctl io "$DEVICE_UDID" screenshot platform-output/ios-simulator/kingdom-startup.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kingdom-ios-simulator-app
+          path: apps/mobile/native/platform-output/ios-simulator/
+
+  ios-device:
+    name: Signed iOS device IPA
+    if: github.event_name == 'workflow_dispatch' && vars.KINGDOM_ENABLE_SIGNED_IOS_RELEASE == 'true'
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci && npm test && npm run build && npx cap sync ios
+        working-directory: apps/mobile/native
+      - name: Import distribution signing certificate and profile
+        env:
+          IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          test -n "$IOS_CERTIFICATE_BASE64" -a -n "$IOS_CERTIFICATE_PASSWORD" -a -n "$IOS_PROVISIONING_PROFILE_BASE64" || { echo 'Missing iOS distribution signing secrets.' >&2; exit 1; }
+          CERT="$RUNNER_TEMP/kingdom-distribution.p12"
+          PROFILE="$RUNNER_TEMP/kingdom.mobileprovision"
+          KEYCHAIN="$RUNNER_TEMP/kingdom-build.keychain-db"
+          echo "$IOS_CERTIFICATE_BASE64" | base64 --decode > "$CERT"
+          echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE"
+          security create-keychain -p "$RUNNER_TEMP/keychain-password" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$RUNNER_TEMP/keychain-password" "$KEYCHAIN"
+          security import "$CERT" -k "$KEYCHAIN" -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$RUNNER_TEMP/keychain-password" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN"
+          security cms -D -i "$PROFILE" > "$RUNNER_TEMP/profile.plist"
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$RUNNER_TEMP/profile.plist")
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PROFILE" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+      - name: Archive and export installable iOS app
+        working-directory: apps/mobile/native
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          IOS_PROFILE_NAME: ${{ secrets.IOS_PROFILE_NAME }}
+        run: |
+          test -n "$IOS_TEAM_ID" -a -n "$IOS_PROFILE_NAME" || { echo 'Missing IOS_TEAM_ID or IOS_PROFILE_NAME secret.' >&2; exit 1; }
+          VERSION=$(node -p "require('./package.json').version")
+          BUILD_NUMBER=$(node -e 'const [a,b,c]=require("./package.json").version.split(".").map(Number); const r=1; console.log(a*10000000+b*100000+c*100+r)')
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -archivePath build/Kingdom.xcarchive -destination 'generic/platform=iOS' \
+            DEVELOPMENT_TEAM="$IOS_TEAM_ID" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY='Apple Distribution' \
+            PROVISIONING_PROFILE_SPECIFIER="$IOS_PROFILE_NAME" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            MARKETING_VERSION="$VERSION" archive
+          cat > build/ExportOptions.plist <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict><key>method</key><string>app-store-connect</string><key>teamID</key><string>${{ secrets.IOS_TEAM_ID }}</string><key>signingStyle</key><string>manual</string><key>provisioningProfiles</key><dict><key>com.westscmd.kingdom</key><string>${{ secrets.IOS_PROFILE_NAME }}</string></dict></dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath build/Kingdom.xcarchive -exportOptionsPlist build/ExportOptions.plist -exportPath build/export
+          mkdir -p platform-output/ios
+          cp build/export/*.ipa "platform-output/ios/kingdom-ios-${VERSION}.ipa"
+          shasum -a 256 platform-output/ios/*.ipa > platform-output/ios/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kingdom-ios-release-ipa
+          path: apps/mobile/native/platform-output/ios/
+          if-no-files-found: error
+
