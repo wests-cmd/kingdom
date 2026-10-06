@@ -51,10 +51,8 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
           "$APKSIGNER" verify --verbose app/build/outputs/apk/release/app-release.apk
           test -n "$ANDROID_EXPECTED_CERT_SHA256" || { echo 'Missing ANDROID_EXPECTED_CERT_SHA256 repository variable.' >&2; exit 1; }
-          ACTUAL_CERT_SHA256=$("$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk | sed -n 's/.*Signer #1 certificate SHA-256 digest: //p' | head -1 | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
-          EXPECTED_CERT_SHA256=$(printf '%s' "$ANDROID_EXPECTED_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
-          printf "Public signer SHA-256: %s\nPinned SHA-256: %s\n" "$ACTUAL_CERT_SHA256" "$EXPECTED_CERT_SHA256"
-          test "$ACTUAL_CERT_SHA256" = "$EXPECTED_CERT_SHA256" || { echo 'APK certificate fingerprint differs from the pinned publisher certificate.' >&2; exit 1; }
+          python ../../../../scripts/test_android_signature.py
+          python ../../../../scripts/verify_android_signature.py "$APKSIGNER" app/build/outputs/apk/release/app-release.apk
           mkdir -p ../platform-output/android
           VERSION=$(node -p "require('../package.json').version")
           cp app/build/outputs/apk/release/app-release.apk "../platform-output/android/kingdom-android-${VERSION}-release.apk"
