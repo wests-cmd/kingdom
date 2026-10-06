@@ -190,4 +190,3 @@ jobs:
           name: kingdom-ios-release-ipa
           path: apps/mobile/native/platform-output/ios/
           if-no-files-found: error
-
