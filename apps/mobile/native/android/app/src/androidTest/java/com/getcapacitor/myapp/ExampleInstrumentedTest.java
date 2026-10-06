@@ -1,4 +1,4 @@
-package com.getcapacitor.myapp;
+package com.westscmd.kingdom;
 
 import static org.junit.Assert.*;
 
