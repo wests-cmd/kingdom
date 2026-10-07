@@ -83,8 +83,12 @@ jobs:
             sleep 8
             adb shell dumpsys activity activities > apps/mobile/native/platform-output/android/activity.txt
             grep -q 'com.westscmd.kingdom' apps/mobile/native/platform-output/android/activity.txt
-            adb shell uiautomator dump /sdcard/kingdom-ui.xml
-            adb pull /sdcard/kingdom-ui.xml apps/mobile/native/platform-output/android/kingdom-ui.xml
+            for attempt in $(seq 1 10); do
+              adb shell uiautomator dump /sdcard/kingdom-ui.xml
+              adb pull /sdcard/kingdom-ui.xml apps/mobile/native/platform-output/android/kingdom-ui.xml
+              if grep -q 'Kingdom HTTPS address' apps/mobile/native/platform-output/android/kingdom-ui.xml; then break; fi
+              sleep 2
+            done
             adb logcat -d > apps/mobile/native/platform-output/android/logcat.txt
             adb exec-out screencap -p > apps/mobile/native/platform-output/android/kingdom-android.png
             grep -q 'Kingdom HTTPS address' apps/mobile/native/platform-output/android/kingdom-ui.xml
@@ -240,8 +244,12 @@ jobs:
             sleep 8
             adb shell dumpsys activity activities > apps/mobile/native/platform-output/android/activity.txt
             grep -q 'com.westscmd.kingdom' apps/mobile/native/platform-output/android/activity.txt
-            adb shell uiautomator dump /sdcard/kingdom-ui.xml
-            adb pull /sdcard/kingdom-ui.xml apps/mobile/native/platform-output/android/kingdom-ui.xml
+            for attempt in $(seq 1 10); do
+              adb shell uiautomator dump /sdcard/kingdom-ui.xml
+              adb pull /sdcard/kingdom-ui.xml apps/mobile/native/platform-output/android/kingdom-ui.xml
+              if grep -q 'Kingdom HTTPS address' apps/mobile/native/platform-output/android/kingdom-ui.xml; then break; fi
+              sleep 2
+            done
             adb logcat -d > apps/mobile/native/platform-output/android/logcat.txt
             adb exec-out screencap -p > apps/mobile/native/platform-output/android/kingdom-android.png
             grep -q 'Kingdom HTTPS address' apps/mobile/native/platform-output/android/kingdom-ui.xml
