@@ -1,0 +1,21 @@
+{
+  "name": "kingdom-mobile-companion",
+  "private": true,
+  "version": "1.1.2",
+  "type": "module",
+  "scripts": {
+    "sync": "cap sync",
+    "test": "node --test tests/*.test.js",
+    "build": "vite build --outDir www"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.2",
+    "@capacitor/browser": "8.0.5",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/ios": "8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2",
+    "vite": "8.3.1"
+  }
+}
