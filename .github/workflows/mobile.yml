@@ -85,8 +85,9 @@ jobs:
             grep -q 'com.westscmd.kingdom' apps/mobile/native/platform-output/android/activity.txt
             adb shell uiautomator dump /sdcard/kingdom-ui.xml
             adb pull /sdcard/kingdom-ui.xml apps/mobile/native/platform-output/android/kingdom-ui.xml
-            grep -q 'Kingdom HTTPS address' apps/mobile/native/platform-output/android/kingdom-ui.xml
+            adb logcat -d > apps/mobile/native/platform-output/android/logcat.txt
             adb exec-out screencap -p > apps/mobile/native/platform-output/android/kingdom-android.png
+            grep -q 'Kingdom HTTPS address' apps/mobile/native/platform-output/android/kingdom-ui.xml
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -241,8 +242,9 @@ jobs:
             grep -q 'com.westscmd.kingdom' apps/mobile/native/platform-output/android/activity.txt
             adb shell uiautomator dump /sdcard/kingdom-ui.xml
             adb pull /sdcard/kingdom-ui.xml apps/mobile/native/platform-output/android/kingdom-ui.xml
-            grep -q 'Kingdom HTTPS address' apps/mobile/native/platform-output/android/kingdom-ui.xml
+            adb logcat -d > apps/mobile/native/platform-output/android/logcat.txt
             adb exec-out screencap -p > apps/mobile/native/platform-output/android/kingdom-android.png
+            grep -q 'Kingdom HTTPS address' apps/mobile/native/platform-output/android/kingdom-ui.xml
       - if: always()
         uses: actions/upload-artifact@v4
         with:
