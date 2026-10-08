@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../../api'
 const groups = [
- {name:'Operate',items:[['Dashboard','Dashboard'],['Tasks','Tasks'],['Swarm','Swarm'],['Runtime','Runtime']]},
+ {name:'Operate',items:[['Dashboard','Dashboard'],['Tasks','Tasks'],['Automations','Automations'],['Swarm','Swarm'],['Runtime','Runtime']]},
  {name:'Knowledge',items:[['AIMap','Intelligence records'],['SkillMaps','Skill maps & Discord'],['Memory','Memory'],['Routing','Routing'],['Skills','Skills'],['Learning','Learning Center']]},
  {name:'Manage',items:[['Governance','Governance'],['Nodes','Nodes & Cluster'],['Mobile','Devices & Knowledge'],['Security','Security'],['Recovery','Recovery'],['Logs','Logs & Activity'],['Settings','Settings']]}
 ]

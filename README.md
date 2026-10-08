@@ -93,3 +93,11 @@ Server administrative APIs require the private `data/owner-token` or `KINGDOM_OW
 ## License
 
 Kingdom uses the custom [CYA License v2.0](LICENSE). Read the [license](LICENSE) and [commercial-use policy](COMMERCIAL_USE.md) before commercial use.
+# Automation supervision
+
+Open **Automations** to inspect explicitly connected workers, retained progress,
+their handover plan and check results. At autonomy level 3, an owner-approved
+adapter can supervise the existing worker after its checks pass. Failed handovers
+retain the original runner and retry within a fixed budget. Lower autonomy levels
+pause adopted work. See [handover setup and recovery](docs/automation-handover.md).
+
