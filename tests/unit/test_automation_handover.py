@@ -161,3 +161,25 @@ def test_inventory_api_requires_owner_and_rejects_unknown_adapter():
     assert response.status_code == 200
     assert isinstance(response.json()['automations'], list)
     assert client.post('/automations/unknown/approve', json={'revision': 'arbitrary'}).status_code == 409
+
+
+def test_parallel_preview_uses_stable_autonomy_authority(tmp_path, monkeypatch):
+    import io
+    from backend.runtime import policy
+    from backend.storage.db import Database
+    token = tmp_path / 'token'; token.write_text('local-test-owner-token')
+    monkeypatch.setenv('KINGDOM_POLICY_AUTHORITY_TOKEN_FILE', str(token))
+    calls = []
+    def respond(request, **kwargs):
+        calls.append(request)
+        return io.BytesIO(b'{"level": 0}')
+    monkeypatch.setattr(policy, 'urlopen', respond)
+    instance = policy.ExecutionPolicy(Database(tmp_path / 'runtime.db'))
+    assert instance.get()['level'] == 0
+    instance.set(0)
+    assert calls[0].full_url == 'http://127.0.0.1:8012/runtime/policy'
+    assert calls[1].method == 'PUT'
+    assert calls[1].data == b'{"level": 0}'
+    assert calls[0].get_header('Authorization') == 'Bearer local-test-owner-token'
+    monkeypatch.setattr(policy, 'urlopen', lambda *args, **kwargs: io.BytesIO(b'{"level": true}'))
+    with pytest.raises(RuntimeError): instance.get()

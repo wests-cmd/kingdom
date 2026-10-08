@@ -43,6 +43,12 @@ local workshop, whose `app/automation-manifest.json` lists tested source hashes.
 The API and local timer share that state file. No Discord token is collected by
 the supervisor. The existing sandboxed timer remains the execution boundary.
 
+While a parallel preview runs beside the stable server, set
+`KINGDOM_POLICY_AUTHORITY_TOKEN_FILE` to the stable server's local owner-token file.
+Policy reads and writes then go only to the fixed loopback stable endpoint on
+port 8012. Both interfaces control the same autonomy level; an unavailable
+authority blocks supervised execution. Normal single-server installs omit it.
+
 `GET /automations` and `POST /automations/{id}/approve` require the ordinary owner
 session. Inventory contains no arbitrary executable command field. Adapter code
 is reviewed and registered locally, never submitted through the API.
