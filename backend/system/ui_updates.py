@@ -59,7 +59,9 @@ class UIComponents:
                 destination=target/name;destination.parent.mkdir(parents=True,exist_ok=True)
                 content=archive.read(name)
                 if name=='index.html':
-                    content=content.replace(b'"/assets/',f'"/ui/{expected}/assets/'.encode()).replace(b'"/branding/',f'"/ui/{expected}/branding/'.encode())
+                    for prefix in (b'"/',b'"./'):
+                        for directory in ('assets','branding'):
+                            content=content.replace(prefix+directory.encode()+b'/',f'"/ui/{expected}/{directory}/'.encode())
                 destination.write_bytes(content)
             if b'<html' not in (target/'index.html').read_bytes().lower(): raise ValueError('UI entry point is invalid')
             state=self.status()

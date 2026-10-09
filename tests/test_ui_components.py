@@ -18,9 +18,10 @@ def package(version='1.2.0',html=b'<html><script src="/assets/app.js"></script><
     data=output.getvalue();return data,hashlib.sha256(data).hexdigest()
 
 
-def test_atomic_activation_and_rollback_preserve_old_assets(tmp_path):
+@pytest.mark.parametrize('html',[b'<html><script src="/assets/app.js"></script></html>',b'<html><script src="./assets/app.js"></script></html>'])
+def test_atomic_activation_and_rollback_preserve_old_assets(tmp_path,html):
     service=UIComponents('1.2.0',tmp_path)
-    first,digest=package();service.install(first,digest)
+    first,digest=package(html=html);service.install(first,digest)
     assert service.status()['active']==digest
     assert f'/ui/{digest}/assets/'.encode() in (service.directory(digest)/'index.html').read_bytes()
     second,next_digest=package(html=b'<html>Second interface</html>');service.install(second,next_digest)
