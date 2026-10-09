@@ -26,6 +26,17 @@ class UIComponents:
         if not re.fullmatch('[a-f0-9]{64}', ident): raise ValueError('Invalid UI component identity')
         return self.root/ident
 
+    def asset(self, ident, resource):
+        # Request strings select existing allowlisted files; they never form a path.
+        folder=next((path for path in self.root.iterdir() if path.name==ident
+                     and re.fullmatch('[a-f0-9]{64}',path.name) and path.is_dir() and not path.is_symlink()),None)
+        if folder is None:raise ValueError('Unknown UI component')
+        for path in folder.rglob('*'):
+            name=path.relative_to(folder).as_posix()
+            if name==resource and name.startswith(('assets/','branding/')) and path.is_file() and not path.is_symlink():
+                if path.resolve().is_relative_to(folder.resolve()):return path
+        raise ValueError('Unknown component asset')
+
     def _point(self, active, previous):
         with tempfile.NamedTemporaryFile(dir=self.root,delete=False) as handle:
             handle.write(json.dumps({'active':active,'previous':previous}).encode()); temporary=Path(handle.name)

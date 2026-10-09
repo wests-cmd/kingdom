@@ -27,6 +27,7 @@ def test_atomic_activation_and_rollback_preserve_old_assets(tmp_path,html):
     second,next_digest=package(html=b'<html>Second interface</html>');service.install(second,next_digest)
     assert service.status()['previous']==digest
     assert (service.directory(digest)/'assets/app.js').exists()
+    assert service.asset(digest,'assets/app.js').read_bytes()==b'console.log("loaded")'
     assert service.rollback()['active']==digest
     assert not service.status()['backend_restart_required']
 
@@ -46,3 +47,9 @@ def test_rejected_ui_update_keeps_working_selection(tmp_path,bad):
 
 def test_update_identity_cannot_escape_root(tmp_path):
     with pytest.raises(ValueError): UIComponents('1.2.0',tmp_path).directory('../outside')
+
+
+@pytest.mark.parametrize('resource',['assets/../../outside','../outside','index.html','assets/../index.html','assets\\app.js','/assets/app.js'])
+def test_public_component_lookup_uses_closed_file_inventory(tmp_path,resource):
+    service=UIComponents('1.2.0',tmp_path);data,digest=package();service.install(data,digest)
+    with pytest.raises(ValueError):service.asset(digest,resource)

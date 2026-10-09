@@ -87,10 +87,7 @@ if os.path.exists(frontend_dist):
         from backend.system.ui_update_api import components
         from fastapi import HTTPException
         try:
-            root = components().directory(component).resolve()
-            target = (root/resource).resolve()
-            if not target.is_relative_to(root) or not resource.startswith(('assets/','branding/')) or not target.is_file():
-                raise ValueError('Unknown component asset')
+            target = components().asset(component, resource)
             return FileResponse(target, headers={'Cache-Control':'public, max-age=31536000, immutable'})
         except ValueError as error: raise HTTPException(404,'Component asset not found') from error
 

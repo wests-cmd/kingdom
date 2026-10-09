@@ -126,7 +126,11 @@ class AttachmentStore:
         return item
 
     def raw(self, ident):
-        item = self.get(ident); stored = (self.root / ident).read_bytes()
+        item = self.get(ident)
+        target = next((path for path in self.root.iterdir() if path.name == item['sha256']
+                       and re.fullmatch(r'[a-f0-9]{64}',path.name) and path.is_file() and not path.is_symlink()),None)
+        if target is None:raise ValueError('Attachment bytes are unavailable')
+        stored = target.read_bytes()
         data = zlib.decompress(stored) if item['codec'] == 'zlib' else stored
         if hashlib.sha256(data).hexdigest() != ident: raise ValueError('Attachment integrity check failed')
         return data
