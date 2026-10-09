@@ -7,3 +7,6 @@ httpx
 asyncio
 cryptography
 psutil
+
+pypdf==6.19.0
+Pillow==12.3.0

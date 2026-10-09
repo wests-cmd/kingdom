@@ -78,7 +78,12 @@ class TaskManager:
         if not isinstance(max_attempts, int) or max_attempts < 1 or max_attempts > 5:
             raise ValueError("max_attempts must be an integer from 1 through 5")
 
-        task_id = str(uuid4())
+        if metadata.get('_mission_step_key'):
+            from uuid import uuid5, NAMESPACE_URL
+            task_id = str(uuid5(NAMESPACE_URL, 'kingdom-mission:' + metadata['_mission_step_key']))
+            if task_id in self._tasks: return deepcopy(self._tasks[task_id])
+        else:
+            task_id = str(uuid4())
         task = {
             "id": task_id,
             "execution_id": str(uuid4()),
@@ -111,7 +116,7 @@ class TaskManager:
             task = self.repo.get(task_id)
             if task:
                 self._tasks[task_id] = task
-        if task["status"] == "queued" and task_id not in self._queue:
+        if task and task["status"] == "queued" and task_id not in self._queue:
             self._queue.append(task_id)
         return deepcopy(task) if task else None
 

@@ -43,7 +43,7 @@ def test_migration_idempotency_and_version_registry():
     """
     run_migrations()
     run_migrations()
-    assert STATE["version"] == "1.1.2"
+    assert STATE["version"] == "1.2.0"
 
 
 def test_updater_transaction_pipeline(tmp_path):

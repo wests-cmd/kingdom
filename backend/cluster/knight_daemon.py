@@ -114,7 +114,8 @@ class KnightDaemon:
 
     def send_heartbeat(self) -> bool:
         try:
-            res = self.send_rpc("heartbeat", {"node_id": self.node_id})
+            import psutil
+            res = self.send_rpc("heartbeat", {"node_id": self.node_id, 'load_metrics': {'cpu_percent': psutil.cpu_percent(), 'memory_percent': psutil.virtual_memory().percent}})
             return res.get("status") == "ok"
         except Exception:
             return False
@@ -140,7 +141,7 @@ class KnightDaemon:
                 }
                 try:
                     from backend.runtime.execution import execute_request, verify_request_result
-                    if not task.get("metadata", {}).get("tool"):
+                    if task.get('metadata', {}).get('tool') not in {'text.analyze@1.0.0', 'code.python.analyze@1.0.0', 'provider.metadata@1.0.0'}:
                         raise NotImplementedError("Remote execution requires a supported controlled tool")
                     outcome = execute_request(task, getattr(self, "granted_capabilities", []))
                     verify_request_result(task, outcome, allow_local_model=False)

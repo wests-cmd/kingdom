@@ -105,9 +105,9 @@ class AutomationSupervisor:
             state = self._load(db, ident)
             if state['lease']:
                 return {'status': 'busy', 'owner': state['owner']}
-            if state['owner'] == 'kingdom' and level != 3:
+            if state['owner'] == 'kingdom' and level not in (3, 4, 5):
                 return {'status': 'paused_by_autonomy', 'owner': state['owner']}
-            adopted = (level == 3 and state['approved_revision'] == adapter.revision
+            adopted = (level in (3, 4, 5) and state['approved_revision'] == adapter.revision
                        and state['attempts'] < 3 and self.clock() >= state['retry_at'])
             # A revision change must never inherit an older candidate's approval.
             if state['owner'] == 'kingdom' and state['revision'] != adapter.revision:

@@ -47,6 +47,9 @@ def verify_accessibility_evidence(evidence, version):
 def stage(platform, version, commit):
     destination = Path("release_staging")
     destination.mkdir(exist_ok=True)
+    if platform == 'linux' and tuple(map(int,version.split('.')[:3])) >= (1,2,0):
+        from scripts.build_ui_component import build
+        build('frontend/dist',destination/f'Kingdom-UI-{version}.zip',version)
     filenames = [item.format(version=version) for item in INVENTORY[platform]]
     for name in filenames:
         source = (Path("desktop/bin") / ("kingdom-backend.exe" if platform == "windows" else "kingdom-backend")) if name.startswith("kingdom-backend-") else Path("desktop/dist") / name
@@ -105,6 +108,8 @@ def verify(directory, version, commit):
             assert digest(path) == artifact["sha256"], name
             artifacts.append(artifact)
     expected = {a["filename"] for a in artifacts} | {f"{p}-manifest.json" for p in INVENTORY}
+    if tuple(map(int,version.split('.')[:3])) >= (1,2,0):
+        assert f'Kingdom-UI-{version}.zip' in expected, 'UI component package missing'
     assert {p.name for p in directory.iterdir()} == expected, "Unexpected or duplicate staging files"
     release = {"product": "Kingdom", "release_name": "Kingdom v1TAS",
                "version": KINGDOM_PRODUCT_VERSION, "release_version": version,

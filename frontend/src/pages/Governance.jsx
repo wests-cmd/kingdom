@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import api from '../api'
 import useLiveData from '../hooks/useLiveData'
 import ApprovalsView from '../components/security/ApprovalsView'
+import ComputerPermissions from '../components/ComputerPermissions'
 export default function Governance() {
  const {data, error, refresh, updated} = useLiveData('/runtime/policy')
  const [selected, setSelected] = useState(null)
@@ -22,6 +23,6 @@ export default function Governance() {
     <input type="radio" name="autonomy" value={level.level} checked={selected === level.level} onChange={() => {setSelected(level.level);setMessage('')}} />
     <span className="policy-number">L{level.level}</span><span><strong>{level.name}</strong><small>{level.description}</small></span>{data.level === level.level && <span className="active-note">Active</span>}
    </label>)}</fieldset><div className="action-row"><button className="primary-red" disabled={busy || selected === data.level || !!error}>{busy ? 'Saving…' : 'Apply policy'}</button>{message && <span role="status">{message}</span>}</div></form>}
-  </section><ApprovalsView />
+  </section><ComputerPermissions /><ApprovalsView />
  </div>
 }

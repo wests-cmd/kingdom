@@ -24,7 +24,7 @@ export default function Automations() {
       <ol>{item.plan.map(step => <li key={step}>{step}</li>)}</ol>
       {item.evidence?.passed && <p>Passed checks: {item.evidence.checks?.join(', ')}.</p>}
       {item.last_success && <p>Last successful check-in: {new Date(item.last_success * 1000).toLocaleString()}.</p>}
-      <p>Bounded execution (level 3) and approval of the exact tested adapter are required for automatic handover. Lower levels do not take ownership. After adoption, lowering autonomy pauses this worker.</p>
+      <p>Autonomy level 3 or higher and approval of the exact tested adapter are required for automatic handover. Levels 0–2 pause adopted work.</p>
       {item.last_failure && <p role="status">Last failure: {item.last_failure}. Original ownership restored; at most three checked adoption attempts, with a 30-minute delay.</p>}
       {item.last_failure && item.diagnosis && <p>{item.diagnosis}</p>}
       {item.lease && <p role="status">Work is in flight. No second worker may start.</p>}

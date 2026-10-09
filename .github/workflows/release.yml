@@ -94,7 +94,7 @@ jobs:
         run: python scripts/audit_release_dependencies.py
       - name: Validate version and run tests
         run: |
-          python scripts/validate_version.py --tag v1.1.2
+          python scripts/validate_version.py --tag v1.2.0
           python -m pytest --maxfail=1
       - name: Build frontend
         run: |
@@ -115,7 +115,7 @@ jobs:
       - name: Exercise actual native installer setup and dashboard
         run: python scripts/smoke_native_installer.py '${{ matrix.platform }}'
       - name: Stage required installers, hashes, and evidence
-        run: python scripts/release_artifacts.py stage --platform '${{ matrix.platform }}' --version 1.1.2 --commit '${{ github.sha }}'
+        run: python scripts/release_artifacts.py stage --platform '${{ matrix.platform }}' --version 1.2.0 --commit '${{ github.sha }}'
       - uses: actions/upload-artifact@v4
         with:
           name: kingdom-verified-${{ matrix.platform }}
@@ -124,7 +124,7 @@ jobs:
           retention-days: 30
 
   publish:
-    name: Publish verified v1.1.2
+    name: Publish verified v1.2.0
     if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
     needs: native-build
     runs-on: ubuntu-latest
@@ -142,7 +142,7 @@ jobs:
           path: release_staging
       - name: Independently verify downloaded build artifacts
         run: |
-          python scripts/release_artifacts.py verify --version 1.1.2 --commit '${{ github.sha }}'
+          python scripts/release_artifacts.py verify --version 1.2.0 --commit '${{ github.sha }}'
           cd release_staging
           sha256sum -c SHA256SUMS
       - name: Create draft, verify uploaded bytes, and publish
@@ -153,25 +153,25 @@ jobs:
         run: |
           set -euo pipefail
           gh api 'repos/'"$GH_REPO"'/git/ref/heads/main' --jq .object.sha | grep -Fx "$RELEASE_COMMIT"
-          if gh release view v1.1.2 --json isDraft --jq .isDraft > existing-release.txt 2>/dev/null; then
+          if gh release view v1.2.0 --json isDraft --jq .isDraft > existing-release.txt 2>/dev/null; then
             if [ "$(cat existing-release.txt)" != true ]; then
-              echo 'A published v1.1.2 already exists; refusing to replace stable assets.'
+              echo 'A published v1.2.0 already exists; refusing to replace stable assets.'
               exit 1
             fi
-            gh release delete v1.1.2 --yes
+            gh release delete v1.2.0 --yes
           fi
-          if gh api 'repos/'"$GH_REPO"'/git/ref/tags/v1.1.2' > existing-tag.json 2>/dev/null; then
+          if gh api 'repos/'"$GH_REPO"'/git/ref/tags/v1.2.0' > existing-tag.json 2>/dev/null; then
             python -c 'import json,os; t=json.load(open("existing-tag.json"))["object"]; assert t["type"] == "commit" and t["sha"] == os.environ["RELEASE_COMMIT"], "Existing tag targets different source"'
           else
-            gh api --method POST 'repos/'"$GH_REPO"'/git/refs' -f ref=refs/tags/v1.1.2 -f sha="$RELEASE_COMMIT"
+            gh api --method POST 'repos/'"$GH_REPO"'/git/refs' -f ref=refs/tags/v1.2.0 -f sha="$RELEASE_COMMIT"
           fi
-          gh release create v1.1.2 release_staging/* --verify-tag --target "$RELEASE_COMMIT" --title 'Kingdom v1TAS (v1.1.2)' --notes-file docs/releases/v1.1.2.md --draft
-          gh release download v1.1.2 --dir release_download
+          gh release create v1.2.0 release_staging/* --verify-tag --target "$RELEASE_COMMIT" --title 'Kingdom v1TAS (v1.2.0)' --notes-file docs/releases/v1.2.0.md --draft
+          gh release download v1.2.0 --dir release_download
           diff -u release_staging/SHA256SUMS release_download/SHA256SUMS
           cd release_download
           sha256sum -c SHA256SUMS
           cd ..
-          gh api 'repos/'"$GH_REPO"'/git/ref/tags/v1.1.2' --jq .object.sha | grep -Fx "$RELEASE_COMMIT"
+          gh api 'repos/'"$GH_REPO"'/git/ref/tags/v1.2.0' --jq .object.sha | grep -Fx "$RELEASE_COMMIT"
           gh api 'repos/'"$GH_REPO"'/git/ref/heads/main' --jq .object.sha | grep -Fx "$RELEASE_COMMIT"
-          gh release edit v1.1.2 --draft=false --prerelease=false --latest --notes-file docs/releases/v1.1.2.md
-          gh release view v1.1.2 --json url,isDraft,assets
+          gh release edit v1.2.0 --draft=false --prerelease=false --latest --notes-file docs/releases/v1.2.0.md
+          gh release view v1.2.0 --json url,isDraft,assets

@@ -48,6 +48,37 @@ class RuntimeEngine:
         self.rate_limiter = RateLimiterEngine()
         self.execution_policy = ExecutionPolicy()
         self.dispatch_lock = RLock()
+        self.restore_computer_grants()
+        from backend.runtime.missions import MissionService
+        from backend.storage.db import db
+        self.missions = MissionService(self, db)
+
+    def restore_computer_grants(self):
+        import json
+        from backend.storage.db import db
+        with db.get_connection() as conn:
+            row = conn.execute("SELECT value_json FROM runtime_state WHERE key='computer_worker_grants'").fetchone()
+        if row:
+            for role, capabilities in json.loads(row[0]).items():
+                self.grant_computer_tools(role, capabilities, persist=False)
+
+    def grant_computer_tools(self, role, capabilities, persist=True):
+        import json, time
+        from backend.storage.db import db
+        from backend.runtime.computer_tools import TOOL_CAPABILITIES
+        if role not in self.swarm.registry._knights or not isinstance(capabilities, list) or not set(capabilities) <= set(TOOL_CAPABILITIES.values()):
+            raise ValueError('Choose an installed Apprentice and supported computer capabilities')
+        for security in (self.security, self.swarm.registry.get(role).zero_trust):
+            current = security.nodes.get_node_capabilities(role)
+            security.nodes.update_node_capabilities(role, (current - set(TOOL_CAPABILITIES.values())) | set(capabilities))
+        if persist:
+            with db.get_connection() as conn:
+                row = conn.execute("SELECT value_json FROM runtime_state WHERE key='computer_worker_grants'").fetchone()
+                grants = json.loads(row[0]) if row else {}
+                grants[role] = capabilities
+                conn.execute("INSERT INTO runtime_state VALUES('computer_worker_grants',?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at", (json.dumps(grants), time.time())); conn.commit()
+            self.events.publish('apprentice.tools_changed', {'role': role, 'capabilities': capabilities, 'actor': 'owner'})
+        return {'role': role, 'capabilities': capabilities}
 
     async def initialize(self) -> dict[str, Any]:
         return await self.start()
@@ -125,6 +156,18 @@ class RuntimeEngine:
 
     def submit_task(self, prompt: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
         meta = metadata or {}
+        from backend.runtime.computer_tools import TOOL_CAPABILITIES
+        if meta.get('tool') in TOOL_CAPABILITIES:
+            if meta.get('subtasks'): raise ValueError('Computer operations must be one exact reviewed task')
+            meta = {**meta, 'capability': TOOL_CAPABILITIES[meta['tool']]}
+        if meta.get('offload') and self.execution_policy.get()['level'] == 5 and meta.get('tool') in {'text.analyze@1.0.0', 'code.python.analyze@1.0.0'}:
+            from backend.cluster.hierarchy import offload_candidate
+            from backend.cluster.node_registry import node_registry
+            target = offload_candidate(node_registry, 'compute')
+            if target:
+                meta = {**meta, 'execution_target': 'remote', 'assigned_knight': target, 'capability': 'compute', 'offload_reason': 'Fresh approved computer with available CPU and memory'}
+            else:
+                meta = {**meta, 'offload_reason': 'No healthy approved computer with fresh load evidence; executing locally'}
         actor = meta.get("actor", "system")
         cap = meta.get("capability", "node.execute")
 
@@ -163,6 +206,7 @@ class RuntimeEngine:
         if self.execution_policy.get()["level"] == 0:
             return
         self.recover_remote_tasks()
+        self.missions.advance_all()
         task = self.tasks.claim_next()
         if task is None:
             return
@@ -232,6 +276,17 @@ class RuntimeEngine:
         from backend.cluster.heartbeat import heartbeat_manager
         leases = getattr(self, "lease_manager", task_lease_manager)
         heartbeat_manager.evaluate_cluster_health()
+        for task in self.tasks.list('queued'):
+            meta = task.get('metadata', {})
+            if meta.get('offload') and meta.get('execution_target') == 'remote':
+                node = node_registry.get_node(task.get('assigned_knight'))
+                if not node or node.node_state not in {'APPROVED','CONNECTED'} or time.time() - node.last_heartbeat > 45:
+                    with self.dispatch_lock:
+                        current = self.tasks.get(task['id'])
+                        if current and current['status'] == 'queued':
+                            recovered = self.tasks.transition_task(task['id'], 'queued', {'assigned_knight': None,
+                                'metadata': {**meta, 'execution_target': 'local', 'offload_reason': 'Offload computer unavailable before dispatch; retained locally'}})
+                            self.events.publish('task.offload_fallback', recovered)
         for task in self.tasks.list("leased"):
             lease = leases.leases.get(task["id"])
             node = node_registry.get_node(task.get("assigned_knight"))

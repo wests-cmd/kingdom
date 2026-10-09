@@ -27,6 +27,8 @@ NodeStatus = NodeState
 class NodeRole(str, Enum):
     COMMANDER = "commander"
     KNIGHT = "knight"
+    KNIGHT_CAPTAIN = 'knight_captain'
+    KNIGHT_APPRENTICE = 'knight_apprentice'
     WORKER = "worker"
     PLANNER = "planner"
     CODER = "coder"

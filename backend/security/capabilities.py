@@ -21,6 +21,8 @@ CAPABILITY_NODE_EXECUTE = "node.execute"
 CAPABILITY_SYSTEM_ADMIN = "system.admin"
 
 ALL_CAPABILITIES = {
+    'computer.control',
+    'computer.observe',
     "view_status", "view_knights", "view_skills", "import_skillmaps", "export_skillmaps",
     "test_skillmaps", "view_providers", "manage_providers", "run_task", "providers.test",
     "compute",
@@ -53,6 +55,8 @@ DEFAULT_KNIGHT_CAPABILITIES = {
 
 # Privileged capabilities requiring strict policy check / human approval
 PRIVILEGED_CAPABILITIES = {
+    'computer.control',
+    'computer.observe',
     CAPABILITY_FILESYSTEM_WRITE,
     CAPABILITY_FILESYSTEM_DELETE,
     CAPABILITY_PROCESS_EXECUTE,

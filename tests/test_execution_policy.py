@@ -64,9 +64,11 @@ def test_policy_api_owner_only_and_rejects_unsupported_levels(monkeypatch,tmp_pa
  assert TestClient(app).put('/runtime/policy',json={'level':0}).status_code in {401,403}
  client=owner_client(app)
  assert client.put('/runtime/policy',json={'level':2}).json()['level']==2
- for level in [-1,4,5,True,'3']:
+ for level in [4,5]:
+  assert client.put('/runtime/policy',json={'level':level}).json()['level']==level
+ for level in [-1,6,True,'3']:
   assert client.put('/runtime/policy',json={'level':level}).status_code==422
- assert client.get('/runtime/policy').json()['level']==2
+ assert client.get('/runtime/policy').json()['level']==5
 
 
 def test_remote_dispatch_obeys_observer_and_exact_approval_boundary(engine):

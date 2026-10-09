@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import DevicePairing from '../components/DevicePairing';
 import ConnectDevice from './ConnectDevice';
+import CommandGroups from '../components/CommandGroups';
 import {deviceLabel,capabilityLabel,fingerprintLabel,nodeStateLabel} from '../components/common/presentation';
 
 export function Nodes() {
@@ -133,6 +134,7 @@ export function Nodes() {
         </div>
       )}
 
+      <CommandGroups />
       {/* Navigation Tabs */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--surface-border)", fontSize: "13px", fontWeight: "500" }}>
         <button
