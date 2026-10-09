@@ -79,6 +79,12 @@ def stage(platform, version, commit):
             raise RuntimeError("Dependency audit evidence incomplete")
         shutil.copy2(source, destination / f"{platform}-{kind}-evidence.json")
     shutil.copy2(Path("evidence/desktop.png"), destination / f"{platform}-desktop.png")
+    if tuple(map(int,version.split('.')[:3])) >= (1,2,0):
+        for name in ('mission-workspace','governance'):
+            shutil.copy2(Path('evidence')/f'{name}.png',destination/f'{platform}-{name}.png')
+        if not all(json.loads((destination/f'{platform}-desktop-evidence.json').read_text()).get('missionWorkspace',{}).get(key) is True
+                   for key in ('fiveLevels','largeEditor','attachmentRoundtrip','missionVerified')):
+            raise RuntimeError('Native mission workspace evidence is incomplete')
     artifacts = [{"filename": name, "size": (destination / name).stat().st_size,
                   "sha256": digest(destination / name), "platform": platform, "arch": "x86_64"}
                  for name in sorted(p.name for p in destination.iterdir())]

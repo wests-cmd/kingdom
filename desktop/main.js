@@ -273,16 +273,42 @@ async function runReleaseSmoke(reportPath) {
   await until(() => mainWindow.webContents.executeJavaScript("fetch('/status').then(r => r.json()).then(s => s.running && s.scheduler_running)"), 'running scheduler');
   await until(() => mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.card-value')).some(e => e.textContent === 'ACTIVE')"), 'live runtime dashboard');
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e => e.textContent === 'Tasks').click()");
-  await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('input[placeholder=\"New task description...\"]'))"), 'task submission form');
+  await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('textarea[aria-label=\"Task description\"]'))"), 'task submission form');
   await mainWindow.webContents.executeJavaScript(`(() => {
-    const input = document.querySelector('input[placeholder="New task description..."]');
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'native release verification');
+    const input = document.querySelector('textarea[aria-label="Task description"]');
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, 'native release verification');
     input.dispatchEvent(new Event('input', {bubbles:true}));
   })()`);
   await mainWindow.webContents.executeJavaScript("document.querySelector('main.content form').requestSubmit()");
   const verifiedTask = await until(() => mainWindow.webContents.executeJavaScript("fetch('/tasks').then(r => r.json()).then(tasks => tasks.find(t => t.prompt === 'native release verification' && t.status === 'completed'))"), 'real verified native task');
   if (verifiedTask.result.results[0].outcome.output.words !== 3 || verifiedTask.result.results[0].verification.state !== 'VERIFIED') throw new Error('Native task outcome verification failed');
   report.taskExecuted = {taskId: verifiedTask.id, words: 3, verification: 'VERIFIED'};
+  report.missionWorkspace = await mainWindow.webContents.executeJavaScript(`(async () => {
+    async function request(url, method='GET', body=null) {
+      const response=await fetch(url,{method,headers:{'X-Kingdom-Request':'1','Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+      if(!response.ok)throw new Error('Mission workspace request failed: '+url);return response.json();
+    }
+    const input=document.querySelector('textarea[aria-label="Task description"]');
+    if(input.maxLength!==500000||input.rows<12||!document.querySelector('input[type="file"][multiple]'))throw new Error('Large task editor missing');
+    const policy=await request('/runtime/policy');
+    if(![1,2,3,4,5].every(level=>policy.levels.some(item=>item.level===level)))throw new Error('Five autonomy levels missing');
+    const upload=await fetch('/workspace/attachments?filename=native-test.txt',{method:'POST',headers:{'X-Kingdom-Request':'1','Content-Type':'application/octet-stream'},body:'native attachment round trip'});
+    if(!upload.ok)throw new Error('Native attachment upload failed');const attachment=await upload.json();
+    const retrieved=await fetch('/workspace/attachments/'+attachment.id+'/download').then(r=>r.text());
+    if(retrieved!=='native attachment round trip')throw new Error('Native attachment retrieval differs');
+    const mission=await request('/missions','POST',{plan:{title:'Native mission',objective:'Measure text with verified evidence',deliverables:['Verified text measurements'],steps:[{id:'measure',title:'Measure source',kind:'text_check',instructions:'native mission evidence',acceptance:'Three words measured with independent verification'}]}});
+    await request('/runtime/policy','PUT',{level:4});
+    await request('/missions/'+mission.id+'/approve','POST',{version:mission.version});
+    return {fiveLevels:true,largeEditor:true,attachmentRoundtrip:true,missionId:mission.id};
+  })()`);
+  await until(() => mainWindow.webContents.executeJavaScript("fetch('/missions').then(r=>r.json()).then(items=>items.some(item=>item.plan.title==='Native mission'&&item.status==='completed'))"), 'verified native mission');
+  report.missionWorkspace.missionVerified = true;
+  fs.mkdirSync(path.dirname(reportPath), {recursive:true});
+  fs.writeFileSync(path.join(path.dirname(reportPath),'mission-workspace.png'),(await mainWindow.webContents.capturePage()).toPNG());
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e=>e.textContent==='Governance').click()");
+  await until(() => mainWindow.webContents.executeJavaScript("document.querySelectorAll('input[name=autonomy]').length===6 && document.body.textContent.includes('Computer control')"), 'five levels and computer grants in native UI');
+  fs.writeFileSync(path.join(path.dirname(reportPath),'governance.png'),(await mainWindow.webContents.capturePage()).toPNG());
+  await mainWindow.webContents.executeJavaScript("fetch('/runtime/policy',{method:'PUT',headers:{'X-Kingdom-Request':'1','Content-Type':'application/json'},body:JSON.stringify({level:3})}).then(r=>{if(!r.ok)throw new Error('Policy restore failed')})");
   report.portableMaps = await mainWindow.webContents.executeJavaScript(`(async () => {
     async function request(url, body) {
       const response = await fetch(url, body ? {method:'POST', headers:{'X-Kingdom-Request':'1','Content-Type':'application/json'}, body:JSON.stringify(body)} : {});
