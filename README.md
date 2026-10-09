@@ -4,26 +4,26 @@
 
 A desktop command center for local workers, governed tasks and persistent knowledge. Start with the installer for your computer; **Python and Node.js are included, so you do not need to install them separately.**
 
-**Current stable release: [Kingdom v1TAS · v1.1.2](https://github.com/wests-cmd/kingdom/releases/tag/v1.1.2)**
+**Current stable release: [Kingdom v1TAS · v1.2.0](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.0)**
 
 [Join the Kingdom Discord](https://discord.gg/4b8f9YS2Wp) · [All releases](https://github.com/wests-cmd/kingdom/releases) · [Report a problem](https://github.com/wests-cmd/kingdom/issues)
 
-**v1.2.0 is under release verification.** Its mission workspace adds five active autonomy levels, larger tasks and inspected attachments, custom installed model connections, reviewed computer tools, Captain groups, bounded source repairs and compatible UI-only updates. [Read the mission guide](docs/MISSION_WORKSPACE.md) and [exact capabilities and limits](docs/releases/v1.2.0.md). The published downloads below remain v1.1.2 until the new native artifacts pass their checks and are released.
+The mission workspace adds five active autonomy levels, larger tasks and inspected attachments, custom installed model connections, reviewed computer tools, Captain groups, bounded source repairs and compatible UI-only updates. [Read the mission guide](docs/MISSION_WORKSPACE.md) and [exact capabilities and limits](docs/releases/v1.2.0.md).
 
 ## Download Kingdom
 
-Choose **one** installer that matches your computer. These are the published v1.1.2 files.
+Choose **one** installer that matches your computer. These are the published v1.2.0 files.
 
 | Your computer | Download | What to do next |
 | --- | --- | --- |
-| **Windows — Intel/AMD 64-bit** | **[Download Windows installer](https://github.com/wests-cmd/kingdom/releases/download/v1.1.2/Kingdom-Setup-1.1.2.exe)** | Run `Kingdom-Setup-1.1.2.exe`, then open the Kingdom desktop shortcut. |
-| **macOS — Intel** | **[Download Mac DMG](https://github.com/wests-cmd/kingdom/releases/download/v1.1.2/Kingdom-1.1.2.dmg)** | Open the DMG, drag Kingdom into Applications, then launch it. |
-| **Linux — Intel/AMD 64-bit** | **[Download AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.1.2/Kingdom-1.1.2.AppImage)** | Allow the downloaded file to run as a program in its file properties, then open it. |
-| **Ubuntu / Debian — amd64** | **[Download DEB package](https://github.com/wests-cmd/kingdom/releases/download/v1.1.2/kingdom-desktop_1.1.2_amd64.deb)** | Open it with your distribution's package installer, then launch Kingdom. |
+| **Windows — Intel/AMD 64-bit** | **[Download Windows installer](https://github.com/wests-cmd/kingdom/releases/download/v1.2.0/Kingdom-Setup-1.2.0.exe)** | Run `Kingdom-Setup-1.2.0.exe`, then open the Kingdom desktop shortcut. |
+| **macOS — Intel** | **[Download Mac DMG](https://github.com/wests-cmd/kingdom/releases/download/v1.2.0/Kingdom-1.2.0.dmg)** | Open the DMG, drag Kingdom into Applications, then launch it. |
+| **Linux — Intel/AMD 64-bit** | **[Download AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.2.0/Kingdom-1.2.0.AppImage)** | Allow the downloaded file to run as a program in its file properties, then open it. |
+| **Ubuntu / Debian — amd64** | **[Download DEB package](https://github.com/wests-cmd/kingdom/releases/download/v1.2.0/kingdom-desktop_1.2.0_amd64.deb)** | Open it with your distribution's package installer, then launch Kingdom. |
 
 **Before installing:** Windows and macOS builds are unsigned; the Mac build is not notarized. Your operating system may show a trust prompt. Native Apple Silicon, Windows ARM64, Linux ARM64, Android and iOS installers are **not supplied**. Mac DMG testing covers Intel Macs; Apple Silicon compatibility is not certified.
 
-**Check your download:** [SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.1.2/SHA256SUMS) and [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.1.2/release-manifest.json) list the exact files and hashes. The [release page](https://github.com/wests-cmd/kingdom/releases/tag/v1.1.2) also contains native startup evidence and screenshots. Choose an installer above rather than GitHub's “Source code” archive or a standalone backend file.
+**Check your download:** [SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.2.0/SHA256SUMS) and [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.2.0/release-manifest.json) list the exact files and hashes. The [release page](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.0) also contains native startup evidence and screenshots. Choose an installer above rather than GitHub's “Source code” archive or a standalone backend file.
 
 ## Your first five minutes
 
