@@ -11,12 +11,12 @@ export default function Swarm() {
 
   return (
     <div>
-      <h2>Workers</h2>
+      <h2>Knight Apprentices</h2>
       {error && <p role="alert">{error}</p>}
 
       <div className="worker-inspector-layout">
         <div>
-          <h4>Cluster Nodes ({knights.length})</h4>
+          <h4>Agents on this computer ({knights.length})</h4>
           {loading ? <p style={{ color: "var(--text-muted)" }}>Loading node cluster...</p> : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "12px", marginTop: "10px" }}>
               {knights.map(k => (

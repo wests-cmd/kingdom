@@ -67,7 +67,7 @@ export default function Dashboard() {
         </div>
 
         <div className="card">
-          <div className="card-title">Online Knights</div>
+          <div className="card-title">Knight Apprentices</div>
           <div className="card-value">{knights.length}</div>
         </div>
 

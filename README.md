@@ -8,6 +8,8 @@ A desktop command center for local workers, governed tasks and persistent knowle
 
 [Join the Kingdom Discord](https://discord.gg/4b8f9YS2Wp) · [All releases](https://github.com/wests-cmd/kingdom/releases) · [Report a problem](https://github.com/wests-cmd/kingdom/issues)
 
+**v1.2.0 is under release verification.** Its mission workspace adds five active autonomy levels, larger tasks and inspected attachments, custom installed model connections, reviewed computer tools, Captain groups, bounded source repairs and compatible UI-only updates. [Read the mission guide](docs/MISSION_WORKSPACE.md) and [exact capabilities and limits](docs/releases/v1.2.0.md). The published downloads below remain v1.1.2 until the new native artifacts pass their checks and are released.
+
 ## Download Kingdom
 
 Choose **one** installer that matches your computer. These are the published v1.1.2 files.

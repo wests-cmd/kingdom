@@ -33,6 +33,14 @@ app.add_middleware(
 app.include_router(router)
 from backend.runtime.automation_api import router as automation_router
 app.include_router(automation_router)
+from backend.runtime.workspace_api import router as workspace_router
+app.include_router(workspace_router)
+from backend.runtime.mission_api import router as mission_router
+app.include_router(mission_router)
+from backend.cluster.hierarchy_api import router as hierarchy_router
+app.include_router(hierarchy_router)
+from backend.system.ui_update_api import router as ui_update_router
+app.include_router(ui_update_router)
 from backend.accessibility import router as accessibility_router
 app.include_router(accessibility_router)
 from backend.recovery import router as recovery_router
@@ -63,10 +71,25 @@ if os.path.exists(frontend_dist):
 
     @app.get("/")
     def serve_frontend_index():
+        from backend.system.ui_update_api import components
+        selected = components()
+        active = selected.status()['active']
+        if active:
+            candidate = selected.directory(active) / 'index.html'
+            if candidate.is_file(): return FileResponse(candidate, headers={'Cache-Control':'no-store'})
         index_file = os.path.join(frontend_dist, "index.html")
         if os.path.exists(index_file):
             return FileResponse(index_file)
         return {"status": "Kingdom Backend Operational"}
+
+    @app.get('/ui/{component}/{resource:path}')
+    def serve_ui_component(component: str, resource: str):
+        from backend.system.ui_update_api import components
+        from fastapi import HTTPException
+        try:
+            target = components().asset(component, resource)
+            return FileResponse(target, headers={'Cache-Control':'public, max-age=31536000, immutable'})
+        except ValueError as error: raise HTTPException(404,'Component asset not found') from error
 
 if __name__ == "__main__":
     import sys

@@ -27,6 +27,13 @@ class SwarmManager:
         subtasks = self._decompose(task["prompt"], task["metadata"].get("subtasks")) if task["metadata"].get("subtasks") else [task["prompt"]]
         assignments = [self._balancer.select_knight(subtask, list(self.registry._knights)) for subtask in subtasks]
         requested = task["metadata"].get("requested_knight")
+        from backend.runtime.computer_tools import TOOL_CAPABILITIES
+        required = TOOL_CAPABILITIES.get(task['metadata'].get('tool'))
+        if required and not requested:
+            eligible = [name for name, apprentice in self.registry._knights.items() if required in apprentice.zero_trust.nodes.get_node_capabilities(name)
+                        and required in self.security.nodes.get_node_capabilities(name)]
+            if not eligible: raise PermissionError('No Apprentice has the required computer-tool grant')
+            assignments = [eligible[0]] * len(subtasks)
         if requested:
             if requested not in self.registry._knights:
                 raise ValueError("Requested worker is not available")

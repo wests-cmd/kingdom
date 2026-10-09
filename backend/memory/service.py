@@ -40,7 +40,16 @@ class MemoryService:
         return deepcopy(entry)
 
     def record_task(self, task):
-        return self.add(task["prompt"], {"task_id": task["id"], "status": task["status"], "result": task["result"]}, 1.0 if task["status"] == "completed" else 0.25)
+        from backend.runtime.attachments import compact_text
+        import hashlib
+        compact = compact_text(task['prompt'], budget=6000)
+        records = (task.get('result') or {}).get('results', [])
+        evidence = [{'tool': record.get('outcome', {}).get('tool'), 'verification': record.get('verification', {}).get('state'),
+                     'artifact': record.get('outcome', {}).get('artifact')} for record in records]
+        return self.add(compact['text'], {'task_id': task['id'], 'status': task['status'], 'evidence': evidence,
+            'source_sha256': hashlib.sha256(task['prompt'].encode()).hexdigest(),
+            'compaction': {k:v for k,v in compact.items() if k != 'text'},
+            'original_retained_in_task': True}, 1.0 if task['status'] == 'completed' else 0.25)
 
     def search(self, query, limit=5):
         # Optimization: Single-pass query matching with pre-compiled regex and heapq.nlargest extraction.

@@ -68,17 +68,17 @@ def establish_owner_session(request: Request, response: Response):
 
 # Request Models
 class TaskRequest(BaseModel):
-    prompt: str = Field(min_length=1, max_length=10_000)
+    prompt: str = Field(min_length=1, max_length=500_000)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 class ModeRequest(BaseModel):
     mode: str
 
 class AutonomyRequest(BaseModel):
-    level: int = Field(ge=0, le=3, strict=True)
+    level: int = Field(ge=0, le=5, strict=True)
 
 class ModelRequest(BaseModel):
-    prompt: str = Field(min_length=1, max_length=10_000)
+    prompt: str = Field(min_length=1, max_length=500_000)
     model: str | None = None
     provider: str | None = None
 
@@ -466,11 +466,21 @@ def set_mode(request: ModeRequest):
 
 @router.post("/tasks", status_code=status.HTTP_201_CREATED)
 def create_task(request: TaskRequest):
+    if any(key.startswith('_mission') or key == 'mission_id' for key in request.metadata):
+        raise HTTPException(400, 'Mission control fields belong to the reviewed mission planner')
     if request.metadata.get("actor_id", "owner") != "owner" or request.metadata.get("actor", "owner") != "owner":
         raise HTTPException(status_code=403, detail="Task actor must be the authenticated owner")
     metadata = dict(request.metadata)
     metadata["actor_id"] = "owner"
     metadata["actor"] = "owner"
+    attachments = metadata.get('attachment_ids', [])
+    if not isinstance(attachments, list) or len(attachments) > 20 or not all(isinstance(item, str) for item in attachments):
+        raise HTTPException(400, 'Use at most 20 valid attachment identifiers')
+    if attachments:
+        from backend.runtime.attachments import AttachmentStore
+        try:
+            for ident in attachments: AttachmentStore(db).get(ident)
+        except (KeyError, ValueError) as error: raise HTTPException(400, 'Attachment not found') from error
     try:
         return engine.submit_task(request.prompt, metadata)
     except ValueError as exc:
@@ -838,8 +848,24 @@ def handle_cluster_rpc(request: RPCMessageRequest):
         raise HTTPException(status_code=403, detail="RPC payload identity differs from authenticated sender")
 
     if msg_type == "heartbeat":
-        res = heartbeat_manager.ping(sender_id)
+        metrics = payload.get('load_metrics', {})
+        if not isinstance(metrics, dict) or any(type(metrics.get(key)) not in (int, float) or not 0 <= metrics[key] <= 100 for key in metrics if key in {'cpu_percent', 'memory_percent'}):
+            raise HTTPException(400, 'Invalid load measurements')
+        res = heartbeat_manager.ping(sender_id, load_metrics={key: metrics[key] for key in ('cpu_percent', 'memory_percent') if key in metrics})
         return {"status": "ok", "ping": res}
+
+    elif msg_type == 'group_task_assign':
+        from backend.cluster.hierarchy_api import hierarchy
+        task = engine.tasks.get(payload.get('task_id', ''))
+        if not task or task['status'] != 'queued': raise HTTPException(409, 'Only queued group work can be assigned')
+        if task.get('metadata', {}).get('tool') not in {'text.analyze@1.0.0', 'code.python.analyze@1.0.0'}:
+            raise HTTPException(409, 'Group dispatch currently supports independently verifiable text and syntax tools')
+        group_id = task.get('metadata', {}).get('group_id')
+        try: hierarchy.authorize_assignment(sender_id, group_id, payload.get('target_node'))
+        except PermissionError as error: raise HTTPException(403, str(error)) from error
+        updated = engine.tasks.transition_task(task['id'], 'queued', {'assigned_knight': payload['target_node'],
+            'metadata': {**task['metadata'], 'execution_target': 'remote'}})
+        return {'status': 'ok', 'task_id': updated['id']}
 
     elif msg_type == "task_poll":
         if engine.execution_policy.get()["level"] == 0:

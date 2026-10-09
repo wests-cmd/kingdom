@@ -2,6 +2,7 @@ import React from 'react'
 import {PALETTES} from '../appearance'
 import {useAppearance} from '../components/common/AppearanceProvider'
 import AccessibilitySettings from '../components/common/AccessibilitySettings'
+import ComponentUpdates from '../components/ComponentUpdates'
 
 export default function AppearanceSettings() {
   const {settings,update,saved,reset}=useAppearance()
@@ -18,6 +19,7 @@ export default function AppearanceSettings() {
       <label>Motion<select value={settings.motion} onChange={e=>update({motion:e.target.value})}><option value="system">Respect device preference</option><option value="reduced">Reduce motion</option></select></label>
       <label>Background atmosphere<select value={settings.atmosphere} onChange={e=>update({atmosphere:Number(e.target.value)})}>{[0,5,10,15,20].map(v=><option key={v} value={v}>{v===0?'Off':v+'%'}</option>)}</select></label>
     </div></section>
-    <p className="muted">These controls change appearance only. Runtime autonomy, approvals and access permissions remain under Governance and Security.</p>
+    <p className="muted">Appearance controls stay on this device. Runtime autonomy, approvals and access permissions are under Governance and Security.</p>
+    <ComponentUpdates />
   </div>
 }
