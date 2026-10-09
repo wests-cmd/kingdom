@@ -49,7 +49,8 @@ def stage(platform, version, commit):
     destination.mkdir(exist_ok=True)
     if platform == 'linux' and tuple(map(int,version.split('.')[:3])) >= (1,2,0):
         from scripts.build_ui_component import build
-        build('frontend/dist',destination/f'Kingdom-UI-{version}.zip',version)
+        compatibility=json.loads(Path('frontend/ui-compatibility.json').read_text())['compatible_backends']
+        build('frontend/dist',destination/f'Kingdom-UI-{version}.zip',version,compatibility)
     filenames = [item.format(version=version) for item in INVENTORY[platform]]
     for name in filenames:
         source = (Path("desktop/bin") / ("kingdom-backend.exe" if platform == "windows" else "kingdom-backend")) if name.startswith("kingdom-backend-") else Path("desktop/dist") / name

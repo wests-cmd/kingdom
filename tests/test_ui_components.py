@@ -53,3 +53,12 @@ def test_update_identity_cannot_escape_root(tmp_path):
 def test_public_component_lookup_uses_closed_file_inventory(tmp_path,resource):
     service=UIComponents('1.2.0',tmp_path);data,digest=package();service.install(data,digest)
     with pytest.raises(ValueError):service.asset(digest,resource)
+
+
+def test_newer_ui_can_target_explicitly_compatible_older_backend(tmp_path):
+    from scripts.build_ui_component import build
+    dist=tmp_path/'dist';dist.mkdir();(dist/'index.html').write_text('<html>new UI</html>')
+    output=tmp_path/'ui.zip'
+    digest=build(dist,output,'1.2.1',['1.2.0','1.2.1'])
+    service=UIComponents('1.2.0',tmp_path/'installed')
+    assert service.install(output.read_bytes(),digest)['active']==digest
