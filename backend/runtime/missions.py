@@ -28,6 +28,7 @@ class MissionPlan(BaseModel):
     assumptions: list[str] = Field(default_factory=list, max_length=30)
     deliverables: list[str] = Field(min_length=1, max_length=50)
     missing_requirements: list[str] = Field(default_factory=list, max_length=30)
+    offload_analysis: bool = False
     steps: list[MissionStep] = Field(min_length=1, max_length=50)
 
 
@@ -185,6 +186,8 @@ class MissionService:
                             'model_profile': state['model_profile'], 'attachment_ids': state['attachment_ids'] if step.kind == 'model' else [],
                             'max_attempts': 1 + budget['max_retries'] if step.kind in {'model','text_check','python_check','read_file'} else 1}
                 if tool: metadata.update(tool=tool, tool_parameters=params)
+                if state['plan'].get('offload_analysis') and policy['level'] == 5 and step.kind in {'text_check','python_check'}:
+                    metadata['offload'] = True
                 self.engine.submit_task(text or step.title, metadata)
                 state['steps'][step.id]['status'] = 'queued'; active += 1
                 if not budget['auto_advance']: break

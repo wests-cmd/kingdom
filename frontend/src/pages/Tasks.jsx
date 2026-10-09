@@ -16,7 +16,7 @@ export default function Tasks() {
 
   const tasks = taskData || []
 
-  const [taskMode, setTaskMode] = useState("text.analyze@1.0.0")
+  const [taskMode, setTaskMode] = useState("mission")
 
   const [inputData, setInputData] = useState("")
 
@@ -41,7 +41,7 @@ export default function Tasks() {
     try {
 
       const files = [...event.target.files]
-      if(files.length) setTaskMode('')
+      if(files.length) setTaskMode('mission')
 
       if(files.length + attachments.length > 20) throw new Error('Use at most 20 attachments.')
 
@@ -65,7 +65,7 @@ export default function Tasks() {
 
     setSubmitting(true);setError('')
 
-    try {const {data}=await api.post('/missions/plan',{objective:inputData,attachment_ids:attachments.map(item=>item.id),model_profile:modelProfile||null});setMission(data);setPlanText(JSON.stringify(data.plan,null,2));refreshMissions()}
+    try {const {data}=await api.post('/missions/plan',{objective:inputData,attachment_ids:attachments.map(item=>item.id),model_profile:modelProfile||null,offload_analysis:offload});setMission(data);setPlanText(JSON.stringify(data.plan,null,2));refreshMissions()}
 
     catch(e) {setError(e.response?.data?.detail || 'Mission planning failed.')} finally {setSubmitting(false)}
 
@@ -92,6 +92,7 @@ export default function Tasks() {
   const handleCreateTask = async (e) => {
 
     e.preventDefault()
+    if(taskMode==='mission'){await draftMission();return}
 
     if (!inputData.trim()) { setError("Enter a task description before submitting."); return }
 
@@ -141,7 +142,7 @@ export default function Tasks() {
 
       <form className="task-form" onSubmit={handleCreateTask} style={{ marginBottom: "24px" }}>
 
-        <label>Task <select value={taskMode} onChange={e => setTaskMode(e.target.value)}><option value="text.analyze@1.0.0">Analyze text</option><option value="code.python.analyze@1.0.0">Check Python syntax</option><option value="">Ask your configured AI</option></select></label>
+        <label>Task <select value={taskMode} onChange={e => setTaskMode(e.target.value)}><option value="mission">Build a complete mission (review first)</option><option value="text.analyze@1.0.0">Analyze text</option><option value="code.python.analyze@1.0.0">Check Python syntax</option><option value="">Ask your configured AI</option></select></label>
 
         <textarea
 
@@ -171,7 +172,7 @@ export default function Tasks() {
 
         <label><input type="checkbox" checked={offload} onChange={e=>setOffload(e.target.checked)}/>At level 5, offload supported analysis to a healthy paired computer</label>
 
-        <div className="action-row"><button type="button" disabled={submitting} onClick={draftMission}>Plan a complete mission</button><button type="submit" disabled={submitting} style={{ padding: "8px 16px" }}>{submitting ? "Submitting…" : "Submit Task"}</button></div>
+        <div className="action-row"><button type="button" disabled={submitting} onClick={draftMission}>Plan a complete mission</button><button type="submit" disabled={submitting} style={{ padding: "8px 16px" }}>{submitting ? "Submitting…" : taskMode==='mission'?"Review mission plan":"Submit Task"}</button></div>
 
       </form>
 

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react"
 import api from "../api"
-import ComponentUpdates from '../components/ComponentUpdates'
 
 export default function Settings() {
   const [security, setSecurity] = useState(null)
@@ -14,7 +13,6 @@ export default function Settings() {
   return (
     <div>
       <h2>Security & Zero-Trust Engine</h2>
-      <ComponentUpdates />
 
       <div className="grid-cards" style={{ margin: "16px 0" }}>
         <div className="card">

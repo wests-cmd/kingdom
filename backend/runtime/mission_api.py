@@ -12,6 +12,7 @@ class DraftRequest(BaseModel):
     objective: str = Field(min_length=1, max_length=500000)
     attachment_ids: list[str] = Field(default_factory=list, max_length=20)
     model_profile: str | None = None
+    offload_analysis: bool = False
 
 
 class ReviewedPlan(BaseModel):
@@ -57,6 +58,7 @@ async def plan(request: DraftRequest):
         body = response['text'].strip()
         if body.startswith('```'): body = body.split('\n', 1)[1].rsplit('```', 1)[0]
         proposed = MissionPlan.model_validate_json(body)
+        proposed.offload_analysis=request.offload_analysis
         state = engine.missions.create(proposed, request.attachment_ids, request.model_profile)
         state['context_compaction'] = {k:v for k,v in context.items() if k != 'text'}
         engine.missions.save(state)

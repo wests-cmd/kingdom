@@ -274,6 +274,7 @@ async function runReleaseSmoke(reportPath) {
   await until(() => mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.card-value')).some(e => e.textContent === 'ACTIVE')"), 'live runtime dashboard');
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e => e.textContent === 'Tasks').click()");
   await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('textarea[aria-label=\"Task description\"]'))"), 'task submission form');
+  await mainWindow.webContents.executeJavaScript("(() => {const select=document.querySelector('.task-form select');select.value='text.analyze@1.0.0';select.dispatchEvent(new Event('change',{bubbles:true}));})()");
   await mainWindow.webContents.executeJavaScript(`(() => {
     const input = document.querySelector('textarea[aria-label="Task description"]');
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, 'native release verification');
