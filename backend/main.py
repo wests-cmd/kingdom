@@ -31,6 +31,8 @@ app.add_middleware(
 )
 
 app.include_router(router)
+from backend.runtime.automation_api import router as automation_router
+app.include_router(automation_router)
 from backend.accessibility import router as accessibility_router
 app.include_router(accessibility_router)
 from backend.recovery import router as recovery_router
