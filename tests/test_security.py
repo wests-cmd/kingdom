@@ -96,6 +96,19 @@ class AuditLoggerTests(unittest.TestCase):
         self.assertEqual(record["metadata"]["api_key"], "******")
         self.assertEqual(record["metadata"]["token"], "******")
 
+    def test_sanitize_dict_handles_non_string_keys_and_iterables(self):
+        logger = AuditLogger()
+        sanitized = logger._sanitize_dict({
+            123: "normal_val",
+            "headers": ["Authorization: Bearer sk-abcdef123456789012345678901234567890"],
+            "nested_list": [{"inner_key": "secret_data"}],
+            "tuple_args": ("password=mysecret",),
+        })
+        self.assertEqual(sanitized[123], "normal_val")
+        self.assertEqual(sanitized["headers"], ["Authorization: Bearer sk-******"])
+        self.assertEqual(sanitized["nested_list"], [{"inner_key": "******"}])
+        self.assertEqual(sanitized["tuple_args"], ("password=******",))
+
 
 class NodeSecurityTests(unittest.TestCase):
     def test_node_registration_and_auth(self):
