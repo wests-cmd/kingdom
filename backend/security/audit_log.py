@@ -110,12 +110,20 @@ class AuditLogger:
     def _sanitize_dict(self, data: dict[str, Any]) -> dict[str, Any]:
         sanitized = {}
         for key, value in data.items():
-            if any(term in key.lower() for term in ("key", "secret", "password", "token", "auth")):
+            if any(term in str(key).lower() for term in ("key", "secret", "password", "token", "auth")):
                 sanitized[key] = "******"
             elif isinstance(value, str):
                 sanitized[key] = self._sanitize_value(value)
             elif isinstance(value, dict):
                 sanitized[key] = self._sanitize_dict(value)
+            elif isinstance(value, (list, tuple, set)):
+                sanitized_items = [
+                    self._sanitize_dict(item) if isinstance(item, dict)
+                    else self._sanitize_value(item) if isinstance(item, str)
+                    else item
+                    for item in value
+                ]
+                sanitized[key] = type(value)(sanitized_items) if not isinstance(value, set) else sanitized_items
             else:
                 sanitized[key] = value
         return sanitized
