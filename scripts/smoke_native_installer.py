@@ -34,10 +34,13 @@ with tempfile.TemporaryDirectory(prefix="kingdom-install-") as temporary:
             user_data = root / 'evidence/user-data'
             profile = user_data / 'local_profile.json'
             saved_profile = profile.read_bytes()
+            database = user_data / 'runtime/data/kingdom.db'
+            saved_database = sha(database)
             marker = user_data / 'runtime/data/update-retention-proof.txt'
             marker.write_text('retained owner data', encoding='utf-8')
             subprocess.run([str(installer), '/S', f'/D={destination}'], check=True, timeout=120)
             assert profile.read_bytes() == saved_profile and marker.read_text() == 'retained owner data'
+            assert sha(database) == saved_database, 'Windows upgrade changed the retained task database'
             assert sha(destination / 'resources/bin/kingdom-backend.exe') == sha(root / 'desktop/bin/kingdom-backend.exe')
             report_file = root / 'evidence/desktop.json'
             report = json.loads(report_file.read_text())
