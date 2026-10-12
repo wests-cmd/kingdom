@@ -60,7 +60,7 @@ function handoffScript(pid, installer, executable, digest, latest, receipt) {
   const quote = text => "'" + text.replace(/'/g, "''") + "'";
   if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error('Invalid process identity');
   version(latest);
-  return `$ErrorActionPreference='Stop'\ntry {\n` +
+  return `$ErrorActionPreference='Stop'\nImport-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Utility')\nImport-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Management')\ntry {\n` +
     `if (Get-Process -Id ${pid} -ErrorAction SilentlyContinue) { Wait-Process -Id ${pid} -Timeout 90 }\n` +
     `if ((Get-FileHash -LiteralPath ${quote(installer)} -Algorithm SHA256).Hash.ToLowerInvariant() -ne ${quote(digest)}) { throw 'Installer checksum changed' }\n` +
     `$result=Start-Process -FilePath ${quote(installer)} -ArgumentList @('/S',${quote('/D=' + path.dirname(executable))}) -WindowStyle Hidden -Wait -PassThru\n` +
@@ -72,6 +72,20 @@ function handoffScript(pid, installer, executable, digest, latest, receipt) {
     `@{success=$true;version=${quote(latest)}} | ConvertTo-Json | Set-Content -LiteralPath ${quote(receipt)} -Encoding UTF8\n` +
     `Remove-Item -LiteralPath ${quote(installer)} -ErrorAction SilentlyContinue\n` +
     `} catch { @{success=$false;version=${quote(latest)};diagnostic=$_.Exception.Message;message='The upgrade could not finish. Your data is retained. Retry the update.'} | ConvertTo-Json | Set-Content -LiteralPath ${quote(receipt)} -Encoding UTF8 } finally { if(-not (Get-Process -Id ${pid} -ErrorAction SilentlyContinue) -and (Test-Path -LiteralPath ${quote(executable)})){ $reopened=Start-Process -FilePath ${quote(executable)} -PassThru; $record=Get-Content -LiteralPath ${quote(receipt)} -Raw | ConvertFrom-Json; $record | Add-Member -NotePropertyName reopenedPID -NotePropertyValue $reopened.Id -Force; $record | ConvertTo-Json | Set-Content -LiteralPath ${quote(receipt)} -Encoding UTF8 } }\n`;
+}
+// PowerShell exits without executing an encoded command when Windows starts it
+// with Node's DETACHED_PROCESS flag. A short-lived bootstrap uses Windows'
+ // Start-Process instead, which gives the hidden helper a working process context.
+function launchHandoff(script, receipt) {
+  const quote = value => "\x27" + value.replace(/\x27/g, "\x27\x27") + "\x27";
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const bootstrap = "$ErrorActionPreference='Stop'; Start-Process -FilePath powershell.exe -WindowStyle Hidden -RedirectStandardOutput " + quote(receipt + ".out.log") + " -RedirectStandardError " + quote(receipt + ".err.log") + " -ArgumentList @('-NoProfile','-NonInteractive','-EncodedCommand','" + encoded + "')";
+  return new Promise((resolve, reject) => {
+    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(bootstrap, 'utf16le').toString('base64')], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    child.stdout.resume(); child.stderr.resume();
+    child.once('error', reject);
+    child.once('close', code => code === 0 ? resolve() : reject(new Error('Could not start the update helper')));
+  });
 }
 class DesktopUpdates {
   constructor(app) {
@@ -121,10 +135,8 @@ class DesktopUpdates {
     try {
     await verifyFile(this.ready.file, this.ready.update);
     const script = handoffScript(process.pid, this.ready.file, this.app.getPath('exe'), this.ready.update.sha256, this.ready.update.latest, path.join(this.directory, 'result.json'));
-    const helper = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { detached: true, windowsHide: true, stdio: 'ignore' });
-    await new Promise((resolve, reject) => { helper.once('spawn', resolve); helper.once('error', reject); });
-    helper.unref(); this.app.quit(); return { restarting: true };
+    await launchHandoff(script, path.join(this.directory, 'result.json')); this.app.quit(); return { restarting: true };
     } catch (error) { this.installing = false; throw error; }
   }
 }
-module.exports = { DesktopUpdates, candidate, newer, verifyFile, handoffScript };
+module.exports = { DesktopUpdates, candidate, newer, verifyFile, handoffScript, launchHandoff };

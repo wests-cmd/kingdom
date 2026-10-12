@@ -45,13 +45,9 @@ with tempfile.TemporaryDirectory(prefix="kingdom-install-") as temporary:
             shutil.copy2(installer, update_installer)
             receipt = root / 'evidence/windows-upgrade.json'
             helper = """
-const {handoffScript}=require('./desktop/updates');
-const {spawn}=require('child_process');
-const fs=require('fs');
+const {handoffScript,launchHandoff}=require('./desktop/updates');
 const [installer,exe,digest,version,receipt]=process.argv.slice(1);
-const script=handoffScript(process.pid,installer,exe,digest,version,receipt);
-const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],{detached:true,windowsHide:true,stdio:['ignore',fs.openSync(receipt+'.log','a'),fs.openSync(receipt+'.log','a')]});
-child.once('spawn',()=>{child.unref()});child.once('error',()=>process.exit(1));
+launchHandoff(handoffScript(process.pid,installer,exe,digest,version,receipt),receipt).catch(()=>process.exit(1));
 """
             subprocess.run(['node', '-e', helper, str(update_installer), str(app), sha(update_installer), version, str(receipt)], check=True, timeout=15)
             deadline = time.monotonic() + 150

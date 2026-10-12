@@ -148,7 +148,7 @@ async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
-    title: 'Kingdom — Distributed AI Runtime',
+    title: 'Kingdom â€” Distributed AI Runtime',
     backgroundColor: '#100e15',
     icon: path.join(app.isPackaged ? process.resourcesPath : __dirname, 'branding', 'kingdom-icon.png'),
     webPreferences: {
@@ -352,6 +352,10 @@ async function runReleaseSmoke(reportPath) {
   await until(() => mainWindow.webContents.executeJavaScript("document.body.textContent.includes('Check desktop updates') && document.body.textContent.includes('Installed version:')"), 'native desktop update controls');
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('section')).find(e=>e.querySelector('h2')?.textContent==='Desktop updates').scrollIntoView()");
   fs.writeFileSync(path.join(path.dirname(reportPath),'updates.png'),(await mainWindow.webContents.capturePage()).toPNG());
+  const startupStatus = await mainWindow.webContents.executeJavaScript("fetch('/auth/local/status',{method:'POST',headers:{'X-Kingdom-Request':'1'}}).then(r=>r.json())");
+  if (startupStatus.passcode_enabled !== false) throw new Error('Passcode must be off by default');
+  await until(() => mainWindow.webContents.executeJavaScript("document.body.textContent.includes('Passcode is off') && document.body.textContent.includes('Turn on passcode')"), 'optional startup passcode controls');
+  report.startupAccess = {directDashboard:true,passcodeOffByDefault:true,optionalPasscodeSettings:true};
   report.desktopUpdates = { bridgeAvailable: true, settingsAvailable: true, supported: updateStatus.supported };
   await mainWindow.webContents.executeJavaScript("(() => {const select=document.querySelector('#appearance-mode'); select.value='light'; select.dispatchEvent(new Event('change',{bubbles:true}));})()");
   await until(() => mainWindow.webContents.executeJavaScript("document.documentElement.dataset.theme === 'light'"), 'applied light mode');

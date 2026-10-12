@@ -44,7 +44,7 @@ function OwnerApp() {
   useEffect(()=>{if(authorized)document.getElementById('main-content')?.focus()},[currentPage,authorized])
   const connect = async () => {
     try { await api.post("/auth/session"); setAuthorized(true); setError("") }
-    catch { setError("Enter the owner access code supplied by your Kingdom installation.") }
+    catch { setAccessCode(""); setError("That owner access code did not match.") }
   }
   useEffect(() => {
     async function open() {
@@ -102,17 +102,17 @@ function OwnerApp() {
     }
   }
 
-  if (loading) return <main className="content"><p role="status">Opening Kingdomâ€¦</p></main>
+  if (loading) return <main className="content"><p role="status">Opening KingdomÃ¢â‚¬Â¦</p></main>
   if (!authorized && localAccess) return <main className="content"><h1>Welcome back</h1>
     <p>Enter the passcode you chose for Kingdom.</p>
     <form onSubmit={e=>{e.preventDefault();unlock()}}>
       <label>Passcode <input autoFocus type="password" autoComplete="current-password" value={accessCode} onChange={e=>setCode(e.target.value)} /></label>
       <button type="submit">Open Kingdom</button>
     </form>{error && <p role="alert">{error}</p>}
-    <details><summary>Use owner recovery access</summary><p>Your installationâ€™s owner access code can restore access.</p><button onClick={()=>{setAccessCode(accessCode);connect()}}>Use entered code as owner access</button></details>
+    <details><summary>Use owner recovery access</summary><p>Your installationÃ¢â‚¬â„¢s owner access code can restore access.</p><button onClick={()=>{setAccessCode(accessCode);connect()}}>Use entered code as owner access</button></details>
     <details><summary>Accessibility settings</summary><AccessibilitySettings /></details></main>
   if (!authorized) return <main className="content"><h1>Connect this device</h1>
-    <p><a href="/#/connect">Use a device connection code</a> from Kingdomâ€™s main panel.</p>
+    <p><a href="/#/connect">Use a device connection code</a> from KingdomÃ¢â‚¬â„¢s main panel.</p>
     <details><summary>Administrator access</summary><form onSubmit={e=>{e.preventDefault();setAccessCode(accessCode);connect()}}>
       <label>Owner access code <input type="password" autoComplete="off" value={accessCode} onChange={e=>setCode(e.target.value)} /></label><button type="submit">Connect</button>
     </form></details>{error && <p role="alert">{error}</p>}</main>
