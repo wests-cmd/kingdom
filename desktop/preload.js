@@ -6,6 +6,12 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('kingdomDesktop', {
+  updates: {
+    status: () => ipcRenderer.invoke('updates:status'),
+    check: () => ipcRenderer.invoke('updates:check'),
+    download: () => ipcRenderer.invoke('updates:download'),
+    install: () => ipcRenderer.invoke('updates:install')
+  },
   getSessionToken: () => ipcRenderer.invoke('auth:getSessionToken'),
   restartRuntime: () => ipcRenderer.invoke('runtime:restart'),
   stopRuntime: () => ipcRenderer.invoke('runtime:stop'),

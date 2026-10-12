@@ -1,7 +1,7 @@
 {
   "name": "kingdom-desktop",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Kingdom Native Desktop Application Shell",
   "homepage": "https://github.com/wests-cmd/kingdom",
   "author": {
@@ -66,6 +66,7 @@
       }
     ],
     "nsis": {
+      "deleteAppDataOnUninstall": false,
       "createDesktopShortcut": "always",
       "shortcutName": "Kingdom"
     }

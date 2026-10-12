@@ -7,6 +7,7 @@ import tempfile
 import hashlib
 import socket
 import time
+import json
 from validate_version import get_authoritative_version
 
 
@@ -28,6 +29,20 @@ with tempfile.TemporaryDirectory(prefix="kingdom-install-") as temporary:
             app = destination / "Kingdom.exe"
             assert sha(destination / "resources/bin/kingdom-backend.exe") == sha(root / "desktop/bin/kingdom-backend.exe")
             subprocess.run([str(app)], env=env, check=True, timeout=120)
+            # Reapply the real installer to the existing installation. User data
+            # must survive without a manual uninstall or a repeated setup wizard.
+            user_data = root / 'evidence/user-data'
+            profile = user_data / 'local_profile.json'
+            saved_profile = profile.read_bytes()
+            marker = user_data / 'runtime/data/update-retention-proof.txt'
+            marker.write_text('retained owner data', encoding='utf-8')
+            subprocess.run([str(installer), '/S', f'/D={destination}'], check=True, timeout=120)
+            assert profile.read_bytes() == saved_profile and marker.read_text() == 'retained owner data'
+            assert sha(destination / 'resources/bin/kingdom-backend.exe') == sha(root / 'desktop/bin/kingdom-backend.exe')
+            report_file = root / 'evidence/desktop.json'
+            report = json.loads(report_file.read_text())
+            report['desktopUpdates']['existingDataPreserved'] = True
+            report_file.write_text(json.dumps(report, indent=2))
         elif platform == "macos":
             subprocess.run(["hdiutil", "attach", "-nobrowse", "-readonly", "-mountpoint", str(destination),
                             str(root / f"desktop/dist/Kingdom-{version}.dmg")], check=True, timeout=120)

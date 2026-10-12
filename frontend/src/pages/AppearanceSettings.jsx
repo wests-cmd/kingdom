@@ -3,6 +3,7 @@ import {PALETTES} from '../appearance'
 import {useAppearance} from '../components/common/AppearanceProvider'
 import AccessibilitySettings from '../components/common/AccessibilitySettings'
 import ComponentUpdates from '../components/ComponentUpdates'
+import DesktopUpdates from '../components/DesktopUpdates'
 
 export default function AppearanceSettings() {
   const {settings,update,saved,reset}=useAppearance()
@@ -20,6 +21,7 @@ export default function AppearanceSettings() {
       <label>Background atmosphere<select value={settings.atmosphere} onChange={e=>update({atmosphere:Number(e.target.value)})}>{[0,5,10,15,20].map(v=><option key={v} value={v}>{v===0?'Off':v+'%'}</option>)}</select></label>
     </div></section>
     <p className="muted">Appearance controls stay on this device. Runtime autonomy, approvals and access permissions are under Governance and Security.</p>
+    <DesktopUpdates />
     <ComponentUpdates />
   </div>
 }
