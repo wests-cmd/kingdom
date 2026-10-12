@@ -38,7 +38,35 @@ with tempfile.TemporaryDirectory(prefix="kingdom-install-") as temporary:
             saved_database = sha(database)
             marker = user_data / 'runtime/data/update-retention-proof.txt'
             marker.write_text('retained owner data', encoding='utf-8')
-            subprocess.run([str(installer), '/S', f'/D={destination}'], check=True, timeout=120)
+            # Exercise the same real PowerShell handoff used by the native updater.
+            # The helper waits for this short-lived Node process before installing.
+            update_installer = destination / 'verified-upgrade.exe'
+            import shutil
+            shutil.copy2(installer, update_installer)
+            receipt = root / 'evidence/windows-upgrade.json'
+            helper = """
+const {handoffScript}=require('./desktop/updates');
+const {spawn}=require('child_process');
+const [installer,exe,digest,version,receipt]=process.argv.slice(1);
+const script=handoffScript(process.pid,installer,exe,digest,version,receipt);
+const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],{detached:true,windowsHide:true,stdio:'ignore'});
+child.once('spawn',()=>{child.unref()});child.once('error',()=>process.exit(1));
+"""
+            subprocess.run(['node', '-e', helper, str(update_installer), str(app), sha(update_installer), version, str(receipt)], check=True, timeout=15)
+            deadline = time.monotonic() + 150
+            upgrade = None
+            while time.monotonic() < deadline:
+                try:
+                    upgrade = json.loads(receipt.read_text(encoding='utf-8-sig'))
+                    if upgrade.get('reopenedPID'):
+                        break
+                except (OSError, ValueError):
+                    pass
+                time.sleep(1)
+            assert upgrade and upgrade.get('success') is True and upgrade.get('reopenedPID'), 'Native upgrade handoff failed'
+            # This process belongs only to the isolated installer acceptance test.
+            subprocess.run(['taskkill', '/PID', str(int(upgrade['reopenedPID'])), '/T', '/F'], check=True, timeout=15)
+            assert not update_installer.exists(), 'Successful upgrade did not clean its download'
             assert profile.read_bytes() == saved_profile and marker.read_text() == 'retained owner data'
             assert sha(database) == saved_database, 'Windows upgrade changed the retained task database'
             assert sha(destination / 'resources/bin/kingdom-backend.exe') == sha(root / 'desktop/bin/kingdom-backend.exe')
