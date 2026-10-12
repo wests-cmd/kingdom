@@ -101,13 +101,30 @@ class AuditLoggerTests(unittest.TestCase):
         sanitized = logger._sanitize_dict({
             123: "normal_val",
             "headers": ["Authorization: Bearer sk-abcdef123456789012345678901234567890"],
-            "nested_list": [{"inner_key": "secret_data"}],
+            "nested": [[{"token": "synthetic-only"}]],
             "tuple_args": ("password=mysecret",),
         })
-        self.assertEqual(sanitized[123], "normal_val")
+        self.assertEqual(sanitized["123"], "normal_val")
         self.assertEqual(sanitized["headers"], ["Authorization: Bearer sk-******"])
-        self.assertEqual(sanitized["nested_list"], [{"inner_key": "******"}])
+        self.assertEqual(sanitized["nested"], [[{"token": "******"}]])
         self.assertEqual(sanitized["tuple_args"], ("password=******",))
+
+    def test_record_persistence_with_mixed_keys_and_deep_iterables(self):
+        logger = AuditLogger()
+        rec = logger.record(
+            actor="test_actor",
+            operation="test_op",
+            capability="system.admin",
+            decision="ALLOWED",
+            reason="test reason",
+            metadata={
+                123: "normal",
+                "other": "normal",
+                "nested": [[{"token": "synthetic-only"}]]
+            }
+        )
+        self.assertEqual(rec["metadata"]["123"], "normal")
+        self.assertEqual(rec["metadata"]["nested"], [[{"token": "******"}]])
 
 
 class NodeSecurityTests(unittest.TestCase):

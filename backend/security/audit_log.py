@@ -107,25 +107,24 @@ class AuditLogger:
 
         return list(reversed(filtered[-limit:]))
 
+    def _sanitize_any(self, val: Any) -> Any:
+        if isinstance(val, str):
+            return self._sanitize_value(val)
+        elif isinstance(val, dict):
+            return self._sanitize_dict(val)
+        elif isinstance(val, (list, tuple, set)):
+            items = [self._sanitize_any(item) for item in val]
+            return items if isinstance(val, set) else type(val)(items)
+        return val
+
     def _sanitize_dict(self, data: dict[str, Any]) -> dict[str, Any]:
         sanitized = {}
         for key, value in data.items():
-            if any(term in str(key).lower() for term in ("key", "secret", "password", "token", "auth")):
-                sanitized[key] = "******"
-            elif isinstance(value, str):
-                sanitized[key] = self._sanitize_value(value)
-            elif isinstance(value, dict):
-                sanitized[key] = self._sanitize_dict(value)
-            elif isinstance(value, (list, tuple, set)):
-                sanitized_items = [
-                    self._sanitize_dict(item) if isinstance(item, dict)
-                    else self._sanitize_value(item) if isinstance(item, str)
-                    else item
-                    for item in value
-                ]
-                sanitized[key] = type(value)(sanitized_items) if not isinstance(value, set) else sanitized_items
+            key_str = str(key)
+            if any(term in key_str.lower() for term in ("key", "secret", "password", "token", "auth")):
+                sanitized[key_str] = "******"
             else:
-                sanitized[key] = value
+                sanitized[key_str] = self._sanitize_any(value)
         return sanitized
 
     def _sanitize_value(self, val: str) -> str:
