@@ -79,7 +79,7 @@ class MemoryService:
             return []
 
         top_entries = heapq.nlargest(limit, scored_entries, key=lambda x: (x[0], x[1]))
-        return [item[2] for item in top_entries]
+        return [deepcopy(item[2]) for item in top_entries]
 
     def entries(self, limit=100):
         return deepcopy(self._state["entries"][-limit:])
