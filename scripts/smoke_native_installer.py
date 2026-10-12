@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory(prefix="kingdom-install-") as temporary:
             marker.write_text('retained owner data', encoding='utf-8')
             # Exercise the same real PowerShell handoff used by the native updater.
             # The helper waits for this short-lived Node process before installing.
-            update_installer = destination / 'verified-upgrade.exe'
+            update_installer = root / 'evidence/verified-upgrade.exe'
             import shutil
             shutil.copy2(installer, update_installer)
             receipt = root / 'evidence/windows-upgrade.json'
