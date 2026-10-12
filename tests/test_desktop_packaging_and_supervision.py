@@ -27,7 +27,7 @@ def test_desktop_main_security_preferences():
     desktop_main = Path(__file__).resolve().parents[1] / "desktop" / "main.js"
     assert desktop_main.exists()
 
-    content = desktop_main.read_text()
+    content = desktop_main.read_text(encoding="utf-8")
     assert "nodeIntegration: false" in content
     assert "contextIsolation: true" in content
     assert "validateProfile" in content
