@@ -4,28 +4,30 @@
 
 A desktop command center for local workers, governed tasks and persistent knowledge. Start with the installer for your computer; **Python and Node.js are included, so you do not need to install them separately.**
 
-**Current stable release: [Kingdom v1TAS · v1.2.0](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.0)**
+**Current stable release: [Kingdom v1TAS · v1.2.1](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.1)**
 
-**v1.2.1 is under release verification.** It adds Windows desktop update controls in Settings, keeping your existing data and replacing application files on restart. The downloads below remain the published v1.2.0 until the new native checks pass.
+Windows desktop users can now check, download and apply updates from **Settings â†’ Desktop updates** without manually uninstalling Kingdom. Profiles, tasks, settings and model connections stay in their existing data folder. Full desktop updates restart the app; compatible interface-only updates keep the backend running.
 
 [Join the Kingdom Discord](https://discord.gg/4b8f9YS2Wp) · [All releases](https://github.com/wests-cmd/kingdom/releases) · [Report a problem](https://github.com/wests-cmd/kingdom/issues)
 
-The mission workspace adds five active autonomy levels, larger tasks and inspected attachments, custom installed model connections, reviewed computer tools, Captain groups, bounded source repairs and compatible UI-only updates. [Read the mission guide](docs/MISSION_WORKSPACE.md) and [exact capabilities and limits](docs/releases/v1.2.0.md).
+The mission workspace adds five active autonomy levels, larger tasks and inspected attachments, custom installed model connections, reviewed computer tools, Captain groups, bounded source repairs and compatible UI-only updates. [Read the mission guide](docs/MISSION_WORKSPACE.md) and [exact capabilities and limits](docs/releases/v1.2.1.md).
 
 ## Download Kingdom
 
-Choose **one** installer that matches your computer. These are the published v1.2.0 files.
+Choose **one** installer that matches your computer. These are the published v1.2.1 files.
 
 | Your computer | Download | What to do next |
 | --- | --- | --- |
-| **Windows — Intel/AMD 64-bit** | **[Download Windows installer](https://github.com/wests-cmd/kingdom/releases/download/v1.2.0/Kingdom-Setup-1.2.0.exe)** | Run `Kingdom-Setup-1.2.0.exe`, then open the Kingdom desktop shortcut. |
-| **macOS — Intel** | **[Download Mac DMG](https://github.com/wests-cmd/kingdom/releases/download/v1.2.0/Kingdom-1.2.0.dmg)** | Open the DMG, drag Kingdom into Applications, then launch it. |
-| **Linux — Intel/AMD 64-bit** | **[Download AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.2.0/Kingdom-1.2.0.AppImage)** | Allow the downloaded file to run as a program in its file properties, then open it. |
-| **Ubuntu / Debian — amd64** | **[Download DEB package](https://github.com/wests-cmd/kingdom/releases/download/v1.2.0/kingdom-desktop_1.2.0_amd64.deb)** | Open it with your distribution's package installer, then launch Kingdom. |
+| **Windows — Intel/AMD 64-bit** | **[Download Windows installer](https://github.com/wests-cmd/kingdom/releases/download/v1.2.1/Kingdom-Setup-1.2.1.exe)** | Run `Kingdom-Setup-1.2.1.exe`, then open the Kingdom desktop shortcut. |
+| **macOS — Intel** | **[Download Mac DMG](https://github.com/wests-cmd/kingdom/releases/download/v1.2.1/Kingdom-1.2.1.dmg)** | Open the DMG, drag Kingdom into Applications, then launch it. |
+| **Linux — Intel/AMD 64-bit** | **[Download AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.2.1/Kingdom-1.2.1.AppImage)** | Allow the downloaded file to run as a program in its file properties, then open it. |
+| **Ubuntu / Debian — amd64** | **[Download DEB package](https://github.com/wests-cmd/kingdom/releases/download/v1.2.1/kingdom-desktop_1.2.1_amd64.deb)** | Open it with your distribution's package installer, then launch Kingdom. |
 
 **Before installing:** Windows and macOS builds are unsigned; the Mac build is not notarized. Your operating system may show a trust prompt. Native Apple Silicon, Windows ARM64, Linux ARM64, Android and iOS installers are **not supplied**. Mac DMG testing covers Intel Macs; Apple Silicon compatibility is not certified.
 
-**Check your download:** [SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.2.0/SHA256SUMS) and [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.2.0/release-manifest.json) list the exact files and hashes. The [release page](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.0) also contains native startup evidence and screenshots. Choose an installer above rather than GitHub's “Source code” archive or a standalone backend file.
+**Check your download:** [SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.2.1/SHA256SUMS) and [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.2.1/release-manifest.json) list the exact files and hashes. The [release page](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.1) also contains native startup evidence and screenshots. Choose an installer above rather than GitHub's “Source code” archive or a standalone backend file.
+
+Kingdom opens directly to the main panel on its own computer. An optional passcode is **off by default**. To use one, open **Settings → Opening Kingdom** and choose and confirm your own passcode. Other devices still need a connection code.
 
 ## Your first five minutes
 
@@ -39,7 +41,7 @@ AI text generation needs a configured model provider. Joining Discord, selecting
 
 ### Already have Kingdom?
 
-Close Kingdom, check the new installer's hash, and run the matching installer. Keep your existing per-user data and `local_profile.json`; do not delete them to update. Native desktop updates use these installers—automatic in-place desktop updates are not provided. Back up your data before an upgrade. If you need to re-run setup, close the app and keep a backup of your profile before changing it.
+On Windows v1.2.1 or later, open **Settings → Desktop updates**, check for a release, download it, then choose **Update and restart**. For an older desktop version, run the new installer over the existing installation once; do not uninstall first. Profiles, tasks, settings and model connections remain in the existing per-user data folder. Native updates need a brief restart and download the full installer. macOS/Linux use their matching installer/package. Compatible UI-only updates keep the backend running. Keep a backup of your data.
 
 ## Connect a phone or another device
 
