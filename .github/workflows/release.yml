@@ -114,6 +114,13 @@ jobs:
           npm --prefix desktop run build -- --x64 --publish never
       - name: Exercise actual native installer setup and dashboard
         run: python scripts/smoke_native_installer.py '${{ matrix.platform }}'
+      - name: Preserve installer failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-failure-${{ matrix.platform }}
+          path: evidence/
+          retention-days: 3
       - name: Stage required installers, hashes, and evidence
         run: python scripts/release_artifacts.py stage --platform '${{ matrix.platform }}' --version 1.2.1 --commit '${{ github.sha }}'
       - uses: actions/upload-artifact@v4

@@ -47,9 +47,10 @@ with tempfile.TemporaryDirectory(prefix="kingdom-install-") as temporary:
             helper = """
 const {handoffScript}=require('./desktop/updates');
 const {spawn}=require('child_process');
+const fs=require('fs');
 const [installer,exe,digest,version,receipt]=process.argv.slice(1);
 const script=handoffScript(process.pid,installer,exe,digest,version,receipt);
-const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],{detached:true,windowsHide:true,stdio:'ignore'});
+const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],{detached:true,windowsHide:true,stdio:['ignore',fs.openSync(receipt+'.log','a'),fs.openSync(receipt+'.log','a')]});
 child.once('spawn',()=>{child.unref()});child.once('error',()=>process.exit(1));
 """
             subprocess.run(['node', '-e', helper, str(update_installer), str(app), sha(update_installer), version, str(receipt)], check=True, timeout=15)
@@ -63,7 +64,7 @@ child.once('spawn',()=>{child.unref()});child.once('error',()=>process.exit(1));
                 except (OSError, ValueError):
                     pass
                 time.sleep(1)
-            assert upgrade and upgrade.get('success') is True and upgrade.get('reopenedPID'), 'Native upgrade handoff failed'
+            assert upgrade and upgrade.get('success') is True and upgrade.get('reopenedPID'), f'Native upgrade handoff failed: {upgrade}'
             # This process belongs only to the isolated installer acceptance test.
             subprocess.run(['taskkill', '/PID', str(int(upgrade['reopenedPID'])), '/T', '/F'], check=True, timeout=15)
             assert not update_installer.exists(), 'Successful upgrade did not clean its download'
