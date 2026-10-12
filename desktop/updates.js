@@ -84,7 +84,7 @@ function launchHandoff(script, receipt) {
     const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(bootstrap, 'utf16le').toString('base64')], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     child.stdout.resume(); child.stderr.resume();
     child.once('error', reject);
-    child.once('close', code => code === 0 ? resolve() : reject(new Error('Could not start the update helper')));
+    child.once('exit', code => { child.stdout.destroy(); child.stderr.destroy(); code === 0 ? resolve() : reject(new Error('Could not start the update helper')); });
   });
 }
 class DesktopUpdates {

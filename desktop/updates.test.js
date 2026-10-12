@@ -43,3 +43,22 @@ test('handoff waits for shutdown, rechecks bytes, preserves data and verifies in
  assert.doesNotMatch(script,/Uninstall|Remove-Item.*-Recurse/);
  assert.throws(()=>handoffScript('42;bad','x','y','z','1.2.1','r'));
 });
+
+test('Windows helper survives its launcher and rejects a missing installer', {skip:process.platform!=='win32'}, async()=>{
+ const {spawn}=require('child_process');
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'kingdom-handoff-'));
+ const receipt=path.join(directory,'result.json');
+ try{
+  const moduleFile=path.resolve(__dirname,'updates.js');
+  const source="const {handoffScript,launchHandoff}=require(process.argv[1]);const path=require('path');const r=process.argv[2];launchHandoff(handoffScript(process.pid,path.join(path.dirname(r),'missing.exe'),path.join(path.dirname(r),'missing-app.exe'),'a'.repeat(64),'1.2.1',r),r).catch(()=>process.exit(1));";
+  await new Promise((resolve,reject)=>{
+   const child=spawn(process.execPath,['-e',source,moduleFile,receipt],{stdio:'ignore'});
+   const timeout=setTimeout(()=>{child.kill();reject(new Error('Launcher did not release helper'))},10000);
+   child.once('error',reject);child.once('exit',code=>{clearTimeout(timeout);code===0?resolve():reject(new Error('Launcher failed'))});
+  });
+  for(let attempt=0;attempt<50&&!fs.existsSync(receipt);attempt++)await new Promise(resolve=>setTimeout(resolve,100));
+  const result=JSON.parse(fs.readFileSync(receipt,'utf8').replace(/^\uFEFF/,''));
+  assert.equal(result.success,false);
+  assert.equal(result.reopenedPID,undefined);
+ }finally{fs.rmSync(directory,{recursive:true,force:true})}
+});
