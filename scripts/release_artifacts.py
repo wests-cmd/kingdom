@@ -80,6 +80,13 @@ def stage(platform, version, commit):
             raise RuntimeError("Dependency audit evidence incomplete")
         shutil.copy2(source, destination / f"{platform}-{kind}-evidence.json")
     shutil.copy2(Path("evidence/desktop.png"), destination / f"{platform}-desktop.png")
+    if tuple(map(int,version.split('.')[:3])) >= (1,2,1):
+        update_evidence = json.loads((destination/f'{platform}-desktop-evidence.json').read_text()).get('desktopUpdates',{})
+        if not update_evidence.get('bridgeAvailable') or not update_evidence.get('settingsAvailable'):
+            raise RuntimeError('Native update controls were not exercised')
+        if platform == 'windows' and not update_evidence.get('existingDataPreserved'):
+            raise RuntimeError('Windows in-place data retention was not verified')
+        shutil.copy2(Path('evidence/updates.png'),destination/f'{platform}-updates.png')
     if tuple(map(int,version.split('.')[:3])) >= (1,2,0):
         for name in ('mission-workspace','governance'):
             shutil.copy2(Path('evidence')/f'{name}.png',destination/f'{platform}-{name}.png')

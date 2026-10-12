@@ -7,6 +7,7 @@ import tempfile
 import hashlib
 import socket
 import time
+import json
 from validate_version import get_authoritative_version
 
 
@@ -28,6 +29,48 @@ with tempfile.TemporaryDirectory(prefix="kingdom-install-") as temporary:
             app = destination / "Kingdom.exe"
             assert sha(destination / "resources/bin/kingdom-backend.exe") == sha(root / "desktop/bin/kingdom-backend.exe")
             subprocess.run([str(app)], env=env, check=True, timeout=120)
+            # Reapply the real installer to the existing installation. User data
+            # must survive without a manual uninstall or a repeated setup wizard.
+            user_data = root / 'evidence/user-data'
+            profile = user_data / 'local_profile.json'
+            saved_profile = profile.read_bytes()
+            database = user_data / 'runtime/data/kingdom.db'
+            saved_database = sha(database)
+            marker = user_data / 'runtime/data/update-retention-proof.txt'
+            marker.write_text('retained owner data', encoding='utf-8')
+            # Exercise the same real PowerShell handoff used by the native updater.
+            # The helper waits for this short-lived Node process before installing.
+            update_installer = root / 'evidence/verified-upgrade.exe'
+            import shutil
+            shutil.copy2(installer, update_installer)
+            receipt = root / 'evidence/windows-upgrade.json'
+            helper = """
+const {handoffScript,launchHandoff}=require('./desktop/updates');
+const [installer,exe,digest,version,receipt]=process.argv.slice(1);
+launchHandoff(handoffScript(process.pid,installer,exe,digest,version,receipt),receipt).catch(()=>process.exit(1));
+"""
+            subprocess.run(['node', '-e', helper, str(update_installer), str(app), sha(update_installer), version, str(receipt)], check=True, timeout=15)
+            deadline = time.monotonic() + 150
+            upgrade = None
+            while time.monotonic() < deadline:
+                try:
+                    upgrade = json.loads(receipt.read_text(encoding='utf-8-sig'))
+                    if upgrade.get('reopenedPID'):
+                        break
+                except (OSError, ValueError):
+                    pass
+                time.sleep(1)
+            assert upgrade and upgrade.get('success') is True and upgrade.get('reopenedPID'), f'Native upgrade handoff failed: {upgrade}'
+            # This process belongs only to the isolated installer acceptance test.
+            subprocess.run(['taskkill', '/PID', str(int(upgrade['reopenedPID'])), '/T', '/F'], check=True, timeout=15)
+            assert not update_installer.exists(), 'Successful upgrade did not clean its download'
+            assert profile.read_bytes() == saved_profile and marker.read_text() == 'retained owner data'
+            assert sha(database) == saved_database, 'Windows upgrade changed the retained task database'
+            assert sha(destination / 'resources/bin/kingdom-backend.exe') == sha(root / 'desktop/bin/kingdom-backend.exe')
+            report_file = root / 'evidence/desktop.json'
+            report = json.loads(report_file.read_text())
+            report['desktopUpdates']['existingDataPreserved'] = True
+            report_file.write_text(json.dumps(report, indent=2))
         elif platform == "macos":
             subprocess.run(["hdiutil", "attach", "-nobrowse", "-readonly", "-mountpoint", str(destination),
                             str(root / f"desktop/dist/Kingdom-{version}.dmg")], check=True, timeout=120)

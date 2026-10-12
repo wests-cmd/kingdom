@@ -108,17 +108,33 @@ class AuditLogger:
         return list(reversed(filtered[-limit:]))
 
     def _sanitize_dict(self, data: dict[str, Any]) -> dict[str, Any]:
-        sanitized = {}
-        for key, value in data.items():
-            if any(term in key.lower() for term in ("key", "secret", "password", "token", "auth")):
-                sanitized[key] = "******"
-            elif isinstance(value, str):
-                sanitized[key] = self._sanitize_value(value)
-            elif isinstance(value, dict):
-                sanitized[key] = self._sanitize_dict(value)
-            else:
-                sanitized[key] = value
-        return sanitized
+        def sensitive(key):
+            return any(term in key.lower() for term in ("key", "secret", "password", "token", "auth"))
+
+        active = set()
+        def clean(value, depth=0):
+            if depth > 20:
+                return "[maximum audit depth]"
+            if isinstance(value, str):
+                return self._sanitize_value(value)
+            if isinstance(value, (dict, list, tuple, set)):
+                if id(value) in active:
+                    return "[circular audit data]"
+                active.add(id(value))
+                try:
+                    if isinstance(value, dict):
+                        return {self._sanitize_value(str(key)): "******" if sensitive(str(key)) else clean(item, depth + 1)
+                                for key, item in value.items()}
+                    # HTTP headers commonly use (name, value) pairs.
+                    if isinstance(value, (list, tuple)) and len(value) == 2 and isinstance(value[0], str) and sensitive(value[0]):
+                        return [self._sanitize_value(value[0]), "******"]
+                    return [clean(item, depth + 1) for item in value]
+                finally:
+                    active.remove(id(value))
+            if value is None or isinstance(value, (bool, int, float)):
+                return value
+            return self._sanitize_value(str(value))
+        return clean(data)
 
     def _sanitize_value(self, val: str) -> str:
         if not isinstance(val, str):

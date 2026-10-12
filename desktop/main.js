@@ -3,7 +3,7 @@
  * Manages native window creation, guided first-run setup, local FastAPI backend process lifecycle, and IPC bridge.
  */
 
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { startBackend, stopBackend, waitForBackendReady, getOwnerToken } = require('./launcher');
@@ -14,6 +14,7 @@ let setupWindow = null;
 
 const smokeReport = process.env.GITHUB_ACTIONS === 'true' && process.env.KINGDOM_RELEASE_SMOKE_REPORT;
 if (app && smokeReport) app.setPath('userData', path.join(path.dirname(smokeReport), 'user-data'));
+const desktopUpdates = app ? new (require('./updates').DesktopUpdates)(app) : null;
 
 const VALID_KNIGHTS = new Set(['planner', 'coder', 'researcher', 'memory', 'security']);
 
@@ -76,6 +77,24 @@ function loadSavedProfile() {
 }
 
 function setupIpcHandlers() {
+  const trustedUpdate = (event) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== event.sender.mainFrame ||
+        new URL(event.senderFrame.url).origin !== `http://127.0.0.1:${process.env.PORT || 8000}`) {
+      throw new Error('Untrusted update requester');
+    }
+  };
+  for (const operation of ['status', 'check', 'download']) {
+    ipcMain.handle(`updates:${operation}`, async event => { trustedUpdate(event); return desktopUpdates[operation](); });
+  }
+  ipcMain.handle('updates:install', async event => {
+    trustedUpdate(event);
+    const result = await dialog.showMessageBox(mainWindow, { type: 'question', buttons: ['Keep working', 'Update and restart'],
+      defaultId: 0, cancelId: 0, title: 'Update Kingdom',
+      message: 'Install the verified update and restart Kingdom?',
+      detail: 'The application files are replaced in place. Your profile, tasks, models and settings stay in their existing data folder. Running desktop tasks will stop during the restart.' });
+    if (result.response !== 1) return { cancelled: true };
+    return desktopUpdates.install();
+  });
   ipcMain.handle('auth:getSessionToken', (event) => {
     const origin = new URL(event.senderFrame.url).origin;
     if (origin !== `http://127.0.0.1:${process.env.PORT || 8000}`) throw new Error('Untrusted session requester');
@@ -129,7 +148,7 @@ async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
-    title: 'Kingdom — Distributed AI Runtime',
+    title: 'Kingdom â€” Distributed AI Runtime',
     backgroundColor: '#100e15',
     icon: path.join(app.isPackaged ? process.resourcesPath : __dirname, 'branding', 'kingdom-icon.png'),
     webPreferences: {
@@ -328,6 +347,16 @@ async function runReleaseSmoke(reportPath) {
   })()`);
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e => e.textContent === 'Settings').click()");
   await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('#appearance-mode')) && document.querySelector('.brand-mark')?.naturalWidth === 512"), 'packaged appearance settings and logo');
+  const updateStatus = await mainWindow.webContents.executeJavaScript('window.kingdomDesktop.updates.status()');
+  if (updateStatus.current !== app.getVersion()) throw new Error('Native update bridge version differs');
+  await until(() => mainWindow.webContents.executeJavaScript("document.body.textContent.includes('Check desktop updates') && document.body.textContent.includes('Installed version:')"), 'native desktop update controls');
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('section')).find(e=>e.querySelector('h2')?.textContent==='Desktop updates').scrollIntoView()");
+  fs.writeFileSync(path.join(path.dirname(reportPath),'updates.png'),(await mainWindow.webContents.capturePage()).toPNG());
+  const startupStatus = await mainWindow.webContents.executeJavaScript("fetch('/auth/local/status',{method:'POST',headers:{'X-Kingdom-Request':'1'}}).then(r=>r.json())");
+  if (startupStatus.passcode_enabled !== false) throw new Error('Passcode must be off by default');
+  await until(() => mainWindow.webContents.executeJavaScript("document.body.textContent.includes('Passcode is off') && document.body.textContent.includes('Turn on passcode')"), 'optional startup passcode controls');
+  report.startupAccess = {directDashboard:true,passcodeOffByDefault:true,optionalPasscodeSettings:true};
+  report.desktopUpdates = { bridgeAvailable: true, settingsAvailable: true, supported: updateStatus.supported };
   await mainWindow.webContents.executeJavaScript("(() => {const select=document.querySelector('#appearance-mode'); select.value='light'; select.dispatchEvent(new Event('change',{bubbles:true}));})()");
   await until(() => mainWindow.webContents.executeJavaScript("document.documentElement.dataset.theme === 'light'"), 'applied light mode');
   mainWindow.webContents.reload();

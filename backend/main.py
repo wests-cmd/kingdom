@@ -31,6 +31,8 @@ app.add_middleware(
 )
 
 app.include_router(router)
+from backend.security.local_access import router as local_access_router
+app.include_router(local_access_router)
 from backend.runtime.automation_api import router as automation_router
 app.include_router(automation_router)
 from backend.runtime.workspace_api import router as workspace_router

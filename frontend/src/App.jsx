@@ -38,13 +38,38 @@ function OwnerApp() {
   const [isConnected, setIsConnected] = useState(false)
   const [authorized, setAuthorized] = useState(false)
   const [accessCode, setCode] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [localAccess, setLocalAccess] = useState(false)
   const [error, setError] = useState("")
   useEffect(()=>{if(authorized)document.getElementById('main-content')?.focus()},[currentPage,authorized])
   const connect = async () => {
     try { await api.post("/auth/session"); setAuthorized(true); setError("") }
-    catch { setError("Enter the owner access code supplied by your Kingdom installation.") }
+    catch { setAccessCode(""); setError("That owner access code did not match.") }
   }
-  useEffect(() => { initializeSession().then(connect).catch(() => setError("Desktop authentication failed.")) }, [])
+  useEffect(() => {
+    async function open() {
+      try {
+        await api.post('/auth/session'); setAuthorized(true); return
+      } catch {}
+      try {
+        const {data} = await api.post('/auth/local/status')
+        setLocalAccess(true)
+        if (!data.passcode_enabled) {
+          await api.post('/auth/local/session', {passcode:''}); setAuthorized(true)
+        }
+      } catch (failure) {
+        // Older installations retain their existing desktop session bridge.
+        if (failure.response?.status === 404 && window.kingdomDesktop?.getSessionToken) {
+          await initializeSession(); await connect()
+        }
+      } finally { setLoading(false) }
+    }
+    open().finally(() => setLoading(false))
+  }, [])
+  const unlock = async () => {
+    try { await api.post('/auth/local/session', {passcode:accessCode}); setCode(''); setError(''); setAuthorized(true) }
+    catch (failure) { setError(failure.response?.status===429?'Too many attempts. Wait a minute and try again.':'That passcode did not match. Try again.') }
+  }
 
   useEffect(() => {
     if (!authorized) return
@@ -77,13 +102,20 @@ function OwnerApp() {
     }
   }
 
-  if (!authorized) return <main className="content"><h1>Connect to Kingdom</h1>
-    <p>Adding a phone or another device? <a href="/#/connect">Enter a device connection code</a>.</p>
-    <p>Desktop access is automatic. For a server, use the owner access code from the server's data/owner-token file or your administrator.</p>
-    <form onSubmit={e => { e.preventDefault(); setAccessCode(accessCode); connect() }}>
-      <label>Owner access code <input type="password" autoComplete="off" value={accessCode} onChange={e => setCode(e.target.value)} /></label>
-      <button type="submit">Connect</button>
-    </form>{error && <p role="alert">{error}</p>}<details><summary>Accessibility settings</summary><AccessibilitySettings /></details></main>
+  if (loading) return <main className="content"><p role="status">Opening KingdomÃ¢â‚¬Â¦</p></main>
+  if (!authorized && localAccess) return <main className="content"><h1>Welcome back</h1>
+    <p>Enter the passcode you chose for Kingdom.</p>
+    <form onSubmit={e=>{e.preventDefault();unlock()}}>
+      <label>Passcode <input autoFocus type="password" autoComplete="current-password" value={accessCode} onChange={e=>setCode(e.target.value)} /></label>
+      <button type="submit">Open Kingdom</button>
+    </form>{error && <p role="alert">{error}</p>}
+    <details><summary>Use owner recovery access</summary><p>Your installationÃ¢â‚¬â„¢s owner access code can restore access.</p><button onClick={()=>{setAccessCode(accessCode);connect()}}>Use entered code as owner access</button></details>
+    <details><summary>Accessibility settings</summary><AccessibilitySettings /></details></main>
+  if (!authorized) return <main className="content"><h1>Connect this device</h1>
+    <p><a href="/#/connect">Use a device connection code</a> from KingdomÃ¢â‚¬â„¢s main panel.</p>
+    <details><summary>Administrator access</summary><form onSubmit={e=>{e.preventDefault();setAccessCode(accessCode);connect()}}>
+      <label>Owner access code <input type="password" autoComplete="off" value={accessCode} onChange={e=>setCode(e.target.value)} /></label><button type="submit">Connect</button>
+    </form></details>{error && <p role="alert">{error}</p>}</main>
   return (
     <div className="layout">
       <a className="skip-link" href="#main-content">Skip to main content</a>
