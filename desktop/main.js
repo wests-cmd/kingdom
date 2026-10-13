@@ -282,6 +282,14 @@ async function runReleaseSmoke(reportPath) {
   await setupWindow.webContents.executeJavaScript(`void window.kingdomDesktop.saveProfile({
     name: 'Developer', gui: true, knights: ['planner', 'coder', 'security']
   }).catch(console.error)`);
+  async function capture(filename) {
+    try {
+      fs.writeFileSync(filename, (await mainWindow.webContents.capturePage()).toPNG());
+    } catch (error) {
+      if (!String(error.message).includes('Current display surface not available')) throw error;
+      report.captureUnavailable = 'Windows has no display surface available for screenshots';
+    }
+  }
   await until(async () => mainWindow && !mainWindow.webContents.isLoading()
     && mainWindow.webContents.getURL().startsWith('http://127.0.0.1')
     && await mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('#root')?.children.length)"), 'rendered dashboard');
@@ -310,7 +318,7 @@ async function runReleaseSmoke(reportPath) {
       return {answers,basicInstructionCheck:answers.map(text=>JSON.stringify((text.match(/\\b\\d+\\b/g)||[]).map(Number))===JSON.stringify(Array.from({length:15},(_,i)=>i+1)))};
     })()`);
     report.parallelChats.activeComputers=active.map(item=>item.profile);
-    fs.writeFileSync(path.join(path.dirname(reportPath),'parallel-chats.png'),(await mainWindow.webContents.capturePage()).toPNG());
+    await capture(path.join(path.dirname(reportPath),'parallel-chats.png'));
   }
   await mainWindow.webContents.executeJavaScript("(() => {const select=document.querySelector('.task-form select');select.value='text.analyze@1.0.0';select.dispatchEvent(new Event('change',{bubbles:true}));})()");
   await mainWindow.webContents.executeJavaScript(`(() => {
@@ -343,10 +351,10 @@ async function runReleaseSmoke(reportPath) {
   await until(() => mainWindow.webContents.executeJavaScript("fetch('/missions').then(r=>r.json()).then(items=>items.some(item=>item.plan.title==='Native mission'&&item.status==='completed'))"), 'verified native mission');
   report.missionWorkspace.missionVerified = true;
   fs.mkdirSync(path.dirname(reportPath), {recursive:true});
-  fs.writeFileSync(path.join(path.dirname(reportPath),'mission-workspace.png'),(await mainWindow.webContents.capturePage()).toPNG());
+  await capture(path.join(path.dirname(reportPath),'mission-workspace.png'));
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e=>e.textContent==='Governance').click()");
   await until(() => mainWindow.webContents.executeJavaScript("document.querySelectorAll('input[name=autonomy]').length===6 && document.body.textContent.includes('Computer control')"), 'five levels and computer grants in native UI');
-  fs.writeFileSync(path.join(path.dirname(reportPath),'governance.png'),(await mainWindow.webContents.capturePage()).toPNG());
+  await capture(path.join(path.dirname(reportPath),'governance.png'));
   await mainWindow.webContents.executeJavaScript("fetch('/runtime/policy',{method:'PUT',headers:{'X-Kingdom-Request':'1','Content-Type':'application/json'},body:JSON.stringify({level:3})}).then(r=>{if(!r.ok)throw new Error('Policy restore failed')})");
   report.portableMaps = await mainWindow.webContents.executeJavaScript(`(async () => {
     async function request(url, body) {
@@ -370,7 +378,7 @@ async function runReleaseSmoke(reportPath) {
   if (updateStatus.current !== app.getVersion()) throw new Error('Native update bridge version differs');
   await until(() => mainWindow.webContents.executeJavaScript("document.body.textContent.includes('Check desktop updates') && document.body.textContent.includes('Installed version:')"), 'native desktop update controls');
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('section')).find(e=>e.querySelector('h2')?.textContent==='Desktop updates').scrollIntoView()");
-  fs.writeFileSync(path.join(path.dirname(reportPath),'updates.png'),(await mainWindow.webContents.capturePage()).toPNG());
+  await capture(path.join(path.dirname(reportPath),'updates.png'));
   const startupStatus = await mainWindow.webContents.executeJavaScript("fetch('/auth/local/status',{method:'POST',headers:{'X-Kingdom-Request':'1'}}).then(r=>r.json())");
   if (startupStatus.passcode_enabled !== false) throw new Error('Passcode must be off by default');
   await until(() => mainWindow.webContents.executeJavaScript("document.body.textContent.includes('Passcode is off') && document.body.textContent.includes('Turn on passcode')"), 'optional startup passcode controls');
@@ -406,7 +414,7 @@ async function runReleaseSmoke(reportPath) {
   report.arch = process.arch;
   fs.mkdirSync(path.dirname(reportPath), {recursive: true});
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
-  fs.writeFileSync(reportPath.replace(/\.json$/, '.png'), (await mainWindow.webContents.capturePage()).toPNG());
+  await capture(reportPath.replace(/\.json$/, '.png'));
   await mainWindow.webContents.executeJavaScript("fetch('/stop', {method: 'POST', headers: {'X-Kingdom-Request': '1'}}).then(r => {if (!r.ok) throw new Error('Runtime stop failed'); return r.json()})");
   await until(() => mainWindow.webContents.executeJavaScript("fetch('/status').then(r => r.json()).then(s => !s.running && !s.scheduler_running)"), 'stopped scheduler');
   report.runtimeStopped = true;
