@@ -43,4 +43,3 @@ Use a user service or another supervised process. A user service may require log
 ## Validation
 
 Automated tests use actual local HTTP servers to verify two-server concurrency, same-server serialization across service instances, cancellation/failure cleanup, bounded busy waits, vision filtering, authenticated SSE/tool forwarding and rejected invalid certificate/configuration inputs. Live hardware verification is separate: record the actual models, simultaneous in-flight requests, latency and answer quality. Successful routing is not a model-quality certification.
-
