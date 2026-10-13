@@ -3,19 +3,26 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import shutil
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 class ServiceNode(BaseModel):
     model_config = ConfigDict(extra='forbid')
     name: str = Field(min_length=1,max_length=100)
-    ssh_executable: str
-    destination: str = Field(pattern=r'^[a-z_][a-z0-9_-]*@[a-zA-Z0-9][a-zA-Z0-9.-]{0,252}$')
-    identity_file: str
+    mode: Literal['ssh','local'] = 'ssh'
+    ssh_executable: str = ''
+    destination: str = ''
+    identity_file: str = ''
     units: list[str] = Field(min_length=1,max_length=30)
 
 def validate(node):
-    for path in (node.ssh_executable,node.identity_file):
-        if not Path(path).is_absolute() or not Path(path).is_file(): raise ValueError('Use installed SSH and key files by absolute path')
+    if node.mode=='local':
+        if not shutil.which('systemctl'):raise ValueError('Local service control requires systemd')
+    else:
+        if not re.fullmatch(r'[a-z_][a-z0-9_-]*@[a-zA-Z0-9][a-zA-Z0-9.-]{0,252}',node.destination):raise ValueError('Use a user@hostname SSH destination')
+        for path in (node.ssh_executable,node.identity_file):
+            if not Path(path).is_absolute() or not Path(path).is_file(): raise ValueError('Use installed SSH and key files by absolute path')
     if any(not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.@-]{0,120}\.service',unit) for unit in node.units):
         raise ValueError('Use explicit systemd service names')
     return node
@@ -45,6 +52,9 @@ class ServiceNodes:
 
     @staticmethod
     def command(node,action,units):
+        if node.mode=='local':
+            import shlex
+            return [shutil.which('systemctl'),'--user',*shlex.split(action),*units]
         # Units are validated and allowlisted, so remote shell parsing cannot introduce new commands.
         return [node.ssh_executable,'-i',node.identity_file,'-o','BatchMode=yes','-o','StrictHostKeyChecking=yes',
                 '-o','ConnectTimeout=8',node.destination,'systemctl --user '+action+' '+' '.join(units)]

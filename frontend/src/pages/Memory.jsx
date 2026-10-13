@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react"
 import api from "../api"
 import useLiveData from "../hooks/useLiveData"
+import KnowledgeSources from "../components/KnowledgeSources"
 
 
 export default function Memory() {
@@ -20,6 +21,7 @@ export default function Memory() {
 
   return (
     <div>
+      <KnowledgeSources/>
       <h2>Persistent Memory</h2>
       {(error || saveError) && <p role="alert">{error || saveError}</p>}
 

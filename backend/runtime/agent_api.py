@@ -24,6 +24,15 @@ class CreateSession(BaseModel):
     max_turns: int = Field(default=12, ge=1, le=32)
     allow_process: bool = False
     skill_ids: list[str] = Field(default_factory=list,max_length=8)
+    workspace: str = Field(default='.',max_length=300)
+    knowledge_scope: str | None = Field(default=None,max_length=100)
+    embedding_profile: str | None = Field(default=None,max_length=64)
+    use_owner_memory: bool = False
+
+class RunSession(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    max_turns: int = Field(default=2,ge=1,le=4)
+    max_seconds: int = Field(default=300,ge=5,le=600)
 
 
 @router.get('')
@@ -61,3 +70,8 @@ def cancel(ident: str):
         return service().cancel(ident)
     except KeyError as error:
         raise HTTPException(404, 'Agent session not found') from error
+
+@router.post('/{ident}/run')
+async def run(ident: str, request: RunSession):
+    try: return await service().run(ident,request.max_turns,request.max_seconds)
+    except KeyError as error: raise HTTPException(404,'Agent session not found') from error

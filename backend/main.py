@@ -62,6 +62,14 @@ app.include_router(harness_router)
 app.include_router(agent_router)
 from backend.runtime.service_api import router as service_router
 app.include_router(service_router)
+from backend.memory.knowledge_api import router as knowledge_router, initialize as initialize_knowledge
+from backend.storage.db import db as knowledge_db
+initialize_knowledge(knowledge_db)
+app.include_router(knowledge_router)
+from backend.runtime.tool_workshop_api import router as tool_workshop_router
+from backend.runtime.model_lab_api import router as model_lab_router
+app.include_router(tool_workshop_router)
+app.include_router(model_lab_router)
 
 # Serve built frontend static assets if available
 frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")

@@ -173,3 +173,19 @@ def test_selected_skill_is_inert_owner_scoped_reference(setup):
     assert 'UNTRUSTED SKILL' in state['messages'][-1]['content']
     assert not engine.records
     with pytest.raises(ValueError):service.create('Inspect','local',skill_ids=['foreign'])
+
+@pytest.mark.asyncio
+async def test_project_paths_are_scoped_and_run_stops_at_approval(setup):
+    service,engine,db=setup([reply(calls=[call('workspace_write',{'path':'hello.txt','content':'hello'})])])
+    state=service.create('Write hello','local',workspace='projects/example')
+    state=await service.run(state['id'],2,5)
+    assert state['status']=='waiting_tools'
+    task=engine.records[state['pending'][0]['task_id']]
+    assert task['metadata']['tool_parameters']['path'].replace('\\','/')=='projects/example/hello.txt'
+    assert len(engine.requests)==1
+
+@pytest.mark.asyncio
+async def test_run_completes_plain_reply_within_budget(setup):
+    service,engine,db=setup([reply('Done')])
+    state=service.create('Answer','local')
+    assert (await service.run(state['id'],1,5))['status']=='completed'

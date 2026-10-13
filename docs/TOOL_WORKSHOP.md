@@ -1,0 +1,14 @@
+# Governed tool workshop
+
+The owner-only `/tool-workshop` API prepares local CLI tools without turning a Discord upload into executable authority. Discovery searches configured harness connections and retained tool proposals. It does not scrape registries or download packages automatically.
+
+1. `GET /tool-workshop/discover?query=...` checks existing tools first.
+2. `POST /tool-workshop` stages a proposal: name, objective, source, UTF-8 `files`, dependency pins, exact `build` and `test` argv recipes, and a `connection` compatible with HarnessConfig. Files are limited to 32 and 512 KiB. Dependencies require name, exact version, source and SHA256. The declarations are provenance for owner review; they do not prove that an arbitrary command obeys those pins. Use hash-verifying package-manager flags in reviewed install recipes.
+3. `POST /{id}/review` with the proposal checksum records explicit owner review of source hashes, dependency declarations and command snapshots. No processes start during submission or review.
+4. `POST /{id}/advance` submits exactly one build or test through existing `process.run` tasks. Existing capability grants and exact command approval still apply. Repeating advance while waiting only checks retained evidence. After build evidence is collected, another advance explicitly submits the test.
+5. Both stages need independent VERIFIED execution receipts and exit code zero. Failed, blocked, cancelled, missing or unverifiable tasks cannot become ready. Output and task identifiers remain attached to the proposal. Successful tests mean only the selected commands passed, not general safety or correctness.
+6. `POST /{id}/register` with checksum and a new `connection_id` explicitly registers a ready CLI through HarnessService. Source files, recipe executables and all retained staging artifacts must still match their hashes. No existing connection is overwritten. The resulting CLI still uses ordinary governed harness jobs.
+
+`POST /{id}/disable` stops future preparation and cancels queued approvals when possible. Running host processes may finish. Registered connections have their own management lifecycle; disabling a recipe does not revoke them. Staging uses `tool-workshop/<id>` under KINGDOM_WORKSPACE. Connection arguments may use `{staging}` or `{staging}/relative-file` to locate staged content, plus the existing standalone `{prompt}` and `{workspace}` placeholders.
+
+Recipes run as host processes, not an OS sandbox. Review scripts, network actions, dependency lockfiles and permissions before approving. Source checks happen at review/dispatch/registration; they cannot prevent a privileged external process from modifying files during execution. Credentials belong in existing credential stores, never staged sources or arguments. Runtime state and evidence persist in SQLite; the workspace must be backed up with that database.

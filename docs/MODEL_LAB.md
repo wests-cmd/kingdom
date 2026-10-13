@@ -1,0 +1,15 @@
+# Optional model preparation
+
+Kingdom's owner-only `/model-lab` API records optional Heretic, fine-tuning and custom preparation jobs. It uses real `harness.run` tasks and the existing exact process approval boundary. It does not install trainers or download model weights automatically. RAG, embeddings, fine-tuning and abliteration are separate operations; none guarantees stronger reasoning.
+
+Create a job with an installed executable, base model, new workspace-relative output directory, resource requirements, dataset provenance and a rollback model-profile reference. Fine-tuning requires dataset provenance; local dataset files must match their SHA-256 hashes. Custom trainer arguments require standalone `{base_model}` and `{output}` placeholders. These are owner-configured commands, not a claimed universal training format or an OS sandbox.
+
+`POST /model-lab/{id}/start` probes available RAM, disk and NVIDIA VRAM before submitting anything. Unknown GPU readiness fails the GPU requirement. Defaults are conservative planning thresholds, not assurances that a particular model fits. A CPU-only 4 GB laptop cannot satisfy the default preparation profile. This implementation dispatches preparation on the Kingdom host; remote GPU training requires a separately installed and tested worker adapter. The existing 1800-second process budget applies; larger training jobs require a future durable trainer adapter.
+
+Heretic's installed command can be discovered with `GET /model-lab`. The recipe uses `--model`, `--trial-index 0`, `--model-action save`, `--save-directory`, `--export-strategy merge` and `--checkpoint-action continue`. These options were checked against the [upstream settings](https://github.com/p-e-w/heretic/blob/master/src/heretic/config.py); see the [upstream usage and hardware guidance](https://github.com/p-e-w/heretic#usage). Review your installed version's help before approving execution. Heretic can fetch both models and evaluation datasets, so explicit download authorization is required. No upload flag is added.
+
+After the governed task succeeds, `POST /model-lab/{id}/refresh` verifies a model directory containing `config.json` and nonempty `.safetensors`, `.bin` or `.gguf` weights. File hashes form the artifact identity. Successful process exit alone never marks a model complete or promotes it.
+
+Submit a separately approved evaluator with `POST /model-lab/{id}/evaluate` and an exact `argv` plus new `report_path`. The evaluator must produce JSON containing `passed: true`, the exact `base_model`, `artifact_sha256` from the job, and a nonempty `metrics` object. The evaluator's own methodology remains reviewable owner responsibility. Refresh accepts the report only after a verified successful evaluator task and unchanged artifact hashes.
+
+`POST /model-lab/{id}/promote` records an evaluated candidate in the job registry. It does not silently replace a serving connection. Configure and test a model-serving profile separately. `/rollback` withdraws the candidate and retains its prior-profile reference and evidence; since promotion did not alter serving connections, withdrawal does not restart or reconfigure models.

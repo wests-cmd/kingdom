@@ -10,10 +10,18 @@ Kingdom is an extensible harness for models and agents. Model weights, an agent 
 - **Portable skills:** SKILL.md preview/confirmation/export, provenance and digests. Documents are untrusted instructions, not executable installers or permission grants. The original preferences-only skill map remains compatible. know-it-all AI supports reviewed imports/exports.
 - **Service computers:** explicit SSH service inventory and allowlisted systemd actions, queued through exact process approvals. Existing services remain in their original supervised deployment; registration does not claim migration.
 
-## Next phases and acceptance gates
+## October 13 checkpoint
 
-1. **Agent reliability:** benchmark actual tool calls, edits, tests and recovery on several model sizes. Add budget-aware automatic continuation and per-project workspace selection. Acceptance: a real multi-file coding task with reviewed changes, passing tests, restart recovery and no duplicate actions.
-2. **Knowledge:** approved ingestion from chosen Discord channels and files; source identity, access scope, deletion and citations. Existing lexical memory retrieval must not be called vector RAG. Add a real embedding-provider interface and persisted similarity search. Acceptance: measured retrieval quality and isolation across users/projects.
+Implemented in source: per-project agent workspaces, bounded automatic continuation, opt-in owner memory, actual embedding-backed retrieval with citations and deletion, reviewed Discord JSON ingestion with provenance and duplicate suppression, governed tool build/test recipes, and optional model preparation/evaluation/artifact registries. Tool recipes do not provide operating-system isolation. Model promotion records a candidate; it does not switch inference profiles automatically.
+
+Laptop 2 runs the source harness behind private Tailscale HTTPS. Its deployed revision predates the final Discord import/provenance and default-model-selection changes. Real local embeddings and an approved tool build/test passed there. Windows retains its previous running desktop version because Application Control rejected the new backend executable. No policy bypass was attempted.
+
+The latest live native-agent smoke check stopped in needs_review before a tool call; the proposed multi-file coding check therefore did not run. Earlier successful tool calls do not establish coding reliability. No fine-tuning or Heretic conversion has run.
+
+## Remaining acceptance gates
+
+1. **Agent reliability:** diagnose the failed live tool-call check and benchmark edits, tests and recovery on several model sizes. Acceptance: a real multi-file coding task with reviewed changes, passing tests, restart recovery and no duplicate actions.
+2. **Knowledge:** connect approved live Discord channel fetching; evaluate retrieval quality, permission isolation and embedding-model version changes. Current Discord ingestion uses explicitly supplied exports, not automatic channel synchronization.
 3. **Tool discovery and building:** discover metadata, resolve pinned packages, show licenses/source hashes, build in isolation and run functional tests. Only activate after owner-approved capability grants. Discord text cannot silently install arbitrary code. Acceptance: install/revoke a real reviewed tool and reject a malicious package/reference.
 4. **Model lifecycle:** isolated dataset/export, optional fine-tuning jobs, evaluation, versioned model artifacts and rollback. Add optional Heretic jobs only for supported weight formats and available hardware. Heretic is model modification, not retrieval or an intelligence upgrade. Upstream: https://github.com/p-e-w/heretic . It requires Python/PyTorch; no local training or Heretic conversion has been demonstrated by this release.
 5. **Distributed execution:** signed remote tool jobs with scoped credentials, resource reservations, cancellation and independent results. Current model offload is real; current host tools are not automatically remote. Acceptance: a remotely executed build with verified artifacts and disconnect recovery.
