@@ -48,8 +48,9 @@ export default function ConnectDevice() {
     finally { setBusy(false) }
   }
   return <main className="connect-page">
-    <h1>Connect this device to Kingdom</h1>
-    <p>Scan the QR code from Kingdom or enter its single-use connection code here. Your owner access code is never needed on this page.</p>
+    <h1>Join an existing Kingdom</h1>
+    <p>Ask its owner for a QR code or single-use connection code. The owner must approve your request. Your owner access code is never needed on this page.</p>
+    <p>Want your own independent Kingdom? <a href="https://github.com/wests-cmd/kingdom/releases/latest">Download Kingdom for your computer</a>. Your own installation opens without someone else's code.</p>
     {!session && <form onSubmit={pair} style={{ display: 'grid', gap: 16 }}>
       <label>Connection code <input aria-label="Connection code" value={code} onChange={e => setCode(e.target.value)} required maxLength={64} autoComplete="off" style={{ width: '100%', padding: 12 }} /></label>
       <label>Device name <input aria-label="Device name" value={name} onChange={e => setName(e.target.value)} required maxLength={100} style={{ width: '100%', padding: 12 }} /></label>

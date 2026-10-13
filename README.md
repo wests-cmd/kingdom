@@ -27,7 +27,9 @@ Choose **one** installer that matches your computer. These are the published v1.
 
 **Check your download:** [SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.2.1/SHA256SUMS) and [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.2.1/release-manifest.json) list the exact files and hashes. The [release page](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.1) also contains native startup evidence and screenshots. Choose an installer above rather than GitHub's “Source code” archive or a standalone backend file.
 
-Kingdom opens directly to the main panel on its own computer. An optional passcode is **off by default**. To use one, open **Settings → Opening Kingdom** and choose and confirm your own passcode. Other devices still need a connection code.
+**Your download is your own Kingdom.** Each fresh installation creates its own identity, security keys and local data. It does not connect to the developer's computer or require a code from anyone else. Kingdom is free to download and use under the [license](LICENSE); model providers may charge for their services.
+
+Kingdom opens directly to the main panel on its own computer. An optional passcode is **off by default**. To use one, open **Settings → Opening Kingdom** and choose and confirm your own passcode. Connecting to somebody else's Kingdom requires their invitation and approval; installing your own Kingdom does not grant access to theirs.
 
 ## Your first five minutes
 

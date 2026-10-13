@@ -161,7 +161,7 @@ def test_cluster_subsystems_wiring():
 
     topo_sync = TopologySync()
     topo = topo_sync.sync()
-    assert topo["commander"] == "KG-MASTER-01"
+    assert topo["commander"] == KingdomIdentity.get_or_create().node_id
     assert len(topo["knights"]) > 0
 
 def test_full_node_lifecycle_and_unauthorized_capability_denial():

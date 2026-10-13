@@ -1,6 +1,7 @@
 import os
 import hashlib
 import json
+from uuid import uuid4
 from typing import Dict, Any, Optional
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
@@ -93,8 +94,10 @@ class BaseNodeIdentity:
 
 
 class KingdomIdentity(BaseNodeIdentity):
-    def __init__(self, kingdom_id: str = "KG-MASTER-01", display_name: str = "Kingdom Commander", private_key: Optional[ed25519.Ed25519PrivateKey] = None):
-        super().__init__(node_id=kingdom_id, node_type="commander", private_key=private_key, display_name=display_name)
+    def __init__(self, kingdom_id: Optional[str] = None, display_name: str = "Kingdom Commander", private_key: Optional[ed25519.Ed25519PrivateKey] = None):
+        # Fresh installations are independent; loading a saved identity preserves
+        # its ID and key, including older installations with the original ID.
+        super().__init__(node_id=kingdom_id or f"KG-{uuid4().hex.upper()}", node_type="commander", private_key=private_key, display_name=display_name)
 
     @classmethod
     def get_or_create(cls, filepath: Optional[str] = None) -> "KingdomIdentity":
