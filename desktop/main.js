@@ -286,7 +286,7 @@ async function runReleaseSmoke(reportPath) {
     try {
       fs.writeFileSync(filename, (await mainWindow.webContents.capturePage()).toPNG());
     } catch (error) {
-      if (!String(error.message).includes('Current display surface not available')) throw error;
+      if (!['Current display surface not available', 'UnknownVizError'].some(message => String(error.message).includes(message))) throw error;
       report.captureUnavailable = 'Windows has no display surface available for screenshots';
     }
   }
