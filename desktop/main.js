@@ -262,7 +262,7 @@ if (app) {
 }
 
 async function runReleaseSmoke(reportPath) {
-  const deadline = Date.now() + 90000;
+  const deadline = Date.now() + (process.env.KINGDOM_LIVE_MODEL_SMOKE === '1' ? 480000 : 90000);
   async function until(check, description) {
     while (Date.now() < deadline) {
       const result = await check();
@@ -293,13 +293,32 @@ async function runReleaseSmoke(reportPath) {
   await until(() => mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.card-value')).some(e => e.textContent === 'ACTIVE')"), 'live runtime dashboard');
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e => e.textContent === 'Tasks').click()");
   await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('textarea[aria-label=\"Task description\"]'))"), 'task submission form');
+  if (process.env.KINGDOM_LIVE_MODEL_SMOKE === '1') {
+    await until(() => mainWindow.webContents.executeJavaScript("document.querySelector('[aria-label=\"Chat 1\"] select')?.value === 'this-pc' && document.querySelector('[aria-label=\"Chat 2\"] select')?.value === 'laptop3'"), 'configured native chat computers');
+    await mainWindow.webContents.executeJavaScript(`(() => {
+      for (const id of ['model-chat-0','model-chat-1']) {
+        const input=document.getElementById(id);
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'Return exactly the comma-separated integers from 1 to 15. No explanation.');
+        input.dispatchEvent(new Event('input',{bubbles:true}));
+      }
+    })()`);
+    await mainWindow.webContents.executeJavaScript("document.querySelector('[aria-label=\"Chat 1\"] form').requestSubmit(); document.querySelector('[aria-label=\"Chat 2\"] form').requestSubmit();");
+    const active = await until(() => mainWindow.webContents.executeJavaScript("fetch('/workspace/model-profiles').then(r=>r.json()).then(data=>{const active=data.capacity.filter(p=>p.active===1);return active.length>=2?active:false})"), 'two native model chats running concurrently');
+    await until(() => mainWindow.webContents.executeJavaScript("(() => {const error=Array.from(document.querySelectorAll('[aria-label^=\"Chat \"] [role=\"alert\"]')).find(e=>e.textContent);if(error)throw new Error(error.textContent);return document.body.textContent.includes('Last reply from this-pc') && document.body.textContent.includes('Last reply from laptop3')})()"), 'both native chat replies');
+    report.parallelChats = await mainWindow.webContents.executeJavaScript(`(() => {
+      const answers = [1,2].map(n=>Array.from(document.querySelectorAll('[aria-label="Chat '+n+'"] pre')).at(-1)?.textContent||'');
+      return {answers,basicInstructionCheck:answers.map(text=>JSON.stringify((text.match(/\\b\\d+\\b/g)||[]).map(Number))===JSON.stringify(Array.from({length:15},(_,i)=>i+1)))};
+    })()`);
+    report.parallelChats.activeComputers=active.map(item=>item.profile);
+    fs.writeFileSync(path.join(path.dirname(reportPath),'parallel-chats.png'),(await mainWindow.webContents.capturePage()).toPNG());
+  }
   await mainWindow.webContents.executeJavaScript("(() => {const select=document.querySelector('.task-form select');select.value='text.analyze@1.0.0';select.dispatchEvent(new Event('change',{bubbles:true}));})()");
   await mainWindow.webContents.executeJavaScript(`(() => {
     const input = document.querySelector('textarea[aria-label="Task description"]');
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, 'native release verification');
     input.dispatchEvent(new Event('input', {bubbles:true}));
   })()`);
-  await mainWindow.webContents.executeJavaScript("document.querySelector('main.content form').requestSubmit()");
+  await mainWindow.webContents.executeJavaScript("document.querySelector('.task-form').requestSubmit()");
   const verifiedTask = await until(() => mainWindow.webContents.executeJavaScript("fetch('/tasks').then(r => r.json()).then(tasks => tasks.find(t => t.prompt === 'native release verification' && t.status === 'completed'))"), 'real verified native task');
   if (verifiedTask.result.results[0].outcome.output.words !== 3 || verifiedTask.result.results[0].verification.state !== 'VERIFIED') throw new Error('Native task outcome verification failed');
   report.taskExecuted = {taskId: verifiedTask.id, words: 3, verification: 'VERIFIED'};

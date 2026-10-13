@@ -9,6 +9,7 @@ import TaskResult, {DebugDetails, scrubText} from '../components/common/TaskResu
 import {workerLabel} from '../components/common/presentation'
 import MissionEditor from '../components/MissionEditor'
 import DesktopActions from '../components/DesktopActions'
+import ParallelChats from '../components/ParallelChats'
 
 export default function Tasks() {
 
@@ -140,6 +141,7 @@ export default function Tasks() {
 
       {loadError && <p role="alert">{loadError}</p>}
 
+      <ParallelChats/>
       <form className="task-form" onSubmit={handleCreateTask} style={{ marginBottom: "24px" }}>
 
         <label>Task <select value={taskMode} onChange={e => setTaskMode(e.target.value)}><option value="mission">Build a complete mission (review first)</option><option value="text.analyze@1.0.0">Analyze text</option><option value="code.python.analyze@1.0.0">Check Python syntax</option><option value="">Ask your configured AI</option></select></label>
@@ -168,7 +170,7 @@ export default function Tasks() {
 
         {attachments.map(item=><p key={item.id}>{item.filename} · {Math.round(item.bytes/1024)} KB · stored {Math.round(item.stored_bytes/1024)} KB <button type="button" onClick={()=>setAttachments(old=>old.filter(x=>x.id!==item.id))}>Remove from task</button>{item.kind==='image' && ' · Select a vision model to inspect its contents.'}{item.kind==='pdf'&&!item.text_extracted&&' · No text detected; OCR has not been performed.'}</p>)}
 
-        <label>Model <select value={modelProfile} onChange={e=>setModelProfile(e.target.value)}><option value="">Installation default</option>{profiles.map(p=><option key={p.id} value={p.id}>{p.id} · {p.model}{p.vision?' · vision':''}</option>)}</select></label>
+        <label>Model <select value={modelProfile} onChange={e=>setModelProfile(e.target.value)}><option value="">Installation default</option>{[...new Set(profiles.map(p=>p.pool_group).filter(Boolean))].map(group=><option key={`pool:${group}`} value={`pool:${group}`}>Pool {group} · choose available computer</option>)}{profiles.map(p=><option key={p.id} value={p.id}>{p.id} · {p.model}{p.vision?' · vision':''}</option>)}</select></label>
 
         <label><input type="checkbox" checked={offload} onChange={e=>setOffload(e.target.checked)}/>At level 5, offload supported analysis to a healthy paired computer</label>
 
