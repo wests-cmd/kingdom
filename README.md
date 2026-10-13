@@ -1,5 +1,9 @@
 # Kingdom
 
+This development branch adds an **Agent workbench** for saved tool conversations and installed CLI connections. These additions are not yet part of the stable release below. **Tasks → Two model chats** provides lightweight parallel chat with selected model computers.
+
+[Harness capabilities and roadmap](docs/HARNESS_ROADMAP.md) · [Portable SKILL.md](docs/PORTABLE_SKILLS.md) · [Model computers](docs/MODEL_OFFLOADING.md)
+
 <img src="frontend/public/branding/kingdom-icon.png" alt="Kingdom crowned K" width="72">
 
 A desktop command center for local workers, governed tasks and persistent knowledge. Start with the installer for your computer; **Python and Node.js are included, so you do not need to install them separately.**

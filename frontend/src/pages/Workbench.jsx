@@ -1,0 +1,64 @@
+import React,{useState} from 'react'
+import api from '../api'
+import useLiveData from '../hooks/useLiveData'
+
+export default function Workbench(){
+ const {data:sessions,refresh}=useLiveData('/agent-sessions',5000)
+ const {data:models}=useLiveData('/workspace/model-profiles',10000)
+ const {data:harnesses,refresh:refreshHarnesses}=useLiveData('/harnesses',10000)
+ const {data:nodes}=useLiveData('/service-nodes',10000)
+ const {data:skills}=useLiveData('/skill-documents',10000)
+ const [skillIds,setSkillIds]=useState([])
+ const [observed,setObserved]=useState({})
+ const [objective,setObjective]=useState(''),[profile,setProfile]=useState('this-pc'),[allowProcess,setAllowProcess]=useState(false)
+ const [selected,setSelected]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState('')
+ const [connection,setConnection]=useState({id:'',name:'',kind:'custom-cli',argv:'["/absolute/path/to/agent", "{prompt}"]',environment:'{}',timeout_seconds:600})
+ const [harness,setHarness]=useState(''),[job,setJob]=useState(''),[cwd,setCwd]=useState('.'),[task,setTask]=useState(null)
+ const perform=async fn=>{setBusy(true);setError('');try{await fn()}catch(e){setError(typeof e.response?.data?.detail==='string'?e.response.data.detail:e.message)}finally{setBusy(false)}}
+ const current=(sessions||[]).find(s=>s.id===selected?.id)||selected
+ return <div className="page"><h1>Agent workbench</h1>
+  <p>Give a model a job with real workspace tools, or hand the job to an installed agent such as Hermes or Claude. You keep control of permissions and approvals.</p>
+  {error&&<p role="alert">{error}</p>}
+  <section className="panel"><h2>Work with a model</h2>
+   <p>Conversations and tool evidence are saved. Model inference runs on your selected computer; workspace tools run on the Kingdom host.</p>
+   <form onSubmit={e=>{e.preventDefault();perform(async()=>{const {data}=await api.post('/agent-sessions',{objective,model_profile:profile,max_turns:12,allow_process:allowProcess,skill_ids:skillIds});setSelected(data);refresh()})}}>
+    <label>Model computer<select value={profile} onChange={e=>setProfile(e.target.value)}>{(models?.profiles||[]).map(p=><option key={p.id} value={p.id}>{p.id} · {p.model}</option>)}{(models?.pools||[]).map(p=><option key={p} value={`pool:${p}`}>Pool {p}</option>)}</select></label>
+    <label>What should it do?<textarea required rows={5} maxLength={24000} value={objective} onChange={e=>setObjective(e.target.value)} placeholder="Inspect the workspace and implement a small change. Run checks and report what actually passed."/></label>
+    <label><input type="checkbox" checked={allowProcess} onChange={e=>setAllowProcess(e.target.checked)}/>Offer command execution to this model. Each command still needs its exact approval.</label>
+    <details><summary>Use saved skill instructions</summary><p>Import documents in Skill maps &amp; Discord first. Selected instructions stay untrusted and do not grant tools.</p>{(skills||[]).map(skill=><label key={skill.skill_id}><input type="checkbox" checked={skillIds.includes(skill.skill_id)} onChange={e=>setSkillIds(old=>e.target.checked?[...old,skill.skill_id]:old.filter(id=>id!==skill.skill_id))}/>{skill.name}</label>)}</details>
+    <button disabled={busy||!objective.trim()}>Create saved job</button>
+   </form>
+   <label>Saved jobs<select value={current?.id||''} onChange={e=>setSelected((sessions||[]).find(s=>s.id===e.target.value)||null)}><option value="">Choose a job</option>{(sessions||[]).map(s=><option key={s.id} value={s.id}>{s.objective.slice(0,65)} · {s.status}</option>)}</select></label>
+   {current&&<div><h3>{current.status.replaceAll('_',' ')}</h3><p>Model turns: {current.turns}/{current.max_turns}</p>
+    {current.error&&<p role="alert">{current.error}</p>}
+    <p>Start Runtime if it is stopped. Grant the intended Apprentice file capabilities in Governance. Review pending operations there, then continue this job.</p>
+    <button disabled={busy||['completed','cancelled','needs_review','budget_exhausted'].includes(current.status)} onClick={()=>perform(async()=>{const {data}=await api.post(`/agent-sessions/${current.id}/advance`,{},{timeout:620000});setSelected(data);refresh()})}>{busy?'Working…':'Continue one step'}</button>
+    <button disabled={busy||current.status==='cancelled'} onClick={()=>perform(async()=>{const {data}=await api.post(`/agent-sessions/${current.id}/cancel`);setSelected(data);refresh()})}>Cancel job</button>
+    {(current.pending||[]).map(p=><p key={p.task_id}>Pending {p.name}: task {p.task_id}</p>)}
+    <div style={{maxHeight:420,overflow:'auto'}}>{current.messages.filter(m=>m.role!=='system').map((m,i)=><div key={i}><strong>{m.role}</strong><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{m.content||JSON.stringify(m.tool_calls,null,2)}</pre></div>)}</div>
+   </div>}
+  </section>
+  <section className="panel"><h2>Delegate to an installed harness</h2><p>{harnesses?.notice}</p>
+   <form onSubmit={e=>{e.preventDefault();perform(async()=>{const {data}=await api.post(`/harnesses/${encodeURIComponent(harness)}/jobs`,{prompt:job,cwd});setTask(data)})}}>
+    <label>Agent connection<select required value={harness} onChange={e=>setHarness(e.target.value)}><option value="">Choose an agent</option>{(harnesses?.profiles||[]).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+    <label>Job<textarea required maxLength={4000} rows={4} value={job} onChange={e=>setJob(e.target.value)}/></label>
+    <label>Workspace folder<input value={cwd} onChange={e=>setCwd(e.target.value)}/></label>
+    <button disabled={busy||!harness}>Queue job for approval</button>
+   </form>{task&&<p role="status">Task {task.id} queued. Follow it in Tasks and approve its exact invocation in Governance.</p>}
+   <details><summary>Add an agent connection</summary><p>Use its installed executable and documented noninteractive arguments. Windows command scripts need an explicit launcher. These are host processes, not sandboxed agents. Keep secrets in the agent's credential store.</p>
+    <form onSubmit={e=>{e.preventDefault();perform(async()=>{const {id,argv,environment,...rest}=connection;await api.put(`/harnesses/${encodeURIComponent(id)}`,{...rest,argv:JSON.parse(argv),environment:JSON.parse(environment)});refreshHarnesses()})}}>
+     <label>Connection ID<input required pattern="[a-z][a-z0-9_-]{0,63}" value={connection.id} onChange={e=>setConnection({...connection,id:e.target.value})}/></label>
+     <label>Name<input required value={connection.name} onChange={e=>setConnection({...connection,name:e.target.value})}/></label>
+     <label>Argument list (JSON)<textarea rows={5} value={connection.argv} onChange={e=>setConnection({...connection,argv:e.target.value})}/></label>
+     <label>Configuration paths (JSON)<textarea value={connection.environment} onChange={e=>setConnection({...connection,environment:e.target.value})}/></label>
+     <label>Timeout in seconds<input type="number" min={1} max={1800} value={connection.timeout_seconds} onChange={e=>setConnection({...connection,timeout_seconds:Number(e.target.value)})}/></label><button disabled={busy}>Save connection</button>
+    </form>
+   </details>
+  </section>
+  <section className="panel"><h2>Connected services</h2><p>Inspect running services on registered computers. Actions become exact tasks for approval; the service keeps its existing deployment.</p>
+   {(nodes||[]).map(node=><div className="record-detail" key={node.id}><h3>{node.name}</h3><button disabled={busy} onClick={()=>perform(async()=>{const {data}=await api.get(`/service-nodes/${node.id}/inspect`,{timeout:25000});setObserved(old=>({...old,[node.id]:data.services}))})}>Refresh service status</button>
+    {(observed[node.id]||[]).map(unit=><div key={unit.Id}><p>{unit.Description||unit.Id}: {unit.ActiveState} / {unit.SubState}</p>{['start','stop','restart'].map(action=><button key={action} disabled={busy} onClick={()=>perform(async()=>{const {data}=await api.post(`/service-nodes/${node.id}/actions`,{unit:unit.Id,action});setTask(data)})}>Request {action}</button>)}</div>)}
+   </div>)}
+  </section>
+ </div>
+}

@@ -56,6 +56,12 @@ from backend.skills.portable_api import service as portable_service, linker as d
 initialize_discord(portable_service, discord_linker)
 app.include_router(discord_router)
 app.include_router(ws_router)
+from backend.runtime.harness_api import router as harness_router
+from backend.runtime.agent_api import router as agent_router
+app.include_router(harness_router)
+app.include_router(agent_router)
+from backend.runtime.service_api import router as service_router
+app.include_router(service_router)
 
 # Serve built frontend static assets if available
 frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")

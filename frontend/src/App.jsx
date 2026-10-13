@@ -4,6 +4,7 @@ import Dashboard from "./pages/Dashboard"
 import Swarm from "./pages/Swarm"
 import Runtime from "./pages/Runtime"
 import Tasks from "./pages/Tasks"
+import Workbench from "./pages/Workbench"
 import Automations from "./pages/Automations"
 import AIMap from "./pages/AIMap"
 import SkillMaps from "./pages/SkillMaps"
@@ -84,6 +85,7 @@ function OwnerApp() {
       case "Swarm": return <Swarm />
       case "Runtime": return <Runtime />
       case "Tasks": return <Tasks />
+      case "Workbench": return <Workbench />
       case "Automations": return <Automations />
       case "AIMap": return <AIMap />
       case "SkillMaps": return <SkillMaps />
