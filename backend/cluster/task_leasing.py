@@ -1,6 +1,7 @@
 """Durable task leases with transactional, exact monotonic fencing."""
 import secrets
 import time
+import math
 from threading import RLock
 from typing import Optional
 from pydantic import BaseModel, Field
@@ -52,10 +53,12 @@ class TaskLeaseManager:
 
     def issue_lease(self, task_id, assigned_node_id, capability_scope, ttl_sec: Optional[float] = None):
         ttl = self.default_ttl if ttl_sec is None else ttl_sec
-        if ttl <= 0:
+        if not math.isfinite(ttl) or ttl <= 0:
             raise ValueError("Lease lifetime must be positive")
         with self._lock, self.db.get_connection() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            if self._node_busy(conn, assigned_node_id, task_id):
+                raise ValueError("Node already has an active task lease")
             seq = conn.execute("SELECT coalesce(max(fencing_token), 0)+1 FROM leases WHERE task_id=?", (task_id,)).fetchone()[0]
             lease = TaskLease(task_id=task_id, assigned_node_id=assigned_node_id,
                 fencing_token=seq, capability_scope=capability_scope, expires_at=time.time()+ttl)
@@ -70,9 +73,18 @@ class TaskLeaseManager:
         return lease
 
     def issue_and_claim(self, task_id, assigned_node_id, capability_scope, expected_version):
-        """Commit the lease and queued-task claim in one transaction."""
+        """Atomically reserve one node slot and claim a queued task.
+
+        BEGIN IMMEDIATE serializes competing managers, including separate
+        processes. The persisted lease, rather than a manager's cache, owns
+        capacity until revocation or expiry.
+        """
+        if not math.isfinite(self.default_ttl) or self.default_ttl <= 0:
+            raise ValueError("Lease lifetime must be positive")
         with self._lock, self.db.get_connection() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            if self._node_busy(conn, assigned_node_id, task_id):
+                return None
             seq = conn.execute("SELECT coalesce(max(fencing_token),0)+1 FROM leases WHERE task_id=?", (task_id,)).fetchone()[0]
             lease = TaskLease(task_id=task_id, assigned_node_id=assigned_node_id, fencing_token=seq,
                               capability_scope=capability_scope, expires_at=time.time()+self.default_ttl)
@@ -87,6 +99,25 @@ class TaskLeaseManager:
         self.leases[task_id] = lease
         self.fencing_sequence[task_id] = seq
         return lease
+
+    @staticmethod
+    def _node_busy(conn, node_id, replacing_task_id):
+        # Called only inside a write transaction: checking and inserting must
+        # never be separated or two independent managers can overbook a node.
+        return conn.execute(
+            "SELECT 1 FROM leases WHERE node_id=? AND task_id<>? "
+            "AND revoked=0 AND expires_at>? LIMIT 1",
+            (node_id, replacing_task_id, time.time()),
+        ).fetchone() is not None
+
+    def busy_node_ids(self):
+        """Scheduling hint; issue_and_claim remains the atomic authority."""
+        with self.db.get_connection() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT node_id FROM leases WHERE revoked=0 AND expires_at>?",
+                (time.time(),),
+            ).fetchall()
+        return {row["node_id"] for row in rows}
 
     def validate_lease_execution(self, task_id, node_id, fencing_token):
         with self.db.get_connection() as conn:

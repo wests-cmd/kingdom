@@ -3,6 +3,8 @@ import { api } from '../api';
 import DevicePairing from '../components/DevicePairing';
 import ConnectDevice from './ConnectDevice';
 import CommandGroups from '../components/CommandGroups';
+import useLiveData from '../hooks/useLiveData';
+import TaskResult from '../components/common/TaskResult';
 import {deviceLabel,capabilityLabel,fingerprintLabel,nodeStateLabel} from '../components/common/presentation';
 
 export function Nodes() {
@@ -14,6 +16,8 @@ export function Nodes() {
   const [showPairModal, setShowPairModal] = useState(false);
   const [invitation, setInvitation] = useState(null);
   const [activeTab, setActiveTab] = useState('nodes');
+  const {data: taskData, error: taskError} = useLiveData('/tasks',5000);
+  const clusterTasks = (taskData || []).filter(task => task.lease_id || task.metadata?.offload || task.metadata?.execution_target === 'remote');
 
   const fetchClusterState = async () => {
     try {
@@ -85,10 +89,10 @@ export function Nodes() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "16px" }}>
         <div>
           <h1 style={{ fontSize: "20px", fontWeight: "700", color: "var(--text-main)", display: "flex", alignItems: "center", gap: "8px" }}>
-            Nodes and devices
+            Computer cluster
           </h1>
           <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
-            Secure, identity-verified Kingdom Commander & Knight federation across LAN, WAN, and overlay networks.
+            Kingdom coordinates models, agents and approved computers to complete tasks, verify results and learn from outcomes.
           </p>
         </div>
         <div style={{ display: "flex", gap: "12px" }}>
@@ -135,6 +139,19 @@ export function Nodes() {
       )}
 
       <CommandGroups />
+      <section className="panel" aria-label="Cluster work">
+        <h2>Work across computers</h2>
+        <p>Plan → place → execute → verify → remember → adapt. Pair a computer, grant its capabilities, then approve a mission in Tasks. Only supported steps can move to another computer.</p>
+        <p className="muted">Pairing and an online status do not prove a job completed. Each task below keeps its assignment and execution evidence separate.</p>
+        {taskError && <p role="alert">Cluster task records could not be refreshed.</p>}
+        {taskData === null ? <p>Loading work records…</p> : !clusterTasks.length ? <p>No remote task leases or offload requests recorded yet.</p> : clusterTasks.slice().sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0,20).map(task => <article className="task-record" key={task.id}>
+          <h3>{task.metadata?.tool || 'Cluster task'}</h3>
+          <p><span className="status-chip">{task.status}</span> · Task {task.id}</p>
+          <p>Assigned computer: {task.assigned_knight || 'Not assigned'}{task.lease_id ? ' · lease recorded' : ''}</p>
+          {task.metadata?.offload_reason && <p>{task.metadata.offload_reason}</p>}
+          {task.result ? <TaskResult result={task.result} taskId={task.id}/> : <p className="muted">No execution result recorded.</p>}
+        </article>)}
+      </section>
       {/* Navigation Tabs */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--surface-border)", fontSize: "13px", fontWeight: "500" }}>
         <button
@@ -186,6 +203,9 @@ export function Nodes() {
               </div>
 
               <div style={{ fontSize: "11px", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: "4px" }}>
+                <div>Health: {node.health || 'Not reported'} · Current task: {node.current_task || 'None reported'}</div>
+                <div>Last heartbeat: {node.last_heartbeat ? new Date(node.last_heartbeat * 1000).toLocaleString() : 'Not reported'}</div>
+                <div>Reported load: CPU {Number.isFinite(node.connection_metadata?.load_metrics?.cpu_percent) ? `${node.connection_metadata.load_metrics.cpu_percent}%` : 'unavailable'} · Memory {Number.isFinite(node.connection_metadata?.load_metrics?.memory_percent) ? `${node.connection_metadata.load_metrics.memory_percent}%` : 'unavailable'}</div>
                 <div>{node.is_local ? 'Recorded federation grants (local tools are listed in Swarm):' : 'Granted capabilities:'}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
                   {!(node.granted_capabilities || node.capabilities || []).length && <span>None recorded</span>}

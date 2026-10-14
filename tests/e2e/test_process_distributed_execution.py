@@ -27,6 +27,9 @@ import urllib.request
 import urllib.parse
 import pytest
 import secrets
+import shlex
+from pathlib import Path
+from datetime import datetime
 OWNER_CODE = secrets.token_urlsafe(48)
 
 
@@ -79,17 +82,18 @@ def commander_process(tmp_path_factory):
         f"import os, sys, uvicorn, pathlib; from backend.storage import db; db.db.db_path=pathlib.Path({str(db_file)!r}); db.db.init_db(); uvicorn.run('backend.main:app', host='127.0.0.1', port={COMMANDER_PORT}, log_level='warning')"
     ]
 
-    proc = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if not wait_for_url(f"{COMMANDER_URL}/health/ready", max_wait_sec=10.0):
+    proc = subprocess.Popen(cmd, cwd=Path(__file__).resolve().parents[2], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if not wait_for_url(f"{COMMANDER_URL}/health/ready", max_wait_sec=30.0):
         proc.terminate()
-        proc.wait(timeout=5)
-        raise AssertionError("Commander failed to start")
+        _, error = proc.communicate(timeout=5)
+        raise AssertionError("Commander failed to start: " + error.decode(errors='replace')[-2000:])
 
     yield proc
 
     proc.terminate()
     try:
-        proc.wait(timeout=3.0)
+        _, error = proc.communicate(timeout=3.0)
+        if error: print(error.decode(errors='replace')[-6000:])
     except subprocess.TimeoutExpired:
         proc.kill()
 
@@ -254,3 +258,70 @@ def test_dual_knight_process_capability_routing(commander_process, tmp_path_fact
         proc_coder.wait(timeout=3.0)
         proc_researcher.terminate()
         proc_researcher.wait(timeout=3.0)
+
+
+def test_verified_mission_dependency_across_two_worker_processes(commander_process, tmp_path_factory):
+    """A real reviewed mission crosses signed worker RPC, not mocked results."""
+    workers=[]
+    try:
+        for index in (1,2):
+            ident=f'mission-worker-{index}'
+            invite=_http_post(f'{COMMANDER_URL}/nodes/invitation?ttl_seconds=300')
+            worker_command=[sys.executable,'-m','backend.cluster.knight_daemon',
+                '--node-id',ident,'--commander-url',COMMANDER_URL,'--pairing-code',invite['code'],
+                '--capabilities','compute','--data-dir',str(tmp_path_factory.mktemp(ident))]
+            # Optional real second computer, reached through an encrypted SSH
+            # reverse tunnel to this isolated controller. No credentials in repo.
+            if index==2 and os.getenv('KINGDOM_E2E_REMOTE_CONFIG'):
+                config=json.loads(Path(os.environ['KINGDOM_E2E_REMOTE_CONFIG']).read_text())
+                remote_args=[config['python'],'-m','backend.cluster.knight_daemon','--node-id',ident,
+                    '--commander-url','http://127.0.0.1:18190','--pairing-code',invite['code'],
+                    '--capabilities','compute','--data-dir','/tmp/kingdom-e2e-'+secrets.token_hex(12)]
+                remote='timeout 90s env '+shlex.quote('PYTHONPATH='+config['source'])+' '+shlex.join(remote_args)
+                worker_command=['ssh','-i',config['identity_file'],'-o','BatchMode=yes','-o','ConnectTimeout=10',
+                    '-o','ExitOnForwardFailure=yes','-R','127.0.0.1:18190:127.0.0.1:8090',config['target'],remote]
+            proc=subprocess.Popen(worker_command,
+                stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
+            workers.append(proc)
+            deadline=time.time()+15
+            while True:
+                try:
+                    if _http_get(f'{COMMANDER_URL}/nodes/{ident}')['node_state']=='PENDING_APPROVAL':break
+                except Exception:pass
+                assert time.time()<deadline,'Worker did not pair'
+                time.sleep(.2)
+            _http_post(f'{COMMANDER_URL}/nodes/{ident}/approve',{'granted_capabilities':['compute']})
+        # Wait for each real signed heartbeat to provide load measurements.
+        deadline=time.time()+15
+        while True:
+            nodes=[_http_get(f'{COMMANDER_URL}/nodes/mission-worker-{i}') for i in (1,2)]
+            if all(n.get('connection_metadata',{}).get('load_metrics') for n in nodes):break
+            assert time.time()<deadline,'Worker has no fresh measured capacity'
+            time.sleep(.2)
+        request=urllib.request.Request(f'{COMMANDER_URL}/runtime/policy',data=json.dumps({'level':5}).encode(),method='PUT',
+            headers={'Authorization':'Bearer '+OWNER_CODE,'Content-Type':'application/json'})
+        with urllib.request.urlopen(request,timeout=5) as response:assert response.status==200
+        plan={'title':'Verified two-computer dependency','objective':'Analyze supplied text, then analyze the verified first result on a second worker.',
+              'deliverables':['Two independently verified results on different workers'], 'steps':[
+            {'id':'first','title':'First computer analysis','kind':'text_check','computer_id':'mission-worker-1',
+             'instructions':'A real cluster result','acceptance':'Controller recomputes result'},
+            {'id':'second','title':'Second computer consumes verified output','kind':'text_check','computer_id':'mission-worker-2',
+             'depends_on':['first'],'input_from':'first','acceptance':'Second worker result recomputed by controller'}]}
+        mission=_http_post(f'{COMMANDER_URL}/missions',{'plan':plan})
+        ident=mission['id'];_http_post(f'{COMMANDER_URL}/missions/{ident}/approve',{'version':1})
+        deadline=time.time()+30
+        while True:
+            mission=_http_post(f'{COMMANDER_URL}/missions/{ident}/advance')
+            if mission['status'] in {'completed','needs_review'}:break
+            assert time.time()<deadline,mission
+            time.sleep(.3)
+        assert mission['status']=='completed',mission
+        tasks=[_http_get(f"{COMMANDER_URL}/tasks/{mission['steps'][key]['task_id']}") for key in ('first','second')]
+        assert [t['result']['executed_by'] for t in tasks]==['mission-worker-1','mission-worker-2']
+        assert all(t['result']['verification']['state']=='VERIFIED' for t in tasks)
+        assert tasks[1]['metadata']['tool_parameters']['text']
+        assert datetime.fromisoformat(tasks[0]['completed_at']).timestamp()<=float(tasks[1]['started_at'])
+    finally:
+        for proc in workers:
+            if proc.poll() is None:proc.terminate()
+            proc.communicate(timeout=5)

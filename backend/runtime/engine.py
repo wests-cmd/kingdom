@@ -163,7 +163,9 @@ class RuntimeEngine:
         if meta.get('offload') and self.execution_policy.get()['level'] == 5 and meta.get('tool') in {'text.analyze@1.0.0', 'code.python.analyze@1.0.0'}:
             from backend.cluster.hierarchy import offload_candidate
             from backend.cluster.node_registry import node_registry
-            target = offload_candidate(node_registry, 'compute', outcomes=self.tasks.repo.list_all(), tool=meta['tool'])
+            from backend.cluster.task_leasing import task_lease_manager
+            leases = getattr(self, 'lease_manager', task_lease_manager)
+            target = offload_candidate(node_registry, 'compute', outcomes=self.tasks.repo.list_all(), tool=meta['tool'], busy_nodes=leases.busy_node_ids())
             if target:
                 meta = {**meta, 'execution_target': 'remote', 'assigned_knight': target, 'capability': 'compute', 'offload_reason': 'Approved computer selected using fresh capacity and controller-verified outcomes for this tool'}
             else:

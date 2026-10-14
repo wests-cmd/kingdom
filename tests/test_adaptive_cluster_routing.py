@@ -16,6 +16,8 @@ def test_repeated_failures_adapt_actual_load_selection():
     registry=SimpleNamespace(list_nodes=nodes)
     assert offload_candidate(registry,'compute')=='fast'
     assert offload_candidate(registry,'compute',outcomes=[outcome('fast')]*4,tool='text.analyze@1.0.0')=='steady'
+    assert offload_candidate(registry,'compute',busy_nodes={'fast'})=='steady'
+    assert offload_candidate(registry,'compute',busy_nodes={'fast','steady'}) is None
 
 def test_other_tools_and_unverified_successes_cannot_improve_ranking():
     registry=SimpleNamespace(list_nodes=nodes)

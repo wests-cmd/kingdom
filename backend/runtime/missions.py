@@ -19,6 +19,7 @@ class MissionStep(BaseModel):
     input_from: str | None = None
     acceptance: str = Field(min_length=1, max_length=1000)
     repair_source: str | None = Field(default=None, max_length=51)
+    computer_id: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class MissionPlan(BaseModel):
@@ -36,6 +37,8 @@ def validate_plan(plan):
     seen = set()
     by_id = {step.id: step for step in plan.steps}
     for step in plan.steps:
+        if step.computer_id and step.kind not in {'text_check', 'python_check'}:
+            raise ValueError('Explicit computers support only independently verified text and Python analysis')
         if step.id in seen or not set(step.depends_on) <= seen or (step.input_from and step.input_from not in step.depends_on):
             raise ValueError('Steps need unique identities and earlier explicit dependencies')
         if step.kind in {'read_file', 'write_file', 'package'}:
@@ -126,11 +129,42 @@ class MissionService:
                     self.engine.events.publish('mission.needs_review', {'id': state['id']})
 
     @staticmethod
+    def verified_outputs(task):
+        """Normalize controller-persisted local and remote verification receipts."""
+        result = task.get('result') or {}
+        if not isinstance(result, dict):
+            raise ValueError('Completion evidence is missing')
+        if 'results' in result:
+            results = result['results']
+            if not isinstance(results, list) or not results:
+                raise ValueError('Completion evidence is missing')
+            outputs = []
+            for item in results:
+                if not isinstance(item, dict) or item.get('verification', {}).get('state') != 'VERIFIED':
+                    raise ValueError('Completion evidence is missing')
+                outcome = item.get('outcome')
+                if not isinstance(outcome, dict) or 'output' not in outcome:
+                    raise ValueError('Completion output is missing')
+                outputs.append(outcome['output'])
+            return outputs
+        if (result.get('verification', {}).get('state') != 'VERIFIED'
+                or not isinstance(result.get('executed_by'), str)
+                or not result['executed_by'] or 'output' not in result
+                or (task.get('assigned_knight') and task['assigned_knight'] != result['executed_by'])):
+            raise ValueError('Completion evidence is missing')
+        output = result['output']
+        # Remote RPC retains the native-tool envelope; local receipts already
+        # store its payload as outcome.output. Normalize only this explicit
+        # envelope, leaving ordinary user dictionaries intact.
+        if isinstance(output, dict) and output.get('kind') == 'native_tool' and 'output' in output:
+            output = output['output']
+        return [output]
+
+    @staticmethod
     def output(task):
-        results = (task.get('result') or {}).get('results', [])
-        if not results: raise ValueError('No independently verified output is available')
-        outcome = results[0]['outcome']['output']
-        return outcome.get('text', outcome.get('output', json.dumps(outcome))) if isinstance(outcome, dict) else str(outcome)
+        outcome = MissionService.verified_outputs(task)[0]
+        value = outcome.get('text', outcome.get('output', outcome)) if isinstance(outcome, dict) else outcome
+        return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
 
     def advance(self, ident):
         with self.lock:
@@ -146,11 +180,14 @@ class MissionService:
                 if not task: continue  # Crash before task creation: same deterministic key resumes below.
                 status = task['status'].lower()
                 if status == 'completed':
-                    results = task.get('result', {}).get('results', [])
-                    if not results or any(item.get('verification', {}).get('state') != 'VERIFIED' for item in results):
+                    step = next(step for step in state['plan']['steps'] if step['id'] == key)
+                    try:
+                        outputs = self.verified_outputs(task)
+                        if step.get('computer_id') and (task.get('result') or {}).get('executed_by') != step['computer_id']:
+                            raise ValueError('Result came from a different computer than the reviewed plan')
+                    except (ValueError, TypeError, AttributeError):
                         state.update(status='needs_review', failure='Completion evidence is missing'); self.save(state); return state
-                    if any(item.get('outcome', {}).get('output', {}).get('exit_code', 0) != 0 for item in results):
-                        step = next(step for step in state['plan']['steps'] if step['id'] == key)
+                    if any(isinstance(output, dict) and output.get('exit_code', 0) != 0 for output in outputs):
                         if step.get('repair_source') and policy['level'] >= 4:
                             return self.begin_repair(state, step, task, budget)
                         state.update(status='needs_review', failure=f'Step {key} returned a failed test or command. Review output and revise the mission.'); self.save(state); return state
@@ -167,6 +204,14 @@ class MissionService:
                 if step.id in complete or (prior and self.engine.tasks.get(prior['task_id'])) or not set(step.depends_on) <= complete:
                     continue
                 if active >= budget['max_parallel']: break
+                if step.computer_id:
+                    from backend.cluster.hierarchy import offload_candidate
+                    from backend.cluster.node_registry import node_registry
+                    target = offload_candidate(node_registry, 'compute', members=[step.computer_id])
+                    node = node_registry.get_node(step.computer_id)
+                    if policy['level'] != 5 or target != step.computer_id or not node or not node.fingerprint:
+                        state.update(status='needs_review', failure=f'Step {step.id} requires its approved healthy computer with fresh capacity, compute permission and autonomy level 5.')
+                        self.save(state); self.engine.events.publish('mission.needs_review', {'id': ident}); return state
                 text = step.instructions
                 if step.input_from:
                     text = self.output(self.engine.tasks.get(state['steps'][step.input_from]['task_id']))
@@ -186,7 +231,9 @@ class MissionService:
                             'model_profile': state['model_profile'], 'attachment_ids': state['attachment_ids'] if step.kind == 'model' else [],
                             'max_attempts': 1 + budget['max_retries'] if step.kind in {'model','text_check','python_check','read_file'} else 1}
                 if tool: metadata.update(tool=tool, tool_parameters=params)
-                if state['plan'].get('offload_analysis') and policy['level'] == 5 and step.kind in {'text_check','python_check'}:
+                if step.computer_id:
+                    metadata.update(execution_target='remote', assigned_knight=step.computer_id, capability='compute')
+                elif state['plan'].get('offload_analysis') and policy['level'] == 5 and step.kind in {'text_check','python_check'}:
                     metadata['offload'] = True
                 self.engine.submit_task(text or step.title, metadata)
                 state['steps'][step.id]['status'] = 'queued'; active += 1

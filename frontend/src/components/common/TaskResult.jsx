@@ -1,5 +1,6 @@
 import React from 'react'
 import api from '../../api'
+import {taskEvidenceRecords, analysisSummary} from './taskEvidence'
 
 async function downloadArtifact(taskId){
  try{
@@ -24,14 +25,14 @@ export function DebugDetails({value}) {
  return <details><summary>Developer diagnostics (credentials filtered)</summary><pre>{JSON.stringify(scrub(value),null,2)}</pre></details>
 }
 export default function TaskResult({result,taskId}) {
- const records = Array.isArray(result?.results) ? result.results : []
+ const records = taskEvidenceRecords(result)
  if(!records.length) return <p className="muted">No supported result summary is available.</p>
  return <div>{taskId&&records.some(record=>record.verification?.state==='VERIFIED'&&['workspace.write@1.0.0','workspace.package@1.0.0','computer.screenshot@1.0.0'].includes(record.outcome?.tool))&&<button onClick={()=>downloadArtifact(taskId)}>Download verified file</button>}{records.map((record,index)=>{
   const outcome=record.outcome || {}
   const verified=record.verification?.state === 'VERIFIED'
+  const analysis=analysisSummary(record)
+  if(analysis) return <p key={index}>{analysis}</p>
   if(outcome.tool === 'provider.metadata@1.0.0') return <p key={index}>{verified ? 'Reviewed metadata response verified.' : 'Metadata response has not been verified.'} This confirms a read-only response, not a completed research or purchasing workflow.</p>
-  if(outcome.tool === 'text.analyze@1.0.0') return <p key={index}>{verified ? 'Verified text analysis' : 'Unverified text analysis'}: {Number.isInteger(outcome.output?.words) ? outcome.output.words : 'Unavailable'} words; {Number.isInteger(outcome.output?.characters) ? outcome.output.characters : 'Unavailable'} characters.</p>
-  if(outcome.tool === 'code.python.analyze@1.0.0') return <p key={index}>{verified && outcome.output?.valid_python ? 'Python syntax verified.' : 'Syntax has not been verified.'} Source code was analyzed without being executed.</p>
   if(outcome.kind === 'model_response') return <details key={index}><summary>View generated text</summary><p className="muted">Generated text does not verify external actions.</p><pre>{scrubText(outcome.output?.text).slice(0,10000)}</pre></details>
   if(outcome.tool?.startsWith('workspace.') || outcome.tool==='process.run@1.0.0' || outcome.tool?.startsWith('computer.')) return <div key={index}><p>{verified?'Execution evidence verified':'Execution has not been verified'} · {outcome.tool}</p>{outcome.output?.path&&<p>Workspace file: {outcome.output.path}</p>}{Number.isInteger(outcome.output?.exit_code)&&<p>Command exit code: {outcome.output.exit_code}{outcome.output.exit_code!==0?' — command or tests failed':''}</p>}{outcome.output?.output&&<pre>{scrubText(outcome.output.output)}</pre>}{outcome.output?.text&&<pre>{scrubText(outcome.output.text)}</pre>}<p className="muted">{record.verification?.scope||outcome.output?.scope}</p></div>
   return <p key={index}>Unsupported result format. Check authorized developer diagnostics.</p>

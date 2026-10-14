@@ -49,10 +49,11 @@ class CommandHierarchy:
                 'knight_captain': 'An approved computer commanding its own group', 'commander': 'Highest control over approved computers and groups'}}
 
 
-def offload_candidate(registry, capability, members=None, outcomes=None, tool=None):
+def offload_candidate(registry, capability, members=None, outcomes=None, tool=None, busy_nodes=None):
     now = time.time()
     candidates = []
     for node in registry.list_nodes():
+        if node.node_id in (busy_nodes or set()): continue
         if node.is_local or not node.public_identity or node.node_state not in {'APPROVED','CONNECTED'} or now - node.last_heartbeat > 45 or node.health != 'healthy' or node.current_task:
             continue
         if capability not in node.granted_capabilities or (members is not None and node.node_id not in members): continue
