@@ -1,0 +1,123 @@
+name: Signed Windows preview
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-sign-verify:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    environment: windows-signing
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      KINGDOM_BACKEND_LAYOUT: onedir
+      SIGNING_ENDPOINT: ${{ vars.SIGNING_ENDPOINT }}
+      SIGNING_ACCOUNT: ${{ vars.SIGNING_ACCOUNT }}
+      SIGNING_PROFILE: ${{ vars.SIGNING_PROFILE }}
+      SIGNING_PUBLISHER: ${{ vars.SIGNING_PUBLISHER }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require configured publisher and protected branch
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -ne 'refs/heads/main') { throw 'Signing is restricted to reviewed main' }
+          foreach ($name in @('SIGNING_ENDPOINT','SIGNING_ACCOUNT','SIGNING_PROFILE','SIGNING_PUBLISHER')) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) { throw "Configure $name in windows-signing environment" }
+          }
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build and check source
+        shell: pwsh
+        run: |
+          python -m pip install -r requirements-release.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python scripts/audit_release_dependencies.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -m pytest --maxfail=1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm --prefix frontend ci
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm --prefix frontend run build
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python scripts/build_native_backend.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm --prefix desktop ci
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Sign backend before packaging
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\desktop\bin
+          files-folder-filter: exe,dll,pyd
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Verify backend and create unpacked desktop
+        shell: pwsh
+        run: |
+          ./scripts/verify_windows_signatures.ps1 -Paths desktop/bin -Publisher $env:SIGNING_PUBLISHER
+          python scripts/smoke_native_backend.py desktop/bin/kingdom-backend.exe evidence/backend.json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm --prefix desktop run build:dir -- --win --x64 --publish never
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Sign packaged application binaries
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\desktop\dist\win-unpacked
+          files-folder-filter: exe,dll,pyd
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Verify packaged binaries and create installer
+        shell: pwsh
+        run: |
+          ./scripts/verify_windows_signatures.ps1 -Paths desktop/dist/win-unpacked -Publisher $env:SIGNING_PUBLISHER
+          npm --prefix desktop run build -- --win nsis --x64 --prepackaged "$env:GITHUB_WORKSPACE/desktop/dist/win-unpacked" --publish never
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Sign installer
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\desktop\dist
+          files-folder-filter: Kingdom-Setup-*.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Verify installer and smoke-test installed app
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem desktop/dist/Kingdom-Setup-*.exe)
+          if ($installers.Count -ne 1) { throw 'Expected one installer' }
+          ./scripts/verify_windows_signatures.ps1 -Paths $installers[0].FullName -Publisher $env:SIGNING_PUBLISHER
+          python scripts/smoke_native_installer.py windows
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Get-FileHash $installers[0].FullName -Algorithm SHA256 | ConvertTo-Json | Set-Content evidence/windows-signing-hash.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kingdom-signed-windows-${{ github.sha }}
+          path: |
+            desktop/dist/Kingdom-Setup-*.exe
+            desktop/bin/
+            evidence/
+          if-no-files-found: error
