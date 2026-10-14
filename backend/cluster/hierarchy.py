@@ -49,7 +49,7 @@ class CommandHierarchy:
                 'knight_captain': 'An approved computer commanding its own group', 'commander': 'Highest control over approved computers and groups'}}
 
 
-def offload_candidate(registry, capability, members=None):
+def offload_candidate(registry, capability, members=None, outcomes=None, tool=None):
     now = time.time()
     candidates = []
     for node in registry.list_nodes():
@@ -59,5 +59,19 @@ def offload_candidate(registry, capability, members=None):
         load = node.connection_metadata.get('load_metrics', {})
         cpu, memory = load.get('cpu_percent', 100), load.get('memory_percent', 100)
         if not all(isinstance(value, (int, float)) and 0 <= value < 85 for value in (cpu, memory)): continue
-        candidates.append((cpu + memory, node.node_id))
+        # Adapt only from controller-persisted outcomes for the same operation.
+        # Worker claims, model text and advertised capabilities are not success.
+        successes = failures = 0
+        for task in (outcomes or [])[:100]:
+            meta = task.get('metadata') or {}
+            if meta.get('execution_target') != 'remote' or (tool and meta.get('tool') != tool): continue
+            result = task.get('result') or {}
+            if (result.get('executed_by') or task.get('assigned_knight')) != node.node_id: continue
+            if task.get('status', '').lower() in {'completed', 'succeeded'} and (result.get('verification') or {}).get('state') == 'VERIFIED':
+                successes += 1
+            elif task.get('status', '').lower() == 'failed':
+                failures += 1
+        # A smoothed failure penalty cannot override eligibility or capacity.
+        penalty = 60 * failures / (successes + failures + 2)
+        candidates.append((cpu + memory + penalty, node.node_id))
     return min(candidates)[1] if candidates else None

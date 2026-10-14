@@ -1,5 +1,9 @@
 # Kingdom
 
+Kingdom is an adaptive AI harness for completing tasks across models, agents, tools and clusters of computers. One computer can work alone; approved computers can cooperate as a cluster. The core loop is to plan bounded work, place it on suitable resources, execute through permitted tools, verify outcomes, retain useful knowledge and improve the next assignment. Integrations should work without requiring Hermes, a particular model, or the original owner's machine setup.
+
+Adaptation includes task routing, reusable skills and retrieval from reviewed evidence. Model tuning is a separate optional lifecycle with evaluations and rollback. Neither stored chat nor a larger model is proof of learning or completed work. Current distributed execution has a narrower verified scope than this product direction: see [the core architecture and delivery gates](docs/ADAPTIVE_CLUSTER_CORE.md).
+
 This development branch adds an **Agent workbench** for saved tool conversations and installed CLI connections. These additions are not yet part of the stable release below. **Tasks → Two model chats** provides lightweight parallel chat with selected model computers.
 
 [Harness capabilities and roadmap](docs/HARNESS_ROADMAP.md) · [Portable SKILL.md](docs/PORTABLE_SKILLS.md) · [Model computers](docs/MODEL_OFFLOADING.md)

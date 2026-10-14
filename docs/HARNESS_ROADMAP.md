@@ -1,6 +1,6 @@
 # Kingdom harness: implementation and evidence map
 
-Kingdom is an extensible harness for models and agents. Model weights, an agent harness, tool permissions, retrieval and training are distinct layers. A larger context or a model modification does not grant tools or establish better reasoning.
+Kingdom is an adaptive AI harness that coordinates models, agents, tools and computer clusters to complete tasks. Its core loop is plan, place, execute, verify, remember and adapt. See [the adaptive cluster core and acceptance gates](ADAPTIVE_CLUSTER_CORE.md). Model weights, an agent harness, tool permissions, retrieval and training are distinct layers. A larger context or a model modification does not grant tools or establish better reasoning.
 
 ## Available foundation
 
