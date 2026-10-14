@@ -290,11 +290,26 @@ class RuntimeEngine:
                                 'metadata': {**meta, 'execution_target': 'local', 'offload_reason': 'Offload computer unavailable before dispatch; retained locally'}})
                             self.events.publish('task.offload_fallback', recovered)
         for task in self.tasks.list("leased"):
-            lease = leases.leases.get(task["id"])
             node = node_registry.get_node(task.get("assigned_knight"))
-            if not lease or lease.revoked or lease.expires_at <= time.time() or not node or node.node_state not in {"APPROVED", "CONNECTED"}:
-                leases.revoke_lease(task["id"])
-                self.tasks.transition_task(task["id"], "RECOVERY_REQUIRED")
-                recovered = self.tasks.transition_task(task["id"], "queued", {"assigned_knight": None, "lease_id": None,
-                    "error": "Remote lease or node became unavailable; safely requeued"})
-                self.events.publish("task.requeued", recovered)
+            try:
+                # The database is authoritative: another controller may have
+                # revoked or replaced a lease since this process cached it.
+                leases.validate_lease_execution(task['id'], task.get('assigned_knight'), task.get('fencing_token'))
+                valid = bool(node and node.node_state in {'APPROVED', 'CONNECTED'})
+            except PermissionError:
+                valid = False
+            if not valid:
+                with self.dispatch_lock:
+                    current = self.tasks.get(task['id'])
+                    if not current or current['status'].lower() != 'leased':
+                        continue
+                    leases.revoke_lease(task['id'])
+                    recovered = self.tasks.transition_task(task['id'], 'RECOVERY_REQUIRED',
+                        {'error': 'Remote execution was interrupted; retained evidence requires review before retrying side effects.'})
+                    if current.get('metadata', {}).get('tool') in {'text.analyze@1.0.0', 'code.python.analyze@1.0.0'}:
+                        recovered = self.tasks.transition_task(task['id'], 'queued',
+                            {'assigned_knight': None, 'lease_id': None,
+                             'error': 'Remote analysis lease unavailable; idempotent analysis safely requeued'})
+                        self.events.publish('task.requeued', recovered)
+                    else:
+                        self.events.publish('task.recovery_required', recovered)

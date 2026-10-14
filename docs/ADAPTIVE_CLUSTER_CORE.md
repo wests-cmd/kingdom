@@ -19,6 +19,8 @@ Existing foundations include paired computers, capability grants, fenced task le
 
 This is task distribution, not shared RAM or arbitrary model-weight sharding. General remote builds, cross-computer native agent tools and reliable multi-stage coding clusters are still unfinished. A historical success does not authorize another action. Current automatic remote dispatch remains restricted to its existing analysis tools and autonomy policy.
 
+Remote disconnect recovery consults persisted lease fencing, including changes made by another controller. Interrupted text/Python analysis can be requeued; unknown operations and commands remain in `RECOVERY_REQUIRED` with their evidence retained instead of automatically repeating possible side effects. A healthy active lease is left alone. This is recovery of controller state, not proof that a disconnected worker process has stopped.
+
 ## Next delivery gates
 
 - Resource reservations: two competing tasks must not overcommit one computer; report why a task waits or falls back.
@@ -31,3 +33,5 @@ This is task distribution, not shared RAM or arbitrary model-weight sharding. Ge
 - Cluster user experience: show the goal, computer assignments, dependencies, budgets, evidence, pending approvals and recovery actions in one understandable workspace.
 
 Acceptance for the core: an owner submits a goal once; multiple approved computers complete dependent work with real evidence, independent review, capacity control and safe recovery. Until that end-to-end scenario passes, describe the individual foundations and their limits rather than claim the whole cluster autonomously works.
+
+Pinned mission steps now wait when their approved, fresh and healthy computer is busy or overloaded. The mission retains its reviewed computer assignment and resumes when capacity returns; the workspace displays the waiting reason. Revoked, stale or unhealthy computers still require review.

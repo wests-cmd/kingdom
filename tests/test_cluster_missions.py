@@ -134,9 +134,8 @@ def test_explicit_worker_receipt_must_match_reviewed_plan_even_after_assignment_
 
 @pytest.mark.parametrize('changes', [
     {'node_state': 'REVOKED'}, {'public_identity': None},
-    {'last_heartbeat': 0}, {'health': 'degraded'}, {'current_task': 'busy'},
+    {'last_heartbeat': 0}, {'health': 'degraded'},
     {'granted_capabilities': []}, {'is_local': True},
-    {'connection_metadata': {'load_metrics': {'cpu_percent': 99, 'memory_percent': 20}}},
 ])
 def test_real_placement_eligibility_blocks_untrusted_or_unavailable_worker(harness, monkeypatch, changes):
     service, _, submitted, _ = harness
@@ -151,3 +150,25 @@ def test_real_placement_eligibility_blocks_untrusted_or_unavailable_worker(harne
     monkeypatch.setattr(node_registry, 'get_node', lambda ident: node)
     assert start(service, plan(computer_id='worker-a'))['status'] == 'needs_review'
     assert not submitted
+
+
+@pytest.mark.parametrize('busy', ['cpu', 'task'])
+def test_pinned_step_waits_for_capacity_then_resumes(harness, monkeypatch, busy):
+    service, _, submitted, _ = harness
+    from backend.cluster.node_registry import node_registry
+    node = SimpleNamespace(node_id='worker-a', node_state='CONNECTED', public_identity={'key': 'paired'},
+        fingerprint='paired', last_heartbeat=time.time(), health='healthy', current_task='other' if busy == 'task' else None,
+        granted_capabilities=['compute'], is_local=False,
+        connection_metadata={'load_metrics': {'cpu_percent': 99 if busy == 'cpu' else 20, 'memory_percent': 20}})
+    monkeypatch.setattr(node_registry, 'list_nodes', lambda: [node])
+    monkeypatch.setattr(node_registry, 'get_node', lambda ident: node)
+    state = start(service, plan(computer_id='worker-a'))
+    assert state['status'] == 'running'
+    assert state['placement_wait']['computer_id'] == 'worker-a'
+    assert not submitted
+    node.current_task = None
+    node.connection_metadata['load_metrics']['cpu_percent'] = 20
+    resumed = service.advance(state['id'])
+    assert 'placement_wait' not in resumed
+    assert len(submitted) == 1
+    assert submitted[0][1]['assigned_knight'] == 'worker-a'

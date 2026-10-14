@@ -210,8 +210,31 @@ class MissionService:
                     target = offload_candidate(node_registry, 'compute', members=[step.computer_id])
                     node = node_registry.get_node(step.computer_id)
                     if policy['level'] != 5 or target != step.computer_id or not node or not node.fingerprint:
+                        # Temporary contention is not loss of owner approval.
+                        # Keep the exact placement and wait for fresh capacity;
+                        # never silently move a pinned step to another computer.
+                        load = (getattr(node, 'connection_metadata', {}) or {}).get('load_metrics', {})
+                        capacity_busy = getattr(node, 'current_task', None) or any(
+                            isinstance(load.get(key), (int, float)) and 85 <= load[key] <= 100
+                            for key in ('cpu_percent', 'memory_percent'))
+                        if (policy['level'] == 5 and node and node.fingerprint
+                                and getattr(node, 'node_state', None) in {'APPROVED', 'CONNECTED'}
+                                and getattr(node, 'public_identity', None) and not getattr(node, 'is_local', True)
+                                and time.time() - getattr(node, 'last_heartbeat', 0) <= 45
+                                and getattr(node, 'health', None) == 'healthy'
+                                and 'compute' in getattr(node, 'granted_capabilities', []) and capacity_busy):
+                            waiting = {'step': step.id, 'computer_id': step.computer_id,
+                                       'reason': 'Waiting for the approved computer to have available capacity'}
+                            changed = state.get('placement_wait') != waiting
+                            state.update(status='running', placement_wait=waiting)
+                            self.save(state)
+                            if changed:
+                                self.engine.events.publish('mission.waiting_capacity', {'id': ident, **waiting})
+                            return state
+                        state.pop('placement_wait', None)
                         state.update(status='needs_review', failure=f'Step {step.id} requires its approved healthy computer with fresh capacity, compute permission and autonomy level 5.')
                         self.save(state); self.engine.events.publish('mission.needs_review', {'id': ident}); return state
+                    state.pop('placement_wait', None)
                 text = step.instructions
                 if step.input_from:
                     text = self.output(self.engine.tasks.get(state['steps'][step.input_from]['task_id']))

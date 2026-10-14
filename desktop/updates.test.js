@@ -60,5 +60,5 @@ test('Windows helper survives its launcher and rejects a missing installer', {sk
   const result=JSON.parse(fs.readFileSync(receipt,'utf8').replace(/^\uFEFF/,''));
   assert.equal(result.success,false);
   assert.equal(result.reopenedPID,undefined);
- }finally{fs.rmSync(directory,{recursive:true,force:true})}
+ }finally{fs.rmSync(directory,{recursive:true,force:true,maxRetries:50,retryDelay:100})}
 });
