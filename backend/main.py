@@ -98,6 +98,14 @@ if os.path.exists(frontend_dist):
             return FileResponse(index_file)
         return {"status": "Kingdom Backend Operational"}
 
+    @app.get('/kingdom.webmanifest')
+    def serve_web_manifest():
+        return FileResponse(os.path.join(frontend_dist,'kingdom.webmanifest'),media_type='application/manifest+json',headers={'Cache-Control':'no-store'})
+
+    @app.get('/kingdom-sw.js')
+    def serve_web_worker():
+        return FileResponse(os.path.join(frontend_dist,'kingdom-sw.js'),media_type='application/javascript',headers={'Cache-Control':'no-store','Service-Worker-Allowed':'/'})
+
     @app.get('/ui/{component}/{resource:path}')
     def serve_ui_component(component: str, resource: str):
         from backend.system.ui_update_api import components

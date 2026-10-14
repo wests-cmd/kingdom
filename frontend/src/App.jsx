@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react"
+import InstallKingdom from './components/InstallKingdom'
 import Sidebar from "./components/common/Sidebar"
 import Dashboard from "./pages/Dashboard"
 import Swarm from "./pages/Swarm"
@@ -116,6 +117,7 @@ function OwnerApp() {
     <details><summary>Use owner recovery access</summary><p>Your installationÃ¢â‚¬â„¢s owner access code can restore access.</p><button onClick={()=>{setAccessCode(accessCode);connect()}}>Use entered code as owner access</button></details>
     <details><summary>Accessibility settings</summary><AccessibilitySettings /></details></main>
   if (!authorized) return <main className="content"><h1>Connect this device</h1>
+    <InstallKingdom />
     <p><a href="/#/connect">Use a device connection code</a> from the Kingdom main panel.</p>
     <details><summary>Administrator access</summary><form onSubmit={e=>{e.preventDefault();setAccessCode(accessCode);connect()}}>
       <label>Owner access code <input type="password" autoComplete="off" value={accessCode} onChange={e=>setCode(e.target.value)} /></label><button type="submit">Connect</button>
@@ -126,6 +128,7 @@ function OwnerApp() {
       <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
 
       <div className="main-container">
+        <details><summary>Install Kingdom as a free web app</summary><InstallKingdom /></details>
         <header className="topbar">
           <div className="page-title">{currentPage === 'SkillMaps' ? 'Skill maps & Discord' : currentPage}</div>
           <div className="status-indicator">
