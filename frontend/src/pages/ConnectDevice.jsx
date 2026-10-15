@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import AccessibilitySettings from '../components/common/AccessibilitySettings'
+import { backendURL } from '../backendConfig'
 
 const hex = bytes => Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('')
 
@@ -11,7 +12,7 @@ export default function ConnectDevice() {
   const [busy, setBusy] = useState(false)
   const [session, setSession] = useState(null)
   const request = async (path, body, token) => {
-    const response = await fetch(path, { method: 'POST', credentials: 'omit',
+    const response = await fetch(backendURL(path), { method: 'POST', credentials: 'omit',
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify(body) })
     const result = await response.json()
@@ -22,7 +23,7 @@ export default function ConnectDevice() {
     event.preventDefault(); setBusy(true); setMessage('Connecting…')
     try {
       if (!window.isSecureContext || !crypto.subtle) throw new Error('Open Kingdom using HTTPS to connect this device.')
-      const identityResponse = await fetch('/nodes/identity', { credentials: 'omit' })
+      const identityResponse = await fetch(backendURL('/nodes/identity'), { credentials: 'omit' })
       if (!identityResponse.ok) throw new Error('Kingdom identity could not be verified.')
       const identity = await identityResponse.json()
       if (params.get('fingerprint') && params.get('fingerprint') !== identity.fingerprint) throw new Error('Kingdom identity does not match this invitation.')
