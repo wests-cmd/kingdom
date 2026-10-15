@@ -2,11 +2,12 @@ import React from 'react'
 import api from '../../api'
 import {taskEvidenceRecords, analysisSummary} from './taskEvidence'
 
-async function downloadArtifact(taskId){
+async function downloadArtifact(taskId,buildName){
  try{
-  const {data,headers}=await api.get(`/workspace/tasks/${encodeURIComponent(taskId)}/artifact`,{responseType:'blob'})
+  const endpoint=buildName===undefined?`/workspace/tasks/${encodeURIComponent(taskId)}/artifact`:`/tasks/${encodeURIComponent(taskId)}/build-artifacts/${buildName.split('/').map(encodeURIComponent).join('/')}`
+  const {data,headers}=await api.get(endpoint,{responseType:'blob'})
   const url=URL.createObjectURL(data),link=document.createElement('a')
-  link.href=url;link.download=headers['content-disposition']?.match(/filename="([^"]+)"/)?.[1]||'kingdom-deliverable'
+  link.href=url;link.download=headers['content-disposition']?.match(/filename="([^"]+)"/)?.[1]||buildName?.split('/').at(-1)||'kingdom-deliverable'
   link.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
  }catch{window.alert('The file is unavailable or changed since verification. Review the task evidence.')}
 }
@@ -32,6 +33,7 @@ export default function TaskResult({result,taskId}) {
   const verified=record.verification?.state === 'VERIFIED'
   const analysis=analysisSummary(record)
   if(analysis) return <p key={index}>{analysis}</p>
+  if(outcome.tool==='build.run@1.0.0') return <div key={index}><p>{verified?'Build artifacts match the reviewed checksums.':'Build artifacts have not been verified.'}</p>{verified&&taskId&&Object.keys(outcome.output?.artifacts||{}).map(name=><button key={name} onClick={()=>downloadArtifact(taskId,name)}>Download {name}</button>)}<p className="muted">{record.verification?.scope||'Application correctness still needs separate tests.'}</p></div>
   if(outcome.tool === 'provider.metadata@1.0.0') return <p key={index}>{verified ? 'Reviewed metadata response verified.' : 'Metadata response has not been verified.'} This confirms a read-only response, not a completed research or purchasing workflow.</p>
   if(outcome.kind === 'model_response') return <details key={index}><summary>View generated text</summary><p className="muted">Generated text does not verify external actions.</p><pre>{scrubText(outcome.output?.text).slice(0,10000)}</pre></details>
   if(outcome.tool?.startsWith('workspace.') || outcome.tool==='process.run@1.0.0' || outcome.tool?.startsWith('computer.')) return <div key={index}><p>{verified?'Execution evidence verified':'Execution has not been verified'} · {outcome.tool}</p>{outcome.output?.path&&<p>Workspace file: {outcome.output.path}</p>}{Number.isInteger(outcome.output?.exit_code)&&<p>Command exit code: {outcome.output.exit_code}{outcome.output.exit_code!==0?' — command or tests failed':''}</p>}{outcome.output?.output&&<pre>{scrubText(outcome.output.output)}</pre>}{outcome.output?.text&&<pre>{scrubText(outcome.output.text)}</pre>}<p className="muted">{record.verification?.scope||outcome.output?.scope}</p></div>

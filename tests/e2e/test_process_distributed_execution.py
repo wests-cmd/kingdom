@@ -93,6 +93,11 @@ def test_reviewed_build_on_real_remote_computer(commander_process, tmp_path_fact
         assert task['result']['verification']['state']=='VERIFIED'
         artifact=task['result']['output']['output']['artifacts']['app.zip']
         assert base64.b64decode(artifact['base64'])==expected.getvalue()
+        download=urllib.request.Request(f'{COMMANDER_URL}/tasks/{task["id"]}/build-artifacts/app.zip',
+            headers={'Authorization':'Bearer '+OWNER_CODE})
+        with urllib.request.urlopen(download,timeout=5) as response:
+            assert response.read()==expected.getvalue()
+            assert response.headers['Cache-Control']=='no-store'
     finally:
         worker.terminate()
         try:worker.communicate(timeout=5)

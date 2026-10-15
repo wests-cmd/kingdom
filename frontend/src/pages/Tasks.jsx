@@ -199,7 +199,7 @@ export default function Tasks() {
 
               <div className="task-meta"><span className="status-chip">{t.status}</span><span>{new Date(t.created_at).toLocaleString()}</span></div>
 
-              <p className="task-input">{t.metadata?.tool === 'provider.metadata@1.0.0' ? 'Reviewed provider metadata test' : t.metadata?.tool === 'code.python.analyze@1.0.0' ? 'Python syntax analysis' : t.metadata?.tool === 'text.analyze@1.0.0' ? 'Text analysis' : 'Configured model task'}</p>
+              <p className="task-input">{t.metadata?.tool === 'build.run@1.0.0' ? 'Reviewed remote build' : t.metadata?.tool === 'provider.metadata@1.0.0' ? 'Reviewed provider metadata test' : t.metadata?.tool === 'code.python.analyze@1.0.0' ? 'Python syntax analysis' : t.metadata?.tool === 'text.analyze@1.0.0' ? 'Text analysis' : 'Configured model task'}</p>
 
               <details><summary>View supplied input</summary><pre>{scrubText(t.prompt || t.input?.prompt || '').slice(0,10000)}</pre></details>
 

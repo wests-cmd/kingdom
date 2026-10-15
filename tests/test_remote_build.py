@@ -26,7 +26,7 @@ def outcome(task):
                 'base64': base64.b64encode(b'BUILT\n').decode()}}}
 
 
-@pytest.mark.parametrize('path', ['../escape', '/absolute', 'C:/disk', 'dir\\escape', 'dir/../escape', 'a//b'])
+@pytest.mark.parametrize('path', ['../escape', '/absolute', 'C:/disk', 'dir\\escape', 'dir/../escape', 'a//b', 'a\nb'])
 def test_source_paths_cannot_escape_bundle(task, path):
     spec = task['metadata']['tool_parameters']; spec['files'] = {path: 'x'}
     spec['source_sha256'] = source_digest(spec['files'])
@@ -100,6 +100,45 @@ def test_build_capability_cannot_be_downgraded_and_approval_is_required(task, tm
     runtime.tasks.transition_task(submitted['id'],'queued')
     assert runtime.dispatch_remote_task(submitted['id'],'worker','process.execute',leases)['status']=='leased'
     assert runtime.security.approvals.get_request(approval)['status']=='consumed'
+
+
+@pytest.fixture
+def download_client(task,monkeypatch):
+    from backend.api import engine
+    from backend.main import app
+    from tests.auth_support import owner_client
+    task.update(status='completed',assigned_knight='worker',result={'executed_by':'worker',
+        'verification':{'state':'VERIFIED'},'output':{'kind':'native_tool','tool':TOOL,'output':outcome(task)}})
+    monkeypatch.setattr(engine.tasks,'get',lambda ident:task if ident==task['id'] else None)
+    return owner_client(app),task
+
+
+def test_owner_can_download_verified_bytes_and_response_is_not_cached(download_client):
+    client,task=download_client
+    response=client.get('/tasks/build-test/build-artifacts/artifact.txt')
+    assert response.status_code==200
+    assert response.content==b'BUILT\n'
+    assert response.headers['cache-control']=='no-store'
+    assert response.headers['x-artifact-sha256']==hashlib.sha256(response.content).hexdigest()
+    assert response.headers['content-disposition'].startswith('attachment;')
+    assert client.get('/tasks/build-test/build-artifacts/missing.txt').status_code==404
+
+
+@pytest.mark.parametrize('change',['bytes','lease','worker','status','verification'])
+def test_changed_or_unverified_evidence_cannot_be_downloaded(download_client,change):
+    client,task=download_client
+    if change=='bytes':task['result']['output']['output']['artifacts']['artifact.txt']['base64']='VEFNUEVSRUQ='
+    elif change=='lease':task['lease_id']='another-lease'
+    elif change=='worker':task['result']['executed_by']='another-worker'
+    elif change=='status':task['status']='leased'
+    else:task['result']['verification']['state']='UNVERIFIED'
+    assert client.get('/tasks/build-test/build-artifacts/artifact.txt').status_code==409
+
+
+def test_build_download_requires_owner_authentication(download_client):
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    assert TestClient(app).get('/tasks/build-test/build-artifacts/artifact.txt').status_code in (401,403)
 
 
 @pytest.mark.skipif(os.name != 'posix', reason='Real process-group build execution requires a POSIX worker')

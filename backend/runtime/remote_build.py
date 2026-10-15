@@ -20,7 +20,7 @@ TOOL = 'build.run@1.0.0'
 
 
 def relative_name(name):
-    if not isinstance(name, str) or not name or len(name) > 240 or '\\' in name or ':' in name or '\x00' in name:
+    if not isinstance(name, str) or not name or len(name) > 240 or '\\' in name or ':' in name or any(ord(c)<32 or ord(c)==127 for c in name):
         raise ValueError('Build files need portable relative paths')
     path = PurePosixPath(name)
     if path.is_absolute() or any(part in {'', '.', '..'} for part in name.split('/')):

@@ -49,7 +49,14 @@ source files to 100, artifacts to 20, and logs to a bounded capture. Nonzero
 exit, missing files, symlinked artifacts, changed artifact digests and excess
 budgets fail. POSIX process groups are stopped after execution or timeout.
 
-Returned artifacts are base64 bytes in the persisted task result. The controller
+Returned artifacts are base64 bytes in the persisted task result. The Tasks
+workspace offers a download button for each verified build artifact. The
+owner-authenticated `GET /tasks/{task_id}/build-artifacts/{name}` endpoint
+rechecks the actual bytes and task/source/lease binding each time, rejects
+unverified or changed evidence, and returns a noncached attachment. Downloading
+does not execute or install the file.
+
+The controller
 checks the exact task identity, active lease and fencing token, command, source
 digest, artifact names and independently computed byte hashes. Signed RPC
 authenticates the worker. Expired/revoked leases cannot submit accepted results.
