@@ -33,6 +33,72 @@ from datetime import datetime
 OWNER_CODE = secrets.token_urlsafe(48)
 
 
+def test_reviewed_build_on_real_remote_computer(commander_process, tmp_path_factory):
+    """Opt-in physical Linux worker, signed RPC and exact high-risk approval."""
+    if not os.getenv('KINGDOM_E2E_REMOTE_CONFIG'):
+        pytest.skip('A real approved POSIX computer configuration is required')
+    import base64, hashlib, io, zipfile
+    from backend.runtime.remote_build import source_digest
+    config=json.loads(Path(os.environ['KINGDOM_E2E_REMOTE_CONFIG']).read_text())
+    ident='build-worker-'+secrets.token_hex(4)
+    invite=_http_post(f'{COMMANDER_URL}/nodes/invitation?ttl_seconds=300')
+    args=[config['python'],'-m','backend.cluster.knight_daemon','--node-id',ident,
+          '--commander-url','http://127.0.0.1:18190','--pairing-code',invite['code'],
+          '--capabilities','process.execute','--data-dir','/tmp/kingdom-build-e2e-'+secrets.token_hex(8)]
+    remote='timeout 90s env '+shlex.quote('PYTHONPATH='+config['source'])+' '+shlex.join(args)
+    worker=subprocess.Popen(['ssh','-i',config['identity_file'],'-o','BatchMode=yes','-o','ConnectTimeout=10',
+        '-o','ExitOnForwardFailure=yes','-R','127.0.0.1:18190:127.0.0.1:8090',config['target'],remote],
+        stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
+    try:
+        deadline=time.time()+20
+        while True:
+            try:
+                if _http_get(f'{COMMANDER_URL}/nodes/{ident}')['node_state']=='PENDING_APPROVAL':break
+            except Exception:pass
+            assert time.time()<deadline, 'Remote build worker did not pair'
+            time.sleep(.2)
+        _http_post(f'{COMMANDER_URL}/nodes/{ident}/approve',{'granted_capabilities':['process.execute']})
+        deadline=time.time()+15
+        while True:
+            node=_http_get(f'{COMMANDER_URL}/nodes/{ident}')
+            load=node.get('connection_metadata',{}).get('load_metrics',{})
+            if load:break
+            assert time.time()<deadline, 'Remote worker has no measured capacity'
+            time.sleep(.2)
+        if max(load['cpu_percent'],load['memory_percent'])>=85:
+            pytest.skip('Real POSIX worker exceeds production admission limits; build not verified')
+        app='print("Hello from a reviewed remote package")\n'
+        script="from pathlib import Path\nimport zipfile\ns=Path('app.py').read_bytes()\ncompile(s,'app.py','exec')\ni=zipfile.ZipInfo('app.py');i.create_system=3;i.external_attr=0o644<<16\nwith zipfile.ZipFile('app.zip','w') as z:z.writestr(i,s)\n"
+        expected=io.BytesIO()
+        info=zipfile.ZipInfo('app.py');info.create_system=3;info.external_attr=0o644<<16
+        with zipfile.ZipFile(expected,'w') as archive:archive.writestr(info,app.encode())
+        files={'app.py':app,'build.py':script}
+        spec={'source_revision':'a'*40,'source_sha256':source_digest(files),'files':files,
+              'argv':['@python','build.py'],'expected_artifacts':{'app.zip':hashlib.sha256(expected.getvalue()).hexdigest()}}
+        task=_http_post(f'{COMMANDER_URL}/tasks',{'prompt':'Build the exact reviewed Python package',
+            'metadata':{'tool':'build.run@1.0.0','tool_parameters':spec,'execution_target':'remote','assigned_knight':ident}})
+        deadline=time.time()+35;approved=False
+        while True:
+            task=_http_get(f'{COMMANDER_URL}/tasks/{task["id"]}')
+            if task['status']=='WAITING_APPROVAL':
+                assert not approved, 'A consumed exact approval was requested again'
+                _http_post(f'{COMMANDER_URL}/security/approvals/{task["metadata"]["approval_id"]}/approve')
+                approved=True
+            if task['status'] in {'completed','failed','RECOVERY_REQUIRED'}:break
+            assert time.time()<deadline,task['status']
+            time.sleep(.2)
+        assert approved, 'Remote process execution bypassed exact task approval'
+        assert task['status']=='completed',task.get('error')
+        assert task['result']['executed_by']==ident
+        assert task['result']['verification']['state']=='VERIFIED'
+        artifact=task['result']['output']['output']['artifacts']['app.zip']
+        assert base64.b64decode(artifact['base64'])==expected.getvalue()
+    finally:
+        worker.terminate()
+        try:worker.communicate(timeout=5)
+        except subprocess.TimeoutExpired:worker.kill();worker.communicate(timeout=5)
+
+
 COMMANDER_PORT = 8090
 COMMANDER_URL = f"http://127.0.0.1:{COMMANDER_PORT}"
 

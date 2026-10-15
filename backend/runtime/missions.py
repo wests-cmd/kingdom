@@ -5,13 +5,14 @@ from threading import RLock
 from typing import Literal
 from uuid import uuid4, uuid5, NAMESPACE_URL
 from pydantic import BaseModel, Field, ConfigDict
+from backend.runtime.remote_build import BuildSpec
 
 
 class MissionStep(BaseModel):
     model_config = ConfigDict(extra='forbid')
     id: str = Field(pattern=r'^[a-z][a-z0-9_-]{0,50}$')
     title: str = Field(min_length=1, max_length=300)
-    kind: Literal['model', 'write_file', 'read_file', 'python_check', 'text_check', 'command', 'package', 'desktop_input']
+    kind: Literal['model', 'write_file', 'read_file', 'python_check', 'text_check', 'command', 'package', 'desktop_input', 'build']
     instructions: str = Field(default='', max_length=100000)
     path: str | None = Field(default=None, max_length=300)
     argv: list[str] = Field(default_factory=list, max_length=40)
@@ -20,6 +21,7 @@ class MissionStep(BaseModel):
     acceptance: str = Field(min_length=1, max_length=1000)
     repair_source: str | None = Field(default=None, max_length=51)
     computer_id: str | None = Field(default=None, min_length=1, max_length=200)
+    build: BuildSpec | None = None
 
 
 class MissionPlan(BaseModel):
@@ -37,8 +39,12 @@ def validate_plan(plan):
     seen = set()
     by_id = {step.id: step for step in plan.steps}
     for step in plan.steps:
-        if step.computer_id and step.kind not in {'text_check', 'python_check'}:
+        if step.computer_id and step.kind not in {'text_check', 'python_check', 'build'}:
             raise ValueError('Explicit computers support only independently verified text and Python analysis')
+        if step.kind == 'build' and (not step.computer_id or not step.build or step.input_from or step.argv):
+            raise ValueError('Build steps need an exact computer and reviewed build specification, without generated command bindings')
+        if step.kind != 'build' and step.build is not None:
+            raise ValueError('Only build steps accept a build specification')
         if step.id in seen or not set(step.depends_on) <= seen or (step.input_from and step.input_from not in step.depends_on):
             raise ValueError('Steps need unique identities and earlier explicit dependencies')
         if step.kind in {'read_file', 'write_file', 'package'}:
@@ -207,7 +213,8 @@ class MissionService:
                 if step.computer_id:
                     from backend.cluster.hierarchy import offload_candidate
                     from backend.cluster.node_registry import node_registry
-                    target = offload_candidate(node_registry, 'compute', members=[step.computer_id])
+                    capability = 'process.execute' if step.kind == 'build' else 'compute'
+                    target = offload_candidate(node_registry, capability, members=[step.computer_id])
                     node = node_registry.get_node(step.computer_id)
                     if policy['level'] != 5 or target != step.computer_id or not node or not node.fingerprint:
                         # Temporary contention is not loss of owner approval.
@@ -222,7 +229,7 @@ class MissionService:
                                 and getattr(node, 'public_identity', None) and not getattr(node, 'is_local', True)
                                 and time.time() - getattr(node, 'last_heartbeat', 0) <= 45
                                 and getattr(node, 'health', None) == 'healthy'
-                                and 'compute' in getattr(node, 'granted_capabilities', []) and capacity_busy):
+                                and capability in getattr(node, 'granted_capabilities', []) and capacity_busy):
                             waiting = {'step': step.id, 'computer_id': step.computer_id,
                                        'reason': 'Waiting for the approved computer to have available capacity'}
                             changed = state.get('placement_wait') != waiting
@@ -232,7 +239,7 @@ class MissionService:
                                 self.engine.events.publish('mission.waiting_capacity', {'id': ident, **waiting})
                             return state
                         state.pop('placement_wait', None)
-                        state.update(status='needs_review', failure=f'Step {step.id} requires its approved healthy computer with fresh capacity, compute permission and autonomy level 5.')
+                        state.update(status='needs_review', failure=f'Step {step.id} requires its approved healthy computer with fresh capacity, {capability} permission and autonomy level 5.')
                         self.save(state); self.engine.events.publish('mission.needs_review', {'id': ident}); return state
                     state.pop('placement_wait', None)
                 text = step.instructions
@@ -246,6 +253,7 @@ class MissionService:
                 elif step.kind == 'command': tool, params = 'process.run@1.0.0', {'argv': step.argv}
                 elif step.kind == 'package': tool, params = 'workspace.package@1.0.0', {'path': step.path}
                 elif step.kind == 'desktop_input': tool, params = 'computer.input@1.0.0', json.loads(step.instructions)
+                elif step.kind == 'build': tool, params = 'build.run@1.0.0', step.build.model_dump()
                 key = ident + ':' + str(state['version']) + ':' + step.id
                 task_id = str(uuid5(NAMESPACE_URL, 'kingdom-mission:' + key))
                 state['steps'][step.id] = {'task_id': task_id, 'status': 'dispatching'}
@@ -255,7 +263,8 @@ class MissionService:
                             'max_attempts': 1 + budget['max_retries'] if step.kind in {'model','text_check','python_check','read_file'} else 1}
                 if tool: metadata.update(tool=tool, tool_parameters=params)
                 if step.computer_id:
-                    metadata.update(execution_target='remote', assigned_knight=step.computer_id, capability='compute')
+                    metadata.update(execution_target='remote', assigned_knight=step.computer_id,
+                                    capability='process.execute' if step.kind == 'build' else 'compute')
                 elif state['plan'].get('offload_analysis') and policy['level'] == 5 and step.kind in {'text_check','python_check'}:
                     metadata['offload'] = True
                 self.engine.submit_task(text or step.title, metadata)

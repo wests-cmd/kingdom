@@ -1,9 +1,9 @@
-export const canChooseComputer = step => ['text_check','python_check'].includes(step.kind)
+export const canChooseComputer = step => ['text_check','python_check','build'].includes(step.kind)
 
-export function eligibleMissionComputers(nodes) {
+export function eligibleMissionComputers(nodes,kind) {
   return (nodes || []).filter(node => !node.is_local &&
     ['APPROVED','CONNECTED'].includes(node.node_state) &&
-    (node.granted_capabilities || []).includes('compute'))
+    (node.granted_capabilities || []).includes(kind==='build'?'process.execute':'compute'))
 }
 
 export function setStepComputer(step,computerId) {

@@ -52,6 +52,11 @@ def native_tools():
             raise ValueError("Only a reviewed provider identifier is allowed")
         return probe_provider(params["provider_id"], params.get("timeout_seconds", 10))
     tools.register_handler("provider.metadata@1.0.0", probe)
+    from backend.runtime.remote_build import TOOL as BUILD_TOOL, build
+    tools.register_tool(ToolDefinition('build.run', '1.0.0', 'kingdom.reviewed', 'remote build',
+        'Run an exactly approved bounded command on a POSIX worker and check reviewed artifact digests',
+        {}, {}, ['process.execute'], [], 'HIGH'))
+    tools.register_handler(BUILD_TOOL, build)
     from backend.runtime.computer_tools import COMPUTER_HANDLERS, TOOL_CAPABILITIES
     for key, handler in COMPUTER_HANDLERS.items():
         tool_id, version = key.split('@')
@@ -74,6 +79,10 @@ def execute_request(task, capabilities):
         from backend.runtime.computer_tools import TOOL_CAPABILITIES, receipt
         if tool in TOOL_CAPABILITIES:
             params = {**params, '_receipt_id': task['id']}
+        from backend.runtime.remote_build import TOOL as BUILD_TOOL
+        if tool == BUILD_TOOL:
+            params = {**params, '_task_context': {key: task.get(key) for key in ('id', 'lease_id', 'fencing_token')}}
+            params['_task_context']['task_id'] = params['_task_context'].pop('id')
         output = native_tools().execute(tool, params, list(capabilities), [])
         return {"kind": "native_tool", "tool": tool, "output": output,
                 **(receipt(task, output) if tool in TOOL_CAPABILITIES else {})}
@@ -117,6 +126,11 @@ def verify_request_result(task, result, allow_local_model=True):
     metadata = task.get("metadata", {})
     tool = metadata.get("tool")
     if tool:
+        from backend.runtime.remote_build import TOOL as BUILD_TOOL, verify as verify_build
+        if tool == BUILD_TOOL:
+            if result.get('kind') != 'native_tool' or result.get('tool') != tool:
+                raise ValueError('Mismatched build receipt')
+            return verify_build(task, result.get('output'))
         from backend.runtime.computer_tools import TOOL_CAPABILITIES, verify_receipt
         if tool in TOOL_CAPABILITIES:
             if not allow_local_model or result.get('tool') != tool or result.get('kind') != 'native_tool':

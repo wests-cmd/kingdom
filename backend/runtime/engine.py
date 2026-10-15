@@ -160,6 +160,12 @@ class RuntimeEngine:
         if meta.get('tool') in TOOL_CAPABILITIES:
             if meta.get('subtasks'): raise ValueError('Computer operations must be one exact reviewed task')
             meta = {**meta, 'capability': TOOL_CAPABILITIES[meta['tool']]}
+        if meta.get('tool') == 'build.run@1.0.0':
+            from backend.runtime.remote_build import BuildSpec
+            BuildSpec.model_validate(meta.get('tool_parameters'))
+            if meta.get('subtasks') or meta.get('execution_target') != 'remote' or not meta.get('assigned_knight'):
+                raise ValueError('Builds require one exact reviewed remote computer task')
+            meta = {**meta, 'capability': 'process.execute', 'max_attempts': 1}
         if meta.get('offload') and self.execution_policy.get()['level'] == 5 and meta.get('tool') in {'text.analyze@1.0.0', 'code.python.analyze@1.0.0'}:
             from backend.cluster.hierarchy import offload_candidate
             from backend.cluster.node_registry import node_registry
@@ -262,6 +268,12 @@ class RuntimeEngine:
             task = self.tasks.get(task_id)
             if self.execution_policy.get()["level"] == 0 or not task or task["status"].lower() != "queued":
                 return None
+            if task.get('metadata', {}).get('tool') == 'build.run@1.0.0':
+                from backend.cluster.hierarchy import offload_candidate
+                from backend.cluster.node_registry import node_registry
+                if capability != 'process.execute' or offload_candidate(node_registry, capability,
+                        members=[node_id], busy_nodes=leases.busy_node_ids()) != node_id:
+                    return None
             auth = self.authorize_task(task)
             if not auth["authorized"]:
                 if auth.get("approval_id"):

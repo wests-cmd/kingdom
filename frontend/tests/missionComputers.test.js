@@ -19,3 +19,9 @@ test('selecting default removes required target without altering other mission f
  assert.equal(canChooseComputer(unsupported),false)
  assert.equal(setStepComputer(unsupported,''),unsupported)
 })
+
+test('build placement requires an actual process grant rather than compute',()=>{
+ const nodes=[{id:'analysis',node_state:'CONNECTED',granted_capabilities:['compute']},{id:'build',node_state:'CONNECTED',granted_capabilities:['process.execute']}]
+ assert.deepEqual(eligibleMissionComputers(nodes,'build').map(n=>n.id),['build'])
+ assert.equal(canChooseComputer({kind:'build'}),true)
+})
