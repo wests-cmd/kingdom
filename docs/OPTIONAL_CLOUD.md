@@ -4,7 +4,16 @@ Kingdom remains a local adaptive harness: models, tools, cluster execution and
 the authoritative SQLite database run on the owner's server. Cloud accounts are
 optional. No service in this document has been provisioned by this change.
 
-## Cloudflare Pages: prepared static frontend
+## Cloudflare Pages: public site ready for account setup
+
+`site/` is a separate no-build HTML/CSS information and download-links page.
+It contains no account access, API endpoint, model inference or tracking. Pages
+settings: root `site`, framework None, blank build command, output `.`. No
+environment variables are required. See `site/README.md`. This is the first
+hosting option; it works without a backend or an account for visitors. Publishing
+still needs an owner-authorized Cloudflare account and has not occurred.
+
+## Cloudflare Pages: separate authenticated frontend preparation
 
 The Vite UI can be built for Pages; it does **not** include the Python backend,
 models, persistent jobs, credentials or SQLite. An existing backend must remain
