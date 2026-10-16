@@ -1,19 +1,14 @@
-import React,{useEffect,useRef,useState} from 'react'
+import React,{useRef,useState} from 'react'
 import api from '../api'
 import useLiveData from '../hooks/useLiveData'
 
-const emptyChat=()=>({profile:'',input:'',messages:[],busy:false,error:'',computer:''})
+const emptyChat=()=>({profile:'auto',input:'',messages:[],busy:false,error:'',computer:''})
 export default function ParallelChats(){
  const {data,error}=useLiveData('/workspace/model-profiles',10000)
  const [chats,setChats]=useState([emptyChat(),emptyChat()])
  const pending=useRef([false,false])
  const profiles=data?.profiles||[]
  const change=(index,patch)=>setChats(old=>old.map((chat,i)=>i===index?{...chat,...patch}:chat))
- useEffect(()=>{
-  if(!data?.profiles?.length)return
-  setChats(old=>old.map((chat,index)=>chat.profile?chat:{...chat,profile:
-   data.profiles.find(p=>p.id===(index===0?'this-pc':'laptop3'))?.id||data.profiles[index%data.profiles.length].id}))
- },[data])
  const send=async(index,event)=>{
   event.preventDefault()
   const chat=chats[index],text=chat.input.trim()
@@ -35,13 +30,13 @@ export default function ParallelChats(){
   <h2 id="parallel-chat-heading">Two model chats</h2>
   <p>Use different computers to run both chats at once. Connections on one computer share its request limit. Chats stay in this page until you clear them or leave it.</p>
   {error&&<p role="alert">Could not load model computers.</p>}
-  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))',gap:16}}>
+  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,280px),1fr))',gap:16}}>
    {chats.map((chat,index)=><section key={index} className="record-detail" style={{minWidth:0}} aria-label={`Chat ${index+1}`}>
     <h3>Chat {index+1}</h3>
     <label>Model computer<select style={{width:'100%',minWidth:0,maxWidth:'100%'}} value={chat.profile} disabled={chat.busy} onChange={e=>change(index,{profile:e.target.value,messages:[],computer:'',error:''})}>
-     <option value="">Choose a connection</option>
+     <option value="auto">Automatic · best available fit</option>
      {(data?.pools||[]).map(pool=><option key={`pool:${pool}`} value={`pool:${pool}`}>Pool {pool} · available computer</option>)}
-     {profiles.map(p=><option key={p.id} value={p.id}>{p.id} · {p.model}</option>)}
+     {profiles.map(p=><option key={p.id} value={p.id}>{p.id} · {p.model} · {p.computer_id||'Computer not associated'}</option>)}
     </select></label>
     <div aria-live="polite" style={{maxHeight:360,overflowY:'auto'}}>{chat.messages.map((message,i)=><div key={i}>
      <strong>{message.role==='user'?'You':'Model'}</strong><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{message.content}</pre>
