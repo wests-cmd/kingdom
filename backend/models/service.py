@@ -37,6 +37,11 @@ class ModelService:
         return {"default_provider": self.default_provider, "ollama": ollama, "openai_compatible": {"configured": bool(self.openai_url and self.openai_key)}, "usage": self.usage}
 
     async def generate(self, prompt, model=None, provider=None, profile=None, images=None):
+        if not profile and not model and not provider:
+            from backend.models.profiles import ModelProfiles
+            from backend.storage.db import db
+            if ModelProfiles(db).list():
+                profile = 'auto'
         if profile:
             return await self._generate_profile(prompt, profile, images or [])
         from backend.runtime.attachments import compact_text
@@ -59,7 +64,11 @@ class ModelService:
         from backend.models.capacity import capacity
         profiles = ModelProfiles(db)
         configured = profiles.list()
-        if ident.startswith('pool:'):
+        if ident == 'auto':
+            from backend.models.selection import eligible_profiles
+            candidates = await eligible_profiles([profiles.get(p['id'], credential=True) for p in configured],
+                                                 characters=len(prompt), images=bool(images))
+        elif ident.startswith('pool:'):
             group = ident.removeprefix('pool:')
             if not group:
                 raise ValueError('Select a named model pool')
@@ -71,7 +80,11 @@ class ModelService:
             candidates = [candidate]
         async with capacity.acquire(candidates, server_profiles=configured) as selected:
             profile = profiles.get(selected['id'], credential=True)
-            return await self._generate_connection(prompt, profile, images)
+            result = await self._generate_connection(prompt, profile, images)
+            if ident == 'auto':
+                from backend.models.selection import selection_reason
+                result['selection'] = selection_reason(profile)
+            return result
 
     async def _generate_connection(self, prompt, profile, images):
         from backend.runtime.attachments import compact_text
@@ -117,7 +130,13 @@ class ModelService:
         has_images = any(isinstance(m.get('content'), list) and any(
             isinstance(part, dict) and part.get('type') in {'image_url', 'input_image', 'image'}
             for part in m['content']) for m in request['messages'])
-        if ident.startswith('pool:'):
+        automatic = not ident or ident == 'auto'
+        if automatic:
+            import json
+            from backend.models.selection import eligible_profiles
+            candidates = await eligible_profiles([profiles.get(p['id'], credential=True) for p in configured],
+                characters=len(json.dumps(request['messages'])), images=has_images, tools=bool(request.get('tools')))
+        elif ident.startswith('pool:'):
             group = ident.removeprefix('pool:')
             candidates = [p for p in configured if group and p.get('pool_group') == group and (not has_images or p.get('vision'))]
         else:
@@ -146,6 +165,9 @@ class ModelService:
             if not payload.get('choices'):
                 raise RuntimeError('Configured model returned no chat choices')
             payload['kingdom_profile'] = profile['id']
+            if automatic:
+                from backend.models.selection import selection_reason
+                payload['kingdom_selection'] = selection_reason(profile)
             self._record(payload.get('usage') or {})
             return payload
 

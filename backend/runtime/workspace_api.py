@@ -46,6 +46,8 @@ class ProfileRequest(BaseModel):
     model: str = Field(min_length=1, max_length=200)
     variant: Literal['standard', 'fine_tuned', 'abliterated', 'custom'] = 'standard'
     vision: bool = False
+    supports_tools: bool = False
+    disabled: bool = False
     context_characters: int = Field(default=24000, ge=4000, le=400000)
     pool_group: str = Field(default='', max_length=64)
     computer_id: str = Field(default='', max_length=64)

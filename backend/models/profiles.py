@@ -51,7 +51,7 @@ class ModelProfiles:
         if pool and not re.fullmatch(r'[a-z][a-z0-9_-]{0,63}', pool):
             raise ValueError('Use a short pool name such as chat')
         computer = config.get('computer_id', '')
-        if computer and not re.fullmatch(r'[a-z][a-z0-9_-]{0,63}', computer):
+        if computer and not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,63}', computer):
             raise ValueError('Use a short computer name such as laptop3')
         for field, default, minimum, maximum in [('max_parallel', 1, 1, 4), ('timeout_seconds', 120, 30, 600),
                                                  ('max_output_tokens', 512, 16, 8192), ('num_ctx', 8192, 512, 131072)]:

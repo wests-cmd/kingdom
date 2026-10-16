@@ -20,7 +20,7 @@ Kingdom strictly enforces human authority over model execution:
 ### Core Directives:
 - Models propose actions; the execution layer validates authority, capabilities, and human approvals before execution.
 - Default to **deny-by-default**.
-- High-risk operations (e.g. `filesystem.delete`, `process.execute`, `docker.execute`) MUST require human approval.
+- High-risk operations require human approval at levels 0–4. At level 5, the authenticated owner’s policy selection is standing authorization for granted tools; task/model metadata cannot elevate policy or capabilities. OS permission boundaries remain mandatory.
 - Mocks are NEVER permitted in production runtime paths.
 
 ---

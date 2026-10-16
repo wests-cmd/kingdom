@@ -47,11 +47,19 @@ class RuntimeEngine:
         self.dlq = DeadLetterQueue()
         self.rate_limiter = RateLimiterEngine()
         self.execution_policy = ExecutionPolicy()
+        # Resolve dynamically so replacement/test policy instances remain authoritative.
+        self.security.owner_policy = self
+        for apprentice in self.swarm.registry._knights.values():
+            apprentice.zero_trust.owner_policy = self
         self.dispatch_lock = RLock()
         self.restore_computer_grants()
         from backend.runtime.missions import MissionService
         from backend.storage.db import db
         self.missions = MissionService(self, db)
+
+    def get(self):
+        """Owner policy authority used by the execution security boundary."""
+        return self.execution_policy.get()
 
     def restore_computer_grants(self):
         import json

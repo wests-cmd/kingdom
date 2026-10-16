@@ -20,7 +20,7 @@ def service():
 class CreateSession(BaseModel):
     model_config = ConfigDict(extra='forbid')
     objective: str = Field(min_length=1, max_length=24000)
-    model_profile: str = Field(min_length=1, max_length=100)
+    model_profile: str = Field(default='auto', min_length=1, max_length=100)
     max_turns: int = Field(default=12, ge=1, le=32)
     allow_process: bool = False
     skill_ids: list[str] = Field(default_factory=list,max_length=8)

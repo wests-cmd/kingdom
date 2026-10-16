@@ -15,8 +15,7 @@ class HeartbeatManager:
         if not node:
             return {"success": False, "error": f"Node {node_id} not found in cluster registry."}
 
-        state = node.status
-        state_val = state.value if isinstance(state, NodeState) else str(state)
+        state_val = node.node_state
         if state_val in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value]:
             return {"success": False, "error": f"Node {node_id} is in invalid state {state_val}."}
 
@@ -43,7 +42,7 @@ class HeartbeatManager:
         return {
             "success": True,
             "node_id": node_id,
-            "node_state": state_val,
+            "node_state": node_registry.get_node(node_id).node_state,
             "timestamp": now
         }
 
@@ -55,8 +54,7 @@ class HeartbeatManager:
         healthy_count = 0
 
         for node in all_nodes:
-            state = node.status
-            state_val = state.value if isinstance(state, NodeState) else str(state)
+            state_val = node.node_state
             if state_val in [NodeState.CONNECTED.value, NodeState.APPROVED.value]:
                 elapsed = now - (node.last_heartbeat or 0)
                 if elapsed > self.timeout_seconds:

@@ -12,24 +12,24 @@ export default function Workbench(){
  const [workspace,setWorkspace]=useState('projects/default')
  const [knowledgeScope,setKnowledgeScope]=useState(''),[embeddingProfile,setEmbeddingProfile]=useState(''),[ownerMemory,setOwnerMemory]=useState(false)
  const [observed,setObserved]=useState({})
- const [objective,setObjective]=useState(''),[profile,setProfile]=useState('this-pc'),[allowProcess,setAllowProcess]=useState(false)
+ const [objective,setObjective]=useState(''),[profile,setProfile]=useState('auto'),[allowProcess,setAllowProcess]=useState(false)
  const [selected,setSelected]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState('')
  const [connection,setConnection]=useState({id:'',name:'',kind:'custom-cli',argv:'["/absolute/path/to/agent", "{prompt}"]',environment:'{}',timeout_seconds:600})
  const [harness,setHarness]=useState(''),[job,setJob]=useState(''),[cwd,setCwd]=useState('.'),[task,setTask]=useState(null)
  const perform=async fn=>{setBusy(true);setError('');try{await fn()}catch(e){setError(typeof e.response?.data?.detail==='string'?e.response.data.detail:e.message)}finally{setBusy(false)}}
  const current=(sessions||[]).find(s=>s.id===selected?.id)||selected
- useEffect(()=>{if(!models?.profiles?.length)return;const valid=models.profiles.some(p=>p.id===profile)||(profile.startsWith('pool:')&&models.pools?.includes(profile.slice(5)));if(!valid)setProfile(models.profiles.find(p=>p.id==='this-pc')?.id||models.profiles.find(p=>p.id==='laptop3')?.id||models.profiles[0].id)},[models,profile])
+ useEffect(()=>{if(profile==='auto'||!models?.profiles?.length)return;const valid=models.profiles.some(p=>p.id===profile)||(profile.startsWith('pool:')&&models.pools?.includes(profile.slice(5)));if(!valid)setProfile(models.profiles.find(p=>p.id==='this-pc')?.id||models.profiles.find(p=>p.id==='laptop3')?.id||models.profiles[0].id)},[models,profile])
  return <div className="page"><h1>Agent workbench</h1>
   <p>Give a model a job with real workspace tools, or hand the job to an installed agent such as Hermes or Claude. You keep control of permissions and approvals.</p>
   {error&&<p role="alert">{error}</p>}
   <section className="panel"><h2>Work with a model</h2>
    <p>Conversations and tool evidence are saved. Model inference runs on your selected computer; workspace tools run on the Kingdom host.</p>
    <form onSubmit={e=>{e.preventDefault();perform(async()=>{const {data}=await api.post('/agent-sessions',{objective,model_profile:profile,max_turns:12,allow_process:allowProcess,skill_ids:skillIds,workspace,knowledge_scope:knowledgeScope||null,embedding_profile:embeddingProfile||null,use_owner_memory:ownerMemory});setSelected(data);refresh()})}}>
-    <label>Model computer<select value={profile} onChange={e=>setProfile(e.target.value)}>{(models?.profiles||[]).map(p=><option key={p.id} value={p.id}>{p.id} · {p.model}</option>)}{(models?.pools||[]).map(p=><option key={p} value={`pool:${p}`}>Pool {p}</option>)}</select></label>
+    <label>Model computer<select value={profile} onChange={e=>setProfile(e.target.value)}><option value="auto">Automatic · available model that fits this request</option>{(models?.profiles||[]).map(p=><option key={p.id} value={p.id}>{p.id} · {p.model}</option>)}{(models?.pools||[]).map(p=><option key={p} value={`pool:${p}`}>Pool {p}</option>)}</select></label>
     <label>What should it do?<textarea required rows={5} maxLength={24000} value={objective} onChange={e=>setObjective(e.target.value)} placeholder="Inspect the workspace and implement a small change. Run checks and report what actually passed."/></label>
     <label>Project folder<input required value={workspace} onChange={e=>setWorkspace(e.target.value)}/></label>
     <details><summary>Knowledge references</summary><p>Save documents under Memory first. Choose the same scope and embedding connection; other scopes stay out of vector retrieval.</p><label>Knowledge scope<input value={knowledgeScope} onChange={e=>setKnowledgeScope(e.target.value)}/></label><label>Embedding connection<select value={embeddingProfile} onChange={e=>setEmbeddingProfile(e.target.value)}><option value="">No vector retrieval</option>{(models?.profiles||[]).map(p=><option key={p.id} value={p.id}>{p.id} · {p.model}</option>)}</select></label><label><input type="checkbox" checked={ownerMemory} onChange={e=>setOwnerMemory(e.target.checked)}/>Also use shared owner memory across projects</label></details>
-    <label><input type="checkbox" checked={allowProcess} onChange={e=>setAllowProcess(e.target.checked)}/>Offer command execution to this model. Each command still needs its exact approval.</label>
+    <label><input type="checkbox" checked={allowProcess} onChange={e=>setAllowProcess(e.target.checked)}/>Offer command execution to this model. Individual approval is required at levels 1–4; level 5 uses your standing authorization and existing tool grants.</label>
     <details><summary>Use saved skill instructions</summary><p>Import documents in Skill maps &amp; Discord first. Selected instructions stay untrusted and do not grant tools.</p>{(skills||[]).map(skill=><label key={skill.skill_id}><input type="checkbox" checked={skillIds.includes(skill.skill_id)} onChange={e=>setSkillIds(old=>e.target.checked?[...old,skill.skill_id]:old.filter(id=>id!==skill.skill_id))}/>{skill.name}</label>)}</details>
     <button disabled={busy||!objective.trim()}>Create saved job</button>
    </form>

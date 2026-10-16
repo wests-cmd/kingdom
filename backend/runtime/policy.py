@@ -13,7 +13,7 @@ LEVELS = [
     {"level": 2, "name": "Approve every task", "description": "Require one exact, single-use human approval before each task executes."},
     {"level": 3, "name": "Bounded execution", "description": "Run tasks within existing capability grants. High-risk actions still need approval."},
     {"level": 4, "name": "Adaptive missions", "description": "Plan and advance approved multi-step missions, retain context and retry failed safe steps within a budget. High-risk actions still need approval."},
-    {"level": 5, "name": "Coordinated missions", "description": "Use larger mission budgets and offload supported analysis to healthy approved computers. Completion requires verified results. High-risk actions still need approval."},
+    {"level": 5, "name": "Owner-authorized autonomy", "description": "Coordinate approved computers and execute granted high-risk tools without per-action prompts. Selecting this level is standing owner authorization, including financial tools if separately connected and granted. OS permissions and verification still apply."},
 ]
 
 
@@ -47,7 +47,7 @@ class ExecutionPolicy:
         level = json.loads(row[0])["level"] if row else 3
         if type(level) is not int or level not in range(6):
             level = 0  # Invalid persisted policy fails closed.
-        return {"level": level, "levels": LEVELS, "mission_budget": self.mission_budget(level), "scope": "New task execution; existing capability and approval checks always apply."}
+        return {"level": level, "levels": LEVELS, "mission_budget": self.mission_budget(level), "scope": "New task execution; authentication and capability checks always apply; level 5 provides standing owner authorization for high-risk tools."}
 
     def set(self, level):
         if type(level) is not int or level not in range(6):

@@ -29,6 +29,7 @@ import { realtime } from "./websocket"
 import api from "./api"
 import { initializeSession, setAccessCode } from "./session"
 import "./styles/app.css"
+import {loadInterfaceMode,saveInterfaceMode,pageForMode} from './interfaceMode'
 
 export default function App() {
   const [hash, setHash] = useState(window.location.hash)
@@ -38,6 +39,13 @@ export default function App() {
 
 function OwnerApp() {
   const [currentPage, setCurrentPage] = useState("Dashboard")
+  const [interfaceMode,setInterfaceMode] = useState(()=>{try{return loadInterfaceMode(window.localStorage)}catch{return 'easy'}})
+  const [modeSaved,setModeSaved] = useState(true)
+  const changeInterfaceMode=mode=>{
+    setInterfaceMode(mode)
+    setCurrentPage(page=>pageForMode(page,mode))
+    try {setModeSaved(saveInterfaceMode(window.localStorage,mode))} catch {setModeSaved(false)}
+  }
   const [isConnected, setIsConnected] = useState(false)
   const [authorized, setAuthorized] = useState(false)
   const [accessCode, setCode] = useState("")
@@ -123,14 +131,15 @@ function OwnerApp() {
       <label>Owner access code <input type="password" autoComplete="off" value={accessCode} onChange={e=>setCode(e.target.value)} /></label><button type="submit">Connect</button>
     </form></details>{error && <p role="alert">{error}</p>}</main>
   return (
-    <div className="layout">
+    <div className="layout" data-interface-mode={interfaceMode} data-page={currentPage.toLowerCase()}>
       <a className="skip-link" href="#main-content">Skip to main content</a>
-      <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
+      <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} interfaceMode={interfaceMode}/>
 
       <div className="main-container">
         <details><summary>Install Kingdom as a free web app</summary><InstallKingdom /></details>
         <header className="topbar">
           <div className="page-title">{currentPage === 'SkillMaps' ? 'Skill maps & Discord' : currentPage}</div>
+          <div className="interface-mode-controls"><fieldset className="interface-mode-switch"><legend>Workspace view</legend>{['easy','advanced'].map(mode=><button key={mode} type="button" aria-pressed={interfaceMode===mode} onClick={()=>changeInterfaceMode(mode)}>{mode==='easy'?'Easy':'Advanced'}</button>)}</fieldset>{!modeSaved&&<small role="status">View changed for this session; preferences could not be saved.</small>}</div>
           <div className="status-indicator">
             Kingdom:{" "}
             <span className={isConnected ? "badge-online" : "badge-offline"}>

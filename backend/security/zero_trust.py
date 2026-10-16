@@ -23,6 +23,9 @@ class ZeroTrust:
         self.risk_classifier = RiskClassifier()
         self.audit = audit_log
         self.manager = manager
+        # Installed runtime supplies the authenticated owner-selected policy.
+        # Task metadata and model output cannot supply this authority.
+        self.owner_policy = None
 
     def validate(self, actor: Any, required_capability: str | None = None) -> dict[str, Any]:
         """Backward compatible validator method."""
@@ -128,7 +131,8 @@ class ZeroTrust:
         # 4. Risk Classification & Approval check
         risk = self.risk_classifier.classify_operation(capability, parameters)
 
-        if require_human_approval or self.approvals.requires_approval(capability, risk):
+        standing_owner = self.owner_policy is not None and self.owner_policy.get()["level"] == 5
+        if require_human_approval or (self.approvals.requires_approval(capability, risk) and not standing_owner):
             # Verify explicit approval_id capability scope and actor identity binding
             if approval_id:
                 if self.approvals.consume(approval_id, actor_id=actor_id, capability=capability,
@@ -179,7 +183,7 @@ class ZeroTrust:
             operation=operation,
             capability=capability,
             decision="ALLOWED",
-            reason="Authorized by zero-trust policy",
+            reason="Owner level 5 standing authorization" if standing_owner and risk == RiskLevel.HIGH else "Authorized by zero-trust policy",
         )
         return {
             "authorized": True,
