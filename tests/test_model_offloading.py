@@ -65,6 +65,27 @@ def save(profiles, name, endpoint, **kwargs):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('provider', ['ollama', 'openai_compatible'])
+async def test_generate_returns_selected_profile_identity_for_both_transports(profiles, provider):
+    # Profile IDs and upstream model names are separate identities. Exercise
+    # the actual HTTP return path, not a mocked _generate_connection result.
+    with model_server() as (endpoint, state):
+        save(profiles, 'selected-computer', endpoint, provider=provider, model='upstream-model')
+        service = ModelService()
+        result = await service.generate('Answer this bounded request.', profile='selected-computer')
+        assert result['profile'] == 'selected-computer'
+        assert result['model'] == 'upstream-model'
+        assert result['provider'] == provider
+        assert result['text'] == 'READY'
+        assert 'text' not in result['context']
+        assert state['bodies'][0]['model'] == 'upstream-model'
+        assert service.usage['requests'] == 1
+        if provider == 'openai_compatible':
+            assert result['usage'] == {'prompt_tokens': 3, 'completion_tokens': 1}
+            assert service.usage['prompt_tokens'] == 3
+
+
+@pytest.mark.asyncio
 async def test_two_computers_run_chats_at_the_same_time(profiles):
     barrier = threading.Barrier(2)
     with model_server(barrier) as (first, a), model_server(barrier) as (second, b):
