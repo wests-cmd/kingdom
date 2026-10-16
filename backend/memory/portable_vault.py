@@ -14,6 +14,13 @@ _ID = re.compile(r'^[A-Za-z0-9_-]{1,80}$')
 _SECRET = re.compile(r'(?i)(password|api[_ -]?key|secret|token|authorization|private[_ -]?key|credential|cookie|access[_ -]?code)')
 
 
+def project_identity(scope):
+    """Keep arbitrary front-door scope labels isolated without filesystem paths."""
+    if not isinstance(scope, str) or not scope.strip() or len(scope) > 200:
+        raise ValueError('Invalid project scope')
+    return 'project_' + hashlib.sha256(scope.encode('utf-8')).hexdigest()[:32]
+
+
 def identifier(value):
     if not isinstance(value, str) or not _ID.fullmatch(value):
         raise ValueError('Invalid project or document identity')
@@ -22,7 +29,7 @@ def identifier(value):
 
 def clean_text(value):
     text = re.sub(r'-----BEGIN [^-]*PRIVATE KEY-----.*?-----END [^-]*PRIVATE KEY-----', '[redacted]', str(value), flags=re.S)
-    text = re.sub(r'(?i)(?:ghp_|github_pat_|sk-)[A-Za-z0-9_-]{10,}|bearer\s+\S+', '[redacted]', text)
+    text = re.sub(r'(?i)(?:ghp_|github_pat_|sk-|(?:sk|rk)_(?:test|live)_)[A-Za-z0-9_-]{10,}|bearer\s+\S+', '[redacted]', text)
     text = re.sub(r'(?i)(https?://)[^\s/@]+:[^\s/@]+@', r'\1[redacted]@', text)
     return re.sub(r'(?im)((?:password|api[_ -]?key|secret|token|authorization)\s*[:=]\s*)[^\n,;]+', r'\1[redacted]', text)
 
@@ -50,6 +57,8 @@ class PortableVault:
                 metadata TEXT NOT NULL,updated REAL NOT NULL,PRIMARY KEY(project,id))''')
             conn.execute('''CREATE TABLE IF NOT EXISTS portable_vault_index (
                 project TEXT NOT NULL,id TEXT NOT NULL,terms TEXT NOT NULL,PRIMARY KEY(project,id))''')
+            conn.execute('''CREATE TABLE IF NOT EXISTS portable_vault_trash (
+                project TEXT NOT NULL,id TEXT NOT NULL,document TEXT NOT NULL,PRIMARY KEY(project,id))''')
             conn.commit()
 
     def put(self, project, body, provenance=None, receipts=None, ident=None, expected_revision=0):
@@ -64,6 +73,8 @@ class PortableVault:
         with self.db.get_connection() as conn:
             conn.execute('BEGIN IMMEDIATE')
             old = conn.execute('SELECT revision FROM portable_vault WHERE project=? AND id=?', (project, ident)).fetchone()
+            if not old and conn.execute('SELECT 1 FROM portable_vault_trash WHERE project=? AND id=?', (project, ident)).fetchone():
+                raise ValueError('Document is in trash; restore explicitly before editing')
             actual = old[0] if old else 0
             if expected_revision != actual:
                 raise ValueError('Document changed; reload before updating')
@@ -100,6 +111,34 @@ class PortableVault:
             files[ident+'.md'] = '<!-- kingdom-vault '+header+' -->\n'+body
         return files
 
+    def trash(self, project, ident, expected_revision):
+        identifier(project); identifier(ident)
+        with self.db.get_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('SELECT * FROM portable_vault WHERE project=? AND id=?', (project, ident)).fetchone()
+            if not row or row['revision'] != expected_revision:
+                raise ValueError('Document changed or is already removed')
+            conn.execute('INSERT OR REPLACE INTO portable_vault_trash VALUES(?,?,?)', (project, ident, json.dumps(dict(row))))
+            conn.execute('DELETE FROM portable_vault WHERE project=? AND id=?', (project, ident))
+            conn.execute('DELETE FROM portable_vault_index WHERE project=? AND id=?', (project, ident))
+            conn.commit()
+        self.publish('vault.document_trashed', {'project': project, 'id': ident})
+        return {'id': ident, 'status': 'trashed', 'recoverable': True}
+
+    def restore(self, project, ident):
+        identifier(project); identifier(ident)
+        with self.db.get_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('SELECT document FROM portable_vault_trash WHERE project=? AND id=?', (project, ident)).fetchone()
+            if not row or conn.execute('SELECT 1 FROM portable_vault WHERE project=? AND id=?', (project, ident)).fetchone():
+                raise ValueError('No restorable document')
+            saved = json.loads(row[0])
+            conn.execute('INSERT INTO portable_vault VALUES(?,?,?,?,?,?)', (project, ident, saved['revision']+1, saved['body'], saved['metadata'], time.time()))
+            conn.execute('DELETE FROM portable_vault_trash WHERE project=? AND id=?', (project, ident))
+            self._index(conn, project, ident, saved['body'])
+            conn.commit()
+        return self.get(project, ident)
+
     def import_files(self, project, files):
         identifier(project)
         if not isinstance(files, dict) or len(files) > 100 or sum(len(str(v).encode()) for v in files.values()) > 2*1024*1024:
@@ -129,6 +168,8 @@ class PortableVault:
         with self.db.get_connection() as conn:
             conn.execute('BEGIN IMMEDIATE')
             for ident, body, metadata in prepared:
+                if conn.execute('SELECT 1 FROM portable_vault_trash WHERE project=? AND id=?', (project, ident)).fetchone():
+                    raise ValueError('Import cannot silently restore a trashed document')
                 old = conn.execute('SELECT body,metadata FROM portable_vault WHERE project=? AND id=?', (project, ident)).fetchone()
                 if old:
                     if tuple(old) != (body, metadata):

@@ -32,7 +32,7 @@ class DurableAutomations:
 
     def create_work(self, project, prompt, interval_sec, model_profile='auto', mode='agent',
                     session_scope=None, allow_process=False, enabled=False, start_at=None,
-                    review_instructions='Review execution evidence and tests before continuing.'):
+                    review_instructions='Review execution evidence and tests before continuing.', autorun=False):
         """Owner-created bounded request intent. Paused until explicitly enabled.
 
         RequestBridge currently runs two agent turns / 300 seconds per approved
@@ -46,7 +46,7 @@ class DurableAutomations:
         session_scope = session_scope or 'automation-'+project
         if not isinstance(session_scope, str) or not 1 <= len(session_scope) <= 100 or len(review_instructions) > 2000:
             raise ValueError('Invalid session scope or review instructions')
-        if not isinstance(allow_process, bool) or not isinstance(enabled, bool):
+        if not isinstance(allow_process, bool) or not isinstance(enabled, bool) or type(autorun) is not bool:
             raise ValueError('Owner grants must be explicit booleans')
         if isinstance(interval_sec, bool) or not isinstance(interval_sec, int) or not 60 <= interval_sec <= 2592000:
             raise ValueError('Interval must be 60 seconds to 30 days')
@@ -57,7 +57,7 @@ class DurableAutomations:
         payload = {'prompt': prompt, 'mode': mode, 'model_profile': model_profile,
                    'session_scope': session_scope, 'project_scope': 'projects/'+project,
                    'allow_process': allow_process, 'review_instructions': review_instructions,
-                   'run_budget': {'max_turns': 2, 'max_seconds': 300}, 'autorun': False}
+                   'run_budget': {'max_turns': 2, 'max_seconds': 300}, 'autorun': autorun}
         with self.db.get_connection() as conn:
             conn.execute('INSERT INTO durable_schedules VALUES(?,?,?,?,?,?,?,?,?)',
                          (ident, project, 'enqueue_request', json.dumps(payload), interval_sec, start_at, 'active' if enabled else 'paused', 1, '{}'))
@@ -129,6 +129,10 @@ class DurableAutomations:
             conn.execute('BEGIN IMMEDIATE')
             rows = conn.execute("SELECT * FROM durable_schedules WHERE status='active' AND next_due<=? ORDER BY next_due,id LIMIT ?", (now, min(max(int(limit), 1), 100))).fetchall()
             for row in rows:
+                previous = conn.execute('SELECT status FROM durable_schedule_outbox WHERE schedule_id=? ORDER BY rowid DESC LIMIT 1', (row['id'],)).fetchone()
+                if previous and previous[0] not in {'execution_completed', 'cancelled'}:
+                    # One unfinished request per schedule; never build a hidden backlog.
+                    continue
                 due = row['next_due']
                 run_key = f"{row['id']}:{due:.6f}"
                 old = conn.execute('SELECT status FROM durable_schedule_runs WHERE run_key=?', (run_key,)).fetchone()
@@ -149,10 +153,11 @@ class DurableAutomations:
                     completed.append(receipt)
                 else:
                     request = {key: payload[key] for key in ('mode','model_profile','session_scope','project_scope','allow_process')}
-                    request['prompt'] = payload['prompt']+'\n\nReview requirements: '+payload['review_instructions']
+                    request['prompt'] = payload['prompt']
+                    request['review_instructions'] = payload['review_instructions']
                     request['idempotency_key'] = 'schedule:'+run_key
                     conn.execute('INSERT INTO durable_schedule_outbox VALUES(?,?,?,?,?,?)', (run_key, row['id'], json.dumps(request), 'pending', 0, None))
-                    receipt = {'run_key': run_key, 'operation': 'enqueue_request', 'project': row['project'], 'status': 'pending_delivery', 'autorun': False}
+                    receipt = {'run_key': run_key, 'operation': 'enqueue_request', 'project': row['project'], 'status': 'pending_delivery', 'autorun': payload.get('autorun', False)}
                     status = 'pending_delivery'
                 conn.execute('INSERT INTO durable_schedule_runs VALUES(?,?,?,?,?)', (run_key, row['id'], due, status, json.dumps(receipt)))
                 next_due = due + (math.floor((now-due)/row['interval_sec'])+1)*row['interval_sec']
@@ -198,7 +203,7 @@ class DurableAutomations:
                 self.publish('automation.delivery_failed', {'run_key': row['run_key'], 'reason': 'Request bridge unavailable; checkpoint retained'})
                 continue
             with self.db.get_connection() as conn:
-                state = conn.execute('SELECT project,status FROM durable_schedules WHERE id=?', (row['schedule_id'],)).fetchone()
+                state = conn.execute('SELECT project,status,payload FROM durable_schedules WHERE id=?', (row['schedule_id'],)).fetchone()
             if state['status'] != 'active':
                 if self.cancel_request is None:
                     # Do not declare cancellation delivered without a bridge receipt.
@@ -209,7 +214,7 @@ class DurableAutomations:
             else:
                 delivery_status = 'enqueued'
             receipt = {'run_key': row['run_key'], 'operation': 'enqueue_request', 'project': state['project'],
-                       'request_id': request_id, 'status': delivery_status, 'autorun': False, 'delivered_at': self.clock()}
+                       'request_id': request_id, 'status': delivery_status, 'autorun': json.loads(state['payload']).get('autorun', False), 'delivered_at': self.clock()}
             with self.db.get_connection() as conn:
                 conn.execute('BEGIN IMMEDIATE')
                 conn.execute('UPDATE durable_schedule_outbox SET status=?,request_id=? WHERE run_key=?', (delivery_status, request_id, row['run_key']))

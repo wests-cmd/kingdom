@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react"
 import api from "../api"
 import useLiveData from "../hooks/useLiveData"
 import KnowledgeSources from "../components/KnowledgeSources"
+import PortableVaultPanel from "../components/PortableVaultPanel"
 
 
 export default function Memory() {
@@ -21,6 +22,7 @@ export default function Memory() {
 
   return (
     <div>
+      <PortableVaultPanel/>
       <KnowledgeSources/>
       <h2>Persistent Memory</h2>
       {(error || saveError) && <p role="alert">{error || saveError}</p>}

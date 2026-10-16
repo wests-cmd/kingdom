@@ -42,6 +42,7 @@ class WorkScheduleRequest(BaseModel):
     session_scope: str | None = Field(default=None, max_length=100)
     allow_process: bool = False
     enabled: bool = False
+    autorun: bool = False
     start_at: float | None = Field(default=None, ge=0)
     review_instructions: str = Field(default='Review execution evidence and tests before continuing.', max_length=2000)
 
@@ -68,7 +69,7 @@ def create_work_schedule(request: WorkScheduleRequest):
 @router.get('/schedules/{project}')
 def list_schedules(project: str):
     return schedule_boundary(lambda: {'schedules': scheduled.list(project), 'supported_operations': ['record_note', 'enqueue_request'],
-        'notice': 'Work creates an idempotent queued request, never runs it automatically. New work schedules start paused unless explicitly enabled.'})
+        'notice': 'Work schedules start paused. Optional automatic bounded execution requires an explicit autorun setting and autonomy level 4 or 5; incomplete work pauses for review.'})
 
 
 @router.post('/schedules/{project}/{ident}/status')

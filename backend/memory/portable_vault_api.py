@@ -13,6 +13,30 @@ def initialize(database, publish=None):
     service = PortableVault(database, publish)
 
 
+@router.get('/project-id')
+def scope_identity(scope: str):
+    from backend.memory.portable_vault import project_identity
+    try:
+        return {'project': project_identity(scope), 'scope': scope}
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+
+
+@router.get('/{project}/download')
+def download(project: str):
+    import io
+    import zipfile
+    from fastapi.responses import StreamingResponse
+    files = boundary(lambda: service.export(project))
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
+        for name, content in files.items():
+            archive.writestr(name, content)
+    output.seek(0)
+    return StreamingResponse(output, media_type='application/zip',
+        headers={'Content-Disposition': 'attachment; filename="kingdom-project-vault.zip"'})
+
+
 class DocumentRequest(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     body: str = Field(max_length=262144)
@@ -25,6 +49,20 @@ class DocumentRequest(BaseModel):
 class ImportRequest(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     files: dict[str, str]
+
+
+class RevisionRequest(BaseModel):
+    expected_revision: int = Field(strict=True, ge=1)
+
+
+@router.post('/{project}/documents/{ident}/trash')
+def trash(project: str, ident: str, request: RevisionRequest):
+    return boundary(lambda: service.trash(project, ident, request.expected_revision))
+
+
+@router.post('/{project}/documents/{ident}/restore')
+def restore(project: str, ident: str):
+    return boundary(lambda: service.restore(project, ident))
 
 
 def boundary(operation):

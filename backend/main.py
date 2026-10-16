@@ -5,10 +5,20 @@ from backend.websocket import ws_router
 from backend.state import STATE
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    await schedule_runner.start()
+    try:
+        yield
+    finally:
+        await schedule_runner.stop()
 
 app = FastAPI(
     title="Kingdom v1TAS",
-    version=STATE.get("version", "1.0.0")
+    version=STATE.get("version", "1.0.0"), lifespan=lifespan
 )
 
 
@@ -83,17 +93,8 @@ from backend.runtime.scheduled_runner import ScheduledRunner
 from backend.runtime.automation_api import scheduled
 scheduled.enqueue_request = lambda body: request_service().create(body)
 scheduled.cancel_request = lambda ident: request_service().cancel(ident)
-schedule_runner = ScheduledRunner(scheduled, engine)
+schedule_runner = ScheduledRunner(scheduled, engine, requests=request_service)
 
-
-@app.on_event('startup')
-async def start_scheduled_work():
-    await schedule_runner.start()
-
-
-@app.on_event('shutdown')
-async def stop_scheduled_work():
-    await schedule_runner.stop()
 
 # Serve built frontend static assets if available
 frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")

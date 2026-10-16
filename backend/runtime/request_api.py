@@ -27,6 +27,7 @@ class RequestInput(BaseModel):
     mode:Literal['auto','quick','agent']='auto'
     model_profile:str=Field(default='auto',min_length=1,max_length=100)
     allow_process:bool=False
+    review_instructions:str=Field(default='',max_length=2000)
 
 @router.post('',status_code=201)
 def create(body:RequestInput):
