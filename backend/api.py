@@ -471,6 +471,12 @@ def create_task(request: TaskRequest):
     if request.metadata.get("actor_id", "owner") != "owner" or request.metadata.get("actor", "owner") != "owner":
         raise HTTPException(status_code=403, detail="Task actor must be the authenticated owner")
     metadata = dict(request.metadata)
+    if 'project_test' in metadata:
+        from backend.runtime.project_tests import validate_metadata
+        try:
+            validate_metadata(metadata)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(400, str(exc)) from exc
     metadata["actor_id"] = "owner"
     metadata["actor"] = "owner"
     attachments = metadata.get('attachment_ids', [])
@@ -520,6 +526,18 @@ def download_build_artifact(task_id: str, name: str):
         'Content-Disposition':"attachment; filename*=UTF-8''"+quote(PurePosixPath(name).name,safe=''),
         'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
         'X-Artifact-SHA256':output['artifacts'][name]['sha256']})
+
+@router.get('/tasks/{task_id}/test-report')
+def project_test_report(task_id: str):
+    task = engine.tasks.get(task_id)
+    if task is None or 'project_test' not in task.get('metadata', {}):
+        raise HTTPException(404, 'Project test task not found')
+    from backend.runtime.project_tests import report
+    try:
+        return report(task)
+    except (ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(409, 'Persisted project test descriptor is invalid') from exc
+
 
 @router.get("/tasks/{task_id}")
 def get_task(task_id: str):
