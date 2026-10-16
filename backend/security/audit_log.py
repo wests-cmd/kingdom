@@ -97,15 +97,31 @@ class AuditLogger:
         decision: str | None = None,
         capability: str | None = None,
     ) -> list[dict[str, Any]]:
-        filtered = self._records
-        if actor:
-            filtered = [r for r in filtered if r["actor"] == actor]
-        if decision:
-            filtered = [r for r in filtered if r["decision"] == decision]
-        if capability:
-            filtered = [r for r in filtered if r["capability"] == capability]
+        # Bolt Optimization: Reverse iteration for O(min(N, limit)) time complexity.
+        # Iterates backward through history so matching elements are collected newest-first
+        # and stops as soon as `limit` items are found, avoiding O(N) multi-pass array scans.
+        if limit <= 0:
+            filtered = self._records
+            if actor:
+                filtered = [r for r in filtered if r["actor"] == actor]
+            if decision:
+                filtered = [r for r in filtered if r["decision"] == decision]
+            if capability:
+                filtered = [r for r in filtered if r["capability"] == capability]
+            return list(reversed(filtered[-limit:]))
 
-        return list(reversed(filtered[-limit:]))
+        matching = []
+        for r in reversed(self._records):
+            if actor and r["actor"] != actor:
+                continue
+            if decision and r["decision"] != decision:
+                continue
+            if capability and r["capability"] != capability:
+                continue
+            matching.append(r)
+            if len(matching) >= limit:
+                break
+        return matching
 
     def _sanitize_dict(self, data: dict[str, Any]) -> dict[str, Any]:
         def sensitive(key):
