@@ -21,7 +21,7 @@ test('staged installers are rechecked and tampering is rejected',async()=>{
   const file=path.join(directory,'setup.exe');fs.writeFileSync(file,'abc');
   const expected={size:3,sha256:crypto.createHash('sha256').update('abc').digest('hex')};
   await verifyFile(file,expected);fs.writeFileSync(file,'bad');await assert.rejects(()=>verifyFile(file,expected));
- }finally{fs.rmSync(directory,{recursive:true,force:true})}
+ }finally{fs.rmSync(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100})}
 });
 test('cached downloads survive restarts but cannot select an outside installer',()=>{
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'kingdom-update-cache-'));
@@ -34,7 +34,7 @@ test('cached downloads survive restarts but cannot select an outside installer',
   assert.equal(new DesktopUpdates(app).ready.update.latest,'1.2.1');
   saved.name='../outside.exe';fs.writeFileSync(path.join(directory,'updates','ready.json'),JSON.stringify(saved));
   assert.equal(new DesktopUpdates(app).ready,null);
- }finally{fs.rmSync(directory,{recursive:true,force:true})}
+ }finally{fs.rmSync(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100})}
 });
 test('handoff waits for shutdown, rechecks bytes, preserves data and verifies installation',()=>{
  const script=handoffScript(42,"C:\\Owner's Folder\\setup.exe","C:\\Kingdom\\Kingdom.exe",'a'.repeat(64),'1.2.1','C:\\updates\\result.json');
@@ -60,5 +60,5 @@ test('Windows helper survives its launcher and rejects a missing installer', {sk
   const result=JSON.parse(fs.readFileSync(receipt,'utf8').replace(/^\uFEFF/,''));
   assert.equal(result.success,false);
   assert.equal(result.reopenedPID,undefined);
- }finally{fs.rmSync(directory,{recursive:true,force:true})}
+ }finally{fs.rmSync(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100})}
 });
