@@ -13,15 +13,18 @@ class ProjectTestReports(unittest.TestCase):
         os.chdir(self.directory.name)
         self.addCleanup(self.directory.cleanup)
         self.addCleanup(os.chdir, self.old)
-        self.task = {'id': 'test-job', 'status': 'completed', 'metadata': {
+        self.task = {'id': 'test-job', 'prompt': 'Run exact suite', 'status': 'completed', 'metadata': {
             'tool': 'process.run@1.0.0', 'capability': 'process.execute', 'max_attempts': 1,
             'project_test': {'project': 'threadmap', 'source_revision': 'a' * 40,
                              'runner': 'unittest', 'minimum_tests': 2}}}
 
     def evidence(self, text='Ran 2 tests in 0.01s\n\nOK\n', exit_code=0, truncated=False):
         output = {'output': text, 'exit_code': exit_code, 'output_truncated': truncated}
-        outcome = {'kind': 'native_tool', 'tool': 'process.run@1.0.0', 'output': output, **receipt(self.task, output)}
-        self.task['result'] = {'results': [{'status': 'completed', 'outcome': outcome, 'verification': {'state': 'VERIFIED'}}]}
+        from backend.swarm.manager import execution_request
+        child = execution_request(self.task, self.task['prompt'])
+        outcome = {'kind': 'native_tool', 'tool': 'process.run@1.0.0', 'output': output, **receipt(child, output)}
+        self.task['result'] = {'plan': {'task_id': self.task['id'], 'subtasks': [{'prompt': self.task['prompt'], 'knight': 'coder'}]},
+                               'results': [{'knight': 'coder', 'status': 'completed', 'outcome': outcome, 'verification': {'state': 'VERIFIED'}}]}
 
     def test_nonempty_report_is_repeatable_after_serialization(self):
         import json
@@ -93,6 +96,32 @@ class ProjectTestReports(unittest.TestCase):
         again = TaskManager(repository)
         self.assertIsNone(again.claim_next())
         self.assertEqual(report(again.get(running['id']))['state'], 'recovery_required')
+
+    def test_actual_swarm_process_receipt_and_wrong_child_rejection(self):
+        import asyncio
+        import sys
+        from types import SimpleNamespace
+        from backend.swarm.manager import SwarmManager
+        from backend.runtime.execution import execute_request
+        # Only authority/registry boundaries are test doubles. Swarm _run,
+        # process tool, subprocess, receipt writing and verification are real.
+        self.task['metadata']['tool_parameters'] = {'argv': [sys.executable, '-c',
+            'import unittest; s=unittest.TestSuite([unittest.FunctionTestCase(lambda: None),unittest.FunctionTestCase(lambda: None)]); unittest.TextTestRunner().run(s)']}
+        knight = SimpleNamespace(execute=lambda request: {'status': 'completed',
+            'knight': 'coder', 'outcome': execute_request(request, ['process.execute'])})
+        swarm = SwarmManager.__new__(SwarmManager)
+        swarm.registry = SimpleNamespace(get=lambda name: knight, begin=lambda name: None, finish=lambda name: None)
+        swarm.security = SimpleNamespace(authorize=lambda **kwargs: {'authorized': True},
+                                         nodes=SimpleNamespace(get_node=lambda name: {'token': 'test-only'}))
+        swarm._publish = lambda *args: None
+        item = asyncio.run(swarm._run('coder', self.task['prompt'], self.task))
+        self.task['result'] = {'plan': {'task_id': self.task['id'],
+            'subtasks': [{'prompt': self.task['prompt'], 'knight': 'coder'}]}, 'results': [item]}
+        self.assertTrue(report(self.task)['tests_passed'])
+        self.task['prompt'] = 'Different child prompt'
+        self.assertEqual(report(self.task)['state'], 'evidence_invalid')
+        self.task['result']['plan']['subtasks'][0]['prompt'] = self.task['prompt']
+        self.assertEqual(report(self.task)['state'], 'evidence_invalid')
 
 
 def test_project_job_api_uses_existing_cancel_and_auth():

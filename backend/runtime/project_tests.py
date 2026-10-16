@@ -23,6 +23,8 @@ def validate_metadata(metadata):
     # Never retry a command automatically: tests may have side effects.
     if metadata.get('max_attempts', 1) != 1:
         raise ValueError('Project test jobs require max_attempts=1')
+    if metadata.get('subtasks'):
+        raise ValueError('Project test jobs require one exact task, without decomposition')
     return descriptor
 
 
@@ -43,8 +45,14 @@ def report(task):
             or outcome.get('kind') != 'native_tool' or outcome.get('tool') != 'process.run@1.0.0'):
         return dict(answer, state='evidence_missing')
     from backend.runtime.computer_tools import verify_receipt
+    from backend.swarm.manager import execution_request
     try:
-        verify_receipt(task, outcome)
+        plan = task['result']['plan']
+        subtask, = plan['subtasks']
+        if (plan['task_id'] != task['id'] or subtask['prompt'] != task['prompt']
+                or subtask['knight'] != item['knight']):
+            raise ValueError('Swarm execution plan mismatch')
+        verify_receipt(execution_request(task, subtask['prompt']), outcome)
     except (ValueError, OSError, KeyError, TypeError):
         return dict(answer, state='evidence_invalid')
     output = outcome.get('output', {})
