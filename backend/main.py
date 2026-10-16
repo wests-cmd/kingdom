@@ -10,11 +10,15 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(_app):
+    import asyncio
+    if await asyncio.to_thread(engine.autostart_requested):
+        await engine.start(persist=False)
     await schedule_runner.start()
     try:
         yield
     finally:
         await schedule_runner.stop()
+        await engine.stop(persist=False)
 
 app = FastAPI(
     title="Kingdom v1TAS",

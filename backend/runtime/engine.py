@@ -107,7 +107,27 @@ class RuntimeEngine:
             recovered.append(rec_task)
         return recovered
 
-    async def start(self) -> dict[str, Any]:
+    def autostart_requested(self):
+        import json
+        with self.execution_policy.db.get_connection() as conn:
+            row = conn.execute("SELECT value_json FROM runtime_state WHERE key='runtime_owner_start_intent'").fetchone()
+        try:
+            return bool(row and json.loads(row[0]).get('enabled') is True)
+        except (ValueError, TypeError, AttributeError):
+            return False
+
+    def remember_start_intent(self, enabled):
+        import json, time
+        with self.execution_policy.db.get_connection() as conn:
+            conn.execute("INSERT INTO runtime_state(key,value_json,updated_at) VALUES('runtime_owner_start_intent',?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at",
+                         (json.dumps({'enabled': enabled}), time.time()))
+            conn.commit()
+
+    async def start(self, persist=True) -> dict[str, Any]:
+        if persist:
+            self.remember_start_intent(True)
+        if self.scheduler.running:
+            return {'status': 'already_running', **self.status()}
         self.reconcile_startup_tasks()
         started = await self.scheduler.start()
         STATE["running"] = self.scheduler.running
@@ -115,7 +135,9 @@ class RuntimeEngine:
             self.events.publish("runtime.started", {"mode": STATE["mode"]})
         return {"status": "started" if started else "already_running", **self.status()}
 
-    async def stop(self) -> dict[str, Any]:
+    async def stop(self, persist=True) -> dict[str, Any]:
+        if persist:
+            self.remember_start_intent(False)
         stopped = await self.scheduler.stop()
         STATE["running"] = self.scheduler.running
         if stopped:
