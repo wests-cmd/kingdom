@@ -72,6 +72,28 @@ from backend.runtime.tool_workshop_api import router as tool_workshop_router
 from backend.runtime.model_lab_api import router as model_lab_router
 app.include_router(tool_workshop_router)
 app.include_router(model_lab_router)
+from backend.runtime.request_api import router as request_router, service as request_service
+app.include_router(request_router)
+from backend.memory.portable_vault_api import router as vault_router, initialize as initialize_vault
+initialize_vault(knowledge_db, engine.events.publish)
+app.include_router(vault_router)
+from backend.integrations.payment_api import router as payment_router
+app.include_router(payment_router)
+from backend.runtime.scheduled_runner import ScheduledRunner
+from backend.runtime.automation_api import scheduled
+scheduled.enqueue_request = lambda body: request_service().create(body)
+scheduled.cancel_request = lambda ident: request_service().cancel(ident)
+schedule_runner = ScheduledRunner(scheduled, engine)
+
+
+@app.on_event('startup')
+async def start_scheduled_work():
+    await schedule_runner.start()
+
+
+@app.on_event('shutdown')
+async def stop_scheduled_work():
+    await schedule_runner.stop()
 
 # Serve built frontend static assets if available
 frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")

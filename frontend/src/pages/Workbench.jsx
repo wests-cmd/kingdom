@@ -1,6 +1,7 @@
 import React,{useState,useEffect} from 'react'
 import api from '../api'
 import useLiveData from '../hooks/useLiveData'
+import UnifiedConversation from '../components/UnifiedConversation'
 
 export default function Workbench(){
  const {data:sessions,refresh}=useLiveData('/agent-sessions',5000)
@@ -22,6 +23,7 @@ export default function Workbench(){
  return <div className="page"><h1>Agent workbench</h1>
   <p>Give a model a job with real workspace tools, or hand the job to an installed agent such as Hermes or Claude. You keep control of permissions and approvals.</p>
   {error&&<p role="alert">{error}</p>}
+  <UnifiedConversation />
   <section className="panel"><h2>Work with a model</h2>
    <p>Conversations and tool evidence are saved. Model inference runs on your selected computer; workspace tools run on the Kingdom host.</p>
    <form onSubmit={e=>{e.preventDefault();perform(async()=>{const {data}=await api.post('/agent-sessions',{objective,model_profile:profile,max_turns:12,allow_process:allowProcess,skill_ids:skillIds,workspace,knowledge_scope:knowledgeScope||null,embedding_profile:embeddingProfile||null,use_owner_memory:ownerMemory});setSelected(data);refresh()})}}>
