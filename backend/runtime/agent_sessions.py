@@ -76,18 +76,24 @@ class AgentSessionService:
         self.engine.events.publish('agent.session_updated', {'id': state['id'], 'status': state['status'], 'turns': state['turns']})
         return state
 
-    def create(self, objective, model_profile, max_turns=12, allow_process=False, skill_ids=None, workspace='.', knowledge_scope=None, embedding_profile=None, use_owner_memory=False):
+    def create(self, objective, model_profile, max_turns=12, allow_process=False, skill_ids=None, workspace='.', knowledge_scope=None, embedding_profile=None, use_owner_memory=False, required_tools=None):
         if not isinstance(objective, str) or not objective.strip() or len(objective) > 24000:
             raise ValueError('Objective must contain 1–24000 characters')
         if not isinstance(model_profile, str) or not model_profile or len(model_profile) > 100:
             raise ValueError('Choose an installed model profile or pool')
         if type(max_turns) is not int or not 1 <= max_turns <= 32 or type(allow_process) is not bool:
             raise ValueError('Use 1–32 model turns and a boolean process grant preference')
+        required_tools=required_tools or []
+        if not isinstance(required_tools,list) or len(required_tools)>4 or any(tool not in TOOLS for tool in required_tools):
+            raise ValueError('Choose known required tool evidence')
+        if 'process_run' in required_tools and not allow_process:raise ValueError('Process evidence requires the process option and normal grants')
         if bool(knowledge_scope)!=bool(embedding_profile):raise ValueError('Choose both a knowledge scope and embedding profile')
         if knowledge_scope:
             from backend.memory.embedding_service import EmbeddingKnowledge
             EmbeddingKnowledge.scope(knowledge_scope)
         messages = [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': objective}]
+        if required_tools:
+            messages.append({'role':'user','content':'Completion requires independently verified execution of these tools since the latest owner review: '+', '.join(required_tools)+'. A written claim is insufficient. This requirement grants no tools or permissions.'})
         from backend.runtime.computer_tools import workspace_path
         if not isinstance(workspace,str) or len(workspace)>300:raise ValueError('Choose a project folder inside the Kingdom workspace')
         workspace_path(workspace).mkdir(parents=True,exist_ok=True)
@@ -116,6 +122,7 @@ class AgentSessionService:
             'messages': messages, 'skill_ids': list(dict.fromkeys(skill_ids)), 'workspace':workspace,
             'knowledge_scope':knowledge_scope,'embedding_profile':embedding_profile,'retrieval_done':False,'use_owner_memory':use_owner_memory,
             'pending': [], 'tool_count': 0, 'created_at': time.time(),
+            'required_tools':list(dict.fromkeys(required_tools)), 'verified_tools_since_review':[],
             'notice': 'Model inference may use the selected computer. File and process tools execute on the Kingdom host through existing grants and approvals; process execution is not sandboxed.'})
 
     def cancel(self, ident):
@@ -168,6 +175,8 @@ class AgentSessionService:
             if outcome.get('tool') != record['tool']:
                 state.update(status='needs_review', error='Tool outcome does not match the requested operation')
                 return self._save(state)
+            verified=state.setdefault('verified_tools_since_review',[])
+            if record['name'] not in verified:verified.append(record['name'])
             output=outcome.get('output')
             if isinstance(output,dict):
                 output=dict(output)
@@ -267,6 +276,9 @@ class AgentSessionService:
                 if not calls:
                     state['answer'] = content
                     state['completion_scope'] = 'Assistant response completed. Only retained independently verified tool results prove operations; code correctness requires successful tests.'
+                    missing=set(state.get('required_tools',[]))-set(state.get('verified_tools_since_review',[]))
+                    if missing:
+                        state.update(status='needs_review',error='Required execution evidence missing: '+', '.join(sorted(missing))+'. Model text did not satisfy this job; no automatic replay was made.')
                 self._save(state)
                 if pending:
                     self._dispatch(state)
@@ -297,6 +309,7 @@ class AgentSessionService:
             state = self._collect(state)
             if state['status']!='ready':raise ValueError('Pending tool results require separate evidence review')
         state['messages'].append({'role':'user','content':'Owner review feedback: '+message.strip()})
+        state['verified_tools_since_review']=[]
         state.update(status='ready',error=None)
         return self._save(state)
 

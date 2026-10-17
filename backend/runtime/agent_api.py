@@ -28,6 +28,7 @@ class CreateSession(BaseModel):
     knowledge_scope: str | None = Field(default=None,max_length=100)
     embedding_profile: str | None = Field(default=None,max_length=64)
     use_owner_memory: bool = False
+    required_tools: list[str] = Field(default_factory=list,max_length=4)
 
 class RunSession(BaseModel):
     model_config = ConfigDict(extra='forbid')

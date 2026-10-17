@@ -21,7 +21,7 @@ export default function Workbench(){
  const [harness,setHarness]=useState(''),[job,setJob]=useState(''),[cwd,setCwd]=useState('.'),[task,setTask]=useState(null)
  const perform=async fn=>{setBusy(true);setError('');try{await fn()}catch(e){setError(typeof e.response?.data?.detail==='string'?e.response.data.detail:e.message)}finally{setBusy(false)}}
  const current=(sessions||[]).find(s=>s.id===selected?.id)||selected
- const [readiness,setReadiness]=useState(null),[review,setReview]=useState('')
+ const [readiness,setReadiness]=useState(null),[review,setReview]=useState(''),[requireEdit,setRequireEdit]=useState(false)
  useEffect(()=>{if(profile==='auto'||!models?.profiles?.length)return;const valid=models.profiles.some(p=>p.id===profile)||(profile.startsWith('pool:')&&models.pools?.includes(profile.slice(5)));if(!valid)setProfile(models.profiles.find(p=>p.id==='this-pc')?.id||models.profiles.find(p=>p.id==='laptop3')?.id||models.profiles[0].id)},[models,profile])
  return <div className="page"><h1>Agent workbench</h1>
   <section className="panel"><h2>Coding setup</h2><button disabled={busy} onClick={()=>perform(async()=>{const {data}=await api.get('/agent-sessions/readiness');setReadiness(data)})}>Check coding setup without inference</button>{readiness&&<div><p>{readiness.ready_for_scoped_file_work?'Workspace coding setup is ready. Independent tests are still required.':'Coding setup needs attention.'}</p>{readiness.blockers.map(reason=><p key={reason} role="alert">{reason}</p>)}{readiness.models.map(model=><p key={model.id}>{model.id} · {model.model} · {model.computer || 'Host not labeled'}</p>)}</div>}</section>
@@ -30,9 +30,10 @@ export default function Workbench(){
   <UnifiedConversation />
   <section className="panel"><h2>Work with a model</h2>
    <p>Conversations and tool evidence are saved. Model inference runs on your selected computer; workspace tools run on the Kingdom host.</p>
-   <form onSubmit={e=>{e.preventDefault();perform(async()=>{const {data}=await api.post('/agent-sessions',{objective,model_profile:profile,max_turns:12,allow_process:allowProcess,skill_ids:skillIds,workspace,knowledge_scope:knowledgeScope||null,embedding_profile:embeddingProfile||null,use_owner_memory:ownerMemory});setSelected(data);refresh()})}}>
+   <form onSubmit={e=>{e.preventDefault();perform(async()=>{const {data}=await api.post('/agent-sessions',{objective,model_profile:profile,max_turns:12,allow_process:allowProcess,skill_ids:skillIds,workspace,knowledge_scope:knowledgeScope||null,embedding_profile:embeddingProfile||null,use_owner_memory:ownerMemory,required_tools:requireEdit?['workspace_read','workspace_write']:[]});setSelected(data);refresh()})}}>
     <label>Model computer<select value={profile} onChange={e=>setProfile(e.target.value)}><option value="auto">Automatic · available model that fits this request</option>{(models?.profiles||[]).map(p=><option key={p.id} value={p.id}>{p.id} · {p.model}</option>)}{(models?.pools||[]).map(p=><option key={p} value={`pool:${p}`}>Pool {p}</option>)}</select></label>
     <label>What should it do?<textarea required rows={5} maxLength={24000} value={objective} onChange={e=>setObjective(e.target.value)} placeholder="Inspect the workspace and implement a small change. Run checks and report what actually passed."/></label>
+    <label><input type="checkbox" checked={requireEdit} onChange={e=>setRequireEdit(e.target.checked)}/>Require verified source read and edit before this job can complete</label>
     <label>Project folder<input required value={workspace} onChange={e=>setWorkspace(e.target.value)}/></label>
     <details><summary>Knowledge references</summary><p>Save documents under Memory first. Choose the same scope and embedding connection; other scopes stay out of vector retrieval.</p><label>Knowledge scope<input value={knowledgeScope} onChange={e=>setKnowledgeScope(e.target.value)}/></label><label>Embedding connection<select value={embeddingProfile} onChange={e=>setEmbeddingProfile(e.target.value)}><option value="">No vector retrieval</option>{(models?.profiles||[]).map(p=><option key={p.id} value={p.id}>{p.id} · {p.model}</option>)}</select></label><label><input type="checkbox" checked={ownerMemory} onChange={e=>setOwnerMemory(e.target.checked)}/>Also use shared owner memory across projects</label></details>
     <label><input type="checkbox" checked={allowProcess} onChange={e=>setAllowProcess(e.target.checked)}/>Offer command execution to this model. Individual approval is required at levels 1–4; level 5 uses your standing authorization and existing tool grants.</label>
@@ -77,4 +78,5 @@ export default function Workbench(){
   </section>
  </div>
 }
+
 

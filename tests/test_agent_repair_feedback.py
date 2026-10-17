@@ -70,3 +70,23 @@ async def test_review_accepts_mixed_completed_read_and_wrong_path_type(setup):
     result=service.review_feedback(current['id'],'Read the file instead of listing it',current['updated_at'])
     assert result['status']=='ready' and not result['pending'] and len(engine.records)==2
     assert 'failed observation' in result['messages'][-3]['content']
+
+
+@pytest.mark.asyncio
+async def test_claimed_edit_without_actual_write_cannot_complete(setup):
+    service,engine,_=setup([reply('I saved the fix.')])
+    state=await service.advance(service.create('Edit source','model',required_tools=['workspace_write'])['id'])
+    assert state['status']=='needs_review' and 'workspace_write' in state['error']
+    assert not engine.records
+
+
+@pytest.mark.asyncio
+async def test_verified_write_satisfies_requirement_but_not_next_review(setup):
+    service,engine,_=setup([reply(calls=[call('workspace_write',{'path':'a.py','content':'x'})]),reply('Written'),reply('Fixed again')])
+    state=await service.advance(service.create('Edit source','model',required_tools=['workspace_write'])['id'])
+    engine.finish(state['pending'][0]['task_id'],{'path':'a.py'})
+    await service.advance(state['id']);state=await service.advance(state['id'])
+    assert state['status']=='completed'
+    state=service.review_feedback(state['id'],'Independent tests failed',state['updated_at'])
+    state=await service.advance(state['id'])
+    assert state['status']=='needs_review' and len(engine.records)==1
