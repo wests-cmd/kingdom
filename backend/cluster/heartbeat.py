@@ -29,6 +29,10 @@ class HeartbeatManager:
 
         # Transition from DISCONNECTED / RECONNECTING back to CONNECTED
         if state_val in [NodeState.DISCONNECTED.value, NodeState.RECONNECTING.value, NodeState.APPROVED.value]:
+            # update_node_state reloads the persisted node. Persist this ping
+            # first, or reconnect restores an old timestamp and immediately
+            # expires a freshly issued task lease.
+            node_registry.repo.save(node.to_dict())
             node_registry.update_node_state(node_id, NodeState.CONNECTED)
         else:
             node_registry.repo.save(node.to_dict())
