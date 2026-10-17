@@ -49,15 +49,16 @@ def list_files(params):
             for entry in sorted(target.iterdir())[:1000] if not entry.is_symlink()]}
 
 
-def run_process(params):
+def run_process(params, *, max_timeout=120, environment=None):
     argv = params.get('argv')
     if not isinstance(argv, list) or not 1 <= len(argv) <= 40 or not all(isinstance(x, str) and 0 < len(x) <= 4000 and '\x00' not in x for x in argv):
         raise ValueError('Supply an argument list, never a shell command string')
     timeout = params.get('timeout_seconds', 60)
-    if type(timeout) is not int or not 1 <= timeout <= 120: raise ValueError('Process timeout must be 1–120 seconds')
+    if type(timeout) is not int or not 1 <= timeout <= max_timeout: raise ValueError(f'Process timeout must be 1–{max_timeout} seconds')
     cwd = workspace_path(params.get('cwd', '.'))
     env = {key: os.environ[key] for key in ('PATH', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'LANG') if key in os.environ}
     env['PYTHONIOENCODING'] = 'utf-8'
+    if environment: env.update(environment)
     with tempfile.TemporaryFile() as output:
         process = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
             stdout=output, stderr=subprocess.STDOUT, shell=False,
@@ -122,6 +123,9 @@ COMPUTER_HANDLERS = {'workspace.read@1.0.0': read_file, 'workspace.write@1.0.0':
                      'workspace.list@1.0.0': list_files, 'process.run@1.0.0': run_process,
                      'computer.screenshot@1.0.0': screenshot}
 from backend.runtime.desktop_control import desktop_input
+from backend.runtime.harnesses import run_harness
+TOOL_CAPABILITIES['harness.run@1.0.0'] = 'process.execute'
+COMPUTER_HANDLERS['harness.run@1.0.0'] = run_harness
 COMPUTER_HANDLERS['computer.input@1.0.0'] = desktop_input
 
 

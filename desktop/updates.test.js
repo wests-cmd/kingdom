@@ -21,7 +21,7 @@ test('staged installers are rechecked and tampering is rejected',async()=>{
   const file=path.join(directory,'setup.exe');fs.writeFileSync(file,'abc');
   const expected={size:3,sha256:crypto.createHash('sha256').update('abc').digest('hex')};
   await verifyFile(file,expected);fs.writeFileSync(file,'bad');await assert.rejects(()=>verifyFile(file,expected));
- }finally{fs.rmSync(directory,{recursive:true,force:true})}
+ }finally{fs.rmSync(directory,{recursive:true,force:true,maxRetries:20,retryDelay:100})}
 });
 test('cached downloads survive restarts but cannot select an outside installer',()=>{
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'kingdom-update-cache-'));
@@ -60,5 +60,5 @@ test('Windows helper survives its launcher and rejects a missing installer', {sk
   const result=JSON.parse(fs.readFileSync(receipt,'utf8').replace(/^\uFEFF/,''));
   assert.equal(result.success,false);
   assert.equal(result.reopenedPID,undefined);
- }finally{fs.rmSync(directory,{recursive:true,force:true})}
+ }finally{fs.rmSync(directory,{recursive:true,force:true,maxRetries:50,retryDelay:100})}
 });

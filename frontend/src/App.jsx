@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from "react"
+import InstallKingdom from './components/InstallKingdom'
 import Sidebar from "./components/common/Sidebar"
 import Dashboard from "./pages/Dashboard"
 import Swarm from "./pages/Swarm"
 import Runtime from "./pages/Runtime"
 import Tasks from "./pages/Tasks"
+import Workbench from "./pages/Workbench"
+import Preparation from "./pages/Preparation"
 import Automations from "./pages/Automations"
 import AIMap from "./pages/AIMap"
 import SkillMaps from "./pages/SkillMaps"
@@ -26,6 +29,7 @@ import { realtime } from "./websocket"
 import api from "./api"
 import { initializeSession, setAccessCode } from "./session"
 import "./styles/app.css"
+import {loadInterfaceMode,saveInterfaceMode,pageForMode} from './interfaceMode'
 
 export default function App() {
   const [hash, setHash] = useState(window.location.hash)
@@ -35,6 +39,13 @@ export default function App() {
 
 function OwnerApp() {
   const [currentPage, setCurrentPage] = useState("Dashboard")
+  const [interfaceMode,setInterfaceMode] = useState(()=>{try{return loadInterfaceMode(window.localStorage)}catch{return 'easy'}})
+  const [modeSaved,setModeSaved] = useState(true)
+  const changeInterfaceMode=mode=>{
+    setInterfaceMode(mode)
+    setCurrentPage(page=>pageForMode(page,mode))
+    try {setModeSaved(saveInterfaceMode(window.localStorage,mode))} catch {setModeSaved(false)}
+  }
   const [isConnected, setIsConnected] = useState(false)
   const [authorized, setAuthorized] = useState(false)
   const [accessCode, setCode] = useState("")
@@ -84,6 +95,8 @@ function OwnerApp() {
       case "Swarm": return <Swarm />
       case "Runtime": return <Runtime />
       case "Tasks": return <Tasks />
+      case "Workbench": return <Workbench />
+      case "Preparation": return <Preparation />
       case "Automations": return <Automations />
       case "AIMap": return <AIMap />
       case "SkillMaps": return <SkillMaps />
@@ -102,7 +115,7 @@ function OwnerApp() {
     }
   }
 
-  if (loading) return <main className="content"><p role="status">Opening KingdomÃ¢â‚¬Â¦</p></main>
+  if (loading) return <main className="content"><p role="status">Opening Kingdom...</p></main>
   if (!authorized && localAccess) return <main className="content"><h1>Welcome back</h1>
     <p>Enter the passcode you chose for Kingdom.</p>
     <form onSubmit={e=>{e.preventDefault();unlock()}}>
@@ -112,18 +125,21 @@ function OwnerApp() {
     <details><summary>Use owner recovery access</summary><p>Your installationÃ¢â‚¬â„¢s owner access code can restore access.</p><button onClick={()=>{setAccessCode(accessCode);connect()}}>Use entered code as owner access</button></details>
     <details><summary>Accessibility settings</summary><AccessibilitySettings /></details></main>
   if (!authorized) return <main className="content"><h1>Connect this device</h1>
-    <p><a href="/#/connect">Use a device connection code</a> from KingdomÃ¢â‚¬â„¢s main panel.</p>
+    <InstallKingdom />
+    <p><a href="/#/connect">Use a device connection code</a> from the Kingdom main panel.</p>
     <details><summary>Administrator access</summary><form onSubmit={e=>{e.preventDefault();setAccessCode(accessCode);connect()}}>
       <label>Owner access code <input type="password" autoComplete="off" value={accessCode} onChange={e=>setCode(e.target.value)} /></label><button type="submit">Connect</button>
     </form></details>{error && <p role="alert">{error}</p>}</main>
   return (
-    <div className="layout">
+    <div className="layout" data-interface-mode={interfaceMode} data-page={currentPage.toLowerCase()}>
       <a className="skip-link" href="#main-content">Skip to main content</a>
-      <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
+      <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} interfaceMode={interfaceMode}/>
 
       <div className="main-container">
+        <details><summary>Install Kingdom as a free web app</summary><InstallKingdom /></details>
         <header className="topbar">
           <div className="page-title">{currentPage === 'SkillMaps' ? 'Skill maps & Discord' : currentPage}</div>
+          <div className="interface-mode-controls"><fieldset className="interface-mode-switch"><legend>Workspace view</legend>{['easy','advanced'].map(mode=><button key={mode} type="button" aria-pressed={interfaceMode===mode} onClick={()=>changeInterfaceMode(mode)}>{mode==='easy'?'Easy':'Advanced'}</button>)}</fieldset>{!modeSaved&&<small role="status">View changed for this session; preferences could not be saved.</small>}</div>
           <div className="status-indicator">
             Kingdom:{" "}
             <span className={isConnected ? "badge-online" : "badge-offline"}>

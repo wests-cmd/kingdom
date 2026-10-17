@@ -80,11 +80,17 @@ def test_failure_rolls_back_without_duplicate_execution_and_can_recover(setup):
     record = s.inventory()[0]
     assert record['owner'] == 'original' and record['last_failure'] == 'RuntimeError'
     assert 'secret' not in str(record)
-    s.run(a.id)
+    assert record['status'] == 'recovery_required' and record['lease']
+    assert s.run(a.id)['status'] == 'busy'
+    assert a.original == 0
     a.fail_run = False
     now[0] += 1800
     restarted = AutomationSupervisor(connect, lambda: 3, lambda *args: None, lambda: now[0])
     restarted.register(a)
+    assert restarted.run(a.id)['status'] == 'busy'
+    assert a.original == 0 and a.candidate == 1
+    restarted.recover_stopped(a.id, record['lease'])
+    now[0] += 1800
     assert restarted.run(a.id)['owner'] == 'kingdom'
 
 

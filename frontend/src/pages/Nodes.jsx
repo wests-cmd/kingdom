@@ -3,9 +3,14 @@ import { api } from '../api';
 import DevicePairing from '../components/DevicePairing';
 import ConnectDevice from './ConnectDevice';
 import CommandGroups from '../components/CommandGroups';
+import useLiveData from '../hooks/useLiveData';
+import TaskResult from '../components/common/TaskResult';
+import KingdomPeers from '../components/KingdomPeers';
+import ComputerIdentity from '../components/ComputerIdentity';
 import {deviceLabel,capabilityLabel,fingerprintLabel,nodeStateLabel} from '../components/common/presentation';
 
 export function Nodes() {
+  const {data: hierarchy, error: hierarchyError} = useLiveData('/hierarchy',10000);
   const [kingdomIdentity, setKingdomIdentity] = useState(null);
   const [nodes, setNodes] = useState([]);
   const [pendingNodes, setPendingNodes] = useState([]);
@@ -14,6 +19,8 @@ export function Nodes() {
   const [showPairModal, setShowPairModal] = useState(false);
   const [invitation, setInvitation] = useState(null);
   const [activeTab, setActiveTab] = useState('nodes');
+  const {data: taskData, error: taskError} = useLiveData('/tasks',5000);
+  const clusterTasks = (taskData || []).filter(task => task.lease_id || task.metadata?.offload || task.metadata?.execution_target === 'remote');
 
   const fetchClusterState = async () => {
     try {
@@ -24,7 +31,7 @@ export function Nodes() {
         api.listPendingNodes()
       ]);
       setKingdomIdentity(idData);
-      setNodes(nodesData || []);
+      setNodes((nodesData || []).filter(node => !node.is_local && node.public_identity && node.fingerprint));
       setPendingNodes(pendingData || []);
     } catch (err) {
       setError('Could not refresh device records. Check the Kingdom connection.');
@@ -79,19 +86,20 @@ export function Nodes() {
 
 
   return (
-    <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div style={{ minWidth:0, overflowWrap:"anywhere", padding: "clamp(8px, 3vw, 24px)", display: "flex", flexDirection: "column", gap: "24px" }}>
       {error && <p role="alert">{error}</p>}
+      <ComputerIdentity data={hierarchy} error={hierarchyError}/>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "16px" }}>
+      <div style={{ display: "flex", flexWrap:"wrap", gap:"8px", minWidth:0, justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "16px" }}>
         <div>
-          <h1 style={{ fontSize: "20px", fontWeight: "700", color: "var(--text-main)", display: "flex", alignItems: "center", gap: "8px" }}>
-            Nodes and devices
+          <h1 style={{ fontSize: "20px", fontWeight: "700", color: "var(--text-main)", display: "flex", flexWrap:"wrap", minWidth:0, alignItems: "center", gap: "8px" }}>
+            Computer cluster
           </h1>
           <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
-            Secure, identity-verified Kingdom Commander & Knight federation across LAN, WAN, and overlay networks.
+            Kingdom coordinates models, agents and approved computers to complete tasks, verify results and learn from outcomes.
           </p>
         </div>
-        <div style={{ display: "flex", gap: "12px" }}>
+        <div style={{ display: "flex", flexWrap:"wrap", gap: "12px" }}>
           <button
             onClick={fetchClusterState}
             style={{ padding: "6px 14px", background: "var(--input-bg)", border: "1px solid var(--surface-border)", color: "var(--text-main)", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
@@ -102,15 +110,15 @@ export function Nodes() {
             onClick={handleCreateInvitation}
             style={{ padding: "6px 14px", background: "var(--accent-primary)", color: "var(--accent-on-primary)", border: "none", borderRadius: "4px", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}
           >
-            Invite a compute worker
+            Invite a Knight computer
           </button>
         </div>
       </div>
 
       {/* Kingdom Identity Banner */}
       {kingdomIdentity && (
-        <div style={{ padding: "16px", background: "var(--input-bg)", border: "1px solid var(--surface-border)", borderRadius: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+        <div style={{ padding: "16px", background: "var(--input-bg)", border: "1px solid var(--surface-border)", borderRadius: "6px", display: "flex", flexWrap:"wrap", gap:"8px", minWidth:0, justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", flexWrap:"wrap", minWidth:0, alignItems: "center", gap: "16px" }}>
             <div style={{ fontSize: "24px", padding: "8px", background: "#2a1213", border: "1px solid #4d181a", borderRadius: "6px" }}>
               K
             </div>
@@ -118,7 +126,7 @@ export function Nodes() {
               <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--accent-red)", textTransform: "uppercase", letterSpacing: "1px" }}>
                 Kingdom Commander Identity
               </div>
-              <div style={{ fontSize: "16px", fontWeight: "700", color: "var(--text-main)", display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "var(--text-main)", display: "flex", flexWrap:"wrap", minWidth:0, alignItems: "center", gap: "8px" }}>
                 {kingdomIdentity.display_name} <span style={{ fontSize: "11px", padding: "2px 6px", background: "var(--input-bg)", color: "var(--text-muted)", borderRadius: "3px", fontFamily: "monospace" }}>{kingdomIdentity.node_id}</span>
               </div>
               <div style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "monospace", marginTop: "2px" }}>
@@ -135,17 +143,30 @@ export function Nodes() {
       )}
 
       <CommandGroups />
+      <section className="panel" aria-label="Cluster work">
+        <h2>Work across computers</h2>
+        <p>Plan → place → execute → verify → remember → adapt. Pair a computer, grant its capabilities, then approve a mission in Tasks. Only supported steps can move to another computer.</p>
+        <p className="muted">Pairing and an online status do not prove a job completed. Each task below keeps its assignment and execution evidence separate.</p>
+        {taskError && <p role="alert">Cluster task records could not be refreshed.</p>}
+        {taskData === null ? <p>Loading work records…</p> : !clusterTasks.length ? <p>No remote task leases or offload requests recorded yet.</p> : clusterTasks.slice().sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0,20).map(task => <article className="task-record" key={task.id}>
+          <h3>{task.metadata?.tool || 'Cluster task'}</h3>
+          <p><span className="status-chip">{task.status}</span> · Task {task.id}</p>
+          <p>Assigned computer: {task.assigned_knight || 'Not assigned'}{task.lease_id ? ' · lease recorded' : ''}</p>
+          {task.metadata?.offload_reason && <p>{task.metadata.offload_reason}</p>}
+          {task.result ? <TaskResult result={task.result} taskId={task.id}/> : <p className="muted">No execution result recorded.</p>}
+        </article>)}
+      </section>
       {/* Navigation Tabs */}
-      <div style={{ display: "flex", borderBottom: "1px solid var(--surface-border)", fontSize: "13px", fontWeight: "500" }}>
+      <div style={{ display: "flex", flexWrap:"wrap", borderBottom: "1px solid var(--surface-border)", fontSize: "13px", fontWeight: "500" }}>
         <button
           onClick={() => setActiveTab('nodes')}
           style={{ padding: "8px 16px", border: "none", borderBottom: activeTab === 'nodes' ? "2px solid var(--accent-red)" : "2px solid transparent", background: "none", color: activeTab === 'nodes' ? "var(--accent-red)" : "var(--text-muted)", cursor: "pointer" }}
         >
-          Active Federation ({nodes.length})
+          Paired Knights ({nodes.length})
         </button>
         <button
           onClick={() => setActiveTab('pending')}
-          style={{ padding: "8px 16px", border: "none", borderBottom: activeTab === 'pending' ? "2px solid var(--accent-red)" : "2px solid transparent", background: "none", color: activeTab === 'pending' ? "var(--accent-red)" : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
+          style={{ padding: "8px 16px", border: "none", borderBottom: activeTab === 'pending' ? "2px solid var(--accent-red)" : "2px solid transparent", background: "none", color: activeTab === 'pending' ? "var(--accent-red)" : "var(--text-muted)", cursor: "pointer", display: "flex", flexWrap:"wrap", minWidth:0, alignItems: "center", gap: "6px" }}
         >
           Pending Approvals
           {pendingNodes.length > 0 && (
@@ -162,12 +183,13 @@ export function Nodes() {
 
       {/* TAB 1: Active Nodes */}
       {activeTab === 'nodes' && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 320px), 1fr))", gap: "16px" }}>
+          {!loading && !nodes.length && <p>No paired Knight computers recorded. Invite a computer to add one.</p>}
           {nodes.map((node) => (
             <div key={node.id} style={{ padding: "16px", background: "var(--input-bg)", border: "1px solid var(--surface-border)", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "12px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div style={{ display: "flex", flexWrap:"wrap", gap:"8px", minWidth:0, justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
-                  <div style={{ fontWeight: "700", color: "var(--text-main)", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <div style={{ fontWeight: "700", color: "var(--text-main)", fontSize: "14px", display: "flex", flexWrap:"wrap", minWidth:0, alignItems: "center", gap: "6px" }}>
                     {deviceLabel(node.public_identity?.display_name || node.id)}
                     <span style={{ fontSize: "10px", padding: "1px 6px", background: "var(--input-bg)", color: "var(--text-muted)", borderRadius: "3px", textTransform: "uppercase" }}>{deviceLabel(node.role,'Remote device')}</span>
                   </div>
@@ -186,6 +208,9 @@ export function Nodes() {
               </div>
 
               <div style={{ fontSize: "11px", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: "4px" }}>
+                <div>Health: {node.health || 'Not reported'} · Current task: {node.current_task || 'None reported'}</div>
+                <div>Last heartbeat: {node.last_heartbeat ? new Date(node.last_heartbeat * 1000).toLocaleString() : 'Not reported'}</div>
+                <div>Reported load: CPU {Number.isFinite(node.connection_metadata?.load_metrics?.cpu_percent) ? `${node.connection_metadata.load_metrics.cpu_percent}%` : 'unavailable'} · Memory {Number.isFinite(node.connection_metadata?.load_metrics?.memory_percent) ? `${node.connection_metadata.load_metrics.memory_percent}%` : 'unavailable'}</div>
                 <div>{node.is_local ? 'Recorded federation grants (local tools are listed in Swarm):' : 'Granted capabilities:'}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
                   {!(node.granted_capabilities || node.capabilities || []).length && <span>None recorded</span>}
@@ -197,7 +222,7 @@ export function Nodes() {
                 </div>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--surface-border)", paddingTop: "8px", fontSize: "11px" }}>
+              <div style={{ display: "flex", flexWrap:"wrap", gap:"8px", minWidth:0, justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--surface-border)", paddingTop: "8px", fontSize: "11px" }}>
                 <span style={{ color: "var(--text-muted)" }}>
                   {node.is_local ? 'Built-in worker · managed by the install profile' : 'Remote / WAN Network'}
                 </span>
@@ -225,7 +250,7 @@ export function Nodes() {
           ) : (
             pendingNodes.map((node) => (
               <div key={node.id} style={{ padding: "16px", background: "var(--input-bg)", border: "1px solid #3d2b00", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ display: "flex", flexWrap:"wrap", gap:"8px", minWidth:0, justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
                     <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--text-main)" }}>
                       {deviceLabel(node.id,'Pending device')}
@@ -271,13 +296,13 @@ export function Nodes() {
       )}
 
       {/* TAB 3: Join Kingdom */}
-      {activeTab === 'join' && <><DevicePairing /><ConnectDevice /></>}
+      {activeTab === 'join' && <><KingdomPeers nodes={nodes}/><DevicePairing /><ConnectDevice /></>}
 
       {/* Pairing Invitation Modal */}
       {showPairModal && invitation && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-          <div style={{ background: "var(--input-bg)", border: "1px solid var(--surface-border)", borderRadius: "8px", width: "100%", maxWidth: "400px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ background: "var(--input-bg)", border: "1px solid var(--surface-border)", borderRadius: "8px", width: "calc(100% - 24px)", maxWidth: "400px", maxHeight:"90dvh", overflowY:"auto", boxSizing:"border-box", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div style={{ display: "flex", flexWrap:"wrap", gap:"8px", minWidth:0, justifyContent: "space-between", alignItems: "center" }}>
               <h3 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text-main)" }}>
                 📱 Pairing Invitation
               </h3>
@@ -295,7 +320,7 @@ export function Nodes() {
             </div>
 
             <div style={{ fontSize: "11px", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: "4px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", flexWrap:"wrap", gap:"8px", minWidth:0, justifyContent: "space-between" }}>
                 <span>Target Kingdom:</span>
                 <span style={{ color: "#eee", fontFamily: "monospace" }}>{invitation.kingdom_id}</span>
               </div>

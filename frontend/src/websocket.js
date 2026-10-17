@@ -1,3 +1,5 @@
+import { backendURL } from './backendConfig'
+
 class RealtimeClient {
   constructor() {
     this.socket = null
@@ -8,8 +10,7 @@ class RealtimeClient {
 
   connect() {
     try {
-      const base = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:8000" : window.location.origin)
-      const url = new URL("/ws", base)
+      const url = new URL(backendURL('/ws'))
       url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
       this.socket = new WebSocket(url)
 

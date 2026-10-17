@@ -141,7 +141,7 @@ class KnightDaemon:
                 }
                 try:
                     from backend.runtime.execution import execute_request, verify_request_result
-                    if task.get('metadata', {}).get('tool') not in {'text.analyze@1.0.0', 'code.python.analyze@1.0.0', 'provider.metadata@1.0.0'}:
+                    if task.get('metadata', {}).get('tool') not in {'text.analyze@1.0.0', 'code.python.analyze@1.0.0', 'provider.metadata@1.0.0', 'build.run@1.0.0'}:
                         raise NotImplementedError("Remote execution requires a supported controlled tool")
                     outcome = execute_request(task, getattr(self, "granted_capabilities", []))
                     verify_request_result(task, outcome, allow_local_model=False)

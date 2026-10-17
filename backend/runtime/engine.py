@@ -47,11 +47,19 @@ class RuntimeEngine:
         self.dlq = DeadLetterQueue()
         self.rate_limiter = RateLimiterEngine()
         self.execution_policy = ExecutionPolicy()
+        # Resolve dynamically so replacement/test policy instances remain authoritative.
+        self.security.owner_policy = self
+        for apprentice in self.swarm.registry._knights.values():
+            apprentice.zero_trust.owner_policy = self
         self.dispatch_lock = RLock()
         self.restore_computer_grants()
         from backend.runtime.missions import MissionService
         from backend.storage.db import db
         self.missions = MissionService(self, db)
+
+    def get(self):
+        """Owner policy authority used by the execution security boundary."""
+        return self.execution_policy.get()
 
     def restore_computer_grants(self):
         import json
@@ -99,7 +107,27 @@ class RuntimeEngine:
             recovered.append(rec_task)
         return recovered
 
-    async def start(self) -> dict[str, Any]:
+    def autostart_requested(self):
+        import json
+        with self.execution_policy.db.get_connection() as conn:
+            row = conn.execute("SELECT value_json FROM runtime_state WHERE key='runtime_owner_start_intent'").fetchone()
+        try:
+            return bool(row and json.loads(row[0]).get('enabled') is True)
+        except (ValueError, TypeError, AttributeError):
+            return False
+
+    def remember_start_intent(self, enabled):
+        import json, time
+        with self.execution_policy.db.get_connection() as conn:
+            conn.execute("INSERT INTO runtime_state(key,value_json,updated_at) VALUES('runtime_owner_start_intent',?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at",
+                         (json.dumps({'enabled': enabled}), time.time()))
+            conn.commit()
+
+    async def start(self, persist=True) -> dict[str, Any]:
+        if persist:
+            self.remember_start_intent(True)
+        if self.scheduler.running:
+            return {'status': 'already_running', **self.status()}
         self.reconcile_startup_tasks()
         started = await self.scheduler.start()
         STATE["running"] = self.scheduler.running
@@ -107,7 +135,9 @@ class RuntimeEngine:
             self.events.publish("runtime.started", {"mode": STATE["mode"]})
         return {"status": "started" if started else "already_running", **self.status()}
 
-    async def stop(self) -> dict[str, Any]:
+    async def stop(self, persist=True) -> dict[str, Any]:
+        if persist:
+            self.remember_start_intent(False)
         stopped = await self.scheduler.stop()
         STATE["running"] = self.scheduler.running
         if stopped:
@@ -160,12 +190,20 @@ class RuntimeEngine:
         if meta.get('tool') in TOOL_CAPABILITIES:
             if meta.get('subtasks'): raise ValueError('Computer operations must be one exact reviewed task')
             meta = {**meta, 'capability': TOOL_CAPABILITIES[meta['tool']]}
+        if meta.get('tool') == 'build.run@1.0.0':
+            from backend.runtime.remote_build import BuildSpec
+            BuildSpec.model_validate(meta.get('tool_parameters'))
+            if meta.get('subtasks') or meta.get('execution_target') != 'remote' or not meta.get('assigned_knight'):
+                raise ValueError('Builds require one exact reviewed remote computer task')
+            meta = {**meta, 'capability': 'process.execute', 'max_attempts': 1}
         if meta.get('offload') and self.execution_policy.get()['level'] == 5 and meta.get('tool') in {'text.analyze@1.0.0', 'code.python.analyze@1.0.0'}:
             from backend.cluster.hierarchy import offload_candidate
             from backend.cluster.node_registry import node_registry
-            target = offload_candidate(node_registry, 'compute')
+            from backend.cluster.task_leasing import task_lease_manager
+            leases = getattr(self, 'lease_manager', task_lease_manager)
+            target = offload_candidate(node_registry, 'compute', outcomes=self.tasks.repo.list_all(), tool=meta['tool'], busy_nodes=leases.busy_node_ids())
             if target:
-                meta = {**meta, 'execution_target': 'remote', 'assigned_knight': target, 'capability': 'compute', 'offload_reason': 'Fresh approved computer with available CPU and memory'}
+                meta = {**meta, 'execution_target': 'remote', 'assigned_knight': target, 'capability': 'compute', 'offload_reason': 'Approved computer selected using fresh capacity and controller-verified outcomes for this tool'}
             else:
                 meta = {**meta, 'offload_reason': 'No healthy approved computer with fresh load evidence; executing locally'}
         actor = meta.get("actor", "system")
@@ -260,6 +298,12 @@ class RuntimeEngine:
             task = self.tasks.get(task_id)
             if self.execution_policy.get()["level"] == 0 or not task or task["status"].lower() != "queued":
                 return None
+            if task.get('metadata', {}).get('tool') == 'build.run@1.0.0':
+                from backend.cluster.hierarchy import offload_candidate
+                from backend.cluster.node_registry import node_registry
+                if capability != 'process.execute' or offload_candidate(node_registry, capability,
+                        members=[node_id], busy_nodes=leases.busy_node_ids()) != node_id:
+                    return None
             auth = self.authorize_task(task)
             if not auth["authorized"]:
                 if auth.get("approval_id"):
@@ -288,11 +332,26 @@ class RuntimeEngine:
                                 'metadata': {**meta, 'execution_target': 'local', 'offload_reason': 'Offload computer unavailable before dispatch; retained locally'}})
                             self.events.publish('task.offload_fallback', recovered)
         for task in self.tasks.list("leased"):
-            lease = leases.leases.get(task["id"])
             node = node_registry.get_node(task.get("assigned_knight"))
-            if not lease or lease.revoked or lease.expires_at <= time.time() or not node or node.node_state not in {"APPROVED", "CONNECTED"}:
-                leases.revoke_lease(task["id"])
-                self.tasks.transition_task(task["id"], "RECOVERY_REQUIRED")
-                recovered = self.tasks.transition_task(task["id"], "queued", {"assigned_knight": None, "lease_id": None,
-                    "error": "Remote lease or node became unavailable; safely requeued"})
-                self.events.publish("task.requeued", recovered)
+            try:
+                # The database is authoritative: another controller may have
+                # revoked or replaced a lease since this process cached it.
+                leases.validate_lease_execution(task['id'], task.get('assigned_knight'), task.get('fencing_token'))
+                valid = bool(node and node.node_state in {'APPROVED', 'CONNECTED'})
+            except PermissionError:
+                valid = False
+            if not valid:
+                with self.dispatch_lock:
+                    current = self.tasks.get(task['id'])
+                    if not current or current['status'].lower() != 'leased':
+                        continue
+                    leases.revoke_lease(task['id'])
+                    recovered = self.tasks.transition_task(task['id'], 'RECOVERY_REQUIRED',
+                        {'error': 'Remote execution was interrupted; retained evidence requires review before retrying side effects.'})
+                    if current.get('metadata', {}).get('tool') in {'text.analyze@1.0.0', 'code.python.analyze@1.0.0'}:
+                        recovered = self.tasks.transition_task(task['id'], 'queued',
+                            {'assigned_knight': None, 'lease_id': None,
+                             'error': 'Remote analysis lease unavailable; idempotent analysis safely requeued'})
+                        self.events.publish('task.requeued', recovered)
+                    else:
+                        self.events.publish('task.recovery_required', recovered)

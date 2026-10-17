@@ -262,7 +262,7 @@ if (app) {
 }
 
 async function runReleaseSmoke(reportPath) {
-  const deadline = Date.now() + 90000;
+  const deadline = Date.now() + (process.env.KINGDOM_LIVE_MODEL_SMOKE === '1' ? 480000 : 90000);
   async function until(check, description) {
     while (Date.now() < deadline) {
       const result = await check();
@@ -282,6 +282,14 @@ async function runReleaseSmoke(reportPath) {
   await setupWindow.webContents.executeJavaScript(`void window.kingdomDesktop.saveProfile({
     name: 'Developer', gui: true, knights: ['planner', 'coder', 'security']
   }).catch(console.error)`);
+  async function capture(filename) {
+    try {
+      fs.writeFileSync(filename, (await mainWindow.webContents.capturePage()).toPNG());
+    } catch (error) {
+      if (!['Current display surface not available', 'UnknownVizError'].some(message => String(error.message).includes(message))) throw error;
+      report.captureUnavailable = 'Windows has no display surface available for screenshots';
+    }
+  }
   await until(async () => mainWindow && !mainWindow.webContents.isLoading()
     && mainWindow.webContents.getURL().startsWith('http://127.0.0.1')
     && await mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('#root')?.children.length)"), 'rendered dashboard');
@@ -293,13 +301,32 @@ async function runReleaseSmoke(reportPath) {
   await until(() => mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.card-value')).some(e => e.textContent === 'ACTIVE')"), 'live runtime dashboard');
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e => e.textContent === 'Tasks').click()");
   await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('textarea[aria-label=\"Task description\"]'))"), 'task submission form');
+  if (process.env.KINGDOM_LIVE_MODEL_SMOKE === '1') {
+    await until(() => mainWindow.webContents.executeJavaScript("document.querySelector('[aria-label=\"Chat 1\"] select')?.value === 'this-pc' && document.querySelector('[aria-label=\"Chat 2\"] select')?.value === 'laptop3'"), 'configured native chat computers');
+    await mainWindow.webContents.executeJavaScript(`(() => {
+      for (const id of ['model-chat-0','model-chat-1']) {
+        const input=document.getElementById(id);
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'Return exactly the comma-separated integers from 1 to 15. No explanation.');
+        input.dispatchEvent(new Event('input',{bubbles:true}));
+      }
+    })()`);
+    await mainWindow.webContents.executeJavaScript("document.querySelector('[aria-label=\"Chat 1\"] form').requestSubmit(); document.querySelector('[aria-label=\"Chat 2\"] form').requestSubmit();");
+    const active = await until(() => mainWindow.webContents.executeJavaScript("fetch('/workspace/model-profiles').then(r=>r.json()).then(data=>{const active=data.capacity.filter(p=>p.active===1);return active.length>=2?active:false})"), 'two native model chats running concurrently');
+    await until(() => mainWindow.webContents.executeJavaScript("(() => {const error=Array.from(document.querySelectorAll('[aria-label^=\"Chat \"] [role=\"alert\"]')).find(e=>e.textContent);if(error)throw new Error(error.textContent);return document.body.textContent.includes('Last reply from this-pc') && document.body.textContent.includes('Last reply from laptop3')})()"), 'both native chat replies');
+    report.parallelChats = await mainWindow.webContents.executeJavaScript(`(() => {
+      const answers = [1,2].map(n=>Array.from(document.querySelectorAll('[aria-label="Chat '+n+'"] pre')).at(-1)?.textContent||'');
+      return {answers,basicInstructionCheck:answers.map(text=>JSON.stringify((text.match(/\\b\\d+\\b/g)||[]).map(Number))===JSON.stringify(Array.from({length:15},(_,i)=>i+1)))};
+    })()`);
+    report.parallelChats.activeComputers=active.map(item=>item.profile);
+    await capture(path.join(path.dirname(reportPath),'parallel-chats.png'));
+  }
   await mainWindow.webContents.executeJavaScript("(() => {const select=document.querySelector('.task-form select');select.value='text.analyze@1.0.0';select.dispatchEvent(new Event('change',{bubbles:true}));})()");
   await mainWindow.webContents.executeJavaScript(`(() => {
     const input = document.querySelector('textarea[aria-label="Task description"]');
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, 'native release verification');
     input.dispatchEvent(new Event('input', {bubbles:true}));
   })()`);
-  await mainWindow.webContents.executeJavaScript("document.querySelector('main.content form').requestSubmit()");
+  await mainWindow.webContents.executeJavaScript("document.querySelector('.task-form').requestSubmit()");
   const verifiedTask = await until(() => mainWindow.webContents.executeJavaScript("fetch('/tasks').then(r => r.json()).then(tasks => tasks.find(t => t.prompt === 'native release verification' && t.status === 'completed'))"), 'real verified native task');
   if (verifiedTask.result.results[0].outcome.output.words !== 3 || verifiedTask.result.results[0].verification.state !== 'VERIFIED') throw new Error('Native task outcome verification failed');
   report.taskExecuted = {taskId: verifiedTask.id, words: 3, verification: 'VERIFIED'};
@@ -324,10 +351,10 @@ async function runReleaseSmoke(reportPath) {
   await until(() => mainWindow.webContents.executeJavaScript("fetch('/missions').then(r=>r.json()).then(items=>items.some(item=>item.plan.title==='Native mission'&&item.status==='completed'))"), 'verified native mission');
   report.missionWorkspace.missionVerified = true;
   fs.mkdirSync(path.dirname(reportPath), {recursive:true});
-  fs.writeFileSync(path.join(path.dirname(reportPath),'mission-workspace.png'),(await mainWindow.webContents.capturePage()).toPNG());
+  await capture(path.join(path.dirname(reportPath),'mission-workspace.png'));
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e=>e.textContent==='Governance').click()");
   await until(() => mainWindow.webContents.executeJavaScript("document.querySelectorAll('input[name=autonomy]').length===6 && document.body.textContent.includes('Computer control')"), 'five levels and computer grants in native UI');
-  fs.writeFileSync(path.join(path.dirname(reportPath),'governance.png'),(await mainWindow.webContents.capturePage()).toPNG());
+  await capture(path.join(path.dirname(reportPath),'governance.png'));
   await mainWindow.webContents.executeJavaScript("fetch('/runtime/policy',{method:'PUT',headers:{'X-Kingdom-Request':'1','Content-Type':'application/json'},body:JSON.stringify({level:3})}).then(r=>{if(!r.ok)throw new Error('Policy restore failed')})");
   report.portableMaps = await mainWindow.webContents.executeJavaScript(`(async () => {
     async function request(url, body) {
@@ -351,7 +378,7 @@ async function runReleaseSmoke(reportPath) {
   if (updateStatus.current !== app.getVersion()) throw new Error('Native update bridge version differs');
   await until(() => mainWindow.webContents.executeJavaScript("document.body.textContent.includes('Check desktop updates') && document.body.textContent.includes('Installed version:')"), 'native desktop update controls');
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('section')).find(e=>e.querySelector('h2')?.textContent==='Desktop updates').scrollIntoView()");
-  fs.writeFileSync(path.join(path.dirname(reportPath),'updates.png'),(await mainWindow.webContents.capturePage()).toPNG());
+  await capture(path.join(path.dirname(reportPath),'updates.png'));
   const startupStatus = await mainWindow.webContents.executeJavaScript("fetch('/auth/local/status',{method:'POST',headers:{'X-Kingdom-Request':'1'}}).then(r=>r.json())");
   if (startupStatus.passcode_enabled !== false) throw new Error('Passcode must be off by default');
   await until(() => mainWindow.webContents.executeJavaScript("document.body.textContent.includes('Passcode is off') && document.body.textContent.includes('Turn on passcode')"), 'optional startup passcode controls');
@@ -387,7 +414,7 @@ async function runReleaseSmoke(reportPath) {
   report.arch = process.arch;
   fs.mkdirSync(path.dirname(reportPath), {recursive: true});
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
-  fs.writeFileSync(reportPath.replace(/\.json$/, '.png'), (await mainWindow.webContents.capturePage()).toPNG());
+  await capture(reportPath.replace(/\.json$/, '.png'));
   await mainWindow.webContents.executeJavaScript("fetch('/stop', {method: 'POST', headers: {'X-Kingdom-Request': '1'}}).then(r => {if (!r.ok) throw new Error('Runtime stop failed'); return r.json()})");
   await until(() => mainWindow.webContents.executeJavaScript("fetch('/status').then(r => r.json()).then(s => !s.running && !s.scheduler_running)"), 'stopped scheduler');
   report.runtimeStopped = true;

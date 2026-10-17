@@ -37,6 +37,11 @@ class ModelService:
         return {"default_provider": self.default_provider, "ollama": ollama, "openai_compatible": {"configured": bool(self.openai_url and self.openai_key)}, "usage": self.usage}
 
     async def generate(self, prompt, model=None, provider=None, profile=None, images=None):
+        if not profile and not model and not provider:
+            from backend.models.profiles import ModelProfiles
+            from backend.storage.db import db
+            if ModelProfiles(db).list():
+                profile = 'auto'
         if profile:
             return await self._generate_profile(prompt, profile, images or [])
         from backend.runtime.attachments import compact_text
@@ -56,9 +61,36 @@ class ModelService:
     async def _generate_profile(self, prompt, ident, images):
         from backend.models.profiles import ModelProfiles
         from backend.storage.db import db
+        from backend.models.capacity import capacity
+        profiles = ModelProfiles(db)
+        configured = profiles.list()
+        if ident == 'auto':
+            from backend.models.selection import eligible_profiles
+            candidates = await eligible_profiles([profiles.get(p['id'], credential=True) for p in configured],
+                                                 characters=len(prompt), images=bool(images))
+        elif ident.startswith('pool:'):
+            group = ident.removeprefix('pool:')
+            if not group:
+                raise ValueError('Select a named model pool')
+            candidates = [p for p in configured if p.get('pool_group') == group and (not images or p.get('vision'))]
+        else:
+            candidate = profiles.get(ident)
+            if images and not candidate.get('vision'):
+                raise ValueError('Select a vision-capable model profile to inspect image contents')
+            candidates = [candidate]
+        async with capacity.acquire(candidates, server_profiles=configured) as selected:
+            profile = profiles.get(selected['id'], credential=True)
+            result = await self._generate_connection(prompt, profile, images)
+            if ident == 'auto':
+                from backend.models.selection import selection_reason
+                result['selection'] = selection_reason(profile)
+            return result
+
+    async def _generate_connection(self, prompt, profile, images):
         from backend.runtime.attachments import compact_text
+        from backend.models.profiles import model_tls_context
         import base64
-        profile = ModelProfiles(db).get(ident, credential=True)
+        ident = profile['id']
         if images and not profile.get('vision'):
             raise ValueError('Select a vision-capable model profile to inspect image contents')
         limit = min(400000, max(4000, profile.get('context_characters', 24000)))
@@ -66,14 +98,19 @@ class ModelService:
         headers = {'Authorization': 'Bearer ' + profile['api_key']} if profile['api_key'] else {}
         if profile['provider'] == 'ollama':
             body = {'model': profile['model'], 'prompt': context['text'], 'stream': False}
+            options = {}
+            if 'num_ctx' in profile: options['num_ctx'] = profile['num_ctx']
+            if 'max_output_tokens' in profile: options['num_predict'] = profile['max_output_tokens']
+            if options: body['options'] = options
             if images: body['images'] = [base64.b64encode(data).decode() for data in images]
             path = '/api/generate'
         else:
             content = context['text'] if not images else [{'type': 'text', 'text': context['text']}] + [
                 {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + base64.b64encode(data).decode()}} for data in images]
             body = {'model': profile['model'], 'messages': [{'role': 'user', 'content': content}], 'stream': False}
+            if 'max_output_tokens' in profile: body['max_tokens'] = profile['max_output_tokens']
             path = '/chat/completions'
-        async with httpx.AsyncClient(timeout=120, follow_redirects=False) as client:
+        async with httpx.AsyncClient(timeout=profile.get('timeout_seconds', 120), follow_redirects=False, verify=model_tls_context(profile)) as client:
             response = await client.post(profile['endpoint'] + path, headers=headers, json=body)
             response.raise_for_status(); payload = response.json()
         text = payload.get('response') if profile['provider'] == 'ollama' else payload['choices'][0]['message']['content']
@@ -81,6 +118,58 @@ class ModelService:
         result = ModelResult(profile['provider'], profile['model'], text, payload.get('usage', {}))
         self._record(result.usage)
         return {**result.export(), 'profile': ident, 'context': {k:v for k,v in context.items() if k != 'text'}}
+
+    async def chat(self, ident, request):
+        """Forward a complete chat/tool conversation to one owner-approved computer."""
+        from backend.models.profiles import ModelProfiles
+        from backend.models.profiles import model_tls_context
+        from backend.models.capacity import capacity
+        from backend.storage.db import db
+        profiles = ModelProfiles(db)
+        configured = profiles.list()
+        has_images = any(isinstance(m.get('content'), list) and any(
+            isinstance(part, dict) and part.get('type') in {'image_url', 'input_image', 'image'}
+            for part in m['content']) for m in request['messages'])
+        automatic = not ident or ident == 'auto'
+        if automatic:
+            import json
+            from backend.models.selection import eligible_profiles
+            candidates = await eligible_profiles([profiles.get(p['id'], credential=True) for p in configured],
+                characters=len(json.dumps(request['messages'])), images=has_images, tools=bool(request.get('tools')))
+        elif ident.startswith('pool:'):
+            group = ident.removeprefix('pool:')
+            candidates = [p for p in configured if group and p.get('pool_group') == group and (not has_images or p.get('vision'))]
+        else:
+            candidates = [profiles.get(ident)]
+            if has_images and not candidates[0].get('vision'):
+                raise ValueError('Select a vision-capable model connection for images')
+        async with capacity.acquire(candidates, server_profiles=configured) as selected:
+            profile = profiles.get(selected['id'], credential=True)
+            import json
+            if len(json.dumps(request['messages'])) > profile.get('context_characters', 24000):
+                raise ValueError('Conversation exceeds this model connection context budget')
+            body = {key: value for key, value in request.items()
+                    if key in {'messages', 'tools', 'tool_choice', 'temperature', 'top_p', 'reasoning_effort', 'parallel_tool_calls'}}
+            body.update(model=profile['model'], stream=False,
+                        max_tokens=min(request.get('max_tokens') or request.get('max_completion_tokens') or profile.get('max_output_tokens', 2048),
+                                       profile.get('max_output_tokens', 2048)))
+            if profile['provider'] == 'ollama':
+                path = '/v1/chat/completions'
+            else:
+                path = '/chat/completions'
+            headers = {'Authorization': 'Bearer ' + profile['api_key']} if profile['api_key'] else {}
+            async with httpx.AsyncClient(timeout=profile.get('timeout_seconds', 120), follow_redirects=False, verify=model_tls_context(profile)) as client:
+                response = await client.post(profile['endpoint'] + path, json=body, headers=headers)
+                response.raise_for_status()
+                payload = response.json()
+            if not payload.get('choices'):
+                raise RuntimeError('Configured model returned no chat choices')
+            payload['kingdom_profile'] = profile['id']
+            if automatic:
+                from backend.models.selection import selection_reason
+                payload['kingdom_selection'] = selection_reason(profile)
+            self._record(payload.get('usage') or {})
+            return payload
 
     async def stream(self, prompt, model=None, provider=None):
         provider = provider or self.default_provider

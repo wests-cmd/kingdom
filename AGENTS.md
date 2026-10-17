@@ -1,9 +1,9 @@
 # AGENTS.md — Kingdom Developer & AI Agent Guidelines
 
 ## 1. Repository Purpose
-Kingdom (`wests-cmd/kingdom`) is the core distributed runtime and infrastructure layer for the Centipede ecosystem. It handles distributed task execution, swarm orchestration, zero-trust security, persistent memory, and live operational APIs.
+Kingdom (`wests-cmd/kingdom`) is an adaptive AI harness and distributed runtime for completing tasks across models, agents, tools and approved clusters of computers. It can stand alone or support the Centipede ecosystem. Its core is plan → place → execute → verify → remember → adapt, with persistent evidence and human authority.
 
-Sledge sits above Kingdom as the user-facing agent. Do NOT move product-level user interaction logic into Kingdom.
+Kingdom provides its own user-facing harness. Sledge, Hermes, Claude-style CLIs and other agents are optional adapters, not required identities or dependencies. Develop cluster orchestration and evidence-based adaptation alongside the interface; do not reduce the product to model chat or assume all tools execute on the controller. Keep implementation claims distinct from roadmap goals. See docs/ADAPTIVE_CLUSTER_CORE.md.
 
 ---
 
@@ -20,7 +20,7 @@ Kingdom strictly enforces human authority over model execution:
 ### Core Directives:
 - Models propose actions; the execution layer validates authority, capabilities, and human approvals before execution.
 - Default to **deny-by-default**.
-- High-risk operations (e.g. `filesystem.delete`, `process.execute`, `docker.execute`) MUST require human approval.
+- High-risk operations require human approval at levels 0–4. At level 5, the authenticated owner’s policy selection is standing authorization for granted tools; task/model metadata cannot elevate policy or capabilities. OS permission boundaries remain mandatory.
 - Mocks are NEVER permitted in production runtime paths.
 
 ---

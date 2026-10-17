@@ -5,10 +5,24 @@ from backend.websocket import ws_router
 from backend.state import STATE
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    import asyncio
+    if await asyncio.to_thread(engine.autostart_requested):
+        await engine.start(persist=False)
+    await schedule_runner.start()
+    try:
+        yield
+    finally:
+        await schedule_runner.stop()
+        await engine.stop(persist=False)
 
 app = FastAPI(
     title="Kingdom v1TAS",
-    version=STATE.get("version", "1.0.0")
+    version=STATE.get("version", "1.0.0"), lifespan=lifespan
 )
 
 
@@ -41,6 +55,8 @@ from backend.runtime.mission_api import router as mission_router
 app.include_router(mission_router)
 from backend.cluster.hierarchy_api import router as hierarchy_router
 app.include_router(hierarchy_router)
+from backend.cluster.federation_api import router as federation_router
+app.include_router(federation_router)
 from backend.system.ui_update_api import router as ui_update_router
 app.include_router(ui_update_router)
 from backend.accessibility import router as accessibility_router
@@ -56,6 +72,33 @@ from backend.skills.portable_api import service as portable_service, linker as d
 initialize_discord(portable_service, discord_linker)
 app.include_router(discord_router)
 app.include_router(ws_router)
+from backend.runtime.harness_api import router as harness_router
+from backend.runtime.agent_api import router as agent_router
+app.include_router(harness_router)
+app.include_router(agent_router)
+from backend.runtime.service_api import router as service_router
+app.include_router(service_router)
+from backend.memory.knowledge_api import router as knowledge_router, initialize as initialize_knowledge
+from backend.storage.db import db as knowledge_db
+initialize_knowledge(knowledge_db)
+app.include_router(knowledge_router)
+from backend.runtime.tool_workshop_api import router as tool_workshop_router
+from backend.runtime.model_lab_api import router as model_lab_router
+app.include_router(tool_workshop_router)
+app.include_router(model_lab_router)
+from backend.runtime.request_api import router as request_router, service as request_service
+app.include_router(request_router)
+from backend.memory.portable_vault_api import router as vault_router, initialize as initialize_vault
+initialize_vault(knowledge_db, engine.events.publish)
+app.include_router(vault_router)
+from backend.integrations.payment_api import router as payment_router
+app.include_router(payment_router)
+from backend.runtime.scheduled_runner import ScheduledRunner
+from backend.runtime.automation_api import scheduled
+scheduled.enqueue_request = lambda body: request_service().create(body)
+scheduled.cancel_request = lambda ident: request_service().cancel(ident)
+schedule_runner = ScheduledRunner(scheduled, engine, requests=request_service)
+
 
 # Serve built frontend static assets if available
 frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
@@ -83,6 +126,14 @@ if os.path.exists(frontend_dist):
         if os.path.exists(index_file):
             return FileResponse(index_file)
         return {"status": "Kingdom Backend Operational"}
+
+    @app.get('/kingdom.webmanifest')
+    def serve_web_manifest():
+        return FileResponse(os.path.join(frontend_dist,'kingdom.webmanifest'),media_type='application/manifest+json',headers={'Cache-Control':'no-store'})
+
+    @app.get('/kingdom-sw.js')
+    def serve_web_worker():
+        return FileResponse(os.path.join(frontend_dist,'kingdom-sw.js'),media_type='application/javascript',headers={'Cache-Control':'no-store','Service-Worker-Allowed':'/'})
 
     @app.get('/ui/{component}/{resource:path}')
     def serve_ui_component(component: str, resource: str):

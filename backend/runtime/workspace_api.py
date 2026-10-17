@@ -7,7 +7,7 @@ from backend.storage.db import db
 from backend.runtime.attachments import AttachmentStore, MAX_FILE
 from backend.models.profiles import ModelProfiles
 from backend.models.service import ModelService
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 router = APIRouter(prefix='/workspace', dependencies=[Depends(require_owner)])
 
@@ -46,12 +46,67 @@ class ProfileRequest(BaseModel):
     model: str = Field(min_length=1, max_length=200)
     variant: Literal['standard', 'fine_tuned', 'abliterated', 'custom'] = 'standard'
     vision: bool = False
+    supports_tools: bool = False
+    disabled: bool = False
     context_characters: int = Field(default=24000, ge=4000, le=400000)
+    pool_group: str = Field(default='', max_length=64)
+    computer_id: str = Field(default='', max_length=64)
+    max_parallel: int = Field(default=1, ge=1, le=4)
+    timeout_seconds: int = Field(default=120, ge=30, le=600)
+    max_output_tokens: int = Field(default=2048, ge=16, le=8192)
+    num_ctx: int = Field(default=8192, ge=512, le=131072)
+    ca_certificate: str = Field(default='', max_length=32000)
     api_key: str | None = Field(default=None, max_length=16000)
 
 
 class ComputerGrant(BaseModel):
     capabilities: list[Literal['filesystem.read', 'filesystem.write', 'process.execute', 'computer.observe', 'computer.control']] = Field(max_length=5)
+
+
+class ChatRequest(BaseModel):
+    model: str = Field(default='kingdom', max_length=200)
+    messages: list[dict] = Field(min_length=1, max_length=256)
+    tools: list[dict] | None = Field(default=None, max_length=64)
+    tool_choice: str | dict | None = None
+    parallel_tool_calls: bool | None = None
+    stream: bool = False
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    top_p: float | None = Field(default=None, ge=0, le=1)
+    reasoning_effort: str | None = Field(default=None, max_length=20)
+    max_tokens: int | None = Field(default=None, ge=1, le=131072)
+    max_completion_tokens: int | None = Field(default=None, ge=1, le=131072)
+
+
+@router.post('/model-chat/{ident}/chat/completions')
+async def model_chat(ident: str, request: ChatRequest):
+    import json
+    body = request.model_dump(exclude_none=True)
+    if len(json.dumps(body).encode()) > 2 * 1024 * 1024:
+        raise HTTPException(413, 'Chat input exceeds two MiB')
+    try:
+        payload = await ModelService().chat(ident, body)
+    except (KeyError, ValueError) as error:
+        raise HTTPException(400, str(error)) from error
+    except TimeoutError as error:
+        raise HTTPException(429, str(error), headers={'Retry-After': '5'}) from error
+    except Exception as error:
+        raise HTTPException(502, 'Model computer unavailable; no other computer was silently substituted') from error
+    if not request.stream:
+        return payload
+    # Buffer upstream to keep provider error reporting reliable. Preserve tool calls in SSE.
+    async def events():
+        base = {k: payload[k] for k in ('id', 'model', 'created') if k in payload}
+        base['object'] = 'chat.completion.chunk'
+        for choice in payload['choices']:
+            message = choice.get('message', {})
+            delta = {k: message[k] for k in ('role', 'content', 'reasoning_content', 'tool_calls') if k in message}
+            if 'tool_calls' in delta:
+                delta['tool_calls'] = [{**call, 'index': index} for index, call in enumerate(delta['tool_calls'])]
+            yield 'data: ' + json.dumps({**base, 'choices': [{'index': choice.get('index', 0), 'delta': delta, 'finish_reason': None}]}) + '\n\n'
+            yield 'data: ' + json.dumps({**base, 'choices': [{'index': choice.get('index', 0), 'delta': {}, 'finish_reason': choice.get('finish_reason', 'stop')}]}) + '\n\n'
+        yield 'data: ' + json.dumps({**base, 'choices': [], 'usage': payload.get('usage', {})}) + '\n\n'
+        yield 'data: [DONE]\n\n'
+    return StreamingResponse(events(), media_type='text/event-stream', headers={'X-Kingdom-Model-Profile': payload['kingdom_profile']})
 
 
 @router.get('/computer-tools')
@@ -103,7 +158,10 @@ def download(ident: str):
 
 @router.get('/model-profiles')
 def profiles():
-    return {'profiles': ModelProfiles(db).list(),
+    from backend.models.capacity import capacity
+    configured = ModelProfiles(db).list()
+    return {'profiles': configured, 'capacity': capacity.status(configured),
+            'pools': sorted({p['pool_group'] for p in configured if p.get('pool_group')}),
             'notice': 'Use installed Ollama models or an OpenAI-compatible endpoint, including custom, fine-tuned or abliterated models. These labels never change autonomy or permissions. Training and weight downloads are separate operations.'}
 
 

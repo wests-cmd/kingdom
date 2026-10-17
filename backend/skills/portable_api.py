@@ -46,6 +46,41 @@ class Confirmation(BaseModel):
     checksum: str = Field(pattern="^[0-9a-f]{64}$")
 
 
+class DocumentUpload(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    content: str = Field(min_length=1, max_length=262144)
+    source: str = Field(default="manual", min_length=1, max_length=500)
+    harness: str = Field(default="generic", pattern=r"^[a-z][a-z0-9_.-]{0,63}$")
+
+
+@router.post("/skill-documents/preview")
+def preview_document(request: DocumentUpload):
+    from backend.skills.documents import SkillDocumentService
+    return boundary(lambda: SkillDocumentService(service).preview("owner", request.content, request.source, request.harness))
+
+
+@router.get("/skill-documents")
+def list_documents():
+    def action():
+        service.authorize("owner", "export_skillmaps")
+        return [{"skill_id": row["skill_id"], "name": row["document"]["name"],
+                 "description": row["document"]["description"], "trust": "untrusted"}
+                for row in service.repository.list("skill_document") if row["actor"] == "owner"]
+    return boundary(action)
+
+
+@router.post("/skill-documents/confirm")
+def confirm_document(request: Confirmation):
+    from backend.skills.documents import SkillDocumentService
+    return boundary(lambda: SkillDocumentService(service).confirm("owner", request.preview_id, request.checksum))
+
+
+@router.get("/skill-documents/{skill_id}/export")
+def export_document(skill_id: str):
+    from backend.skills.documents import SkillDocumentService
+    return boundary(lambda: SkillDocumentService(service).export("owner", skill_id))
+
+
 class LinkConfirmation(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     code: str = Field(min_length=20, max_length=64)

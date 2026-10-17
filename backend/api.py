@@ -471,6 +471,12 @@ def create_task(request: TaskRequest):
     if request.metadata.get("actor_id", "owner") != "owner" or request.metadata.get("actor", "owner") != "owner":
         raise HTTPException(status_code=403, detail="Task actor must be the authenticated owner")
     metadata = dict(request.metadata)
+    if 'project_test' in metadata:
+        from backend.runtime.project_tests import validate_metadata
+        try:
+            validate_metadata(metadata)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(400, str(exc)) from exc
     metadata["actor_id"] = "owner"
     metadata["actor"] = "owner"
     attachments = metadata.get('attachment_ids', [])
@@ -489,6 +495,49 @@ def create_task(request: TaskRequest):
 @router.get("/tasks")
 def list_tasks(task_status: str | None = Query(default=None, alias="status")):
     return engine.tasks.list(task_status)
+
+
+@router.get('/tasks/{task_id}/build-artifacts/{name:path}')
+def download_build_artifact(task_id: str, name: str):
+    import base64
+    from pathlib import PurePosixPath
+    from urllib.parse import quote
+    from backend.runtime.remote_build import TOOL, relative_name, verify
+    task=engine.tasks.get(task_id)
+    if not task or task.get('metadata',{}).get('tool')!=TOOL:
+        raise HTTPException(404,'Build artifact not found')
+    result=task.get('result') or {}
+    if (task.get('status','').lower()!='completed' or result.get('verification',{}).get('state')!='VERIFIED'
+            or not result.get('executed_by') or result['executed_by']!=task.get('assigned_knight')):
+        raise HTTPException(409,'Build completion has not been verified')
+    try:
+        relative_name(name)
+        outcome=result['output']
+        if outcome.get('kind')!='native_tool' or outcome.get('tool')!=TOOL:
+            raise ValueError('Mismatched build outcome')
+        output=outcome['output']
+        verify(task,output)  # Recheck source/lease binding and every actual artifact byte.
+    except (ValueError,TypeError,KeyError,AttributeError) as error:
+        raise HTTPException(409,'Build evidence changed or could not be verified') from error
+    if name not in output['artifacts']:
+        raise HTTPException(404,'Build artifact not found')
+    content=base64.b64decode(output['artifacts'][name]['base64'],validate=True)
+    return Response(content,media_type='application/octet-stream',headers={
+        'Content-Disposition':"attachment; filename*=UTF-8''"+quote(PurePosixPath(name).name,safe=''),
+        'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
+        'X-Artifact-SHA256':output['artifacts'][name]['sha256']})
+
+@router.get('/tasks/{task_id}/test-report')
+def project_test_report(task_id: str):
+    task = engine.tasks.get(task_id)
+    if task is None or 'project_test' not in task.get('metadata', {}):
+        raise HTTPException(404, 'Project test task not found')
+    from backend.runtime.project_tests import report
+    try:
+        return report(task)
+    except (ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(409, 'Persisted project test descriptor is invalid') from exc
+
 
 @router.get("/tasks/{task_id}")
 def get_task(task_id: str):
