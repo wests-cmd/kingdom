@@ -40,7 +40,7 @@ export default function Workbench(){
    <label>Saved jobs<select value={current?.id||''} onChange={e=>setSelected((sessions||[]).find(s=>s.id===e.target.value)||null)}><option value="">Choose a job</option>{(sessions||[]).map(s=><option key={s.id} value={s.id}>{s.objective.slice(0,65)} · {s.status}</option>)}</select></label>
    {current&&<div><h3>{current.status.replaceAll('_',' ')}</h3><p>Model turns: {current.turns}/{current.max_turns}</p>
     {current.error&&<p role="alert">{current.error}</p>}
-    {current.status==='needs_review'&&<div><label>Correction or recovery context<textarea maxLength={4000} value={review} onChange={e=>setReview(e.target.value)}/></label><button disabled={busy||!review.trim()} onClick={()=>perform(async()=>{const {data}=await api.post(`/agent-sessions/${current.id}/review-feedback`,{message:review,expected_updated_at:current.updated_at});setSelected(data);setReview('');refresh()})}>Save reviewed correction</button><p className="muted">Preserves the conversation and turn budget. Failed writes, processes and approval decisions cannot be replayed through this control.</p></div>}
+    {['needs_review','completed'].includes(current.status)&&<div><label>Reviewed correction or independent test failure<textarea maxLength={4000} value={review} onChange={e=>setReview(e.target.value)}/></label><button disabled={busy||!review.trim()} onClick={()=>perform(async()=>{const {data}=await api.post(`/agent-sessions/${current.id}/review-feedback`,{message:review,expected_updated_at:current.updated_at});setSelected(data);setReview('');refresh()})}>Save reviewed correction</button><p className="muted">Preserves the conversation and turn budget. Failed writes, processes and approval decisions cannot be replayed through this control.</p></div>}
     <p>Start Runtime if it is stopped. Grant the intended Apprentice file capabilities in Governance. Review pending operations there, then continue this job.</p>
     <button disabled={busy||['completed','cancelled','needs_review','budget_exhausted'].includes(current.status)} onClick={()=>perform(async()=>{const {data}=await api.post(`/agent-sessions/${current.id}/advance`,{},{timeout:620000});setSelected(data);refresh()})}>{busy?'Working…':'Continue one step'}</button>
     <button disabled={busy||['completed','cancelled','needs_review','budget_exhausted'].includes(current.status)} onClick={()=>perform(async()=>{const {data}=await api.post(`/agent-sessions/${current.id}/run`,{max_turns:2,max_seconds:300},{timeout:320000});setSelected(data);refresh()})}>Run until review or budget</button>
@@ -73,3 +73,4 @@ export default function Workbench(){
   </section>
  </div>
 }
+

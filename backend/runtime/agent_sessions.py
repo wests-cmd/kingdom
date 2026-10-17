@@ -279,7 +279,7 @@ class AgentSessionService:
     def review_feedback(self, ident, message, expected_updated_at):
         state = self.get(ident)
         if self._locks.get(ident) and self._locks[ident].locked(): raise ValueError('Wait for the active model turn')
-        if state['status'] != 'needs_review' or state['updated_at'] != expected_updated_at:
+        if state['status'] not in {'needs_review','completed'} or state['updated_at'] != expected_updated_at:
             raise ValueError('Reload the exact review checkpoint before continuing')
         if not isinstance(message,str) or not 1<=len(message.strip())<=4000: raise ValueError('Supply bounded review feedback')
         if state['turns'] >= state['max_turns']: raise ValueError('Model-turn budget exhausted; create a new reviewed session')
@@ -309,3 +309,4 @@ class AgentSessionService:
             except asyncio.TimeoutError:return self.get(ident)
             if state['status'] in {'thinking','waiting_tools'}:await asyncio.sleep(.25)
         return self.get(ident)
+

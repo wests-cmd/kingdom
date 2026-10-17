@@ -34,3 +34,17 @@ def test_feedback_requires_exact_checkpoint_and_preserves_budget(setup):
     current=service.get(state['id']);result=service.review_feedback(current['id'],'Model host restored',current['updated_at'])
     assert result['turns']==2 and result['status']=='ready'
     assert result['messages'][-1]['role']=='user'
+
+
+def test_completed_response_can_receive_independent_test_failure(setup):
+    service,engine,_=setup([])
+    state=service.create('Repair','auto',max_turns=4)
+    state.update(status='completed',turns=3);service._save(state)
+    current=service.get(state['id'])
+    resumed=service.review_feedback(current['id'],'Independent tests failed: SyntaxError at line 19',current['updated_at'])
+    assert resumed['status']=='ready' and resumed['turns']==3
+    assert not engine.records
+    resumed.update(status='completed',turns=4);service._save(resumed)
+    current=service.get(state['id'])
+    with pytest.raises(ValueError,match='budget exhausted'):
+        service.review_feedback(current['id'],'Keep trying',current['updated_at'])

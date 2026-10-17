@@ -138,7 +138,7 @@ class ModelService:
                 characters=len(json.dumps(request['messages'])), images=has_images, tools=bool(request.get('tools')))
             if not candidates:
                 from backend.models.selection import ModelSelectionError
-                raise ModelSelectionError('No reachable model connection fits this request. Check tool support, installed models, model host connectivity and context limits in coding setup.')
+                raise ModelSelectionError('No reachable eligible model connection fits this request. Check tool support, installed models, model host connectivity and context limits in coding setup.')
         elif ident.startswith('pool:'):
             group = ident.removeprefix('pool:')
             candidates = [p for p in configured if group and p.get('pool_group') == group and (not has_images or p.get('vision'))]
