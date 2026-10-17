@@ -34,6 +34,34 @@ class RunSession(BaseModel):
     max_turns: int = Field(default=2,ge=1,le=4)
     max_seconds: int = Field(default=300,ge=5,le=600)
 
+class ReviewFeedback(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    message: str = Field(min_length=1,max_length=4000)
+    expected_updated_at: float
+
+@router.get('/readiness')
+async def readiness():
+    from backend.models.profiles import ModelProfiles
+    from backend.models.selection import eligible_profiles
+    from backend.storage.db import db
+    from backend.api import engine
+    from backend.runtime.computer_tools import TOOL_CAPABILITIES
+    catalog=ModelProfiles(db)
+    profiles=catalog.list()
+    ready=await eligible_profiles([catalog.get(p['id'],credential=True) for p in profiles],characters=2000,tools=True)
+    grants=[{'role':role,'capabilities':sorted(engine.security.nodes.get_node_capabilities(role) & set(TOOL_CAPABILITIES.values()))} for role in engine.swarm.registry._knights]
+    blockers=[]
+    if not ready: blockers.append('No reachable installed tool-capable model fits the minimum context budget. Verify tool support and model connection in Settings.')
+    if not any('filesystem.read' in item['capabilities'] and 'filesystem.write' in item['capabilities'] for item in grants): blockers.append('No Apprentice has both workspace read and write grants. Review the intended worker in Governance.')
+    if not engine.status().get('running'): blockers.append('Start the Kingdom runtime.')
+    return {'ready_for_scoped_file_work':not blockers,'blockers':blockers,'models':[{'id':p['id'],'model':p['model'],'computer':p.get('computer_id')} for p in ready], 'grants':grants,'scope':'Connection and setup checks only; coding correctness and independent tests remain required.'}
+
+@router.post('/{ident}/review-feedback')
+def review_feedback(ident: str, request: ReviewFeedback):
+    try:return service().review_feedback(ident,request.message,request.expected_updated_at)
+    except KeyError:raise HTTPException(404,'Agent session not found')
+    except ValueError as error:raise HTTPException(409,str(error)) from error
+
 
 @router.get('')
 def sessions():

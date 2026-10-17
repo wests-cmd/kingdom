@@ -19,8 +19,10 @@ export default function Workbench(){
  const [harness,setHarness]=useState(''),[job,setJob]=useState(''),[cwd,setCwd]=useState('.'),[task,setTask]=useState(null)
  const perform=async fn=>{setBusy(true);setError('');try{await fn()}catch(e){setError(typeof e.response?.data?.detail==='string'?e.response.data.detail:e.message)}finally{setBusy(false)}}
  const current=(sessions||[]).find(s=>s.id===selected?.id)||selected
+ const [readiness,setReadiness]=useState(null),[review,setReview]=useState('')
  useEffect(()=>{if(profile==='auto'||!models?.profiles?.length)return;const valid=models.profiles.some(p=>p.id===profile)||(profile.startsWith('pool:')&&models.pools?.includes(profile.slice(5)));if(!valid)setProfile(models.profiles.find(p=>p.id==='this-pc')?.id||models.profiles.find(p=>p.id==='laptop3')?.id||models.profiles[0].id)},[models,profile])
  return <div className="page"><h1>Agent workbench</h1>
+  <section className="panel"><h2>Coding setup</h2><button disabled={busy} onClick={()=>perform(async()=>{const {data}=await api.get('/agent-sessions/readiness');setReadiness(data)})}>Check coding setup without inference</button>{readiness&&<div><p>{readiness.ready_for_scoped_file_work?'Workspace coding setup is ready. Independent tests are still required.':'Coding setup needs attention.'}</p>{readiness.blockers.map(reason=><p key={reason} role="alert">{reason}</p>)}{readiness.models.map(model=><p key={model.id}>{model.id} · {model.model} · {model.computer || 'Host not labeled'}</p>)}</div>}</section>
   <p>Give a model a job with real workspace tools, or hand the job to an installed agent such as Hermes or Claude. You keep control of permissions and approvals.</p>
   {error&&<p role="alert">{error}</p>}
   <UnifiedConversation />
@@ -38,6 +40,7 @@ export default function Workbench(){
    <label>Saved jobs<select value={current?.id||''} onChange={e=>setSelected((sessions||[]).find(s=>s.id===e.target.value)||null)}><option value="">Choose a job</option>{(sessions||[]).map(s=><option key={s.id} value={s.id}>{s.objective.slice(0,65)} · {s.status}</option>)}</select></label>
    {current&&<div><h3>{current.status.replaceAll('_',' ')}</h3><p>Model turns: {current.turns}/{current.max_turns}</p>
     {current.error&&<p role="alert">{current.error}</p>}
+    {current.status==='needs_review'&&<div><label>Correction or recovery context<textarea maxLength={4000} value={review} onChange={e=>setReview(e.target.value)}/></label><button disabled={busy||!review.trim()} onClick={()=>perform(async()=>{const {data}=await api.post(`/agent-sessions/${current.id}/review-feedback`,{message:review,expected_updated_at:current.updated_at});setSelected(data);setReview('');refresh()})}>Save reviewed correction</button><p className="muted">Preserves the conversation and turn budget. Failed writes, processes and approval decisions cannot be replayed through this control.</p></div>}
     <p>Start Runtime if it is stopped. Grant the intended Apprentice file capabilities in Governance. Review pending operations there, then continue this job.</p>
     <button disabled={busy||['completed','cancelled','needs_review','budget_exhausted'].includes(current.status)} onClick={()=>perform(async()=>{const {data}=await api.post(`/agent-sessions/${current.id}/advance`,{},{timeout:620000});setSelected(data);refresh()})}>{busy?'Working…':'Continue one step'}</button>
     <button disabled={busy||['completed','cancelled','needs_review','budget_exhausted'].includes(current.status)} onClick={()=>perform(async()=>{const {data}=await api.post(`/agent-sessions/${current.id}/run`,{max_turns:2,max_seconds:300},{timeout:320000});setSelected(data);refresh()})}>Run until review or budget</button>

@@ -137,6 +137,9 @@ class AgentSessionService:
         for record in state['pending']:
             task = self.engine.tasks.get(record['task_id'])
             status = task['status'].lower()
+            if status == 'failed' and record['tool'] in {'workspace.read@1.0.0','workspace.list@1.0.0'} and '[Errno 2]' in (task.get('error') or ''):
+                record['observation_error'] = 'path_not_found'
+                continue
             if status in {'failed', 'cancelled', 'blocked', 'denied', 'recovery_required', 'unknown'}:
                 state.update(status='needs_review', error='A governed tool task failed or needs review. Inspect its retained evidence; no automatic retry was made.')
                 return self._save(state)
@@ -146,6 +149,10 @@ class AgentSessionService:
             state['status'] = 'waiting_tools'
             return self._save(state)
         for record in state['pending']:
+            if record.pop('observation_error', None) == 'path_not_found':
+                state['messages'].append({'role':'tool','tool_call_id':record['call_id'],
+                    'content':json.dumps({'task_id':record['task_id'],'error_code':'path_not_found','message':'The requested workspace path does not exist. Use the provided paths or list the current project directory. This is a failed observation, not a successful tool operation.'})})
+                continue
             task = self.engine.tasks.get(record['task_id'])
             results = (task.get('result') or {}).get('results', [])
             if len(results) != 1 or results[0].get('verification', {}).get('state') != 'VERIFIED':
@@ -262,11 +269,28 @@ class AgentSessionService:
                 if self.get(ident)['status'] != 'cancelled':
                     state.update(status='needs_review', error='Model turn interrupted; no automatic retry was made.'); self._save(state)
                 raise
-            except Exception:
+            except Exception as error:
                 if self.get(ident)['status'] == 'cancelled':
                     return self.get(ident)
-                state.update(status='needs_review', error='Model response or governed dispatch could not be accepted. Review retained tasks and model configuration; no automatic retry was made.')
+                from backend.models.selection import ModelSelectionError
+                state.update(status='needs_review', error=str(error) if isinstance(error,ModelSelectionError) else 'Model response or governed dispatch could not be accepted. Review retained tasks and model configuration; no automatic retry was made.', error_class=type(error).__name__)
                 return self._save(state)
+
+    def review_feedback(self, ident, message, expected_updated_at):
+        state = self.get(ident)
+        if self._locks.get(ident) and self._locks[ident].locked(): raise ValueError('Wait for the active model turn')
+        if state['status'] != 'needs_review' or state['updated_at'] != expected_updated_at:
+            raise ValueError('Reload the exact review checkpoint before continuing')
+        if not isinstance(message,str) or not 1<=len(message.strip())<=4000: raise ValueError('Supply bounded review feedback')
+        if state['turns'] >= state['max_turns']: raise ValueError('Model-turn budget exhausted; create a new reviewed session')
+        for record in state['pending']:
+            task = self.engine.tasks.get(record['task_id'])
+            if not task or record['tool'] not in {'workspace.read@1.0.0','workspace.list@1.0.0'} or task['status'].lower()!='failed' or '[Errno 2]' not in (task.get('error') or ''):
+                raise ValueError('This pending operation requires separate task or approval review; it cannot be replayed through feedback')
+        if state['pending']: state = self._collect(state)
+        state['messages'].append({'role':'user','content':'Owner review feedback: '+message.strip()})
+        state.update(status='ready',error=None)
+        return self._save(state)
 
     async def run(self,ident,max_turns=2,max_seconds=300):
         if type(max_turns)is not int or not 1<=max_turns<=4 or type(max_seconds)is not int or not 5<=max_seconds<=600:

@@ -3,6 +3,9 @@ import asyncio
 
 import httpx
 
+class ModelSelectionError(ValueError):
+    """Safe configuration diagnostic; never includes endpoint credentials."""
+
 from backend.models.profiles import model_tls_context
 
 
