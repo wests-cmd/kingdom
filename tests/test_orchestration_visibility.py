@@ -25,6 +25,13 @@ def test_background_rejects_review_needed_work_without_retry():
     assert not runner.active
 
 
+def test_verified_local_executor_is_visible_and_interrupted_agent_is_not_thinking():
+    task={'metadata':{'agent_session_id':'agent'},'result':{'results':[{'knight':'researcher','verification':{'state':'VERIFIED'}},{'knight':'untrusted','verification':{'state':'UNVERIFIED'}}]}}
+    view=job_view({'id':'request','agent_session_id':'agent','status':'waiting_review'},{'status':'thinking'},[task])
+    assert view['assigned_workers']==['researcher']
+    assert view['display_status']=='waiting_review'
+
+
 def test_browser_independent_work_is_bounded_and_single_slot():
     async def scenario():
         entered=asyncio.Event();release=asyncio.Event();calls=[]

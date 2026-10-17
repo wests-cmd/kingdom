@@ -27,7 +27,7 @@ export default function OrchestrationBoard() {
   <p className="muted">Work continues when this browser closes while the Kingdom server stays running. A completed response does not prove a tested repair.</p>
   <div className="orchestration-filters" role="group" aria-label="Filter work">{[['attention','Needs attention'],['done','Responses done'],['all','All work']].map(([id,title])=><button key={id} aria-pressed={filter===id} onClick={()=>setFilter(id)}>{title}</button>)}</div>
   {!data ? <p>Loading recorded work…</p> : !visible.length ? <p>No requests in this view. Queued work is not running work.</p> : <div className="orchestration-jobs">{visible.map(job=><article key={job.id} className="orchestration-job">
-   <div className="job-heading"><strong>{job.project || 'Unscoped project'}</strong><span className="status-chip">{label(job.agent_status || job.status)}</span></div>
+   <div className="job-heading"><strong>{job.project || 'Unscoped project'}</strong><span className="status-chip">{label(job.display_status || job.status)}</span></div>
    <p>{job.objective}</p>
    <dl className="job-facts"><div><dt>Knight / computer</dt><dd>{job.computer || 'Not recorded'}</dd></div><div><dt>Apprentice / executor</dt><dd>{job.assigned_workers.join(', ') || 'Not assigned yet'}</dd></div><div><dt>Model</dt><dd>{job.model || label(job.model_profile)}</dd></div><div><dt>Execution evidence</dt><dd>{job.verified_tools} verified tools / {job.tool_count} requested</dd></div></dl>
    {job.reason && <p className="job-blocker"><strong>Needs attention:</strong> {job.reason}</p>}
