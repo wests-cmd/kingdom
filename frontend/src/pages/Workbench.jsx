@@ -2,6 +2,8 @@ import React,{useState,useEffect} from 'react'
 import api from '../api'
 import useLiveData from '../hooks/useLiveData'
 import UnifiedConversation from '../components/UnifiedConversation'
+import HarnessQuickConnect from '../components/HarnessQuickConnect'
+import ModelProfiles from '../components/ModelProfiles'
 
 export default function Workbench(){
  const {data:sessions,refresh}=useLiveData('/agent-sessions',5000)
@@ -50,6 +52,8 @@ export default function Workbench(){
    </div>}
   </section>
   <section className="panel"><h2>Delegate to an installed harness</h2><p>{harnesses?.notice}</p>
+   <HarnessQuickConnect onSaved={refreshHarnesses}/>
+   <details><summary>Connect a cloud or local API model</summary><p>Use a provider implementing the supported chat API. This does not connect arbitrary service APIs or carry over a chat website subscription automatically.</p><ModelProfiles/></details>
    <form onSubmit={e=>{e.preventDefault();perform(async()=>{const {data}=await api.post(`/harnesses/${encodeURIComponent(harness)}/jobs`,{prompt:job,cwd});setTask(data)})}}>
     <label>Agent connection<select required value={harness} onChange={e=>setHarness(e.target.value)}><option value="">Choose an agent</option>{(harnesses?.profiles||[]).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
     <label>Job<textarea required maxLength={4000} rows={4} value={job} onChange={e=>setJob(e.target.value)}/></label>

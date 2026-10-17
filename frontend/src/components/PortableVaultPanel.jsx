@@ -4,11 +4,14 @@ import api from '../api'
 function download(blob,name){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 export default function PortableVaultPanel(){
  const [scope,setScope]=useState('projects/default'),[project,setProject]=useState(''),[documents,setDocuments]=useState([]),[query,setQuery]=useState(''),[selected,setSelected]=useState(null),[trashed,setTrashed]=useState(null),[body,setBody]=useState(''),[importText,setImportText]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('')
+ const [storage,setStorage]=useState(null)
+ useEffect(()=>{api.get('/vault/storage').then(r=>setStorage(r.data)).catch(()=>{})},[])
  const action=async operation=>{setBusy(true);setError('');setMessage('');try{await operation()}catch(e){setError(e.response?.data?.detail||e.message)}finally{setBusy(false)}}
- const refresh=async target=>{const {data}=await api.get(`/vault/${encodeURIComponent(target)}/export`);setDocuments(Object.entries(data.files).map(([name,text])=>{const match=text.match(/^<!-- kingdom-vault (.*?) -->\n([\s\S]*)$/);if(!match)throw Error('A vault file has an unreadable header; export it for review.');return {...JSON.parse(match[1]),body:match[2],name}}))}
- const open=()=>action(async()=>{const {data}=await api.get(`/vault/project-id?scope=${encodeURIComponent(scope)}`);setProject(data.project);setSelected(null);setTrashed(null);setBody('');await refresh(data.project);setMessage('Project vault opened. Notes remain untrusted references, never tool permissions.')})
- const choose=doc=>{setSelected(doc);setBody(doc.body);setMessage('');setError('')}
+ const refresh=async target=>{try{const {data}=await api.get(`/vault/${encodeURIComponent(target)}/export`);setDocuments(Object.entries(data.files).map(([name,text])=>{const match=text.match(/^<!-- kingdom-vault (.*?) -->\n([\s\S]*)$/);if(!match)throw Error('A vault file has an unreadable header; export it for review.');return {...JSON.parse(match[1]),body:match[2],name}}))}catch(e){if(e.response?.status!==503)throw e;const {data}=await api.get(`/vault/${encodeURIComponent(target)}/cached`);setDocuments(data.documents);setMessage('Main vault is offline. Showing local cached copies; writes require reconnection.')}}
+ const open=()=>action(async()=>{const {data}=await api.get(`/vault/project-id?scope=${encodeURIComponent(scope)}`);setProject(data.project);setSelected(null);setTrashed(null);setBody('');setMessage('Project vault opened. Notes remain untrusted references, never tool permissions.');await refresh(data.project)})
+ const choose=doc=>action(async()=>{const {data}=await api.get(`/vault/${project}/documents/${doc.id}`);setSelected(data);setBody(data.body);if(data.cache)setMessage(`Cached copy: ${Math.round(data.cache.age_seconds)} seconds old. Reconnect the archive before editing.`)})
  return <section className="panel" style={{minWidth:0,overflowWrap:'anywhere'}}><h2>Portable project notes</h2><p>Edit project notes here and export them as portable Markdown. Imported notes are untrusted references; they do not grant tools or verify receipts.</p>
+ {storage&&<p role="status">Main vault: {storage.archive==='external'?'configured external storage':'this Kingdom (external vault not configured)'} · {storage.online?'online':'offline'}. Local hot-memory limit: {Math.round(storage.cache_limit_bytes/1024/1024)} MB. Cached notes never grant permissions.</p>}
  <form onSubmit={e=>{e.preventDefault();open()}}><label>Project workspace scope<input required maxLength={200} value={scope} disabled={busy} onChange={e=>setScope(e.target.value)} placeholder="projects/default"/></label><button disabled={busy||!scope.trim()}>Open project vault</button></form>
  {busy&&<p role="status">Working with project notes…</p>}{error&&<p role="alert">{error}</p>}{message&&<p role="status">{message}</p>}
  {project&&<><p className="muted">Opened vault: {project}. Change scope and open it to switch projects.</p>
@@ -27,3 +30,5 @@ export default function PortableVaultPanel(){
  </>}
  </section>
 }
+
+

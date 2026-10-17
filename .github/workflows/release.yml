@@ -92,15 +92,15 @@ jobs:
           fi
       - name: Audit installed Python dependencies
         run: python scripts/audit_release_dependencies.py
-      - name: Validate version and run tests
-        run: |
-          python scripts/validate_version.py --tag v1.2.1
-          python -m pytest --maxfail=1
       - name: Build frontend
         run: |
           npm --prefix frontend ci
           npm --prefix frontend audit --audit-level=high
           npm --prefix frontend run build
+      - name: Validate version and run tests against built web assets
+        run: |
+          python scripts/validate_version.py --tag v1.2.1
+          python -m pytest --maxfail=1
       - name: Build native frozen backend
         run: python scripts/build_native_backend.py
       - name: Exercise native backend from clean directory

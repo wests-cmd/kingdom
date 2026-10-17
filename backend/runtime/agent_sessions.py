@@ -40,6 +40,12 @@ SYSTEM = ('You are a Kingdom coding assistant. Use the available tools to inspec
           'and remaining limitations. Do not claim model training or external actions without verified evidence.')
 
 
+def recoverable_observation(record,task):
+    return (task['status'].lower()=='failed'
+            and record['tool'] in {'workspace.read@1.0.0','workspace.list@1.0.0'}
+            and any(code in (task.get('error') or '') for code in ('[Errno 2]','[Errno 20]','[Errno 21]')))
+
+
 class AgentSessionService:
     def __init__(self, engine, database):
         self.engine, self.db = engine, database
@@ -137,7 +143,7 @@ class AgentSessionService:
         for record in state['pending']:
             task = self.engine.tasks.get(record['task_id'])
             status = task['status'].lower()
-            if status == 'failed' and record['tool'] in {'workspace.read@1.0.0','workspace.list@1.0.0'} and '[Errno 2]' in (task.get('error') or ''):
+            if recoverable_observation(record,task):
                 record['observation_error'] = 'path_not_found'
                 continue
             if status in {'failed', 'cancelled', 'blocked', 'denied', 'recovery_required', 'unknown'}:
@@ -151,7 +157,7 @@ class AgentSessionService:
         for record in state['pending']:
             if record.pop('observation_error', None) == 'path_not_found':
                 state['messages'].append({'role':'tool','tool_call_id':record['call_id'],
-                    'content':json.dumps({'task_id':record['task_id'],'error_code':'path_not_found','message':'The requested workspace path does not exist. Use the provided paths or list the current project directory. This is a failed observation, not a successful tool operation.'})})
+                    'content':json.dumps({'task_id':record['task_id'],'error_code':'path_not_found','message':'The path is missing or has the wrong file/directory type for this read/list operation. Read files with workspace_read and list directories with workspace_list. This is a failed observation, not a successful tool operation.'})})
                 continue
             task = self.engine.tasks.get(record['task_id'])
             results = (task.get('result') or {}).get('results', [])
@@ -285,9 +291,11 @@ class AgentSessionService:
         if state['turns'] >= state['max_turns']: raise ValueError('Model-turn budget exhausted; create a new reviewed session')
         for record in state['pending']:
             task = self.engine.tasks.get(record['task_id'])
-            if not task or record['tool'] not in {'workspace.read@1.0.0','workspace.list@1.0.0'} or task['status'].lower()!='failed' or '[Errno 2]' not in (task.get('error') or ''):
+            if not task or not (recoverable_observation(record,task) or task['status'].lower() in {'completed','succeeded'}):
                 raise ValueError('This pending operation requires separate task or approval review; it cannot be replayed through feedback')
-        if state['pending']: state = self._collect(state)
+        if state['pending']:
+            state = self._collect(state)
+            if state['status']!='ready':raise ValueError('Pending tool results require separate evidence review')
         state['messages'].append({'role':'user','content':'Owner review feedback: '+message.strip()})
         state.update(status='ready',error=None)
         return self._save(state)

@@ -5,6 +5,16 @@ from backend.runtime.harnesses import HarnessConfig, HarnessService
 
 router = APIRouter(prefix='/harnesses', dependencies=[Depends(require_owner)])
 
+
+@router.get('/discovery')
+def discovery():
+    import shutil
+    presets=[('hermes','Hermes',['chat','-q','{prompt}'],'https://hermes-agent.nousresearch.com/docs/user-guide/cli'),
+             ('claude','Claude Code',['-p','{prompt}'],'https://code.claude.com/docs/en/headless'),
+             ('codex','Codex CLI',['exec','--sandbox','read-only','--','{prompt}'],'https://developers.openai.com/codex/noninteractive/')]
+    return {'presets':[{'kind':kind,'name':name,'executable':shutil.which(kind),'arguments':args,'documentation':url} for kind,name,args,url in presets],
+            'notice':'Discovery checks this Kingdom host only. Installed does not mean signed in or tested. Credentials stay in the selected harness. No program is started or permission changed.'}
+
 def service():
     from backend.api import engine
     from backend.storage.db import db

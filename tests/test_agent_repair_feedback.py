@@ -57,3 +57,16 @@ def test_coding_setup_and_review_require_owner():
     assert client.get('/agent-sessions/readiness').status_code in {401,403}
     assert client.post('/agent-sessions/example/review-feedback',json={
         'message':'retry','expected_updated_at':0}).status_code in {401,403}
+
+
+@pytest.mark.asyncio
+async def test_review_accepts_mixed_completed_read_and_wrong_path_type(setup):
+    service,engine,_=setup([reply(calls=[call('workspace_list',{'path':'a.py'},'list'),call('workspace_read',{'path':'test.py'},'read')])])
+    state=await service.advance(service.create('Inspect','model')['id'])
+    engine.records[state['pending'][0]['task_id']].update(status='failed',error="[Errno 20] Not a directory: 'a.py'")
+    engine.finish(state['pending'][1]['task_id'],{'text':'tests'})
+    state.update(status='needs_review');service._save(state)
+    current=service.get(state['id'])
+    result=service.review_feedback(current['id'],'Read the file instead of listing it',current['updated_at'])
+    assert result['status']=='ready' and not result['pending'] and len(engine.records)==2
+    assert 'failed observation' in result['messages'][-3]['content']

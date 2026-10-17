@@ -10,7 +10,23 @@ service = None
 
 def initialize(database, publish=None):
     global service
-    service = PortableVault(database, publish)
+    from backend.memory.tiered_vault import configured_vault
+    service = configured_vault(database, publish)
+
+
+@router.get('/storage')
+def storage():
+    return boundary(lambda: service.status())
+
+
+@router.get('/{project}/documents/{ident}')
+def get_document(project: str, ident: str):
+    return boundary(lambda: service.get(project,ident))
+
+
+@router.get('/{project}/cached')
+def cached_documents(project: str):
+    return boundary(lambda: {'documents':service.cached(project)})
 
 
 @router.get('/project-id')
@@ -72,6 +88,8 @@ def boundary(operation):
         return operation()
     except KeyError as error:
         raise HTTPException(404, 'Document not found in this project') from error
+    except OSError as error:
+        raise HTTPException(503, 'Vault storage unavailable; local cached reads may still be available') from error
     except (ValueError, TypeError) as error:
         raise HTTPException(409, 'Invalid document, scope, checksum or revision; existing data preserved') from error
 
