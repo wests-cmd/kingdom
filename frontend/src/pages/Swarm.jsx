@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react"
 import useLiveData from "../hooks/useLiveData"
 import SwarmGraph from "../components/graphs/SwarmGraph"
 import ComputerIdentity from "../components/ComputerIdentity"
+import OrchestrationBoard from '../components/OrchestrationBoard'
 
 export default function Swarm() {
   const {data: hierarchy, error: hierarchyError} = useLiveData("/hierarchy",10000)
@@ -14,6 +15,7 @@ export default function Swarm() {
   return (
     <div style={{minWidth:0,overflowWrap:"anywhere"}}>
       <ComputerIdentity data={hierarchy} error={hierarchyError}/>
+      <OrchestrationBoard/>
       <h2>Knight Apprentices</h2>
       {error && <p role="alert">{error}</p>}
 

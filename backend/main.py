@@ -17,6 +17,8 @@ async def lifespan(_app):
     try:
         yield
     finally:
+        from backend.runtime.request_api import background
+        await background.stop()
         await schedule_runner.stop()
         await engine.stop(persist=False)
 
@@ -88,6 +90,8 @@ app.include_router(tool_workshop_router)
 app.include_router(model_lab_router)
 from backend.runtime.request_api import router as request_router, service as request_service
 app.include_router(request_router)
+from backend.runtime.orchestration_api import router as orchestration_router
+app.include_router(orchestration_router)
 from backend.memory.portable_vault_api import router as vault_router, initialize as initialize_vault
 initialize_vault(knowledge_db, engine.events.publish)
 app.include_router(vault_router)

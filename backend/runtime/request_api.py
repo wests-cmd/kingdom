@@ -55,3 +55,12 @@ async def run(ident:str):
 def cancel(ident:str):
     try:return service().cancel(ident)
     except KeyError as error:raise HTTPException(404,'Request not found') from error
+
+from backend.runtime.background_requests import BackgroundRequests
+background = BackgroundRequests(service)
+
+@router.post('/{ident}/background', status_code=202)
+async def start_background(ident: str):
+    try: return background.start(ident)
+    except KeyError: raise HTTPException(404, 'Request not found')
+    except ValueError as error: raise HTTPException(409, str(error)) from error

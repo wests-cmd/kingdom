@@ -5,6 +5,7 @@ import ApprovalsView from "../components/security/ApprovalsView"
 import Tasks from "./Tasks"
 import useLiveData from "../hooks/useLiveData"
 import ComputerIdentity from "../components/ComputerIdentity"
+import OrchestrationBoard from '../components/OrchestrationBoard'
 
 export default function Dashboard() {
   const {data: hierarchy, error: hierarchyError} = useLiveData("/hierarchy", 10000)
@@ -46,6 +47,7 @@ export default function Dashboard() {
   return (
     <div style={{minWidth:0, overflowWrap:"anywhere"}}>
       <ComputerIdentity data={hierarchy} error={hierarchyError}/>
+      <OrchestrationBoard/>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", padding: "8px 16px", background: "var(--input-bg)", border: "1px solid var(--surface-border)", borderRadius: "6px" }}>
         <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
           Runtime Health Stream: <span style={{ fontWeight: "700", color: connectionState === "LIVE" ? "#4ade80" : "#f87171" }}>{connectionState}</span>
@@ -72,7 +74,7 @@ export default function Dashboard() {
 
         <div className="card">
           <div className="card-title">Knight Apprentices</div>
-          <div className="card-value">{knights.length}</div>
+          <div className="card-value">{hierarchy ? hierarchy.apprentices.length : '—'}</div>
         </div>
 
         <div className="card">

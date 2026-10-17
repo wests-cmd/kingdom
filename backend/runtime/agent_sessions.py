@@ -208,6 +208,8 @@ class AgentSessionService:
             try:
                 response = await self.engine.models.chat(state['model_profile'], {'messages': state['messages'],
                     'tools': tools, 'tool_choice': 'auto', 'parallel_tool_calls': False, 'stream': False, 'max_tokens': 2048})
+                state['selected_profile'] = response.get('kingdom_profile')
+                state['selected_model'] = response.get('model')
                 if self.get(ident)['status'] == 'cancelled':
                     return self.get(ident)
                 choices = response.get('choices', [])
