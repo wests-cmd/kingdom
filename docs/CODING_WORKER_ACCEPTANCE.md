@@ -19,6 +19,14 @@ turns and runtime. Inspect the saved conversation, task identities and tool
 results. Closing the browser does not turn a foreground request into a persistent
 worker; use the documented background request controls where supported.
 
+For code changes, select **Require verified source read and edit**. API callers
+can supply `required_tools` from `workspace_read`, `workspace_list`,
+`workspace_write` and the separately enabled `process_run`. These requirements
+grant nothing: they prevent a response from completing without actual verified
+tool results. Owner review clears that stage's evidence requirement, so a previous
+write cannot satisfy a subsequent requested correction. This gate verifies the
+operation, not the correctness of its contents; independent tests still apply.
+
 A nonexistent path from a read/list operation becomes a failed observation for
 the model to correct. It is never counted as verified success. Permission errors,
 failed writes, failed processes and ambiguous outcomes still stop for review.
