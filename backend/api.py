@@ -896,12 +896,19 @@ def handle_cluster_rpc(request: RPCMessageRequest):
     if payload.get("node_id", sender_id) != sender_id:
         raise HTTPException(status_code=403, detail="RPC payload identity differs from authenticated sender")
 
-    if msg_type == "heartbeat":
+    if msg_type in {"heartbeat", "inventory_snapshot"}:
         metrics = payload.get('load_metrics', {})
         if not isinstance(metrics, dict) or any(type(metrics.get(key)) not in (int, float) or not 0 <= metrics[key] <= 100 for key in metrics if key in {'cpu_percent', 'memory_percent'}):
             raise HTTPException(400, 'Invalid load measurements')
-        res = heartbeat_manager.ping(sender_id, load_metrics={key: metrics[key] for key in ('cpu_percent', 'memory_percent') if key in metrics})
-        return {"status": "ok", "ping": res}
+        try:
+            res = heartbeat_manager.ping(sender_id, load_metrics={key: metrics[key] for key in ('cpu_percent', 'memory_percent') if key in metrics}, apprentice_inventory=payload.get('apprentice_inventory'))
+        except ValueError as error: raise HTTPException(400, str(error)) from error
+        if not res.get('success'): raise HTTPException(403, res.get('error', 'Peer report denied'))
+        result = {"status": "ok", "ping": res}
+        if msg_type == 'heartbeat':
+            from backend.cluster.apprentice_inventory import local_inventory
+            result['inventory_proof'] = transport.create_signed_message(sender_id, 'inventory_snapshot', {'node_id': k_identity.node_id, 'apprentice_inventory': local_inventory()})
+        return result
 
     elif msg_type == 'group_task_assign':
         from backend.cluster.hierarchy_api import hierarchy

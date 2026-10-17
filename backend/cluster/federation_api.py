@@ -70,7 +70,8 @@ def export_heartbeat_proof(node_id:str):
     if node.node_state not in {'APPROVED','CONNECTED','DISCONNECTED','RECONNECTING'}:
         raise HTTPException(409,'Peer is not approved for reconnection')
     local=KingdomIdentity.get_or_create()
-    return RPCSecureTransport(local).create_signed_message(node_id,'heartbeat',{'node_id':local.node_id})
+    from backend.cluster.apprentice_inventory import local_inventory
+    return RPCSecureTransport(local).create_signed_message(node_id,'heartbeat',{'node_id':local.node_id,'apprentice_inventory':local_inventory()})
 
 class IdentityMigrationRequest(BaseModel):
     expected_id: str=Field(min_length=1,max_length=100)
@@ -132,12 +133,16 @@ async def reconnect(node_id:str):
         async with httpx.AsyncClient(timeout=15,follow_redirects=False) as client:
             response=await client.get(address+'/nodes/identity');response.raise_for_status()
             check_identity(response.json(),node.public_identity,local)
-            message=RPCSecureTransport(local).create_signed_message(node_id,'heartbeat',{'node_id':local.node_id})
+            from backend.cluster.apprentice_inventory import local_inventory
+            message=RPCSecureTransport(local).create_signed_message(node_id,'heartbeat',{'node_id':local.node_id,'apprentice_inventory':local_inventory()})
             response=await client.post(address+'/nodes/rpc',json=message);response.raise_for_status()
             result=response.json()
             if result.get('status')!='ok' or result.get('ping',{}).get('success') is not True:
                 raise ValueError('Other Kingdom has not approved this identity')
-        heartbeat_manager.ping(node_id)
+        if result.get('inventory_proof'):
+            from backend.api import handle_cluster_rpc, RPCMessageRequest
+            handle_cluster_rpc(RPCMessageRequest.model_validate(result['inventory_proof']))
+        else: heartbeat_manager.ping(node_id)
         return {'peer':node_id,'connected':True,'mutual_identity_accepted':True}
     except (ValueError,KeyError) as e:raise HTTPException(409,str(e)) from e
     except httpx.HTTPError as e:raise HTTPException(502,'Peer connection failed; identity and grants retained for retry') from e

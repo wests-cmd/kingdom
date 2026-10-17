@@ -73,7 +73,7 @@ export default function Dashboard() {
         </div>
 
         <div className="card">
-          <div className="card-title">Knight Apprentices</div>
+          <div className="card-title">Local Apprentices</div>
           <div className="card-value">{hierarchy ? hierarchy.apprentices.length : '—'}</div>
         </div>
 

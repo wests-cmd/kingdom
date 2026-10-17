@@ -60,8 +60,11 @@ def overview():
         jobs.append(job)
     peers = hierarchy['knights']
     now = time.time()
+    inventory = hierarchy['inventory']
     return {'observed_at': now, 'commander': hierarchy['commander'], 'knights': peers,
+            'inventory': inventory,
             'apprentices': hierarchy['apprentices'], 'jobs': jobs,
             'counts': {'knights': 1 + len(peers), 'paired_knights': len(peers), 'local_apprentices': len(hierarchy['apprentices']),
+                       'current_apprentices': inventory['total_current'], 'remote_apprentices': inventory['remote_count'],
                        'connected_peers': sum(n.get('node_state') == 'CONNECTED' and now - n.get('last_heartbeat', 0) < 45 for n in peers)},
-            'background': background.status(), 'coverage': 'Apprentice counts cover this Kingdom only; remote inventories are not inferred.'}
+            'background': background.status(), 'coverage': inventory['notice']}

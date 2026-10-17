@@ -42,7 +42,10 @@ class CommandHierarchy:
         return group
 
     def export(self, apprentices):
+        from backend.cluster.apprentice_inventory import aggregate_inventories
+        inventory = aggregate_inventories(apprentices, [node.to_dict() for node in self.computers()])
         return {'commander': {'id': 'owner', 'computer': socket.gethostname(), 'authority': 'All groups; owner approval and capability policy remain highest'},
+                'inventory': inventory,
                 'knights': [node.to_dict() for node in self.computers()],
                 'apprentices': [{**item, 'entity_type': 'knight_apprentice', 'host': socket.gethostname()} for item in apprentices],
                 'groups': self.groups(), 'definitions': {'knight': 'A connected computer', 'knight_apprentice': 'An agent or bot on a computer',
