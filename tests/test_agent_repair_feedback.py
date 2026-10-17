@@ -48,3 +48,12 @@ def test_completed_response_can_receive_independent_test_failure(setup):
     current=service.get(state['id'])
     with pytest.raises(ValueError,match='budget exhausted'):
         service.review_feedback(current['id'],'Keep trying',current['updated_at'])
+
+
+def test_coding_setup_and_review_require_owner():
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    client=TestClient(app)
+    assert client.get('/agent-sessions/readiness').status_code in {401,403}
+    assert client.post('/agent-sessions/example/review-feedback',json={
+        'message':'retry','expected_updated_at':0}).status_code in {401,403}
