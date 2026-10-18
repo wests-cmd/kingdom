@@ -291,7 +291,8 @@ class AgentSessionService:
                 if self.get(ident)['status'] == 'cancelled':
                     return self.get(ident)
                 from backend.models.selection import ModelSelectionError
-                state.update(status='needs_review', error=str(error) if isinstance(error,ModelSelectionError) else 'Model response or governed dispatch could not be accepted. Review retained tasks and model configuration; no automatic retry was made.', error_class=type(error).__name__)
+                from backend.models.ollama_chat import NativeChatProtocolError
+                state.update(status='needs_review', error=str(error) if isinstance(error,(ModelSelectionError, NativeChatProtocolError)) else 'Model response or governed dispatch could not be accepted. Review retained tasks and model configuration; no automatic retry was made.', error_class=type(error).__name__)
                 return self._save(state)
 
     def review_feedback(self, ident, message, expected_updated_at):
@@ -311,6 +312,7 @@ class AgentSessionService:
         state['messages'].append({'role':'user','content':'Owner review feedback: '+message.strip()})
         state['verified_tools_since_review']=[]
         state.update(status='ready',error=None)
+        state.pop('error_class',None)
         return self._save(state)
 
     async def run(self,ident,max_turns=2,max_seconds=300):

@@ -4,6 +4,7 @@ import useLiveData from '../hooks/useLiveData'
 import UnifiedConversation from '../components/UnifiedConversation'
 import HarnessQuickConnect from '../components/HarnessQuickConnect'
 import ModelProfiles from '../components/ModelProfiles'
+import ChatProposals from '../components/ChatProposals'
 
 export default function Workbench(){
  const {data:sessions,refresh}=useLiveData('/agent-sessions',5000)
@@ -28,6 +29,7 @@ export default function Workbench(){
   <p>Give a model a job with real workspace tools, or hand the job to an installed agent such as Hermes or Claude. You keep control of permissions and approvals.</p>
   {error&&<p role="alert">{error}</p>}
   <UnifiedConversation />
+  <ChatProposals />
   <section className="panel"><h2>Work with a model</h2>
    <p>Conversations and tool evidence are saved. Model inference runs on your selected computer; workspace tools run on the Kingdom host.</p>
    <form onSubmit={e=>{e.preventDefault();perform(async()=>{const {data}=await api.post('/agent-sessions',{objective,model_profile:profile,max_turns:12,allow_process:allowProcess,skill_ids:skillIds,workspace,knowledge_scope:knowledgeScope||null,embedding_profile:embeddingProfile||null,use_owner_memory:ownerMemory,required_tools:requireEdit?['workspace_read','workspace_write']:[]});setSelected(data);refresh()})}}>

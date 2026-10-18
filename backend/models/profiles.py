@@ -46,6 +46,10 @@ class ModelProfiles:
                 raise ValueError('Invalid model server CA certificate') from error
         if len(config['model']) > 200 or not config['model'].strip(): raise ValueError('Supply the installed model identifier')
         if config['provider'] not in {'ollama', 'openai_compatible'}: raise ValueError('Unsupported model protocol')
+        if config.get('ollama_think') is not None and type(config['ollama_think']) is not bool:
+            raise ValueError('ollama_think must be an explicit boolean or unset')
+        if config.get('ollama_think') is not None and config['provider'] != 'ollama':
+            raise ValueError('ollama_think is only supported by native Ollama profiles')
         if config.get('variant') not in {'standard', 'fine_tuned', 'abliterated', 'custom'}: raise ValueError('Unsupported model label')
         pool = config.get('pool_group', '')
         if pool and not re.fullmatch(r'[a-z][a-z0-9_-]{0,63}', pool):

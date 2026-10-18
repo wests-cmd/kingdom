@@ -98,6 +98,8 @@ class ModelService:
         headers = {'Authorization': 'Bearer ' + profile['api_key']} if profile['api_key'] else {}
         if profile['provider'] == 'ollama':
             body = {'model': profile['model'], 'prompt': context['text'], 'stream': False}
+            if profile.get('ollama_think') is not None:
+                body['think'] = profile['ollama_think']
             options = {}
             if 'num_ctx' in profile: options['num_ctx'] = profile['num_ctx']
             if 'max_output_tokens' in profile: options['num_predict'] = profile['max_output_tokens']
@@ -113,9 +115,20 @@ class ModelService:
         async with httpx.AsyncClient(timeout=profile.get('timeout_seconds', 120), follow_redirects=False, verify=model_tls_context(profile)) as client:
             response = await client.post(profile['endpoint'] + path, headers=headers, json=body)
             response.raise_for_status(); payload = response.json()
-        text = payload.get('response') if profile['provider'] == 'ollama' else payload['choices'][0]['message']['content']
+        if profile['provider'] == 'ollama':
+            if payload.get('done') is False or payload.get('done_reason') == 'length':
+                raise RuntimeError('Configured model returned an incomplete response; review the output budget')
+            text = payload.get('response')
+            usage = {'prompt_tokens': payload.get('prompt_eval_count', 0),
+                     'completion_tokens': payload.get('eval_count', 0)}
+            usage['total_tokens'] = usage['prompt_tokens'] + usage['completion_tokens']
+        else:
+            choice = payload['choices'][0]
+            if choice.get('finish_reason') == 'length':
+                raise RuntimeError('Configured model returned an incomplete response; review the output budget')
+            text, usage = choice['message']['content'], payload.get('usage', {})
         if not isinstance(text, str) or not text.strip(): raise RuntimeError('Configured model returned no text')
-        result = ModelResult(profile['provider'], profile['model'], text, payload.get('usage', {}))
+        result = ModelResult(profile['provider'], profile['model'], text, usage)
         self._record(result.usage)
         return {**result.export(), 'profile': ident, 'context': {k:v for k,v in context.items() if k != 'text'}}
 
@@ -157,7 +170,9 @@ class ModelService:
                         max_tokens=min(request.get('max_tokens') or request.get('max_completion_tokens') or profile.get('max_output_tokens', 2048),
                                        profile.get('max_output_tokens', 2048)))
             if profile['provider'] == 'ollama':
-                path = '/v1/chat/completions'
+                from backend.models.ollama_chat import request_body
+                body = request_body(profile, request, body['max_tokens'])
+                path = '/api/chat'
             else:
                 path = '/chat/completions'
             headers = {'Authorization': 'Bearer ' + profile['api_key']} if profile['api_key'] else {}
@@ -165,6 +180,9 @@ class ModelService:
                 response = await client.post(profile['endpoint'] + path, json=body, headers=headers)
                 response.raise_for_status()
                 payload = response.json()
+            if profile['provider'] == 'ollama':
+                from backend.models.ollama_chat import response_payload
+                payload = response_payload(profile, payload, request)
             if not payload.get('choices'):
                 raise RuntimeError('Configured model returned no chat choices')
             payload['kingdom_profile'] = profile['id']

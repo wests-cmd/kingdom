@@ -17,7 +17,7 @@ from backend.storage.db import Database
 
 @contextmanager
 def model_server(barrier=None, tool=False, fail=False):
-    state = {'active': 0, 'peak': 0, 'bodies': []}
+    state = {'active': 0, 'peak': 0, 'bodies': [], 'paths': []}
     lock = threading.Lock()
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_): pass
@@ -27,6 +27,7 @@ def model_server(barrier=None, tool=False, fail=False):
                 state['active'] += 1
                 state['peak'] = max(state['peak'], state['active'])
                 state['bodies'].append(body)
+                state['paths'].append(self.path)
             try:
                 if barrier: barrier.wait(timeout=3)
                 time.sleep(.1)
@@ -38,6 +39,13 @@ def model_server(barrier=None, tool=False, fail=False):
                     {'index': 0, 'message': message, 'finish_reason': 'tool_calls' if tool else 'stop'}],
                     'usage': {'prompt_tokens': 3, 'completion_tokens': 1}}
                 if self.path == '/api/generate': payload = {'response': 'READY'}
+                if self.path == '/api/chat':
+                    native = {'role': 'assistant', 'content': 'READY'}
+                    if tool:
+                        native = {'role': 'assistant', 'content': '', 'tool_calls': [
+                            {'id': 'test-call', 'function': {'name': 'get_status', 'arguments': {}}}]}
+                    payload = {'model': body['model'], 'message': native, 'done': True, 'done_reason': 'stop',
+                               'prompt_eval_count': 3, 'eval_count': 1}
                 data = json.dumps(payload).encode()
                 self.send_response(503 if fail else 200)
                 self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(data)))
@@ -113,7 +121,8 @@ async def test_explicit_computer_budgets_and_client_output_caps(profiles):
         await ModelService().generate('one', profile='small')
         assert state['bodies'][0]['options'] == {'num_ctx':1024,'num_predict':32}
         await ModelService().chat('small', {'messages':[{'role':'user','content':'hello'}], 'max_completion_tokens':100000})
-        assert state['bodies'][1]['max_tokens'] == 32
+        assert state['paths'][1] == '/api/chat'
+        assert state['bodies'][1]['options'] == {'num_predict': 32, 'num_ctx': 1024}
 
 
 @pytest.mark.asyncio

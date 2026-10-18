@@ -22,7 +22,8 @@ def server():
         def do_POST(self):
             calls.append(json.loads(self.rfile.read(int(self.headers['Content-Length']))))
             self.send_response(200); self.end_headers()
-            self.wfile.write(json.dumps({'response': 'REAL HTTP', 'choices': [{'message': {'content': 'REAL HTTP'}}]}).encode())
+            self.wfile.write(json.dumps({'response': 'REAL HTTP', 'choices': [{'message': {'content': 'REAL HTTP'}}],
+                'message': {'role': 'assistant', 'content': 'REAL HTTP'}, 'done': True, 'done_reason': 'stop'}).encode())
     instance = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     thread = threading.Thread(target=instance.serve_forever, daemon=True); thread.start()
     try: yield f'http://127.0.0.1:{instance.server_port}', calls

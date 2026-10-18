@@ -29,10 +29,11 @@ async def test_review_does_not_replay_permissions_or_failed_writes(setup,tool,ar
 
 def test_feedback_requires_exact_checkpoint_and_preserves_budget(setup):
     service,_,_=setup([])
-    state=service.create('Repair','auto');state.update(status='needs_review',turns=2,error='Model unavailable');service._save(state)
+    state=service.create('Repair','auto');state.update(status='needs_review',turns=2,error='Model unavailable',error_class='ReadTimeout');service._save(state)
     with pytest.raises(ValueError):service.review_feedback(state['id'],'Model host restored',0)
     current=service.get(state['id']);result=service.review_feedback(current['id'],'Model host restored',current['updated_at'])
     assert result['turns']==2 and result['status']=='ready'
+    assert result.get('error_class') is None and result['error'] is None
     assert result['messages'][-1]['role']=='user'
 
 

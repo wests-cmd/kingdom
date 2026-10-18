@@ -1,7 +1,7 @@
 """Authenticated large task inputs and custom model connections."""
 from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 from backend.security.http_auth import require_owner
 from backend.storage.db import db
 from backend.runtime.attachments import AttachmentStore, MAX_FILE
@@ -55,6 +55,7 @@ class ProfileRequest(BaseModel):
     timeout_seconds: int = Field(default=120, ge=30, le=600)
     max_output_tokens: int = Field(default=2048, ge=16, le=8192)
     num_ctx: int = Field(default=8192, ge=512, le=131072)
+    ollama_think: StrictBool | None = None
     ca_certificate: str = Field(default='', max_length=32000)
     api_key: str | None = Field(default=None, max_length=16000)
 
