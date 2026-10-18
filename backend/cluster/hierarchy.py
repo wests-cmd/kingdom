@@ -45,13 +45,16 @@ class CommandHierarchy:
 
     def export(self, apprentices):
         from backend.cluster.apprentice_inventory import aggregate_inventories
-        inventory = aggregate_inventories(apprentices, [node.to_dict() for node in self.computers()])
+        computers = self.computers()
+        participating = [node for node in computers if node.node_state in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}]
+        inventory = aggregate_inventories(apprentices, [node.to_dict() for node in participating])
         from backend.cluster.topology import topology_nodes
-        graph = self.topology.read(topology_nodes(apprentices, self.computers(), inventory['remote_apprentices']))
+        graph = self.topology.read(topology_nodes(apprentices, participating, inventory['remote_apprentices']))
         return {'commander': {'id': 'owner', 'computer': socket.gethostname(), 'authority': 'All groups; owner approval and capability policy remain highest'},
                 'topology': graph,
                 'inventory': inventory,
-                'knights': [node.to_dict() for node in self.computers()],
+                'knights': [node.to_dict() for node in participating],
+                'archived_knights': [node.to_dict() for node in computers if node not in participating],
                 'apprentices': [{**item, 'entity_type': 'knight_apprentice', 'host': socket.gethostname()} for item in apprentices],
                 'groups': self.groups(), 'definitions': {'knight': 'A connected computer', 'knight_apprentice': 'An agent or bot on a computer',
                 'knight_captain': 'An approved computer commanding its own group', 'commander': 'Highest control over approved computers and groups'}}

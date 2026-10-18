@@ -51,3 +51,16 @@ def test_owner_api_and_optimistic_conflict(monkeypatch, tmp_path):
     assert client.put('/hierarchy/topology', json=body).status_code == 200
     assert client.put('/hierarchy/topology', json=body).status_code == 409
     assert client.get('/hierarchy').json()['topology']['version'] == 1
+
+
+def test_revocation_removes_coordinator_without_erasing_audit_record(tmp_path):
+    from types import SimpleNamespace
+    from backend.cluster.hierarchy import CommandHierarchy
+    node=SimpleNamespace(node_id='revoked-pc',hostname='Former Knight',is_local=False,
+                         public_identity={'node_id':'revoked-pc'},fingerprint='old',node_state='REVOKED')
+    node.to_dict=lambda: {'node_id':node.node_id,'node_state':node.node_state}
+    hierarchy=CommandHierarchy(Database(tmp_path/'revoked.db'),SimpleNamespace(list_nodes=lambda:[node]),lambda *a:None)
+    snapshot=hierarchy.export([])
+    assert snapshot['knights']==[]
+    assert snapshot['archived_knights']==[node.to_dict()]
+    assert [n['id'] for n in snapshot['topology']['nodes']]==['local']

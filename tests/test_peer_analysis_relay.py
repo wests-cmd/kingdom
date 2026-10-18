@@ -129,3 +129,27 @@ def test_poll_skips_unsupported_job_before_leasing_and_selects_later_analysis(mo
     assert result['tasks'][0]['id']==supported['id']
     untouched=manager.get(unsupported['id'])
     assert untouched['status']=='queued' and not untouched.get('lease_id')
+
+
+@pytest.mark.parametrize('transport',['worker','inventory'])
+def test_ssh_python_input_is_explicit_utf8(monkeypatch,transport):
+    from types import SimpleNamespace
+    seen=[]
+    def run(argv,**kwargs):
+        assert kwargs['encoding']=='utf-8'
+        source=kwargs['input']
+        # Exercise the exact bytes sent to Python on non-UTF8 Windows locales.
+        raw=source.encode(kwargs['encoding'])
+        assert raw.decode('utf-8')==source
+        compile(raw,'remote-stdin','exec')
+        assert 'café' in source
+        seen.append(raw)
+        return SimpleNamespace(returncode=0,stdout='{}')
+    monkeypatch.setattr(relay.subprocess,'run',run)
+    host={'ssh':['ssh','pinned-host'],'python':'python3','cwd':'/tmp/café',
+          'source_root':'/tmp/source','port':8012,'token_file':'data/owner-token'}
+    if transport=='worker':
+        relay.remote_worker(host,{'operation':'poll','worker_id':'worker','controller_id':'controller'})
+    else:
+        relay.inventory_api()(host,'/nodes/identity')
+    assert len(seen)==1
