@@ -3,8 +3,10 @@ import useLiveData from "../hooks/useLiveData"
 import SwarmGraph from "../components/graphs/SwarmGraph"
 import ComputerIdentity from "../components/ComputerIdentity"
 import OrchestrationBoard from '../components/OrchestrationBoard'
+import ComputerTopology from '../components/ComputerTopology'
 
-export default function Swarm() {
+export default function Swarm({interfaceMode='easy'}) {
+  const [view,setView]=useState(interfaceMode==='easy'?'network':'activity')
   const {data: hierarchy, error: hierarchyError} = useLiveData("/hierarchy",10000)
   const {data,error} = useLiveData("/knights",4000)
   const knights = data?.knights || (Array.isArray(data) ? data : [])
@@ -15,6 +17,8 @@ export default function Swarm() {
   return (
     <div style={{minWidth:0,overflowWrap:"anywhere"}}>
       <ComputerIdentity data={hierarchy} error={hierarchyError}/>
+      <div className="action-row" aria-label="Swarm views"><button aria-pressed={view==='activity'} onClick={()=>setView('activity')}>Activity</button><button aria-pressed={view==='network'} onClick={()=>setView('network')}>Network map</button></div>
+      {view==='network'?<ComputerTopology hierarchy={hierarchy} advanced={interfaceMode==='advanced'}/>:<>
       <OrchestrationBoard/>
       <h2>Knight Apprentices</h2>
       {error && <p role="alert">{error}</p>}
@@ -77,6 +81,7 @@ export default function Swarm() {
           )}
         </div>
       </div>
+      </>}
     </div>
   )
 }

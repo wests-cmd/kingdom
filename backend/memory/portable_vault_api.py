@@ -60,6 +60,7 @@ class DocumentRequest(BaseModel):
     receipts: list[str] = Field(default_factory=list, max_length=100)
     id: str | None = Field(default=None, max_length=80)
     expected_revision: int = Field(default=0, ge=0)
+    allowed_roles: list[str] | None = Field(default=None,max_length=32)
 
 
 class ImportRequest(BaseModel):
@@ -96,7 +97,7 @@ def boundary(operation):
 
 @router.post('/{project}/documents')
 def put(project: str, request: DocumentRequest):
-    return boundary(lambda: service.put(project, request.body, request.provenance, request.receipts, request.id, request.expected_revision))
+    return boundary(lambda: service.put(project, request.body, request.provenance, request.receipts, request.id, request.expected_revision,allowed_roles=request.allowed_roles))
 
 
 @router.get('/{project}/export')
@@ -118,4 +119,4 @@ def rebuild(project: str):
 def search(project: str, query: str = ''):
     if len(query) > 8000:
         raise HTTPException(400, 'Query exceeds limit')
-    return boundary(lambda: {'documents': service.search(project, query)})
+    return boundary(lambda: {'documents': service.search(project, query,reader_role='owner')})

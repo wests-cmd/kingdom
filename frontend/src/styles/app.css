@@ -946,3 +946,11 @@ input[type=color] { width:56px; height:40px; padding:4px!important; cursor:point
 .content {min-width:0;}
 .content :is(pre,code,h1,h2,h3,p,span) {overflow-wrap:anywhere;}
 .content textarea {box-sizing:border-box; width:100%;}
+.sidebar-toggle { width:100%; margin-bottom:12px; white-space:normal; }
+.sidebar.is-collapsed { width:76px; padding:12px 6px; }
+.sidebar.is-collapsed .sidebar-logo { padding:8px 10px; }
+.sidebar [hidden] { display:none!important; }
+.topology-computers { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:12px; }
+.topology-computers summary { cursor:pointer; overflow-wrap:anywhere; }
+.topology-computers ul { padding-left:20px; max-height:280px; overflow:auto; }
+.cluster-topology svg { width:100%; height:auto; max-height:320px; }

@@ -85,17 +85,18 @@ class TieredVault:
     def put(self,*args,**kwargs):
         return self._remember(self._archive().put(*args,**kwargs))
 
-    def search(self,project,query):
+    def search(self,project,query,reader_role=None):
         identifier(project)
         try:
-            return [self._remember(doc) for doc in self._archive().search(project,query)]
+            return [self._remember(doc) for doc in self._archive().search(project,query,reader_role=reader_role)]
         except VaultUnavailable:
             import re
             terms=set(re.findall(r'\w+',query.lower()))
             with self.local.get_connection() as connection:
                 rows=connection.execute('SELECT id FROM vault_hot_cache WHERE project=? ORDER BY touched DESC',(project,)).fetchall()
             docs=[self.get(project,row[0]) for row in rows]
-            return [doc for doc in docs if terms.intersection(re.findall(r'\w+',doc['body'].lower()))][:20]
+            from backend.memory.vault_policy import can_read
+            return [doc for doc in docs if can_read(doc,reader_role) and terms.intersection(re.findall(r'\w+',doc['body'].lower()))][:20]
 
     def trash(self,project,ident,expected_revision):
         result=self._archive().trash(project,ident,expected_revision)

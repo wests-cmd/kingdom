@@ -61,23 +61,29 @@ class PortableVault:
                 project TEXT NOT NULL,id TEXT NOT NULL,document TEXT NOT NULL,PRIMARY KEY(project,id))''')
             conn.commit()
 
-    def put(self, project, body, provenance=None, receipts=None, ident=None, expected_revision=0):
+    def put(self, project, body, provenance=None, receipts=None, ident=None, expected_revision=0, allowed_roles=None):
         project, ident = identifier(project), identifier(ident or uuid.uuid4().hex)
         if not isinstance(body, str) or len(body.encode()) > 262144:
             raise ValueError('Document exceeds 256 KB')
-        metadata = clean_metadata({'provenance': provenance or {}, 'receipts': receipts or [], 'trust': 'untrusted'})
+        from backend.memory.vault_policy import readers,reject_payment_details
+        reject_payment_details(json.dumps({'body':body,'provenance':provenance or {},'receipts':receipts or []}))
+        metadata = clean_metadata({'provenance': provenance or {}, 'receipts': receipts or [], 'trust': 'untrusted','allowed_roles':readers(allowed_roles)})
         encoded = json.dumps(metadata, allow_nan=False, sort_keys=True)
         if len(encoded) > 32768:
             raise ValueError('Metadata exceeds limit')
         body = clean_text(body)
         with self.db.get_connection() as conn:
             conn.execute('BEGIN IMMEDIATE')
-            old = conn.execute('SELECT revision FROM portable_vault WHERE project=? AND id=?', (project, ident)).fetchone()
+            old = conn.execute('SELECT revision,metadata FROM portable_vault WHERE project=? AND id=?', (project, ident)).fetchone()
             if not old and conn.execute('SELECT 1 FROM portable_vault_trash WHERE project=? AND id=?', (project, ident)).fetchone():
                 raise ValueError('Document is in trash; restore explicitly before editing')
             actual = old[0] if old else 0
             if expected_revision != actual:
                 raise ValueError('Document changed; reload before updating')
+            if allowed_roles is None and old:
+                metadata['allowed_roles']=readers(json.loads(old[1]).get('allowed_roles',[]))
+                encoded=json.dumps(metadata,allow_nan=False,sort_keys=True)
+                if len(encoded)>32768:raise ValueError('Metadata exceeds limit')
             revision = actual+1
             conn.execute('INSERT OR REPLACE INTO portable_vault VALUES(?,?,?,?,?,?)', (project, ident, revision, body, encoded, time.time()))
             self._index(conn, project, ident, body)
@@ -159,7 +165,9 @@ class PortableVault:
             identifier(meta['id'])
             if len(body.encode()) > 262144:
                 raise ValueError('Document exceeds 256 KB')
-            metadata = clean_metadata({'provenance': meta.get('provenance', {}), 'receipts': meta.get('receipts', []), 'trust': 'untrusted'})
+            from backend.memory.vault_policy import readers,reject_payment_details
+            reject_payment_details(json.dumps({'body':body,'provenance':meta.get('provenance',{})}))
+            metadata = clean_metadata({'provenance': meta.get('provenance', {}), 'receipts': meta.get('receipts', []), 'trust': 'untrusted','allowed_roles':readers(meta.get('allowed_roles',[]))})
             encoded = json.dumps(metadata, allow_nan=False, sort_keys=True)
             if len(encoded) > 32768:
                 raise ValueError('Metadata exceeds limit')
@@ -172,7 +180,9 @@ class PortableVault:
                     raise ValueError('Import cannot silently restore a trashed document')
                 old = conn.execute('SELECT body,metadata FROM portable_vault WHERE project=? AND id=?', (project, ident)).fetchone()
                 if old:
-                    if tuple(old) != (body, metadata):
+                    previous = json.loads(old[1])
+                    previous.setdefault('allowed_roles', [])
+                    if old[0] != body or previous != json.loads(metadata):
                         raise ValueError('Existing identity has different content; update with expected revision')
                     continue
                 conn.execute('INSERT INTO portable_vault VALUES(?,?,?,?,?,?)', (project, ident, 1, body, metadata, time.time()))
@@ -194,11 +204,13 @@ class PortableVault:
         self.publish('vault.index_rebuilt', {'project': project, 'count': len(rows)})
         return len(rows)
 
-    def search(self, project, query):
+    def search(self, project, query, reader_role=None):
         terms = set(re.findall(r'\w+', query.lower()))
         with self.db.get_connection() as conn:
             rows = conn.execute('SELECT id,terms FROM portable_vault_index WHERE project=?', (identifier(project),)).fetchall()
-        return [self.get(project, row[0]) for row in rows if terms.intersection(row[1].split())][:20]
+        from backend.memory.vault_policy import can_read
+        found=[self.get(project,row[0]) for row in rows if terms.intersection(row[1].split())]
+        return [document for document in found if can_read(document,reader_role)][:20]
 
     def export_directory(self, project, root):
         """Internal-only caller supplies a configured root, never an HTTP path."""

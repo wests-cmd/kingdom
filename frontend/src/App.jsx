@@ -41,6 +41,8 @@ function OwnerApp() {
   const [currentPage, setCurrentPage] = useState("Dashboard")
   const [interfaceMode,setInterfaceMode] = useState(()=>{try{return loadInterfaceMode(window.localStorage)}catch{return 'easy'}})
   const [modeSaved,setModeSaved] = useState(true)
+  const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>{try{return window.localStorage.getItem('kingdom.sidebar-collapsed')==='true'}catch{return false}})
+  const toggleSidebar=()=>setSidebarCollapsed(previous=>{const next=!previous;try{window.localStorage.setItem('kingdom.sidebar-collapsed',String(next))}catch{}return next})
   const changeInterfaceMode=mode=>{
     setInterfaceMode(mode)
     setCurrentPage(page=>pageForMode(page,mode))
@@ -92,7 +94,7 @@ function OwnerApp() {
   const renderPage = () => {
     switch (currentPage) {
       case "Dashboard": return <Dashboard />
-      case "Swarm": return <Swarm />
+      case "Swarm": return <Swarm interfaceMode={interfaceMode}/>
       case "Runtime": return <Runtime />
       case "Tasks": return <Tasks />
       case "Workbench": return <Workbench />
@@ -108,7 +110,7 @@ function OwnerApp() {
       case "Nodes": return <Nodes />
       case "Mobile": return <MobileGateway />
       case "Security": return <Settings />
-      case "Settings": return <AppearanceSettings />
+      case "Settings": return <AppearanceSettings interfaceMode={interfaceMode} changeInterfaceMode={changeInterfaceMode} modeSaved={modeSaved}/>
       case "Recovery": return <Recovery />
       case "Logs": return <Logs />
       default: return <Dashboard />
@@ -133,13 +135,12 @@ function OwnerApp() {
   return (
     <div className="layout" data-interface-mode={interfaceMode} data-page={currentPage.toLowerCase()}>
       <a className="skip-link" href="#main-content">Skip to main content</a>
-      <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} interfaceMode={interfaceMode}/>
+      <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} interfaceMode={interfaceMode} collapsed={sidebarCollapsed} toggle={toggleSidebar}/>
 
       <div className="main-container">
         <details><summary>Install Kingdom as a free web app</summary><InstallKingdom /></details>
         <header className="topbar">
           <div className="page-title">{currentPage === 'SkillMaps' ? 'Skill maps & Discord' : currentPage}</div>
-          <div className="interface-mode-controls"><fieldset className="interface-mode-switch"><legend>Workspace view</legend>{['easy','advanced'].map(mode=><button key={mode} type="button" aria-pressed={interfaceMode===mode} onClick={()=>changeInterfaceMode(mode)}>{mode==='easy'?'Easy':'Advanced'}</button>)}</fieldset>{!modeSaved&&<small role="status">View changed for this session; preferences could not be saved.</small>}</div>
           <div className="status-indicator">
             Kingdom:{" "}
             <span className={isConnected ? "badge-online" : "badge-offline"}>

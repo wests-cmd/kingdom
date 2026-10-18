@@ -1,60 +1,56 @@
-# Vault and reconnecting devices
+# Vault layouts and reconnecting Knights
 
-Keep one archive on an always-connected machine, and a bounded hot cache on each
-Kingdom. Computers retain distinct Kingdom identities. A disconnected computer is
-not spare capacity; reconnecting a different identity requires pairing rather than
-silently inheriting its predecessor's authority.
+A Kingdom can run on one computer or coordinate several Knights. Joining paired
+Kingdoms presents one logical cluster; each computer retains its own identity,
+credentials and authority. Reconnection never transfers authority to an unknown
+replacement machine.
 
-## Storage roles
+## Choose a layout
 
-| Storage | Recommended role |
-| --- | --- |
-| Dedicated 1 TB external drive | Main vault on the permanent server; readable project notes, reports and receipts |
-| Server internal disk | OS, Kingdom services, containers and temporary computation |
-| Each computer's internal disk | Its own state, credentials and small local hot cache |
-| Large installer/live USB | Recovery/live boot, separate from the canonical vault |
-| Small installer USB | OS installation/recovery; verify target identity before writes |
-| 128 GB removable model storage | Optional model files and reusable downloads; not the only vault backup |
-| 64 GB SD | Device-specific workspace/cache or backup, after identifying existing contents |
+| Layout | Intended use | Current implementation |
+| --- | --- | --- |
+| Standalone | One Knight keeps project memory locally | Local durable vault |
+| Central archive | One archive plus bounded caches on each Knight | Identity-pinned local external archive and cache; authenticated remote synchronization remains pending |
+| Balanced peers | Available Knights distribute archive copies by capacity | Deterministic placement planner only; transfer and replication remain pending |
 
-These are roles, not automatic formatting instructions. Capacity alone does not
-identify a device. Preserve files and inspect model/serial/filesystem before any
-migration. A central disk is not a backup: keep an additional verified copy on
-separate storage.
+Storage capacity is configurable. No particular drive size, host name or machine
+count is required. A central archive is not a backup; retain a verified independent
+copy. Never share the live SQLite database over a network filesystem.
 
-## Implemented storage contract
+## Access and payment information
 
-Without external configuration, existing notes remain in the local database.
-Administrators can configure `KINGDOM_VAULT_ROOT` to an existing absolute path and
-`KINGDOM_VAULT_ID` to the identity stored in `.kingdom-vault-id` on that archive.
-The archive database is `vault.sqlite3`. Creation of the marker and migration of
-existing notes are explicit installation steps after media identification, not
-actions performed by an HTTP caller or by a model.
+Notes may carry explicit Apprentice role allowlists. Unlabelled notes are shared
+within their project; restricted notes are excluded from ordinary model retrieval
+and from offline cached search for other roles. Owner administration can inspect
+all notes. Role labels are retrieval controls, not operating-system sandboxes.
 
-`KINGDOM_HOT_CACHE_BYTES` defaults to 8 MB per Kingdom, with a 64 MB maximum.
-Read/save/search operations populate a bounded, scoped local cache. Disconnecting
-the archive permits cached reads marked with age and non-authoritative status.
-Archive writes fail visibly while absent or when its identity differs. A missing
-mount must never cause a new vault to appear silently on the OS disk.
+Keep payment instruments with a payment provider. General AI notes reject common
+card-number and security-code patterns, including import paths. This detector is
+not a comprehensive secret scanner. Payment agents should use scoped provider
+references; coding agents must not receive payment credentials or secret-store
+access. Merely selecting a role does not grant a tool or provider permission.
 
-The vault API and shared request retrieval use this configured storage. Notes do
-not include owner credentials or grant agent authority. A remotely connected
-Kingdom still needs authenticated, scoped synchronization; mounting one SQLite
-database concurrently across network filesystems is not the synchronization
-protocol. The local cache implementation does not claim that remote sync is done.
+## External archive configuration
 
-## Example device placement
+Without external configuration, notes remain local. Administrators can set
+`KINGDOM_VAULT_ROOT` to an existing absolute archive directory and
+`KINGDOM_VAULT_ID` to its `.kingdom-vault-id` marker. The database is
+`vault.sqlite3`. Formatting, mounting and migration are separate authorized setup
+steps that verify the physical device, preserve existing files and check backups.
 
-The owner's DT1 is an installed headless Centipede server, with laptop 2 currently
-hosting additional services and models. Laptop 1 and laptop 3 may leave and
-return; reserve their work only while reachable and retain their own identities.
-Phones can use an authenticated front door without being counted as compute
-workers. Installing an APK is separate from replacing Android with another OS.
+`KINGDOM_HOT_CACHE_BYTES` defaults to 8 MB and permits up to 64 MB. Cached reads
+include age and non-authoritative status. Missing or changed archive media causes
+writes to fail visibly; Kingdom must not silently create a replacement on the OS
+disk. Cross-Knight synchronization must preserve project and role isolation.
 
-The identified MXQ runs Android 4.4.2 with kernel 3.10.33. That version/build does
-not identify its SoC or establish Wi-Fi-to-Ethernet sharing support. Before using
-it as a network bridge/router, identify actual Ethernet/Wi-Fi interfaces,
-firmware, routing support and supported administrative access. Do not flash an
-image selected only by the generic MXQ label. Preserve DT1's working Ethernet
-path while testing a replacement. Physical attachment of a drive or Ethernet
-cable remains a physical step.
+## Discovery and visibility
+
+The local service inventory observes running services without starting or stopping
+them. Authenticated fresh peer reports can expose their observations in Swarm's
+network view. A missing report means unknown, not zero services or Apprentices.
+Discovery does not grant control over a discovered application. Service management
+and remote updates require explicit adapters, tool grants and verification.
+
+Swarm groups Apprentices beneath their Knight. Its links show logical pairing,
+not a claim about physical Ethernet or Wi-Fi connections. Easy and Advanced views
+are selected in Settings; Advanced retains diagrams while adding identifiers.
