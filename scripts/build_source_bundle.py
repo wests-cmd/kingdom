@@ -19,6 +19,9 @@ def build(repository,output):
         for entry in archive.infolist():
             if entry.is_dir():continue
             name=entry.filename
+            # A source preview must not carry an older prebuilt native backend.
+            # Native installers have a separate tested release pipeline.
+            if name.startswith('desktop/bin/'):continue
             if name.startswith('data/') and name.endswith('/nothing'):continue
             if name.startswith(('data/','.venv/','node_modules/')) or name=='.env':
                 raise ValueError('Runtime/private data must not be tracked in a source release')
