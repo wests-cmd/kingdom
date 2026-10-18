@@ -6,7 +6,7 @@ Adaptation includes task routing, reusable skills and retrieval from reviewed ev
 
 This development branch adds an **Agent workbench** for saved tool conversations and installed CLI connections. These additions are not yet part of the stable release below. **Tasks → Two model chats** provides lightweight parallel chat with selected model computers.
 
-**Updated source-service preview:** [Download the adaptive cluster preview](https://github.com/wests-cmd/kingdom/releases/tag/adaptive-cluster-2026-10-17.1). It includes the built browser interface, guided AI worker connections, bounded local vault caches and coding execution requirements. This separate preview requires Python 3.12; read `START-HERE.md` in its ZIP. Native stable installers remain listed below. See [vault and reconnecting-device setup](docs/VAULT_AND_DEVICE_LAYOUT.md).
+**Updated source-service preview:** [Download the adaptive cluster preview](https://github.com/wests-cmd/kingdom/releases/tag/adaptive-cluster-2026-10-17.2). It includes the built browser interface, guided AI worker connections, bounded local vault caches and coding execution requirements. This separate preview requires Python 3.12; read `START-HERE.md` in its ZIP. Native stable installers remain listed below. See [vault and reconnecting-device setup](docs/VAULT_AND_DEVICE_LAYOUT.md).
 
 [Harness capabilities and roadmap](docs/HARNESS_ROADMAP.md) · [Portable SKILL.md](docs/PORTABLE_SKILLS.md) · [Model computers](docs/MODEL_OFFLOADING.md)
 

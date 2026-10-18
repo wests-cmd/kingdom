@@ -78,3 +78,20 @@ and unit backups are retained for recovery.
 Source hash/health checks prove that a particular tested release is running;
 they do not prove general autonomous coding competence. Review and test a
 generated change before promoting its release.
+
+
+## Owner-operated existing-connection relay
+
+`scripts/kingdom-peer-relay.py` can carry signed inventory-independent operations
+through existing owner-authorized SSH connections when direct HTTPS routes are
+unavailable. Configure hosts using the same private host objects as
+`scripts/sync-peer-inventories.py` (`ssh` argv, `cwd`, `port`, `token_file`). Keep
+that configuration outside the repository. The connector reads owner credentials
+only on each remote host, never prints them, grants no permissions and approves no
+update task. It does not change SSH forwarding or firewall settings.
+
+Commands include `sync --project PROJECT`, `inspect`, `stage-update --archive
+SOURCE.tar.gz`, `activate-update --release SHA256`, and `update-status --release
+SHA256`, with `--config`, `--source` and `--target` before the command. Project
+sharing requires the normal two-sided grants. Activation returns a governed task;
+its scheduling result is not a verified update. Read the final signed receipt.
