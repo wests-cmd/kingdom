@@ -27,3 +27,8 @@ def test_desktop_input_accepts_only_explicit_parameters():
         {'action':'click','window_title':'Test','x':12,'y':25},
         {'action':'key','window_title':'Test','key':'ctrl+s'}]:
         assert validate_input(parameters)==parameters
+
+
+def test_queued_desktop_input_rejects_an_expired_observation_before_any_input():
+    with pytest.raises(ValueError,match='expired'):
+        desktop_input({'action':'key','window_title':'Kingdom Test','key':'enter','window_handle':123,'observed_at':1})

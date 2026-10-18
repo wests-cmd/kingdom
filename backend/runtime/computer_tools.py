@@ -123,10 +123,13 @@ COMPUTER_HANDLERS = {'workspace.read@1.0.0': read_file, 'workspace.write@1.0.0':
                      'workspace.list@1.0.0': list_files, 'process.run@1.0.0': run_process,
                      'computer.screenshot@1.0.0': screenshot}
 from backend.runtime.desktop_control import desktop_input
+from backend.runtime.desktop_observation import desktop_observe
 from backend.runtime.harnesses import run_harness
 TOOL_CAPABILITIES['harness.run@1.0.0'] = 'process.execute'
 COMPUTER_HANDLERS['harness.run@1.0.0'] = run_harness
 COMPUTER_HANDLERS['computer.input@1.0.0'] = desktop_input
+TOOL_CAPABILITIES['computer.observe@1.0.0'] = 'computer.observe'
+COMPUTER_HANDLERS['computer.observe@1.0.0'] = desktop_observe
 
 
 def receipt(task, output):

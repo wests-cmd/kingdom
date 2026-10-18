@@ -29,6 +29,8 @@ class CreateSession(BaseModel):
     embedding_profile: str | None = Field(default=None,max_length=64)
     use_owner_memory: bool = False
     required_tools: list[str] = Field(default_factory=list,max_length=4)
+    desktop_window_title: str | None = Field(default=None,min_length=1,max_length=500)
+    desktop_expected_text: str | None = Field(default=None,min_length=1,max_length=2000)
 
 class RunSession(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -56,6 +58,28 @@ async def readiness():
     if not any('filesystem.read' in item['capabilities'] and 'filesystem.write' in item['capabilities'] for item in grants): blockers.append('No Apprentice has both workspace read and write grants. Review the intended worker in Governance.')
     if not engine.status().get('running'): blockers.append('Start the Kingdom runtime.')
     return {'ready_for_scoped_file_work':not blockers,'blockers':blockers,'models':[{'id':p['id'],'model':p['model'],'computer':p.get('computer_id')} for p in ready], 'grants':grants,'scope':'Connection and setup checks only; coding correctness and independent tests remain required.'}
+
+
+@router.get('/desktop-readiness')
+def desktop_readiness():
+    import sys
+    import importlib.util
+    from backend.api import engine
+    grants=[{'role':role,'can_observe':'computer.observe' in engine.security.nodes.get_node_capabilities(role),
+             'can_control':'computer.control' in engine.security.nodes.get_node_capabilities(role)} for role in engine.swarm.registry._knights]
+    foreground=None
+    if sys.platform=='win32':
+        try:
+            from backend.runtime.desktop_observation import _foreground_window
+            handle,title=_foreground_window()
+            foreground={'window_handle':handle,'window_title':title}
+        except Exception:
+            pass
+    return {'platform_supported':sys.platform=='win32',
+            'adapter_installed':importlib.util.find_spec('pywinauto') is not None,
+            'foreground_window':foreground,
+            'foreground_available':foreground is not None,
+            'apprentices':grants,'scope':'Interactive Windows desktop only. Select the exact foreground window; actual observation/action/read-back must still be verified. No tools or privileges were granted by this check.'}
 
 @router.post('/{ident}/review-feedback')
 def review_feedback(ident: str, request: ReviewFeedback):

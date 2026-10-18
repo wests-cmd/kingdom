@@ -63,6 +63,11 @@ class RequestService:
         state = {**body, 'id':uuid4().hex,'status':'queued','answer':'','evidence':[], 'created_at':time.time(),'updated_at':time.time(), 'agent_session_id':None}
         text = body['prompt'].strip().lower().rstrip('?.!')
         route = body['mode']
+        if body.get('desktop_expected_text') and not body.get('desktop_window_title'):
+            raise ValueError('Desktop acceptance requires an owner-selected window')
+        if body.get('desktop_window_title'):
+            if route=='quick':raise ValueError('Desktop control requires the agent route')
+            route='agent'
         if route == 'auto':
             if text in {'what time is it','time','what is the current time'}: route='time'
             elif text in {'status','system status','what is the status'}: route='status'
@@ -129,7 +134,11 @@ class RequestService:
                     objective = state['prompt']
                     if state.get('review_instructions'):
                         objective += '\n\nReview requirements: ' + state['review_instructions']
-                    agent=await asyncio.to_thread(self.agents.create,objective,state['model_profile'],workspace=state['project_scope'],allow_process=state['allow_process'],use_owner_memory=False)
+                    desktop_options=({'desktop_window_title':state['desktop_window_title'],
+                                      'desktop_expected_text':state.get('desktop_expected_text'),
+                                      'required_tools':['desktop_observe']}
+                                     if state.get('desktop_window_title') else {})
+                    agent=await asyncio.to_thread(self.agents.create,objective,state['model_profile'],workspace=state['project_scope'],allow_process=state['allow_process'],use_owner_memory=False,**desktop_options)
                     state=await asyncio.to_thread(self.update,ident,{'agent_session_id':agent['id']},expected={'running'})
                     if state is None:
                         await asyncio.to_thread(self.agents.cancel,agent['id'])

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from types import SimpleNamespace
 from uuid import uuid5, NAMESPACE_URL
 
@@ -16,6 +17,86 @@ def reply(content=None, calls=None):
 
 def call(name, args, ident='call1'):
     return {'id': ident, 'type': 'function', 'function': {'name': name, 'arguments': json.dumps(args)}}
+
+
+@pytest.mark.asyncio
+async def test_desktop_tools_are_opt_in_and_initial_input_is_not_offered(setup):
+    service, engine, _ = setup([reply('No desktop requested'), reply('Window selected')])
+    await service.advance(service.create('Inspect code','local')['id'])
+    assert not any(t['function']['name'].startswith('desktop_') for t in engine.requests[-1][1]['tools'])
+    await service.advance(service.create('Observe this window','local',desktop_window_title='Kingdom Test')['id'])
+    names={t['function']['name'] for t in engine.requests[-1][1]['tools']}
+    assert 'desktop_observe' in names and 'desktop_input' not in names
+
+
+@pytest.mark.asyncio
+async def test_desktop_agent_observes_acts_and_checks_visible_result(setup):
+    service, engine, _ = setup([
+        reply(calls=[call('desktop_observe',{},'observe1')]),
+        reply(calls=[call('desktop_input',{'action':'type_text','text':'Kingdom typed this'},'input1')]),
+        reply(calls=[call('desktop_observe',{},'observe2')]),
+        reply('The selected window now contains the requested text.')])
+    state=service.create('Type into the test window','local',desktop_window_title='Kingdom Test',required_tools=['desktop_observe','desktop_input'])
+    state=await service.advance(state['id'])
+    assert state['pending'][0]['arguments']=={'window_title':'Kingdom Test'}
+    engine.finish(state['pending'][0]['task_id'],{'ok':True,'window_handle':123,'window_title':'Kingdom Test','observed_at':time.time(),'controls':[]})
+    state=await service.advance(state['id'])
+    state=await service.advance(state['id'])
+    args=state['pending'][0]['arguments']
+    assert args['window_title']=='Kingdom Test' and args['window_handle']==123
+    assert 'path' not in args and 'cwd' not in args
+    engine.finish(state['pending'][0]['task_id'],{'input_sent':True})
+    await service.advance(state['id'])
+    state=await service.advance(state['id'])
+    assert 'desktop_input' not in {t['function']['name'] for t in engine.requests[-1][1]['tools']}
+    engine.finish(state['pending'][0]['task_id'],{'ok':True,'window_handle':123,'window_title':'Kingdom Test','observed_at':time.time(),'controls':[{'text':'Kingdom typed this'}]})
+    await service.advance(state['id'])
+    state=await service.advance(state['id'])
+    assert state['status']=='completed' and not state['desktop_observation_required']
+
+
+@pytest.mark.asyncio
+async def test_desktop_agent_cannot_claim_success_without_observing_after_input(setup):
+    service, engine, _ = setup([reply(calls=[call('desktop_observe',{})]),reply(calls=[call('desktop_input',{'action':'key','key':'tab'},'input')]),reply('Done')])
+    state=service.create('Use desktop','local',desktop_window_title='Kingdom Test')
+    state=await service.advance(state['id'])
+    engine.finish(state['pending'][0]['task_id'],{'ok':True,'window_handle':123,'window_title':'Kingdom Test','observed_at':time.time(),'controls':[]})
+    await service.advance(state['id']);state=await service.advance(state['id'])
+    engine.finish(state['pending'][0]['task_id'],{'input_sent':True})
+    await service.advance(state['id']);state=await service.advance(state['id'])
+    assert state['status']=='needs_review' and 'after input' in state['error']
+
+
+def test_desktop_evidence_cannot_enable_tools_without_an_owner_target(setup):
+    service, _, _ = setup([])
+    with pytest.raises(ValueError,match='owner-selected'):
+        service.create('Use computer','local',required_tools=['desktop_input'])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('args',[{'action':'key','key':'enter'}, {'action':'type_text','text':'secret','window_title':'Another window'}])
+async def test_model_cannot_skip_initial_observation_or_change_window(setup,args):
+    service, engine, _=setup([reply(calls=[call('desktop_input',args)])])
+    state=await service.advance(service.create('Use computer','local',desktop_window_title='Kingdom Test')['id'])
+    assert state['status']=='needs_review' and not engine.records
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('visible,expected_status',[('Expected visible receipt','completed'),('Wrong text','needs_review')])
+async def test_desktop_completion_checks_actual_owner_selected_visible_text(setup,visible,expected_status):
+    service, engine, _=setup([reply(calls=[call('desktop_observe',{})]),reply('The expected text is visible.')])
+    state=await service.advance(service.create('Read this window','local',desktop_window_title='Kingdom Test',desktop_expected_text='Expected visible receipt')['id'])
+    engine.finish(state['pending'][0]['task_id'],{'ok':True,'window_handle':123,'window_title':'Kingdom Test','observed_at':time.time(),'controls':[{'name':visible}]})
+    await service.advance(state['id']);state=await service.advance(state['id'])
+    assert state['status']==expected_status
+
+
+@pytest.mark.asyncio
+async def test_desktop_target_cannot_complete_without_any_real_observation(setup):
+    service, engine, _=setup([reply('I looked at it.')])
+    state=await service.advance(service.create('Read the selected window','local',desktop_window_title='Kingdom Test')['id'])
+    assert state['status']=='needs_review' and 'desktop_observe' in state['error']
+    assert not engine.records
 
 
 class Engine:

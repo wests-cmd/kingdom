@@ -19,6 +19,30 @@ class Agents:
     def cancel(self,ident):self.cancelled.append(ident)
 
 
+def test_desktop_request_uses_agent_and_preserves_owner_window(tmp_path):
+    service, models, agents=setup(tmp_path)
+    options=[]
+    original=agents.create
+    def capture(*args,**kwargs):
+        options.append(kwargs)
+        return original(*args,**kwargs)
+    agents.create=capture
+    data=body(desktop_window_title='Kingdom Test')
+    request=service.create(data)
+    assert request['route']=='agent'
+    asyncio.run(service.run(request['id']))
+    assert options[0]['desktop_window_title']=='Kingdom Test'
+    assert options[0]['required_tools']==['desktop_observe']
+    assert models.calls==0
+
+
+def test_text_only_route_cannot_silently_accept_a_desktop_request(tmp_path):
+    service, _, _=setup(tmp_path)
+    data=body(desktop_window_title='Kingdom Test');data['mode']='quick'
+    with pytest.raises(ValueError,match='agent route'):
+        service.create(data)
+
+
 def setup(tmp_path):
     db=Database(tmp_path/'state.db');models=Models();agents=Agents()
     engine=SimpleNamespace(status=lambda:{'running':True,'mode':'adaptive'},tasks=SimpleNamespace(list=lambda:[]))

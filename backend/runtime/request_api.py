@@ -28,6 +28,8 @@ class RequestInput(BaseModel):
     model_profile:str=Field(default='auto',min_length=1,max_length=100)
     allow_process:bool=False
     review_instructions:str=Field(default='',max_length=2000)
+    desktop_window_title:str|None=Field(default=None,min_length=1,max_length=500)
+    desktop_expected_text:str|None=Field(default=None,min_length=1,max_length=2000)
 
 @router.post('',status_code=201)
 def create(body:RequestInput):
