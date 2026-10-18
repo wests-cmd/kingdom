@@ -940,12 +940,22 @@ def handle_cluster_rpc(request: RPCMessageRequest):
         return {'status': 'ok', 'task_id': updated['id']}
 
     elif msg_type == "task_poll":
+        supported_tools = payload.get("supported_tools")
+        if supported_tools is not None:
+            analysis_tools = {"text.analyze@1.0.0", "code.python.analyze@1.0.0"}
+            if (not isinstance(supported_tools, list) or not supported_tools
+                    or len(supported_tools) > len(analysis_tools)
+                    or any(not isinstance(tool, str) or tool not in analysis_tools for tool in supported_tools)
+                    or len(set(supported_tools)) != len(supported_tools)):
+                raise HTTPException(400, "supported_tools must list distinct native analysis tools")
         if engine.execution_policy.get()["level"] == 0:
             return {"status": "ok", "tasks": []}
         tasks = engine.tasks.list("queued")
         assigned_tasks = []
         for t in tasks:
             meta = t.get("metadata", {})
+            if supported_tools is not None and meta.get("tool") not in supported_tools:
+                continue  # Filter before claiming: unsupported tasks retain their original queue/lease state.
             assigned_k = t.get("assigned_knight") or meta.get("assigned_knight")
             is_remote = meta.get("execution_target") == "remote" or (assigned_k and assigned_k not in engine.swarm.registry._knights)
             required_capability = meta.get("capability", "compute")
