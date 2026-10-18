@@ -30,6 +30,7 @@ export default function Tasks() {
   const [attachments,setAttachments] = useState([]), [profiles,setProfiles] = useState([]), [modelProfile,setModelProfile] = useState('')
 
   const [offload,setOffload] = useState(false), [mission,setMission] = useState(null), [planText,setPlanText] = useState('')
+  const [importPlan,setImportPlan] = useState('')
 
   const {data:missions,refresh:refreshMissions} = useLiveData('/missions',4000)
 
@@ -179,6 +180,7 @@ export default function Tasks() {
       </form>
 
       {error && <p role="alert">{error}</p>}
+      <details><summary>Import a prepared mission</summary><p>Use an existing plan without spending a model request on planning. Import creates a draft; review and approve it before execution.</p><textarea aria-label="Prepared mission JSON" rows={10} value={importPlan} onChange={e=>setImportPlan(e.target.value)} style={{width:'100%',minWidth:0}}/><button disabled={submitting||!importPlan.trim()} onClick={async()=>{setSubmitting(true);setError('');try{const parsed=JSON.parse(importPlan);const {data}=await api.post('/missions',parsed.plan?parsed:{plan:parsed});setMission(data);setPlanText(JSON.stringify(data.plan,null,2));setImportPlan('');refreshMissions()}catch(e){setError(e.response?.data?.detail||'Provide a valid mission plan.')}finally{setSubmitting(false)}}}>Import as draft</button></details>
       <DesktopActions onQueued={loadTasks}/>
 
       {mission && <section className="panel"><h3>Review and edit the mission</h3><p>Add or remove steps, requirements and deliverables before approving. No plan executes just because it was generated.</p><MissionEditor value={planText} onChange={setPlanText}/><details><summary>Advanced plan format</summary><textarea aria-label="Mission plan" rows={16} style={{width:'100%',minHeight:300}} value={planText} onChange={e=>setPlanText(e.target.value)}/></details><button disabled={submitting} onClick={savePlan}>Save edited plan</button></section>}

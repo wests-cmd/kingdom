@@ -172,3 +172,27 @@ def test_pinned_step_waits_for_capacity_then_resumes(harness, monkeypatch, busy)
     assert 'placement_wait' not in resumed
     assert len(submitted) == 1
     assert submitted[0][1]['assigned_knight'] == 'worker-a'
+
+
+@pytest.mark.parametrize('level,count,parallel', [(4,40,1),(5,100,3)])
+def test_larger_missions_keep_bounded_parallel_execution(harness,level,count,parallel):
+    from backend.runtime.policy import ExecutionPolicy
+    service,tasks,submitted,policy = harness
+    policy.update(level=level,mission_budget=ExecutionPolicy.mission_budget(level))
+    candidate = MissionPlan(title='Bounded batch',objective='Measure inputs',deliverables=['Receipts'],
+        steps=[{'id':f'check{index}','title':f'Check {index}','kind':'text_check',
+                'instructions':'input','acceptance':'Verified measurement'} for index in range(count)])
+    state = start(service,candidate)
+    assert len(submitted) == parallel
+    assert service.advance(state['id'])['status'] == 'running'
+    assert len(submitted) == parallel  # Repeated polling cannot duplicate queued work.
+    while state['status'] != 'completed':
+        pending = [task for task in tasks.values() if task['status'] == 'queued']
+        assert len(pending) <= parallel
+        for task in pending:
+            assert task['metadata']['max_attempts'] == (3 if level == 4 else 4)
+            task.update(status='completed',result=receipt({'words':1}))
+        state = service.advance(state['id'])
+    assert len(tasks) == count
+    assert len(state['report']) == count
+    assert all(step['status'] == 'verified' for step in state['steps'].values())

@@ -8,6 +8,8 @@ from uuid import uuid4
 class CommandHierarchy:
     def __init__(self, database, registry, publisher):
         self.db, self.registry, self.publish = database, registry, publisher
+        from backend.cluster.topology import CoordinationTopology
+        self.topology = CoordinationTopology(database, publisher)
         with self.db.get_connection() as conn:
             conn.execute('CREATE TABLE IF NOT EXISTS command_groups(id TEXT PRIMARY KEY,data_json TEXT NOT NULL)'); conn.commit()
 
@@ -44,7 +46,10 @@ class CommandHierarchy:
     def export(self, apprentices):
         from backend.cluster.apprentice_inventory import aggregate_inventories
         inventory = aggregate_inventories(apprentices, [node.to_dict() for node in self.computers()])
+        from backend.cluster.topology import topology_nodes
+        graph = self.topology.read(topology_nodes(apprentices, self.computers(), inventory['remote_apprentices']))
         return {'commander': {'id': 'owner', 'computer': socket.gethostname(), 'authority': 'All groups; owner approval and capability policy remain highest'},
+                'topology': graph,
                 'inventory': inventory,
                 'knights': [node.to_dict() for node in self.computers()],
                 'apprentices': [{**item, 'entity_type': 'knight_apprentice', 'host': socket.gethostname()} for item in apprentices],

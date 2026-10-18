@@ -19,3 +19,11 @@ export function workerLabel(value) {
  const labels = {planner:'Planning',coder:'Coding',researcher:'Research',memory:'Memory',security:'Security'}
  return typeof value === 'string' && Object.hasOwn(labels,value) ? labels[value] : 'Registered worker'
 }
+
+// Presentation only: stable legacy IDs remain valid routing and receipt keys.
+export function apprenticeLabel(value) {
+ const id = typeof value === 'string' ? value : value?.public_id || value?.id || value?.role
+ if (typeof id !== 'string') return 'Registered Apprentice'
+ const role = id.split('/').at(-1).replace(/^(?:knight-|[Aa]pprentices?-)/, '')
+ return /^[a-z][a-z0-9_-]{0,63}$/.test(role) ? `Apprentices-${role}` : 'Registered Apprentice'
+}

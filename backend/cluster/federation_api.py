@@ -8,6 +8,7 @@ from backend.cluster.identity import KingdomIdentity
 from backend.cluster.node_registry import node_registry, NodeState
 from backend.cluster.transport import RPCSecureTransport
 from backend.cluster.heartbeat import heartbeat_manager
+from backend.cluster.local_load import local_load_metrics
 
 router=APIRouter(prefix='/federation', dependencies=[Depends(require_owner)])
 
@@ -71,7 +72,7 @@ def export_heartbeat_proof(node_id:str):
         raise HTTPException(409,'Peer is not approved for reconnection')
     local=KingdomIdentity.get_or_create()
     from backend.cluster.apprentice_inventory import local_inventory
-    return RPCSecureTransport(local).create_signed_message(node_id,'heartbeat',{'node_id':local.node_id,'apprentice_inventory':local_inventory()})
+    return RPCSecureTransport(local).create_signed_message(node_id,'heartbeat',{'node_id':local.node_id,'apprentice_inventory':local_inventory(),'load_metrics':local_load_metrics()})
 
 class IdentityMigrationRequest(BaseModel):
     expected_id: str=Field(min_length=1,max_length=100)
@@ -134,7 +135,7 @@ async def reconnect(node_id:str):
             response=await client.get(address+'/nodes/identity');response.raise_for_status()
             check_identity(response.json(),node.public_identity,local)
             from backend.cluster.apprentice_inventory import local_inventory
-            message=RPCSecureTransport(local).create_signed_message(node_id,'heartbeat',{'node_id':local.node_id,'apprentice_inventory':local_inventory()})
+            message=RPCSecureTransport(local).create_signed_message(node_id,'heartbeat',{'node_id':local.node_id,'apprentice_inventory':local_inventory(),'load_metrics':local_load_metrics()})
             response=await client.post(address+'/nodes/rpc',json=message);response.raise_for_status()
             result=response.json()
             if result.get('status')!='ok' or result.get('ping',{}).get('success') is not True:

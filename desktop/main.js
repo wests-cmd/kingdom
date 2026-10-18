@@ -3,7 +3,7 @@
  * Manages native window creation, guided first-run setup, local FastAPI backend process lifecycle, and IPC bridge.
  */
 
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { startBackend, stopBackend, waitForBackendReady, getOwnerToken } = require('./launcher');
@@ -11,6 +11,27 @@ const { getHardwareReport, suggestProfile } = require('./hardware');
 
 let mainWindow = null;
 let setupWindow = null;
+const {BackgroundLifecycle} = require('./background');
+let background = null;
+let openingWindow = false;
+
+async function showMainWindow() {
+  if (setupWindow && !setupWindow.isDestroyed()) {
+    setupWindow.show();
+    setupWindow.focus();
+    return;
+  }
+  if (!loadSavedProfile()) { createSetupWindow(); return; }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    return;
+  }
+  if (openingWindow) return;
+  openingWindow = true;
+  try { await createWindow(); } finally { openingWindow = false; }
+}
 
 const smokeReport = process.env.GITHUB_ACTIONS === 'true' && process.env.KINGDOM_RELEASE_SMOKE_REPORT;
 if (app && smokeReport) app.setPath('userData', path.join(path.dirname(smokeReport), 'user-data'));
@@ -158,6 +179,7 @@ async function createWindow() {
     }
   });
 
+  if (background) background.attach(mainWindow);
   mainWindow.webContents.setWindowOpenHandler(() => ({action: "deny"}));
   mainWindow.webContents.on("will-navigate", (event, url) => {
     if (new URL(url).origin !== `http://127.0.0.1:${process.env.PORT || 8000}`) event.preventDefault();
@@ -198,7 +220,20 @@ function createSetupWindow() {
 
 if (app) {
   // A release runner uses a disposable profile and exercises the actual packaged app.
+  const primaryInstance = app.requestSingleInstanceLock();
+  if (!primaryInstance) app.quit();
+  app.on('second-instance', () => {
+    if (setupWindow) { setupWindow.show(); setupWindow.focus(); }
+    else if (loadSavedProfile()) showMainWindow();
+  });
   app.whenReady().then(() => {
+    if (!primaryInstance) return;
+    if (!smokeReport) {
+      background = new BackgroundLifecycle({app, Tray, Menu,
+        icon: path.join(app.isPackaged ? process.resourcesPath : __dirname, 'branding', 'kingdom-icon.png'),
+        showWindow: showMainWindow, stopBackend});
+      background.start();
+    }
     setupIpcHandlers();
 
     const savedProfile = loadSavedProfile();
@@ -232,6 +267,7 @@ if (app) {
     }
 
     app.on('activate', () => {
+      if (mainWindow) { showMainWindow(); return; }
       if (BrowserWindow.getAllWindows().length === 0 && !setupWindow) {
         const activeProfile = loadSavedProfile();
         if (activeProfile && !activeProfile.gui) {
@@ -247,13 +283,14 @@ if (app) {
   });
 
   app.on('window-all-closed', () => {
-    if (smokeReport) return;
+    if (smokeReport || (background && background.tray)) return;
     const activeProfile = loadSavedProfile();
     if (activeProfile && !activeProfile.gui) return;
     if (process.platform !== 'darwin') app.quit();
   });
   let quitting = false;
   app.on('before-quit', (event) => {
+    if (background) { void background.beforeQuit(event); return; }
     if (quitting) return;
     event.preventDefault();
     quitting = true;

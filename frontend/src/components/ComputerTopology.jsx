@@ -1,5 +1,7 @@
 import React from 'react'
 import useLiveData from '../hooks/useLiveData'
+import CoordinationGraph from './CoordinationGraph'
+import {apprenticeLabel} from './common/presentation'
 
 export default function ComputerTopology({hierarchy,advanced=false}){
  const {data:observed}=useLiveData('/service-nodes/discovery',30000)
@@ -21,8 +23,8 @@ export default function ComputerTopology({hierarchy,advanced=false}){
  </svg>
  <p className="muted">Lines show approved collaboration, not Ethernet or Wi-Fi wiring. {computers.length>shown.length?`The overview shows ${shown.length}; all computers are listed below.`:''} A missing report is unknown, not zero workers.</p>
  <div className="topology-computers">{computers.map((computer,index)=><details key={computer.id} className="card"><summary>🖥 Knight {index+1}: {computer.name} · {computer.state}</summary>
-  <h3>Knight Apprentices</h3>{computer.id!=='local'&&!computer.current?<p>Fresh Apprentice information is unavailable.</p>:computer.apprentices.length?<ul>{computer.apprentices.map(agent=><li key={agent.id}><strong>{agent.display_name||agent.id}</strong> · {agent.role} · {agent.status||'Not reported'}</li>)}</ul>:<p>No Apprentices reported.</p>}
+ <h3>Apprentices</h3>{computer.id!=='local'&&!computer.current?<p>Fresh Apprentice information is unavailable.</p>:computer.apprentices.length?<ul>{computer.apprentices.map(agent=><li key={agent.id}><strong>{apprenticeLabel(agent)}</strong> · {agent.status||'Not reported'}</li>)}</ul>:<p>No Apprentices reported.</p>}
   <details><summary>Observed running services {computer.services?.state==='observed'?`(${computer.services.services.length})`:''}</summary>{computer.services?.state==='observed'?<ul>{computer.services.services.map(item=><li key={item.id}>{item.name}{advanced?` · ${item.id}`:''}</li>)}</ul>:<p>Observation is {computer.services?.state||'not available'} on this computer.</p>}<p className="muted">Detection does not grant control. Starting, stopping or updating a service requires its reviewed management connection.</p></details>
   {advanced&&<p className="muted">Identity: {computer.id} · {computer.id==='local'?'local observation':'signed peer inventory; execution is verified separately'}</p>}
- </details>)}</div></section>
+ </details>)}</div><CoordinationGraph graph={hierarchy.topology}/></section>
 }

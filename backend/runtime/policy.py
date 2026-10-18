@@ -7,6 +7,8 @@ from urllib.request import Request, urlopen
 from threading import RLock
 from backend.storage.db import db
 
+MAX_MISSION_STEPS = 100
+
 LEVELS = [
     {"level": 0, "name": "Paused", "description": "Keep queued tasks on hold. No new task executes."},
     {"level": 1, "name": "Safe analysis", "description": "Run built-in text and syntax analysis. Other tasks need individual approval."},
@@ -66,7 +68,7 @@ class ExecutionPolicy:
 
     @staticmethod
     def mission_budget(level):
-        return {"max_steps": 50 if level == 5 else 20 if level == 4 else 10,
+        return {"max_steps": MAX_MISSION_STEPS if level == 5 else 40 if level == 4 else 10,
                 "max_retries": 3 if level == 5 else 2 if level == 4 else 0,
                 "max_parallel": 3 if level == 5 else 1,
                 "auto_advance": level >= 4, "cross_computer": level == 5}

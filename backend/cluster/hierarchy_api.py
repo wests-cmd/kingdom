@@ -24,3 +24,20 @@ def status(): return hierarchy.export(engine.swarm.registry.status())
 def create(request: GroupRequest):
     try: return hierarchy.create_group(request.name, request.captain, request.members)
     except ValueError as error: raise HTTPException(400, str(error)) from error
+
+
+class TopologyRequest(BaseModel):
+    version: int = Field(ge=0, strict=True)
+    parents: dict[str, str] = Field(max_length=1000)
+
+
+@router.put('/topology')
+def save_topology(request: TopologyRequest):
+    from backend.cluster.topology import TopologyConflict
+    nodes = hierarchy.export(engine.swarm.registry.status())['topology']['nodes']
+    try:
+        return hierarchy.topology.save(request.version, request.parents, nodes)
+    except TopologyConflict as error:
+        raise HTTPException(409, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error

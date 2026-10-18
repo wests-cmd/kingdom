@@ -6,6 +6,7 @@ from typing import Literal
 from uuid import uuid4, uuid5, NAMESPACE_URL
 from pydantic import BaseModel, Field, ConfigDict
 from backend.runtime.remote_build import BuildSpec
+from backend.runtime.policy import MAX_MISSION_STEPS
 
 
 class MissionStep(BaseModel):
@@ -16,7 +17,7 @@ class MissionStep(BaseModel):
     instructions: str = Field(default='', max_length=100000)
     path: str | None = Field(default=None, max_length=300)
     argv: list[str] = Field(default_factory=list, max_length=40)
-    depends_on: list[str] = Field(default_factory=list, max_length=50)
+    depends_on: list[str] = Field(default_factory=list, max_length=MAX_MISSION_STEPS - 1)
     input_from: str | None = None
     acceptance: str = Field(min_length=1, max_length=1000)
     repair_source: str | None = Field(default=None, max_length=51)
@@ -29,10 +30,10 @@ class MissionPlan(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     objective: str = Field(min_length=1, max_length=500000)
     assumptions: list[str] = Field(default_factory=list, max_length=30)
-    deliverables: list[str] = Field(min_length=1, max_length=50)
+    deliverables: list[str] = Field(min_length=1, max_length=MAX_MISSION_STEPS)
     missing_requirements: list[str] = Field(default_factory=list, max_length=30)
     offload_analysis: bool = False
-    steps: list[MissionStep] = Field(min_length=1, max_length=50)
+    steps: list[MissionStep] = Field(min_length=1, max_length=MAX_MISSION_STEPS)
 
 
 def validate_plan(plan):

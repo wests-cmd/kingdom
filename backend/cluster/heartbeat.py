@@ -28,8 +28,10 @@ class HeartbeatManager:
             node.connection_metadata = {**(node.connection_metadata or {}), 'apprentice_inventory': {'received_at': now, 'report': report}}
         node.last_heartbeat = now
         node.health = health
-        if load_metrics:
+        if load_metrics is not None:
             meta = node.connection_metadata or {}
+            # A new signed report without usable measurements cannot refresh
+            # the heartbeat while retaining a formerly idle load sample.
             meta["load_metrics"] = load_metrics
             node.connection_metadata = meta
 

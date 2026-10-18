@@ -7,6 +7,7 @@ import useLiveData from '../hooks/useLiveData';
 import TaskResult from '../components/common/TaskResult';
 import KingdomPeers from '../components/KingdomPeers';
 import ComputerIdentity from '../components/ComputerIdentity';
+import ComputerTopology from '../components/ComputerTopology';
 import {deviceLabel,capabilityLabel,fingerprintLabel,nodeStateLabel} from '../components/common/presentation';
 
 export function Nodes() {
@@ -89,6 +90,7 @@ export function Nodes() {
     <div style={{ minWidth:0, overflowWrap:"anywhere", padding: "clamp(8px, 3vw, 24px)", display: "flex", flexDirection: "column", gap: "24px" }}>
       {error && <p role="alert">{error}</p>}
       <ComputerIdentity data={hierarchy} error={hierarchyError}/>
+      <ComputerTopology hierarchy={hierarchy}/>
       {/* Header */}
       <div style={{ display: "flex", flexWrap:"wrap", gap:"8px", minWidth:0, justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "16px" }}>
         <div>

@@ -922,7 +922,8 @@ def handle_cluster_rpc(request: RPCMessageRequest):
         result = {"status": "ok", "ping": res}
         if msg_type == 'heartbeat':
             from backend.cluster.apprentice_inventory import local_inventory
-            result['inventory_proof'] = transport.create_signed_message(sender_id, 'inventory_snapshot', {'node_id': k_identity.node_id, 'apprentice_inventory': local_inventory()})
+            from backend.cluster.local_load import local_load_metrics
+            result['inventory_proof'] = transport.create_signed_message(sender_id, 'inventory_snapshot', {'node_id': k_identity.node_id, 'apprentice_inventory': local_inventory(), 'load_metrics': local_load_metrics()})
         return result
 
     elif msg_type == 'group_task_assign':
