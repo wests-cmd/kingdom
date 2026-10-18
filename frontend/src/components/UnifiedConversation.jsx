@@ -2,6 +2,7 @@ import React,{useEffect,useState} from 'react'
 import api from '../api'
 import useLiveData from '../hooks/useLiveData'
 import ConversationVoice from './ConversationVoice'
+import AgentActivity from './AgentActivity'
 
 export default function UnifiedConversation(){
  const [scope,setScope]=useState(()=>localStorage.getItem('kingdom-conversation-scope')||crypto.randomUUID())
@@ -31,6 +32,7 @@ export default function UnifiedConversation(){
  </form>
  <details><summary>Reconnect another front door</summary><label>Conversation scope<input value={scope} disabled={busy} onChange={e=>{setScope(e.target.value);setSelected(null);setKey(crypto.randomUUID())}}/></label><p>Use the same conversation scope, project scope and idempotency key in another authenticated client to reconnect to the same request without duplicating work.</p></details>
  <label>Saved requests<select value={current?.id||''} onChange={e=>setSelected(e.target.value)}><option value="">Choose a saved request</option>{(requests||[]).map(item=><option key={item.id} value={item.id}>{item.prompt.slice(0,65)} · {item.status}</option>)}</select></label>
+ {current?.agent_session_id&&<AgentActivity jobId={current.agent_session_id}/>}
  {current&&<article><h3>{current.status.replaceAll('_',' ')} · {current.route}</h3><p>{current.prompt}</p><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{current.answer||'No answer recorded yet.'}</pre>{current.error&&<p role="alert">{current.error}</p>}
  <p className="muted">Request {current.id} · model {current.model_profile}{current.agent_session_id?` · agent job ${current.agent_session_id}`:''}</p>
  {current.status==='running'&&<p>Work is in progress or has an interrupted checkpoint. Reconnecting never silently replays it. Inspect its agent job before cancelling and making a new request.</p>}

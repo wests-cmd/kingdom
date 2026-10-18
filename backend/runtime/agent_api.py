@@ -101,6 +101,12 @@ def create(request: CreateSession):
         raise HTTPException(400, str(error)) from error
 
 
+@router.get('/{ident}/activity')
+def activity(ident: str):
+    try: return service().activity(ident)
+    except KeyError: raise HTTPException(404, 'Agent session not found')
+
+
 @router.get('/{ident}')
 def get(ident: str):
     try:

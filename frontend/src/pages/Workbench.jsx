@@ -5,6 +5,7 @@ import UnifiedConversation from '../components/UnifiedConversation'
 import HarnessQuickConnect from '../components/HarnessQuickConnect'
 import ModelProfiles from '../components/ModelProfiles'
 import ChatProposals from '../components/ChatProposals'
+import AgentActivity from '../components/AgentActivity'
 
 export default function Workbench(){
  const {data:sessions,refresh}=useLiveData('/agent-sessions',5000)
@@ -26,6 +27,8 @@ export default function Workbench(){
  const [readiness,setReadiness]=useState(null),[review,setReview]=useState(''),[requireEdit,setRequireEdit]=useState(false)
  useEffect(()=>{if(profile==='auto'||!models?.profiles?.length)return;const valid=models.profiles.some(p=>p.id===profile)||(profile.startsWith('pool:')&&models.pools?.includes(profile.slice(5)));if(!valid)setProfile(models.profiles.find(p=>p.id==='this-pc')?.id||models.profiles.find(p=>p.id==='laptop3')?.id||models.profiles[0].id)},[models,profile])
  return <div className="page"><h1>Agent workbench</h1>
+  <label>Current job<select value={current?.id||''} onChange={e=>setSelected((sessions||[]).find(s=>s.id===e.target.value)||null)}><option value="">Choose a job to inspect</option>{(sessions||[]).map(s=><option key={s.id} value={s.id}>{s.objective.slice(0,65)} · {s.status}</option>)}</select></label>
+  {current&&<AgentActivity jobId={current.id}/>}
   <section className="panel"><h2>Coding setup</h2><button disabled={busy} onClick={()=>perform(async()=>{const {data}=await api.get('/agent-sessions/readiness');setReadiness(data)})}>Check coding setup without inference</button>{readiness&&<div><p>{readiness.ready_for_scoped_file_work?'Workspace coding setup is ready. Independent tests are still required.':'Coding setup needs attention.'}</p>{readiness.blockers.map(reason=><p key={reason} role="alert">{reason}</p>)}{readiness.models.map(model=><p key={model.id}>{model.id} · {model.model} · {model.computer || 'Host not labeled'}</p>)}</div>}</section>
   <p>Give a model a job with real workspace tools, or hand the job to an installed agent such as Hermes or Claude. You keep control of permissions and approvals.</p>
   {error&&<p role="alert">{error}</p>}

@@ -5,7 +5,8 @@ import time
 from uuid import uuid4, uuid5, NAMESPACE_URL
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from backend.runtime.agent_activity import AgentRejection, activity_summary
 
 
 class ReadArgs(BaseModel):
@@ -78,6 +79,15 @@ class AgentSessionService:
         if not row:
             raise KeyError('Agent session not found')
         return json.loads(row[0])
+
+    def activity(self, ident):
+        return activity_summary(self.get(ident), self.engine.tasks)
+
+    @staticmethod
+    def _event(state, kind, **details):
+        events=state.setdefault('activity_events',[])
+        events.append({'at':time.time(),'kind':kind,**details})
+        state['activity_events']=events[-40:]
 
     def list(self):
         with self.db.get_connection() as conn:
@@ -202,7 +212,6 @@ class AgentSessionService:
                 state.update(status='needs_review', error='Tool outcome does not match the requested operation')
                 return self._save(state)
             verified=state.setdefault('verified_tools_since_review',[])
-            if record['name'] not in verified:verified.append(record['name'])
             output=outcome.get('output')
             if record['name']=='desktop_observe':
                 if (not isinstance(output,dict) or output.get('ok') is not True
@@ -219,6 +228,9 @@ class AgentSessionService:
             elif record['name']=='desktop_input':
                 state['desktop_observation_required']=True
                 state['desktop_expected_text_seen']=False
+            if record['name'] not in verified:verified.append(record['name'])
+            state['verified_action_count']=state.get('verified_action_count',0)+1
+            self._event(state,'tool_verified',tool=record['name'],task_id=task['id'])
             if isinstance(output,dict):
                 output=dict(output)
                 prefix=state.get('workspace','.')
@@ -270,10 +282,14 @@ class AgentSessionService:
                          and (name != 'desktop_input' or not state.get('desktop_observation_required',True))}
             tools = [{'type': 'function', 'function': {'name': name, 'description': item[2], 'parameters': item[1].model_json_schema()}}
                      for name, item in available.items()]
-            state['status'] = 'thinking'; self._save(state)
+            state['status'] = 'thinking'
+            state['model_started_at']=time.time(); state['model_finished_at']=None
+            self._event(state,'model_started'); self._save(state)
             try:
                 response = await self.engine.models.chat(state['model_profile'], {'messages': state['messages'],
                     'tools': tools, 'tool_choice': 'auto', 'parallel_tool_calls': False, 'stream': False, 'max_tokens': 2048})
+                state['model_finished_at']=time.time()
+                self._event(state,'model_returned')
                 state['selected_profile'] = response.get('kingdom_profile')
                 state['selected_model'] = response.get('model')
                 if self.get(ident)['status'] == 'cancelled':
@@ -293,7 +309,7 @@ class AgentSessionService:
                     name = call.get('function', {}).get('name')
                     call_id = call.get('id')
                     if name not in available or call.get('type') != 'function' or not isinstance(call_id, str) or not 1 <= len(call_id) <= 200 or call_id in seen:
-                        raise ValueError('Model requested an unknown tool or invalid call identity')
+                        raise AgentRejection('invalid_tool_call')
                     seen.add(call_id)
                     args = call['function'].get('arguments')
                     if not isinstance(args, str) or len(args) > 110000:
@@ -304,7 +320,7 @@ class AgentSessionService:
                         if name=='desktop_input':
                             observation=state.get('desktop_observation',{})
                             if not 0<=time.time()-observation.get('observed_at',0)<=30:
-                                raise ValueError('Desktop observation expired; observe again before input')
+                                raise AgentRejection('desktop_observation_expired')
                             arguments['window_handle']=observation['window_handle']
                             arguments['observed_at']=observation['observed_at']
                             from backend.runtime.desktop_control import validate_input
@@ -346,14 +362,16 @@ class AgentSessionService:
                 return state
             except asyncio.CancelledError:
                 if self.get(ident)['status'] != 'cancelled':
-                    state.update(status='needs_review', error='Model turn interrupted; no automatic retry was made.'); self._save(state)
+                    state.update(status='needs_review', error='Model turn interrupted; no automatic retry was made.', error_code='turn_interrupted'); self._save(state)
                 raise
             except Exception as error:
                 if self.get(ident)['status'] == 'cancelled':
                     return self.get(ident)
                 from backend.models.selection import ModelSelectionError
                 from backend.models.ollama_chat import NativeChatProtocolError
-                state.update(status='needs_review', error=str(error) if isinstance(error,(ModelSelectionError, NativeChatProtocolError)) else 'Model response or governed dispatch could not be accepted. Review retained tasks and model configuration; no automatic retry was made.', error_class=type(error).__name__)
+                code = error.code if isinstance(error,AgentRejection) else ('invalid_tool_arguments' if isinstance(error,ValidationError) else 'model_protocol_error' if isinstance(error,NativeChatProtocolError) else 'model_unavailable' if isinstance(error,ModelSelectionError) else 'dispatch_rejected')
+                self._event(state,'response_rejected')
+                state.update(status='needs_review', error=str(error) if isinstance(error,(AgentRejection,ModelSelectionError,NativeChatProtocolError)) else 'Model response or governed dispatch could not be accepted. Review retained tasks and model configuration; no automatic retry was made.', error_class=type(error).__name__,error_code=code)
                 return self._save(state)
 
     def review_feedback(self, ident, message, expected_updated_at):
@@ -374,6 +392,7 @@ class AgentSessionService:
         state['verified_tools_since_review']=[]
         state.update(status='ready',error=None)
         state.pop('error_class',None)
+        state.pop('error_code',None)
         return self._save(state)
 
     async def run(self,ident,max_turns=2,max_seconds=300):
