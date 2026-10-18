@@ -10,8 +10,8 @@ replacement machine.
 | Layout | Intended use | Current implementation |
 | --- | --- | --- |
 | Standalone | One Knight keeps project memory locally | Local durable vault |
-| Central archive | One archive plus bounded caches on each Knight | Identity-pinned local external archive and cache; authenticated remote synchronization remains pending |
-| Balanced peers | Available Knights distribute archive copies by capacity | Deterministic placement planner only; transfer and replication remain pending |
+| Central archive | One archive plus bounded caches on each Knight | Identity-pinned external archive and cache; explicit project transfers with verified peer receipts |
+| Balanced peers | Available Knights distribute archive copies by capacity | Byte-balanced replica transfers to selected peers; source copies retained, no total-disk rebalancing |
 
 Storage capacity is configurable. No particular drive size, host name or machine
 count is required. A central archive is not a backup; retain a verified independent
@@ -41,7 +41,7 @@ steps that verify the physical device, preserve existing files and check backups
 `KINGDOM_HOT_CACHE_BYTES` defaults to 8 MB and permits up to 64 MB. Cached reads
 include age and non-authoritative status. Missing or changed archive media causes
 writes to fail visibly; Kingdom must not silently create a replacement on the OS
-disk. Cross-Knight synchronization must preserve project and role isolation.
+disk. Cross-Knight synchronization uses two-sided project and role grants, signed batches, conflict checks and durable signed acknowledgements. Existing peer copies are retained after grant revocation; delete them explicitly on their owner-controlled Knight. The Memory page exposes project sharing controls. See docs/KNIGHT_MANAGEMENT.md for remote service/update adapters.
 
 ## Discovery and visibility
 

@@ -80,6 +80,8 @@ app.include_router(harness_router)
 app.include_router(agent_router)
 from backend.runtime.service_api import router as service_router
 app.include_router(service_router)
+from backend.runtime.knight_management_api import router as knight_management_router
+app.include_router(knight_management_router)
 from backend.memory.knowledge_api import router as knowledge_router, initialize as initialize_knowledge
 from backend.storage.db import db as knowledge_db
 initialize_knowledge(knowledge_db)
@@ -95,6 +97,8 @@ app.include_router(orchestration_router)
 from backend.memory.portable_vault_api import router as vault_router, initialize as initialize_vault
 initialize_vault(knowledge_db, engine.events.publish)
 app.include_router(vault_router)
+from backend.memory.vault_sync_api import router as vault_sync_router
+app.include_router(vault_sync_router)
 from backend.integrations.payment_api import router as payment_router
 app.include_router(payment_router)
 from backend.runtime.scheduled_runner import ScheduledRunner

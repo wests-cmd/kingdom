@@ -896,6 +896,21 @@ def handle_cluster_rpc(request: RPCMessageRequest):
     if payload.get("node_id", sender_id) != sender_id:
         raise HTTPException(status_code=403, detail="RPC payload identity differs from authenticated sender")
 
+    if msg_type == 'knight_management':
+        from backend.runtime.knight_management import dispatch
+        try:
+            result = dispatch(sender_id, payload.get('operation'), payload.get('arguments', {}))
+        except PermissionError as error:
+            raise HTTPException(403, str(error)) from error
+        except (ValueError, KeyError) as error:
+            raise HTTPException(400, str(error)) from error
+        return transport.create_signed_message(sender_id, 'knight_management_result', {
+            'request_id': msg_dict['msg_id'], 'operation': payload.get('operation'), 'result': result})
+
+    if msg_type == 'vault_sync_push':
+        from backend.memory.vault_sync_api import receive_verified
+        return receive_verified(sender_id,payload,transport)
+
     if msg_type in {"heartbeat", "inventory_snapshot"}:
         metrics = payload.get('load_metrics', {})
         if not isinstance(metrics, dict) or any(type(metrics.get(key)) not in (int, float) or not 0 <= metrics[key] <= 100 for key in metrics if key in {'cpu_percent', 'memory_percent'}):

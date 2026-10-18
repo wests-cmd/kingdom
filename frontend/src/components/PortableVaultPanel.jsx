@@ -1,5 +1,6 @@
 import React,{useEffect,useState} from 'react'
 import api from '../api'
+import VaultSyncPanel from './VaultSyncPanel'
 
 function download(blob,name){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 export default function PortableVaultPanel(){
@@ -26,6 +27,7 @@ export default function PortableVaultPanel(){
  <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:12}}><button disabled={busy} onClick={()=>action(async()=>{const {data}=await api.get(`/vault/${project}/download`,{responseType:'blob'});download(data,'kingdom-project-vault.zip');setMessage('ZIP downloaded. Review its contents before sharing.')})}>Download Markdown ZIP</button>
  <button disabled={busy} onClick={()=>action(async()=>{const {data}=await api.get(`/vault/${project}/export`);download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'kingdom-vault.json')})}>Export JSON</button>
  <button disabled={busy} onClick={()=>action(async()=>{const {data}=await api.post(`/vault/${project}/rebuild-index`);setMessage(`Rebuilt the lexical index for ${data.indexed} notes.`)})}>Rebuild search index</button></div>
+ <VaultSyncPanel key={project} project={project}/>
  <details><summary>Import a JSON vault export</summary><p>Choose or paste a JSON export containing a files dictionary. Checksums and project scope are validated by Kingdom. Existing notes are preserved when validation fails.</p><input aria-label="Choose JSON vault export" type="file" accept="application/json,.json" disabled={busy} onChange={async e=>{const file=e.target.files?.[0];if(!file)return;if(file.size>4*1024*1024){setError('JSON import exceeds 4 MiB.');return}setImportText(await file.text())}}/><textarea aria-label="JSON vault export" rows={5} value={importText} onChange={e=>setImportText(e.target.value)}/><button disabled={busy||!importText.trim()} onClick={()=>action(async()=>{const parsed=JSON.parse(importText);if(!parsed.files||typeof parsed.files!=='object'||Array.isArray(parsed.files))throw Error('Choose a vault JSON export with a files dictionary.');const {data}=await api.post(`/vault/${project}/import`,{files:parsed.files});await refresh(project);setMessage(`Imported ${data.imported.length} notes; ${data.unchanged} unchanged.`)})}>Validate and import notes</button></details>
  </>}
  </section>

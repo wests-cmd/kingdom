@@ -71,10 +71,11 @@ class ServiceNodes:
             if properties.get('Id') in node.units: blocks.append(properties)
         return {'id':ident,'services':blocks,'scope':'Observed systemd user services. Registration does not migrate or replace their deployment.'}
 
-    def action(self,ident,unit,action):
+    def action(self,ident,unit,action,*,requested_by_peer=None):
         node=self.config(ident)
         if unit not in node.units or action not in {'start','stop','restart'}: raise ValueError('Choose a registered service and supported action')
         argv=self.command(node,action,[unit])
         return self.engine.submit_task(f'{action} service {unit} on {ident}',{'actor':'owner','tool':'process.run@1.0.0',
             'tool_parameters':{'argv':argv,'timeout_seconds':60},'service_node':ident,'service_unit':unit,
+            **({'requested_by_peer':requested_by_peer} if requested_by_peer else {}),
             'verification_scope':'Command exit only. Inspect service state afterward.'})
