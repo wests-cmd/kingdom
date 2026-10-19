@@ -102,15 +102,16 @@ def test_different_agent_cannot_take_over_continuation():
 
 
 def test_continuations_share_one_decreasing_deadline(monkeypatch):
-    timeouts = []
+    # Windows event-loop clocks may not advance during a 10ms real sleep.
+    # Drive elapsed time explicitly so the assertion tests a shared deadline,
+    # rather than timer resolution or runner scheduling.
+    now, timeouts = [100.0], []
     async def observe(awaitable, timeout):
         timeouts.append(timeout)
-        await asyncio.sleep(.01)
+        now[0] += 1.0
         return await awaitable
-    monkeypatch.setattr('backend.runtime.background_requests.asyncio.wait_for', observe)
+    clock = SimpleNamespace(time=lambda:now[0])
+    monkeypatch.setattr('backend.runtime.background_requests.asyncio',SimpleNamespace(
+        get_running_loop=lambda:clock,wait_for=observe,CancelledError=asyncio.CancelledError))
     run_fixture([('waiting_review', 'ready'), ('completed', 'completed')])
-    assert len(timeouts) == 2
-    assert 0 < timeouts[1] < timeouts[0]
-    # Adding/subtracting a floating-point monotonic timestamp can round the
-    # first interval a fraction above 310 on Windows. Keep the deadline bound.
-    assert timeouts[0] <= 310 + 1e-9
+    assert timeouts == [310.0,309.0]

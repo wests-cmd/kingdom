@@ -163,3 +163,22 @@ def test_failed_missing_and_symlinked_artifacts_never_pass(task, source):
     spec = task['metadata']['tool_parameters']; spec['files']['build.py'] = source
     spec['source_sha256'] = source_digest(spec['files'])
     with pytest.raises(Exception): execute_request(task, ['process.execute'])
+
+
+@pytest.mark.skipif(os.name != 'posix', reason='POSIX build and ancestor symlink semantics')
+def test_real_build_accepts_system_temp_alias_but_not_artifact_symlinks(task,tmp_path,monkeypatch):
+    import tempfile
+    from backend.runtime import remote_build
+    real_temporary_directory=tempfile.TemporaryDirectory
+    actual=tmp_path/'actual-temp';actual.mkdir()
+    alias=tmp_path/'temp-alias';alias.symlink_to(actual,target_is_directory=True)
+    # macOS exposes /var/folders through the system /var -> /private/var alias.
+    monkeypatch.setattr(remote_build.tempfile,'TemporaryDirectory',
+        lambda **kwargs:real_temporary_directory(dir=alias,**kwargs))
+    result=execute_request(task,['process.execute'])
+    assert verify_request_result(task,result,allow_local_model=False)['state']=='VERIFIED'
+    spec=task['metadata']['tool_parameters']
+    spec['files']['build.py']="from pathlib import Path\nPath('real.txt').write_bytes(b'BUILT\\n')\nPath('artifact.txt').symlink_to('real.txt')\n"
+    spec['source_sha256']=source_digest(spec['files'])
+    with pytest.raises(ValueError,match='symlinked'):
+        execute_request(task,['process.execute'])

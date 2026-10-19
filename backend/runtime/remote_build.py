@@ -67,7 +67,7 @@ def build(params):
     if os.name != 'posix':
         raise ValueError('This remote build adapter requires a POSIX worker')
     with tempfile.TemporaryDirectory(prefix='kingdom-build-') as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
         for name, content in spec.files.items():
             target = root/name
             target.parent.mkdir(parents=True, exist_ok=True)
