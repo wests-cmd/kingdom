@@ -109,11 +109,16 @@ class RuntimeApiTests(unittest.TestCase):
         self.assertEqual(response.json()["knights"][0]["name"], "planner")
 
     def test_model_api_is_explicit_when_no_provider_is_configured(self):
+        from unittest.mock import patch
+        from backend.api import engine
         client = owner_client(app)
-        response = client.post("/models/generate", json={"prompt": "hello"})
-        self.assertEqual(response.status_code, 503)
-        self.assertIn("No model provider", response.json()["detail"])
-        self.assertEqual(client.post("/models/stream", json={"prompt": "hello"}).status_code, 503)
+        # A developer machine can have real saved profiles. This case explicitly
+        # tests the absent-provider configuration without contacting that model.
+        with patch('backend.models.profiles.ModelProfiles.list', return_value=[]), patch.object(engine.models, 'default_provider', 'disabled'):
+            response = client.post("/models/generate", json={"prompt": "hello"})
+            self.assertEqual(response.status_code, 503)
+            self.assertIn("No model provider", response.json()["detail"])
+            self.assertEqual(client.post("/models/stream", json={"prompt": "hello"}).status_code, 503)
 
 
 class MemoryServiceTests(unittest.TestCase):

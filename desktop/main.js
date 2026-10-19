@@ -389,6 +389,12 @@ async function runReleaseSmoke(reportPath) {
   report.missionWorkspace.missionVerified = true;
   fs.mkdirSync(path.dirname(reportPath), {recursive:true});
   await capture(path.join(path.dirname(reportPath),'mission-workspace.png'));
+  // The first-run workspace deliberately hides advanced pages. Exercise the
+  // same Settings control an owner uses before inspecting Governance.
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e=>e.textContent==='Settings').click()");
+  await until(() => mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.interface-mode-switch button')).some(e=>e.textContent==='Advanced')"), 'workspace view settings');
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.interface-mode-switch button')).find(e=>e.textContent==='Advanced').click()");
+  await until(() => mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).some(e=>e.textContent==='Governance')"), 'advanced navigation');
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e=>e.textContent==='Governance').click()");
   await until(() => mainWindow.webContents.executeJavaScript("document.querySelectorAll('input[name=autonomy]').length===6 && document.body.textContent.includes('Computer control')"), 'five levels and computer grants in native UI');
   await capture(path.join(path.dirname(reportPath),'governance.png'));
