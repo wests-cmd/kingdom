@@ -110,4 +110,7 @@ def test_continuations_share_one_decreasing_deadline(monkeypatch):
     monkeypatch.setattr('backend.runtime.background_requests.asyncio.wait_for', observe)
     run_fixture([('waiting_review', 'ready'), ('completed', 'completed')])
     assert len(timeouts) == 2
-    assert 0 < timeouts[1] < timeouts[0] <= 310
+    assert 0 < timeouts[1] < timeouts[0]
+    # Adding/subtracting a floating-point monotonic timestamp can round the
+    # first interval a fraction above 310 on Windows. Keep the deadline bound.
+    assert timeouts[0] <= 310 + 1e-9
