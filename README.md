@@ -12,6 +12,12 @@ Windows desktop users can now check, download and apply updates from **Settings 
 
 The mission workspace adds five active autonomy levels, larger tasks and inspected attachments, custom installed model connections, reviewed computer tools, Captain groups, bounded source repairs and compatible UI-only updates. [Read the mission guide](docs/MISSION_WORKSPACE.md) and [exact capabilities and limits](docs/releases/v1.2.1.md).
 
+## Latest preview and project status
+
+An optional **v1.2.2 preview** is available from the [preview release page](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.2-preview.1). Its Windows, Linux and Intel macOS build checks passed. Windows and macOS packages remain unsigned; the Mac build is not notarized. This preview does not replace the stable downloads below or automatically update existing installations.
+
+See the [verified status and remaining work](docs/PROJECT_STATUS.md) for what is implemented, what is still partial, and the eight remaining acceptance areas. General autonomous coding and automatic updates of every connected computer are not claimed complete.
+
 ## Download Kingdom
 
 Choose **one** installer that matches your computer. These are the published v1.2.1 files.
