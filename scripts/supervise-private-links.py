@@ -99,10 +99,30 @@ class ProcessLock:
             pass
 
 
+def independent_forwards(link):
+    """One unavailable model listener must not tear down a dashboard forward."""
+    checked = validate_link(link)
+    argv, shared, forwards = checked['argv'], [], []
+    index = 0
+    while index < len(argv) - 1:
+        value = argv[index]
+        if value in {'-L', '-R'}:
+            forwards.append(argv[index:index + 2]); index += 2
+        elif value in {'-F', '-i', '-o', '-p'}:
+            shared.extend(argv[index:index + 2]); index += 2
+        else:
+            shared.append(value); index += 1
+    if len(forwards) == 1:
+        return [checked]
+    return [{'name': checked['name'][:40] + '-forward-' + str(i + 1),
+             'argv': shared + forward + [argv[-1]]} for i, forward in enumerate(forwards)]
+
+
 class Supervisor:
     def __init__(self, links, spawn=subprocess.Popen, clock=time.monotonic):
         self.spawn, self.clock = spawn, clock
-        self.links = [dict(validate_link(link), child=None, failures=0, next_attempt=0, status='waiting') for link in links]
+        self.links = [dict(item, child=None, failures=0, next_attempt=0, status='waiting')
+                      for link in links for item in independent_forwards(link)]
         if not self.links or len({link['name'] for link in self.links}) != len(self.links):
             raise ValueError('Supply distinct nonempty private links')
 

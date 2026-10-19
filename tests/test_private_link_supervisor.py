@@ -101,3 +101,16 @@ def test_receipt_writes_atomically(tmp_path):
     module.write_receipt(path, {'status': 'safe'})
     assert json.loads(path.read_text()) == {'status': 'safe'}
     assert not path.with_suffix('.tmp').exists()
+
+
+def test_model_forward_failure_cannot_take_down_dashboard_on_same_host():
+    mixed=link()
+    mixed['argv'][-1:-1]=['-R','127.0.0.1:11434:127.0.0.1:11434']
+    children=[]
+    def spawn(argv,**kwargs):
+        if '-R' in argv:raise OSError('Remote model port occupied')
+        child=Child();children.append(child);return child
+    worker=module.Supervisor([mixed],spawn=spawn,clock=lambda:0)
+    worker.step()
+    assert len(children)==1
+    assert sorted(item['status'] for item in worker.receipt()['links'])==['process_running','reconnecting']

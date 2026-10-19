@@ -13,6 +13,19 @@ settings are `StrictHostKeyChecking=yes`, `BatchMode=yes`,
 `ExitOnForwardFailure=yes`, and bounded positive `ServerAliveInterval`,
 `ServerAliveCountMax` and `ConnectTimeout` values (maximum 60).
 
+Multiple forwards in one configuration entry are supervised independently.
+An occupied remote model port therefore cannot prevent the dashboard's local
+forward from reconnecting. Separate entries with friendly names are preferable
+when their status should be recognizable to an operator. Remote SSH sessions
+can retain forwarding ports after an unclean network loss; verify the exact
+session owner and absence of child work before closing an orphan. Do not kill
+the SSH server or unrelated sessions to release a port.
+On an owner-managed SSH server, bounded `ClientAliveInterval` and
+`ClientAliveCountMax` settings also let the server retire unreachable clients
+instead of retaining their remote listeners indefinitely. Validate the exact
+server configuration before reloading it; client-side keepalives alone do not
+ensure a server detects an unclean network loss.
+
 Stop with Ctrl+C. Only children started by this supervisor are terminated.
 Do not start it alongside another launcher that owns the same forwarding ports.
 It uses a process lock to prevent duplicate supervisors for that configuration.
