@@ -29,6 +29,9 @@ def validate_inventory(report):
             raise ValueError('Invalid Apprentice activity')
         clean.append({'id': ident, 'display_name': name, 'role': role, 'status': status, 'active': active})
     result={'version': 1, 'apprentices': clean}
+    if report.get('release') is not None:
+        from backend.cluster.release_status import ReleaseReport
+        result['release']=ReleaseReport.model_validate(report['release']).model_dump()
     services=report.get('services')
     if services is not None:
         if not isinstance(services,dict) or services.get('state') not in {'observed','unsupported','unavailable'} or not isinstance(services.get('services'),list) or len(services['services'])>128:
@@ -45,7 +48,8 @@ def validate_inventory(report):
 def local_inventory():
     from backend.api import knights
     from backend.runtime.service_discovery import discover_local_services
-    return validate_inventory({'version': 1,'services':discover_local_services(), 'apprentices': [
+    from backend.cluster.release_status import local_release
+    return validate_inventory({'version': 1,'release':local_release(),'services':discover_local_services(), 'apprentices': [
         {key: row[key] for key in ('id', 'display_name', 'role', 'status', 'active') if key in row}
         for row in knights()['knights']]})
 
@@ -72,7 +76,8 @@ def aggregate_inventories(local, peers, now=None):
                                    'host': node.get('hostname') or ident, 'entity_type': 'knight_apprentice',
                                    'provenance': 'signed_peer_report'} for row in report['apprentices'])
         reports.append({'kingdom_id': ident, 'state': state, 'received_at': saved.get('received_at') if isinstance(saved,dict) else None,
-                        'services':report.get('services') if state=='current' else None})
+                        'services':report.get('services') if state=='current' else None,
+                        'release':report.get('release') if state=='current' else None})
     return {'local_count': len(local), 'remote_count': len(remote), 'total_current': len(local) + len(remote),
             'complete': all(r['state'] == 'current' for r in reports), 'reports': reports, 'remote_apprentices': remote,
             'notice': 'Remote workers are identity-attested peer reports, not independent proof of running models or successful execution.'}

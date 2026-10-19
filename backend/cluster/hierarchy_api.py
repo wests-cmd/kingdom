@@ -41,3 +41,17 @@ def save_topology(request: TopologyRequest):
         raise HTTPException(409, str(error)) from error
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
+
+
+from backend.cluster.release_status import DesiredRelease, ReleasePreferences
+release_preferences = ReleasePreferences(db, engine.events.publish)
+
+
+@router.get('/releases')
+def release_status():
+    return release_preferences.status([node.to_dict() for node in hierarchy.computers()])
+
+
+@router.put('/releases/desired')
+def desired_release(request: DesiredRelease):
+    return release_preferences.set(request.model_dump())

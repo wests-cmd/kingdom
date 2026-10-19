@@ -4,10 +4,18 @@ import shutil
 import subprocess
 import sys
 import os
+import json
 
 root = Path(__file__).resolve().parents[1]
 bin_dir = root / "desktop" / "bin"
 bin_dir.mkdir(exist_ok=True)
+sys.path.insert(0,str(root))
+from backend.cluster.release_status import local_release
+manifest=root/'build'/'kingdom-release.json'
+manifest.parent.mkdir(exist_ok=True)
+report=local_release(root)
+report['revision']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
+manifest.write_text(json.dumps(report,indent=2),encoding='utf-8')
 # An ignored development binary can be present in a checkout. Stage only this build.
 for name in ("kingdom-backend", "kingdom-backend.exe"):
     candidate = bin_dir / name
@@ -24,6 +32,7 @@ subprocess.run([
     "--add-data", f"{root / 'frontend' / 'dist'}:frontend/dist",
     "--add-data", f"{root / 'migrations'}:migrations",
     "--add-data", f"{root / 'configs' / 'install_profiles.json'}:configs",
+    "--add-data", f"{manifest}:.",
     str(root / "scripts" / "desktop_backend.py"),
 ], cwd=root, check=True)
 if signed_directory:
