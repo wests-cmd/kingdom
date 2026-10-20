@@ -1,6 +1,7 @@
 import React,{useRef,useState} from 'react'
 import api from '../api'
 import useLiveData from '../hooks/useLiveData'
+import {parallelChatRequest} from '../utils/parallelChatRequest'
 
 const emptyChat=()=>({profile:'auto',input:'',messages:[],busy:false,error:'',computer:''})
 export default function ParallelChats(){
@@ -19,7 +20,7 @@ export default function ParallelChats(){
   change(index,{busy:true,error:'',messages,input:''})
   try{
    const {data:result}=await api.post(`/workspace/model-chat/${encodeURIComponent(chat.profile)}/chat/completions`,
-    {messages,stream:false,max_tokens:1024,reasoning_effort:'none',temperature:0},{timeout:620000})
+    parallelChatRequest(messages),{timeout:620000})
    const reply=result.choices?.[0]?.message?.content
    if(typeof reply!=='string'||!reply.trim())throw new Error('This model returned no chat text. Try another connection.')
    change(index,{messages:[...messages,{role:'assistant',content:reply}],computer:result.kingdom_profile||chat.profile})
