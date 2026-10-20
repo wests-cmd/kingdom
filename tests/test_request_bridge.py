@@ -52,7 +52,7 @@ def setup(tmp_path):
 def body(**extra):
     return dict(idempotency_key='key',session_scope='chat',project_scope='projects/a',prompt='what time is it?',mode='auto',model_profile='explicit-model',allow_process=False,**extra)
 
-@pytest.mark.parametrize('prompt',['what time is it?','status','what are my priorities?'])
+@pytest.mark.parametrize('prompt',['what time is it?','status','what are my priorities?', 'What is the runtime status?', 'runtime status', 'What is the system status?'])
 def test_deterministic_requests_never_call_provider(tmp_path,prompt):
     service,models,agents=setup(tmp_path)
     data=body();data['prompt']=prompt

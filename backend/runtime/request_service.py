@@ -70,7 +70,8 @@ class RequestService:
             route='agent'
         if route == 'auto':
             if text in {'what time is it','time','what is the current time'}: route='time'
-            elif text in {'status','system status','what is the status'}: route='status'
+            elif text in {'status','system status','runtime status','what is the status',
+                          'what is the runtime status','what is the system status'}: route='status'
             elif text in {'priorities','what are my priorities','what needs doing'}: route='priorities'
             elif re.match(r'^(?:please\s+)?(?:inspect|implement|edit|modify|fix|refactor|build|run tests|test the|create a file|write a file)\b', text): route='agent'
             else: route='quick'
