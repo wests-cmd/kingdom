@@ -19,6 +19,34 @@ class Agents:
     def cancel(self,ident):self.cancelled.append(ident)
 
 
+def test_empty_timeout_exception_retains_safe_failure_class(tmp_path):
+    service,models,_=setup(tmp_path)
+    async def timeout(*args):raise TimeoutError()
+    models.chat=timeout
+    data=body();data['mode']='quick'
+    ident=service.create(data)['id']
+    with pytest.raises(TimeoutError):asyncio.run(service.run(ident))
+    failed=service.get(ident)
+    assert failed['error_class']=='TimeoutError'
+    assert failed['error'] and 'timed out' in failed['error'].lower()
+    assert failed['status']=='failed'
+
+
+@pytest.mark.parametrize('failure',[TimeoutError('api_key=private-provider-key'),
+                                    ValueError('Authorization: Bearer private-provider-key')])
+def test_failed_request_diagnostic_excludes_exception_secrets(tmp_path,failure):
+    service,models,_=setup(tmp_path)
+    async def fail(*args):raise failure
+    models.chat=fail
+    data=body();data['mode']='quick'
+    ident=service.create(data)['id']
+    with pytest.raises(type(failure)):asyncio.run(service.run(ident))
+    failed=service.get(ident)
+    assert failed['error_class']==type(failure).__name__
+    assert failed['error']
+    assert 'private-provider-key' not in str(failed)
+
+
 def test_desktop_request_uses_agent_and_preserves_owner_window(tmp_path):
     service, models, agents=setup(tmp_path)
     options=[]

@@ -156,7 +156,13 @@ class RequestService:
                 evidence=[{'type':'model_response','profile':payload.get('kingdom_profile',state['model_profile']),'model':payload.get('model'),'usage':payload.get('usage',{}),'verified_execution':False}]
             return await asyncio.to_thread(self.update,ident,{'status':'completed','answer':answer,'evidence':evidence},expected={'running'}) or await asyncio.to_thread(self.get,ident)
         except Exception as error:
-            await asyncio.to_thread(self.update,ident,{'status':'failed','answer':'Request failed; no automatic model substitution or replay occurred.','error':str(error)[:500]},expected={'running'})
+            # Provider exception messages can contain credentials or request bodies.
+            # Persist a fixed diagnostic and a built-in failure category instead.
+            error_class = next(cls.__name__ for cls in type(error).__mro__
+                               if cls.__module__ == 'builtins' and issubclass(cls, Exception))
+            diagnostic = ('Request timed out.' if isinstance(error, TimeoutError)
+                          else f'Request failed ({error_class}).')
+            await asyncio.to_thread(self.update,ident,{'status':'failed','answer':'Request failed; no automatic model substitution or replay occurred.','error_class':error_class,'error':diagnostic},expected={'running'})
             raise
 
     def cancel(self, ident):
