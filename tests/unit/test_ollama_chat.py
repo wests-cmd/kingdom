@@ -6,6 +6,25 @@ from backend.models.ollama_chat import request_body, response_payload
 PROFILE = {'model': 'configured', 'num_ctx': 4096, 'ollama_think': False}
 
 
+def test_structured_output_schema_is_transported_without_granting_tools():
+    schema={'type':'object','properties':{'steps':{'type':'array','items':{'enum':['normalize_line_endings','text_digest']}}},'required':['steps']}
+    body=request_body(PROFILE,{'messages':[{'role':'user','content':'Design a workflow'}],
+        'response_format':{'type':'json_schema','json_schema':{'name':'workflow','schema':schema}}},256)
+    assert body['format']==schema and 'tools' not in body
+    assert body['options']['num_predict']==256
+
+
+@pytest.mark.parametrize('value',[{},'json',{'type':'xml'},{'type':'json_schema','json_schema':{'schema':[]}},
+    {'type':'json_schema','json_schema':{'schema':{'description':'x'*32768}}}])
+def test_invalid_or_unbounded_structured_formats_are_rejected(value):
+    with pytest.raises(ValueError):request_body(PROFILE,{'messages':[{'role':'user','content':'data'}],'response_format':value},128)
+
+
+def test_json_object_mode_preserves_profile_thinking_configuration():
+    body=request_body(PROFILE,{'messages':[{'role':'user','content':'data'}],'response_format':{'type':'json_object'}},128)
+    assert body['format']=='json' and body['think'] is False
+
+
 def request():
     return {'messages': [{'role': 'user', 'content': 'Read the project'}],
             'tools': [{'type': 'function', 'function': {'name': 'read_file', 'parameters': {'type': 'object'}}}],

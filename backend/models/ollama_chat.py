@@ -80,6 +80,18 @@ def request_body(profile, request, output_limit):
         if request.get(field) is not None:
             options[field] = request[field]
     body = {'model': profile['model'], 'messages': messages, 'stream': False, 'options': options}
+    output_format=request.get('response_format')
+    if output_format is not None:
+        if not isinstance(output_format,dict):raise ValueError('Invalid structured output format')
+        if output_format.get('type')=='json_object':
+            body['format']='json'
+        elif output_format.get('type')=='json_schema':
+            definition=output_format.get('json_schema')
+            schema=definition.get('schema') if isinstance(definition,dict) else None
+            if not isinstance(schema,dict) or len(json.dumps(schema).encode())>32768:
+                raise ValueError('Structured output schema must be an object up to 32 KiB')
+            body['format']=schema
+        else:raise ValueError('Unsupported structured output format')
     if request.get('tools') and choice != 'none':
         body['tools'] = request['tools']
     if profile.get('ollama_think') is not None:

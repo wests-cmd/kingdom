@@ -165,7 +165,7 @@ class ModelService:
             if len(json.dumps(request['messages'])) > profile.get('context_characters', 24000):
                 raise ValueError('Conversation exceeds this model connection context budget')
             body = {key: value for key, value in request.items()
-                    if key in {'messages', 'tools', 'tool_choice', 'temperature', 'top_p', 'reasoning_effort', 'parallel_tool_calls'}}
+                    if key in {'messages', 'tools', 'tool_choice', 'temperature', 'top_p', 'reasoning_effort', 'parallel_tool_calls', 'response_format'}}
             body.update(model=profile['model'], stream=False,
                         max_tokens=min(request.get('max_tokens') or request.get('max_completion_tokens') or profile.get('max_output_tokens', 2048),
                                        profile.get('max_output_tokens', 2048)))
