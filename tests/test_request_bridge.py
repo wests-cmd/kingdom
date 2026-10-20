@@ -183,3 +183,39 @@ def test_automatic_agent_preserves_explicit_model_without_inference(tmp_path):
     result=asyncio.run(service.run(service.create(data)['id']))
     assert result['route']=='agent'
     assert profiles==['explicit-model'] and models.calls==0
+
+@pytest.mark.parametrize('desktop_title', [None, 'Kingdom Test'])
+def test_request_preserves_required_coding_evidence_in_native_session(tmp_path, monkeypatch, desktop_title):
+    from backend.runtime.agent_sessions import AgentSessionService
+    db = Database(tmp_path / 'coding-evidence.db')
+    models = Models()
+    engine = SimpleNamespace(models=models, events=SimpleNamespace(publish=lambda *args: None),
+                             execution_policy=SimpleNamespace(get=lambda: {'level': 3}))
+    monkeypatch.setenv('KINGDOM_WORKSPACE', str(tmp_path / 'workspace'))
+    agents = AgentSessionService(engine, db)
+    service = RequestService(db, engine, models, agents)
+    data = body(required_tools=['workspace_read', 'workspace_write'], desktop_window_title=desktop_title)
+    data['mode'] = 'agent'
+    saved = service.create(data)
+    restarted = RequestService(db, engine, models, agents)
+    result = asyncio.run(restarted.run(saved['id']))
+    assert result['status'] == 'waiting_review'
+    native = agents.get(result['agent_session_id'])
+    assert native['required_tools'] == (['workspace_read', 'workspace_write', 'desktop_observe']
+                                        if desktop_title else ['workspace_read', 'workspace_write'])
+    assert native['status'] == 'needs_review'
+    assert 'workspace_write' in native['error']
+    assert native['model_profile'] == 'explicit-model'
+    assert native['allow_process'] is False
+    assert native['workspace'] == 'projects/a'
+    assert native['tool_count'] == 0
+
+def test_request_input_accepts_only_known_required_tools():
+    from pydantic import ValidationError
+    from backend.runtime.request_api import RequestInput
+    data = body(required_tools=['workspace_read', 'workspace_write'])
+    parsed = RequestInput.model_validate(data)
+    assert parsed.model_dump()['required_tools'] == ['workspace_read', 'workspace_write']
+    data['required_tools'] = ['unrestricted_shell']
+    with pytest.raises(ValidationError):
+        RequestInput.model_validate(data)

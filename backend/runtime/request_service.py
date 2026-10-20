@@ -135,11 +135,13 @@ class RequestService:
                     objective = state['prompt']
                     if state.get('review_instructions'):
                         objective += '\n\nReview requirements: ' + state['review_instructions']
+                    required_tools=list(state.get('required_tools',[]))
+                    if state.get('desktop_window_title') and 'desktop_observe' not in required_tools:
+                        required_tools.append('desktop_observe')
                     desktop_options=({'desktop_window_title':state['desktop_window_title'],
-                                      'desktop_expected_text':state.get('desktop_expected_text'),
-                                      'required_tools':['desktop_observe']}
+                                      'desktop_expected_text':state.get('desktop_expected_text')}
                                      if state.get('desktop_window_title') else {})
-                    agent=await asyncio.to_thread(self.agents.create,objective,state['model_profile'],workspace=state['project_scope'],allow_process=state['allow_process'],use_owner_memory=False,**desktop_options)
+                    agent=await asyncio.to_thread(self.agents.create,objective,state['model_profile'],workspace=state['project_scope'],allow_process=state['allow_process'],use_owner_memory=False,required_tools=required_tools,**desktop_options)
                     state=await asyncio.to_thread(self.update,ident,{'agent_session_id':agent['id']},expected={'running'})
                     if state is None:
                         await asyncio.to_thread(self.agents.cancel,agent['id'])

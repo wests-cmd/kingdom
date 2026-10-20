@@ -2,6 +2,7 @@
 import asyncio
 import json
 import time
+import threading
 from uuid import uuid4, uuid5, NAMESPACE_URL
 from typing import Literal
 
@@ -56,6 +57,10 @@ SYSTEM = ('You are a Kingdom coding assistant. Use the available tools to inspec
           'Ask for missing requirements rather than inventing integrations. State what you changed, what tests actually ran, '
           'and remaining limitations. Do not claim model training or external actions without verified evidence.')
 
+# Order short task submission/cancellation sections across service instances in
+# this server. Inference never holds this lock; SQLite remains authoritative.
+_dispatch_guard = threading.RLock()
+
 
 def recoverable_observation(record,task):
     return (task['status'].lower()=='failed'
@@ -96,6 +101,12 @@ class AgentSessionService:
     def _save(self, state):
         state['updated_at'] = time.time()
         with self.db.get_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            previous = conn.execute('SELECT state_json FROM agent_sessions WHERE id=?', (state['id'],)).fetchone()
+            if previous:
+                saved = json.loads(previous[0])
+                if saved['status'] == 'cancelled':
+                    return saved
             conn.execute('INSERT INTO agent_sessions VALUES(?,?) ON CONFLICT(id) DO UPDATE SET state_json=excluded.state_json',
                          (state['id'], json.dumps(state)))
             conn.commit()
@@ -162,6 +173,10 @@ class AgentSessionService:
             'notice': 'Model inference may use the selected computer. File and process tools execute on the Kingdom host through existing grants and approvals; process execution is not sandboxed.'})
 
     def cancel(self, ident):
+        with _dispatch_guard:
+            return self._cancel(ident)
+
+    def _cancel(self, ident):
         state = self.get(ident)
         for record in state['pending']:
             task = self.engine.tasks.get(record['task_id'])
@@ -172,6 +187,14 @@ class AgentSessionService:
         return self._save(state)
 
     def _dispatch(self, state):
+        with _dispatch_guard:
+            current = self.get(state['id'])
+            if current['status'] == 'cancelled':
+                return current
+            self._dispatch_pending(current)
+            return current
+
+    def _dispatch_pending(self, state):
         # Persisted deterministic identities make resuming between save and submit safe.
         for record in state['pending']:
             if self.engine.tasks.get(record['task_id']):
@@ -181,7 +204,9 @@ class AgentSessionService:
                 'tool': record['tool'], 'tool_parameters': record['arguments'], 'max_attempts': 1})
 
     def _collect(self, state):
-        self._dispatch(state)
+        state = self._dispatch(state)
+        if state['status'] == 'cancelled':
+            return state
         waiting = False
         for record in state['pending']:
             task = self.engine.tasks.get(record['task_id'])
@@ -356,9 +381,9 @@ class AgentSessionService:
                         state.update(status='needs_review',error='Observe the selected window after input before claiming completion')
                     elif state.get('desktop_expected_text') and not state.get('desktop_expected_text_seen'):
                         state.update(status='needs_review',error='Owner-selected acceptance text was not verified in the observed window')
-                self._save(state)
-                if pending:
-                    self._dispatch(state)
+                state = self._save(state)
+                if pending and state['status'] != 'cancelled':
+                    state = self._dispatch(state)
                 return state
             except asyncio.CancelledError:
                 if self.get(ident)['status'] != 'cancelled':

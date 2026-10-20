@@ -1,6 +1,7 @@
 import asyncio
 import json
 import time
+import threading
 from types import SimpleNamespace
 from uuid import uuid5, NAMESPACE_URL
 
@@ -223,6 +224,48 @@ async def test_concurrent_advance_and_cancellation_never_duplicate_dispatch(setu
     release.set()
     assert (await running)['status'] == 'cancelled'
     assert not engine.records
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('boundary', ['save', 'dispatch'])
+async def test_cancel_after_model_check_cannot_restore_or_dispatch_stale_state(setup, monkeypatch, boundary):
+    service, engine, database = setup([reply(calls=[call('workspace_write', {'path': 'x', 'content': 'x'})])])
+    ident = service.create('Write x', 'local')['id']
+    # A second service exercises persisted cancellation, rather than an instance flag.
+    cancelling = AgentSessionService(engine, database)
+    entered, released = threading.Event(), threading.Event()
+    original = service._save if boundary == 'save' else service._dispatch
+
+    def pause(state):
+        if state['status'] == 'waiting_tools':
+            entered.set()
+            assert released.wait(5), 'Cancellation did not complete'
+        return original(state)
+
+    monkeypatch.setattr(service, '_save' if boundary == 'save' else '_dispatch', pause)
+    failures = []
+
+    def cancel_at_boundary():
+        try:
+            assert entered.wait(5), 'Model did not reach the boundary'
+            assert cancelling.cancel(ident)['status'] == 'cancelled'
+        except BaseException as error:
+            failures.append(error)
+        finally:
+            released.set()
+
+    worker = threading.Thread(target=cancel_at_boundary)
+    worker.start()
+    try:
+        result = await service.advance(ident)
+    finally:
+        worker.join(6)
+    assert not worker.is_alive()
+    assert not failures
+    assert result['status'] == 'cancelled'
+    assert service.get(ident)['status'] == 'cancelled'
+    assert not engine.records
+    assert (await service.advance(ident))['status'] == 'cancelled'
 
 
 @pytest.mark.asyncio
