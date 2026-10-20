@@ -916,7 +916,11 @@ def handle_cluster_rpc(request: RPCMessageRequest):
         if not isinstance(metrics, dict) or any(type(metrics.get(key)) not in (int, float) or not 0 <= metrics[key] <= 100 for key in metrics if key in {'cpu_percent', 'memory_percent'}):
             raise HTTPException(400, 'Invalid load measurements')
         try:
-            res = heartbeat_manager.ping(sender_id, load_metrics={key: metrics[key] for key in ('cpu_percent', 'memory_percent') if key in metrics}, apprentice_inventory=payload.get('apprentice_inventory'))
+            measured={key: metrics[key] for key in ('cpu_percent', 'memory_percent') if key in metrics}
+            if 'power' in metrics:
+                from backend.cluster.power_policy import validate_power
+                measured['power']=validate_power(metrics['power'])
+            res = heartbeat_manager.ping(sender_id, load_metrics=measured, apprentice_inventory=payload.get('apprentice_inventory'))
         except ValueError as error: raise HTTPException(400, str(error)) from error
         if not res.get('success'): raise HTTPException(403, res.get('error', 'Peer report denied'))
         result = {"status": "ok", "ping": res}

@@ -60,7 +60,7 @@ class CommandHierarchy:
                 'knight_captain': 'An approved computer commanding its own group', 'commander': 'Highest control over approved computers and groups'}}
 
 
-def offload_candidate(registry, capability, members=None, outcomes=None, tool=None, busy_nodes=None):
+def offload_candidate(registry, capability, members=None, outcomes=None, tool=None, busy_nodes=None, estimated_seconds=None):
     now = time.time()
     candidates = []
     for node in registry.list_nodes():
@@ -71,6 +71,9 @@ def offload_candidate(registry, capability, members=None, outcomes=None, tool=No
         load = node.connection_metadata.get('load_metrics', {})
         cpu, memory = load.get('cpu_percent', 100), load.get('memory_percent', 100)
         if not all(isinstance(value, (int, float)) and 0 <= value < 85 for value in (cpu, memory)): continue
+        from backend.cluster.power_policy import power_budget
+        estimate = estimated_seconds if estimated_seconds is not None else (180 if capability=='process.execute' else 10)
+        if not power_budget(load.get('power'),estimate)['allowed']:continue
         # Adapt only from controller-persisted outcomes for the same operation.
         # Worker claims, model text and advertised capabilities are not success.
         successes = failures = 0

@@ -89,8 +89,10 @@ def test_build_capability_cannot_be_downgraded_and_approval_is_required(task, tm
     assert submitted['max_attempts']==1
     node=SimpleNamespace(node_id='worker',is_local=False,public_identity={'key':'paired'},node_state='CONNECTED',
         last_heartbeat=time.time(),health='healthy',current_task=None,granted_capabilities=['process.execute'],
-        connection_metadata={'load_metrics':{'cpu_percent':1,'memory_percent':1}})
+        connection_metadata={'load_metrics':{'cpu_percent':1,'memory_percent':1,
+          'power':{'status':'no_battery','battery_percent':None,'plugged':None}}})
     monkeypatch.setattr('backend.cluster.node_registry.node_registry.list_nodes',lambda:[node])
+    monkeypatch.setattr('backend.cluster.node_registry.node_registry.get_node',lambda _:node)
     leases=TaskLeaseManager(database=database)
     assert runtime.dispatch_remote_task(submitted['id'],'worker','process.execute',leases) is None
     pending=runtime.tasks.get(submitted['id'])

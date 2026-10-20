@@ -225,14 +225,16 @@ class MissionService:
                         capacity_busy = getattr(node, 'current_task', None) or any(
                             isinstance(load.get(key), (int, float)) and 85 <= load[key] <= 100
                             for key in ('cpu_percent', 'memory_percent'))
+                        from backend.cluster.power_policy import power_budget
+                        power=power_budget(load.get('power'),180 if capability=='process.execute' else 10)
                         if (policy['level'] == 5 and node and node.fingerprint
                                 and getattr(node, 'node_state', None) in {'APPROVED', 'CONNECTED'}
                                 and getattr(node, 'public_identity', None) and not getattr(node, 'is_local', True)
                                 and time.time() - getattr(node, 'last_heartbeat', 0) <= 45
                                 and getattr(node, 'health', None) == 'healthy'
-                                and capability in getattr(node, 'granted_capabilities', []) and capacity_busy):
+                                and capability in getattr(node, 'granted_capabilities', []) and (capacity_busy or not power['allowed'])):
                             waiting = {'step': step.id, 'computer_id': step.computer_id,
-                                       'reason': 'Waiting for the approved computer to have available capacity'}
+                                       'reason': power['reason'] if not power['allowed'] else 'Waiting for the approved computer to have available capacity'}
                             changed = state.get('placement_wait') != waiting
                             state.update(status='running', placement_wait=waiting)
                             self.save(state)

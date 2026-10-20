@@ -174,6 +174,25 @@ def test_pinned_step_waits_for_capacity_then_resumes(harness, monkeypatch, busy)
     assert submitted[0][1]['assigned_knight'] == 'worker-a'
 
 
+def test_pinned_step_waits_for_power_then_resumes_without_new_assignment(harness,monkeypatch):
+    service,_,submitted,_=harness
+    from backend.cluster.node_registry import node_registry
+    power={'status':'battery','battery_percent':5,'plugged':False}
+    node=SimpleNamespace(node_id='worker-a',node_state='CONNECTED',public_identity={'key':'paired'},
+      fingerprint='paired',last_heartbeat=time.time(),health='healthy',current_task=None,
+      granted_capabilities=['compute'],is_local=False,
+      connection_metadata={'load_metrics':{'cpu_percent':1,'memory_percent':1,'power':power}})
+    monkeypatch.setattr(node_registry,'list_nodes',lambda:[node])
+    monkeypatch.setattr(node_registry,'get_node',lambda _:node)
+    state=start(service,plan(computer_id='worker-a'))
+    assert state['status']=='running' and not submitted
+    assert 'Battery reserve' in state['placement_wait']['reason']
+    power['plugged']=True
+    resumed=service.advance(state['id'])
+    assert len(submitted)==1 and 'placement_wait' not in resumed
+    assert submitted[0][1]['assigned_knight']=='worker-a'
+
+
 @pytest.mark.parametrize('level,count,parallel', [(4,40,1),(5,100,3)])
 def test_larger_missions_keep_bounded_parallel_execution(harness,level,count,parallel):
     from backend.runtime.policy import ExecutionPolicy

@@ -11,8 +11,47 @@ def test_reports_measured_load_using_bounded_cpu_sample(monkeypatch):
         return 73.5
     monkeypatch.setitem(sys.modules, 'psutil', SimpleNamespace(
         cpu_percent=cpu_percent, virtual_memory=lambda: SimpleNamespace(percent=61.25)))
-    assert local_load_metrics() == {'cpu_percent': 73.5, 'memory_percent': 61.25}
+    assert local_load_metrics() == {'cpu_percent': 73.5, 'memory_percent': 61.25,
+                                  'power': {'status': 'unknown', 'battery_percent': None, 'plugged': None}}
     assert intervals == [0.1]
+
+
+@pytest.mark.parametrize('percent,plugged', [(12, False), (85.5, True), (0, False), (100, True)])
+def test_power_reports_battery_percentage_and_measured_plug_state(monkeypatch, percent, plugged):
+    monkeypatch.setitem(sys.modules, 'psutil', SimpleNamespace(
+        cpu_percent=lambda interval: 10, virtual_memory=lambda: SimpleNamespace(percent=20),
+        sensors_battery=lambda: SimpleNamespace(percent=percent, power_plugged=plugged)))
+    assert local_load_metrics()['power'] == {
+        'status': 'battery', 'battery_percent': percent, 'plugged': plugged}
+
+
+def test_power_distinguishes_no_battery_from_unknown(monkeypatch):
+    monkeypatch.setitem(sys.modules, 'psutil', SimpleNamespace(
+        cpu_percent=lambda interval: 10, virtual_memory=lambda: SimpleNamespace(percent=20),
+        sensors_battery=lambda: None))
+    assert local_load_metrics()['power'] == {
+        'status': 'no_battery', 'battery_percent': None, 'plugged': None}
+
+
+@pytest.mark.parametrize('failure', [OSError, RuntimeError, NotImplementedError])
+def test_power_sensor_failure_preserves_load_without_assuming_ac(monkeypatch, failure):
+    def broken():raise failure('unavailable')
+    monkeypatch.setitem(sys.modules, 'psutil', SimpleNamespace(
+        cpu_percent=lambda interval: 10, virtual_memory=lambda: SimpleNamespace(percent=20),
+        sensors_battery=broken))
+    assert local_load_metrics() == {'cpu_percent': 10, 'memory_percent': 20,
+                                  'power': {'status': 'unknown', 'battery_percent': None, 'plugged': None}}
+
+
+@pytest.mark.parametrize('percent,plugged', [(-1, True), (101, True), (float('nan'), True),
+                                           (float('inf'), True), (True, True), ('50', True),
+                                           (50, None), (50, 1), (50, 'yes')])
+def test_invalid_power_measurements_are_unknown(monkeypatch, percent, plugged):
+    monkeypatch.setitem(sys.modules, 'psutil', SimpleNamespace(
+        cpu_percent=lambda interval: 10, virtual_memory=lambda: SimpleNamespace(percent=20),
+        sensors_battery=lambda: SimpleNamespace(percent=percent, power_plugged=plugged)))
+    assert local_load_metrics()['power'] == {
+        'status': 'unknown', 'battery_percent': None, 'plugged': None}
 
 
 @pytest.mark.parametrize('value', [float('nan'), float('inf'), -1, 101, True, '0'])

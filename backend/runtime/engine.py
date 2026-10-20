@@ -298,6 +298,15 @@ class RuntimeEngine:
             task = self.tasks.get(task_id)
             if self.execution_policy.get()["level"] == 0 or not task or task["status"].lower() != "queued":
                 return None
+            from backend.cluster.node_registry import node_registry
+            from backend.cluster.power_policy import power_budget
+            node=node_registry.get_node(node_id)
+            measured=(getattr(node,'connection_metadata',{}) or {}).get('load_metrics',{})
+            short_tools={'text.analyze@1.0.0','code.python.analyze@1.0.0'}
+            estimated=10 if task.get('metadata',{}).get('tool') in short_tools else 180
+            if not power_budget(measured.get('power'),estimated)['allowed']:
+                self.events.publish('task.waiting_power',{'task_id':task_id,'node_id':node_id})
+                return None
             if task.get('metadata', {}).get('tool') == 'build.run@1.0.0':
                 from backend.cluster.hierarchy import offload_candidate
                 from backend.cluster.node_registry import node_registry

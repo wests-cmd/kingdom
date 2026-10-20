@@ -11,6 +11,12 @@ import ComputerTopology from '../components/ComputerTopology';
 import KingdomUpdates from '../components/KingdomUpdates';
 import {deviceLabel,capabilityLabel,fingerprintLabel,nodeStateLabel} from '../components/common/presentation';
 
+function powerLabel(power) {
+  if (power?.status === 'no_battery') return 'No battery reported';
+  if (power?.status !== 'battery' || !Number.isFinite(power.battery_percent) || typeof power.plugged !== 'boolean') return 'Unknown';
+  return `${Math.round(power.battery_percent)}% · ${power.plugged ? 'Plugged in' : 'On battery'}`;
+}
+
 export function Nodes() {
   const {data: hierarchy, error: hierarchyError} = useLiveData('/hierarchy',10000);
   const [kingdomIdentity, setKingdomIdentity] = useState(null);
@@ -215,6 +221,7 @@ export function Nodes() {
                 <div>Health: {node.health || 'Not reported'} · Current task: {node.current_task || 'None reported'}</div>
                 <div>Last heartbeat: {node.last_heartbeat ? new Date(node.last_heartbeat * 1000).toLocaleString() : 'Not reported'}</div>
                 <div>Reported load: CPU {Number.isFinite(node.connection_metadata?.load_metrics?.cpu_percent) ? `${node.connection_metadata.load_metrics.cpu_percent}%` : 'unavailable'} · Memory {Number.isFinite(node.connection_metadata?.load_metrics?.memory_percent) ? `${node.connection_metadata.load_metrics.memory_percent}%` : 'unavailable'}</div>
+                <div>Reported power: {powerLabel(node.connection_metadata?.load_metrics?.power)}</div>
                 <div>{node.is_local ? 'Recorded federation grants (local tools are listed in Swarm):' : 'Granted capabilities:'}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
                   {!(node.granted_capabilities || node.capabilities || []).length && <span>None recorded</span>}
