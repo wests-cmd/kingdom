@@ -1,8 +1,8 @@
 # Verified status and remaining work
 
-Updated October 19, 2026. Stable release: v1.2.1. Optional preview: v1.2.2-preview.1, built from `2022ee56f5dcde0d7f909bb80354cdea2a8ac796`. Source integration is still open in PR #122 and PR #125; preview availability is not a claim that those branches are merged into main.
+Stable release: [v1.2.2](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.2). See its release manifest for the exact source commit and native startup/installer evidence. The earlier v1.2.2-preview.1 and source-service previews are historical previews; they are not the native stable download path.
 
-## Verified preview foundations
+## Verified foundations and release scope
 
 - Separate Knight computer and Apprentice software-agent identities, host labels and editable coordination diagrams. Coordination lines do not themselves change execution placement or grants.
 - Supported remote text/Python analysis with signed placement and independent controller checks. Syntax checks do not prove program correctness.
@@ -20,13 +20,13 @@ Updated October 19, 2026. Stable release: v1.2.1. Optional preview: v1.2.2-previ
 | Deterministic-first routing and inference | Partial | No-model status answers, meaningful model/worker selection, measured concurrency, grounding and fallback acceptance. |
 | Portable background continuity | Partial | Installed startup/reconnect and recovery without temporary developer tunnels; prove device behavior and expose missing dependencies. Local custom helpers are not automatically bundled product features. |
 | Beginner/advanced usability | Partial | Narrow-window and half-screen review, clearer topology and onboarding, and accurate distinction between visual hierarchy and execution authority. |
-| Stable release integration | Open | Review and integrate tested source, stage/verify stable artifacts, publish refreshed stable downloads and verify actual installation/update behavior. |
+| Stable release integration | Released; wider device acceptance open | v1.2.2 native assets and release evidence are published. Broader real-device installation, cross-Knight update/reconnect/rollback and hardware coverage remain separate acceptance work. |
 | Shared architecture and adaptation | Partial | Cross-interface idempotent jobs, portable project memory, restart-safe automation, optional voice/perception/connectors and measured adaptation. |
 
 There are eight broad areas with remaining acceptance work. A checkbox or percentage would not fairly represent their different sizes. The foundations above are separately verified; no claim that the project is otherwise finished.
 
 ## Boundaries and availability
 
-Cloud providers, harnesses, payment accounts, signing services and hardware integrations are optional and require actual configuration. No live payment provider or universal autonomous repair is implied by a UI control. The unsigned preview may be blocked by operating-system application-control policies; no bypass is supplied.
+Cloud providers, harnesses, payment accounts, signing services and hardware integrations are optional and require actual configuration. No live payment provider or universal autonomous repair is implied by a UI control. The unsigned native packages may be blocked by operating-system application-control policies; no bypass is supplied.
 
-[Preview downloads](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.2-preview.1) · [PR #122](https://github.com/wests-cmd/kingdom/pull/122) · [PR #125](https://github.com/wests-cmd/kingdom/pull/125)
+[Stable downloads and exact build evidence](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.2) · [Release notes](releases/v1.2.2.md)

@@ -4,9 +4,9 @@ Kingdom is an adaptive AI harness for completing tasks across models, agents, to
 
 Adaptation includes task routing, reusable skills and retrieval from reviewed evidence. Model tuning is a separate optional lifecycle with evaluations and rollback. Neither stored chat nor a larger model is proof of learning or completed work. Current distributed execution has a narrower verified scope than this product direction: see [the core architecture and delivery gates](docs/ADAPTIVE_CLUSTER_CORE.md).
 
-This development branch adds an **Agent workbench** for saved tool conversations and installed CLI connections. These additions are not yet part of the stable release below. **Tasks → Two model chats** provides lightweight parallel chat with selected model computers.
+Kingdom includes an **Agent workbench** for saved tool conversations and installed CLI connections. **Tasks → Two model chats** provides lightweight parallel chat with selected model computers.
 
-**Updated source-service preview:** [Download the adaptive cluster preview](https://github.com/wests-cmd/kingdom/releases/tag/adaptive-cluster-2026-10-17.2). It includes the built browser interface, guided AI worker connections, bounded local vault caches and coding execution requirements. This separate preview requires Python 3.12; read `START-HERE.md` in its ZIP. Native stable installers remain listed below. See [vault and reconnecting-device setup](docs/VAULT_AND_DEVICE_LAYOUT.md).
+**Earlier optional source-service preview:** [Download the adaptive cluster preview](https://github.com/wests-cmd/kingdom/releases/tag/adaptive-cluster-2026-10-17.2). It includes the built browser interface, guided AI worker connections, bounded local vault caches and coding execution requirements. This separate preview requires Python 3.12; read `START-HERE.md` in its ZIP. Native stable installers remain listed below. See [vault and reconnecting-device setup](docs/VAULT_AND_DEVICE_LAYOUT.md).
 
 [Harness capabilities and roadmap](docs/HARNESS_ROADMAP.md) · [Portable SKILL.md](docs/PORTABLE_SKILLS.md) · [Model computers](docs/MODEL_OFFLOADING.md)
 
@@ -14,34 +14,34 @@ This development branch adds an **Agent workbench** for saved tool conversations
 
 A desktop command center for local workers, governed tasks and persistent knowledge. Start with the installer for your computer; **Python and Node.js are included, so you do not need to install them separately.**
 
-**Current stable release: [Kingdom v1TAS · v1.2.1](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.1)**
+**Current stable release: [Kingdom v1TAS · v1.2.2](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.2)**
 
-Windows desktop users can now check, download and apply updates from **Settings â†’ Desktop updates** without manually uninstalling Kingdom. Profiles, tasks, settings and model connections stay in their existing data folder. Full desktop updates restart the app; compatible interface-only updates keep the backend running.
+Windows desktop users can now check, download and apply updates from **Settings → Desktop updates** without manually uninstalling Kingdom. Profiles, tasks, settings and model connections stay in their existing data folder. Full desktop updates restart the app; compatible interface-only updates keep the backend running.
 
 [Join the Kingdom Discord](https://discord.gg/4b8f9YS2Wp) · [All releases](https://github.com/wests-cmd/kingdom/releases) · [Report a problem](https://github.com/wests-cmd/kingdom/issues)
 
-The mission workspace adds five active autonomy levels, larger tasks and inspected attachments, custom installed model connections, reviewed computer tools, Captain groups, bounded source repairs and compatible UI-only updates. [Read the mission guide](docs/MISSION_WORKSPACE.md) and [exact capabilities and limits](docs/releases/v1.2.1.md).
+The mission workspace adds five active autonomy levels, larger tasks and inspected attachments, custom installed model connections, reviewed computer tools, Captain groups, bounded source repairs and compatible UI-only updates. [Read the mission guide](docs/MISSION_WORKSPACE.md) and [exact capabilities and limits](docs/releases/v1.2.2.md).
 
-## Latest preview and project status
+## Release status and remaining work
 
-An optional **v1.2.2 preview** is available from the [preview release page](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.2-preview.1). Its Windows, Linux and Intel macOS build checks passed. Windows and macOS packages remain unsigned; the Mac build is not notarized. This preview does not replace the stable downloads below or automatically update existing installations.
+**v1.2.2 stable** supersedes the earlier optional preview for native downloads. See the [release notes](docs/releases/v1.2.2.md) for the distributed-work changes and limits. Windows and macOS packages remain unsigned; the Mac build is not notarized. Publishing a release does not update every connected computer automatically.
 
 See the [verified status and remaining work](docs/PROJECT_STATUS.md) for what is implemented, what is still partial, and the eight remaining acceptance areas. General autonomous coding and automatic updates of every connected computer are not claimed complete.
 
 ## Download Kingdom
 
-Choose **one** installer that matches your computer. These are the published v1.2.1 files.
+Choose **one** installer that matches your computer. These are the published v1.2.2 files.
 
 | Your computer | Download | What to do next |
 | --- | --- | --- |
-| **Windows — Intel/AMD 64-bit** | **[Download Windows installer](https://github.com/wests-cmd/kingdom/releases/download/v1.2.1/Kingdom-Setup-1.2.1.exe)** | Run `Kingdom-Setup-1.2.1.exe`, then open the Kingdom desktop shortcut. |
-| **macOS — Intel** | **[Download Mac DMG](https://github.com/wests-cmd/kingdom/releases/download/v1.2.1/Kingdom-1.2.1.dmg)** | Open the DMG, drag Kingdom into Applications, then launch it. |
-| **Linux — Intel/AMD 64-bit** | **[Download AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.2.1/Kingdom-1.2.1.AppImage)** | Allow the downloaded file to run as a program in its file properties, then open it. |
-| **Ubuntu / Debian — amd64** | **[Download DEB package](https://github.com/wests-cmd/kingdom/releases/download/v1.2.1/kingdom-desktop_1.2.1_amd64.deb)** | Open it with your distribution's package installer, then launch Kingdom. |
+| **Windows — Intel/AMD 64-bit** | **[Download Windows installer](https://github.com/wests-cmd/kingdom/releases/download/v1.2.2/Kingdom-Setup-1.2.2.exe)** | Run `Kingdom-Setup-1.2.2.exe`, then open the Kingdom desktop shortcut. |
+| **macOS — Intel** | **[Download Mac DMG](https://github.com/wests-cmd/kingdom/releases/download/v1.2.2/Kingdom-1.2.2.dmg)** | Open the DMG, drag Kingdom into Applications, then launch it. |
+| **Linux — Intel/AMD 64-bit** | **[Download AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.2.2/Kingdom-1.2.2.AppImage)** | Allow the downloaded file to run as a program in its file properties, then open it. |
+| **Ubuntu / Debian — amd64** | **[Download DEB package](https://github.com/wests-cmd/kingdom/releases/download/v1.2.2/kingdom-desktop_1.2.2_amd64.deb)** | Open it with your distribution's package installer, then launch Kingdom. |
 
 **Before installing:** Windows and macOS builds are unsigned; the Mac build is not notarized. Your operating system may show a trust prompt. Native Apple Silicon, Windows ARM64, Linux ARM64, Android and iOS installers are **not supplied**. Mac DMG testing covers Intel Macs; Apple Silicon compatibility is not certified.
 
-**Check your download:** [SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.2.1/SHA256SUMS) and [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.2.1/release-manifest.json) list the exact files and hashes. The [release page](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.1) also contains native startup evidence and screenshots. Choose an installer above rather than GitHub's “Source code” archive or a standalone backend file.
+**Check your download:** [SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.2.2/SHA256SUMS) and [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.2.2/release-manifest.json) list the exact files and hashes. The [release page](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.2) also contains native startup evidence and screenshots. Choose an installer above rather than GitHub's “Source code” archive or a standalone backend file.
 
 Kingdom opens directly to the main panel on its own computer. An optional passcode is **off by default**. To use one, open **Settings → Opening Kingdom** and choose and confirm your own passcode. Other devices still need a connection code.
 
