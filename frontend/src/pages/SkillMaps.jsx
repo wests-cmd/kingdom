@@ -1,6 +1,7 @@
 import React, {useState, useEffect} from 'react'
 import api from '../api'
 import useLiveData from '../hooks/useLiveData'
+import SkillDocuments from '../components/SkillDocuments'
 
 export default function SkillMaps() {
  const maps = useLiveData('/skillmaps',5000)
@@ -45,6 +46,7 @@ export default function SkillMaps() {
   <div className="page-heading"><div><p className="eyebrow">Portable preferences</p><h1>Skill maps & Discord</h1><p>Bring a map, review what this Kingdom can support, then test reviewed providers through your workers.</p></div></div>
   {(error || maps.error || providers.error || links.error || profiles.error) && <p role="alert" className="notice error">{error || 'Could not load integration records. Check your connection.'}</p>}
   {notice && <p role="status" className="notice">{notice}</p>}
+  <SkillDocuments/>
   <section className="panel"><h2>Import a skill map</h2><p>JSON or YAML, up to 256 KB. Importing saves preferences and provider requirements. It grants no permissions and installs no code.</p><label>Choose a skill map <input type="file" accept=".json,.yaml,.yml" disabled={busy} onChange={upload}/></label>
    {preview && <div className="record-detail"><h3>Review: {preview.map_id}</h3><p>{preview.skills} requested skills · {preview.unsupported_skills.length} unsupported · {preview.compatible_knights.length} compatible workers</p><p>Supported metadata checks: {preview.understood_capabilities.join(", ") || "None"}</p><p>Unsupported capabilities: {preview.unsupported_capabilities.join(", ") || "None"}</p><p>Unsupported skills: {preview.unsupported_skills.join(', ') || 'None'}</p>{preview.providers.map(provider => <p key={provider.provider_id}>{provider.provider_id}: {provider.reviewed ? 'Reviewed test adapter' : 'No reviewed test'}{provider.credential_required ? ' · credential reference required; testing unsupported' : ' · no credential reference supplied'}</p>)}<button disabled={busy} onClick={() => action(async () => {await api.post('/skillmaps/confirm',{preview_id:preview.preview_id,checksum:preview.checksum});setPreview(null);setNotice('Map saved as preferences.')})}>Confirm import</button><button onClick={() => setPreview(null)}>Discard preview</button></div>}
   </section>

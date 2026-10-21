@@ -19,8 +19,15 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pyinstaller
+          pip install -r requirements-dev.txt
+          pip install pyinstaller
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Build assets exercised by web app route checks
+        run: |
+          npm --prefix frontend ci
+          npm --prefix frontend run build
       - name: Run Backend Unit Tests & Distributed Process E2E Suite
         run: |
           python3 -m pytest

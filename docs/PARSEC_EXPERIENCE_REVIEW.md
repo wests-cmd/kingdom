@@ -1,0 +1,21 @@
+# Parsec experience ideas for Kingdom
+
+Reviewed 2026-10-20 against official Parsec documentation. This is a design proposal and acceptance backlog, not implemented Kingdom functionality. Adapt the interaction principles through Kingdom's own permission and execution boundaries; do not copy proprietary code, branding or protocol internals.
+
+## Useful reference patterns
+
+| Official observation | Proposed Kingdom application (unimplemented) |
+|---|---|
+| Parsec's Computers view lists owned/shared computers with a Connect action. [App navigation](https://support.parsec.app/hc/en-us/articles/32381494397332-Parsec-App-for-Linux) | Computer cards show authenticated identity, last-seen freshness and actual available capabilities. **Connect** establishes a session; **Observe** requests read-only screen access; **Control** separately requests input authority. These three labels are Kingdom's proposed distinction, not a claimed Parsec menu. |
+| Hosts accept/reject guest connections, grant keyboard/mouse permissions and can disconnect guests. [Hosting and Permissions](https://support.parsec.app/hc/en-us/articles/32381747079572-Hosting-and-Permissions) | Display who requests which capability, on which computer, for how long. Issue host-enforced scoped grants; provide visible revoke/disconnect controls. Observation must not imply input, files, shell, clipboard or agent execution. |
+| Parsec exposes encode/decode latency, network round-trip latency, bitrate and active stream format, with congestion and decoder warnings. [Stream Overlay, Stats, and Logging](https://support.parsec.app/hc/en-us/articles/32381603663636-Stream-Overlay-Stats-and-Logging) | Show measured session health and sample freshness; separate transport RTT, capture/encode/decode time, dropped frames and achieved quality. Do not label RTT or their simple sum as measured end-to-end input latency. Unsupported metrics remain unavailable, never simulated. |
+| Network-cutoff and disappeared-host errors have distinct recovery guidance. [12007](https://support.parsec.app/hc/en-us/articles/32361439718804-Error-Codes-12007-The-Network-Connection-On-Your-Client-Computer-Was-Cutoff), [12010](https://support.parsec.app/hc/en-us/articles/32361439781012-Error-Codes-12010-The-computer-you-were-connected-to-disappeared) | Show disconnected/reconnecting/approval-required states with bounded retries. Revalidate identity, expiry and revocation on resume; never replay queued input or duplicate a job. A saved computer is not a standing control grant. |
+| Parsec recommends basic settings and diagnosis before advanced configuration; some advanced changes require restart. [All Advanced Configuration Options](https://support.parsec.app/hc/en-us/articles/32381443626516-All-Advanced-Configuration-Options) | Beginner settings offer plain-language quality/bandwidth choices and a reset. Advanced settings expose only supported codec/display/transport controls, effective values, tradeoffs and restart requirements. Preserve a recovery path after an invalid setting. |
+
+## Hardware and platform limits
+
+Parsec documents hosting on Windows/macOS and Linux as a client, with platform and encoder/decoder requirements. Its compatibility list does not establish Kingdom support or a streaming host for Centipede Linux. [Hardware and Software Compatibility](https://support.parsec.app/hc/en-us/articles/32381568346644-Hardware-and-Software-Compatibility), [Install Parsec App on Linux](https://support.parsec.app/hc/en-us/articles/32381552552340-Install-Parsec-App-on-Linux).
+
+DT1's actual GPU/driver, capture interface and hardware encoding capability have not been established by this review. Do not assume NVENC, a supported Intel encoder, a virtual display driver, or a target resolution/frame rate. First inventory the actual host, then benchmark an explicitly selected lawful adapter on both ends. A software fallback requires its own measured CPU budget. Agent job placement and remote desktop streaming are separate capabilities; connecting one does not combine GPU/RAM or authorize the other.
+
+The acceptance work is recorded under P01–P05 in [REFERENCE_ARCHITECTURE_BACKLOG.md](REFERENCE_ARCHITECTURE_BACKLOG.md). No adapter installation, account connection, device change or production implementation was performed for this review.

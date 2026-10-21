@@ -471,6 +471,12 @@ def create_task(request: TaskRequest):
     if request.metadata.get("actor_id", "owner") != "owner" or request.metadata.get("actor", "owner") != "owner":
         raise HTTPException(status_code=403, detail="Task actor must be the authenticated owner")
     metadata = dict(request.metadata)
+    if 'project_test' in metadata:
+        from backend.runtime.project_tests import validate_metadata
+        try:
+            validate_metadata(metadata)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(400, str(exc)) from exc
     metadata["actor_id"] = "owner"
     metadata["actor"] = "owner"
     attachments = metadata.get('attachment_ids', [])
@@ -489,6 +495,49 @@ def create_task(request: TaskRequest):
 @router.get("/tasks")
 def list_tasks(task_status: str | None = Query(default=None, alias="status")):
     return engine.tasks.list(task_status)
+
+
+@router.get('/tasks/{task_id}/build-artifacts/{name:path}')
+def download_build_artifact(task_id: str, name: str):
+    import base64
+    from pathlib import PurePosixPath
+    from urllib.parse import quote
+    from backend.runtime.remote_build import TOOL, relative_name, verify
+    task=engine.tasks.get(task_id)
+    if not task or task.get('metadata',{}).get('tool')!=TOOL:
+        raise HTTPException(404,'Build artifact not found')
+    result=task.get('result') or {}
+    if (task.get('status','').lower()!='completed' or result.get('verification',{}).get('state')!='VERIFIED'
+            or not result.get('executed_by') or result['executed_by']!=task.get('assigned_knight')):
+        raise HTTPException(409,'Build completion has not been verified')
+    try:
+        relative_name(name)
+        outcome=result['output']
+        if outcome.get('kind')!='native_tool' or outcome.get('tool')!=TOOL:
+            raise ValueError('Mismatched build outcome')
+        output=outcome['output']
+        verify(task,output)  # Recheck source/lease binding and every actual artifact byte.
+    except (ValueError,TypeError,KeyError,AttributeError) as error:
+        raise HTTPException(409,'Build evidence changed or could not be verified') from error
+    if name not in output['artifacts']:
+        raise HTTPException(404,'Build artifact not found')
+    content=base64.b64decode(output['artifacts'][name]['base64'],validate=True)
+    return Response(content,media_type='application/octet-stream',headers={
+        'Content-Disposition':"attachment; filename*=UTF-8''"+quote(PurePosixPath(name).name,safe=''),
+        'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
+        'X-Artifact-SHA256':output['artifacts'][name]['sha256']})
+
+@router.get('/tasks/{task_id}/test-report')
+def project_test_report(task_id: str):
+    task = engine.tasks.get(task_id)
+    if task is None or 'project_test' not in task.get('metadata', {}):
+        raise HTTPException(404, 'Project test task not found')
+    from backend.runtime.project_tests import report
+    try:
+        return report(task)
+    except (ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(409, 'Persisted project test descriptor is invalid') from exc
+
 
 @router.get("/tasks/{task_id}")
 def get_task(task_id: str):
@@ -847,12 +896,39 @@ def handle_cluster_rpc(request: RPCMessageRequest):
     if payload.get("node_id", sender_id) != sender_id:
         raise HTTPException(status_code=403, detail="RPC payload identity differs from authenticated sender")
 
-    if msg_type == "heartbeat":
+    if msg_type == 'knight_management':
+        from backend.runtime.knight_management import dispatch
+        try:
+            result = dispatch(sender_id, payload.get('operation'), payload.get('arguments', {}))
+        except PermissionError as error:
+            raise HTTPException(403, str(error)) from error
+        except (ValueError, KeyError) as error:
+            raise HTTPException(400, str(error)) from error
+        return transport.create_signed_message(sender_id, 'knight_management_result', {
+            'request_id': msg_dict['msg_id'], 'operation': payload.get('operation'), 'result': result})
+
+    if msg_type == 'vault_sync_push':
+        from backend.memory.vault_sync_api import receive_verified
+        return receive_verified(sender_id,payload,transport)
+
+    if msg_type in {"heartbeat", "inventory_snapshot"}:
         metrics = payload.get('load_metrics', {})
         if not isinstance(metrics, dict) or any(type(metrics.get(key)) not in (int, float) or not 0 <= metrics[key] <= 100 for key in metrics if key in {'cpu_percent', 'memory_percent'}):
             raise HTTPException(400, 'Invalid load measurements')
-        res = heartbeat_manager.ping(sender_id, load_metrics={key: metrics[key] for key in ('cpu_percent', 'memory_percent') if key in metrics})
-        return {"status": "ok", "ping": res}
+        try:
+            measured={key: metrics[key] for key in ('cpu_percent', 'memory_percent') if key in metrics}
+            if 'power' in metrics:
+                from backend.cluster.power_policy import validate_power
+                measured['power']=validate_power(metrics['power'])
+            res = heartbeat_manager.ping(sender_id, load_metrics=measured, apprentice_inventory=payload.get('apprentice_inventory'))
+        except ValueError as error: raise HTTPException(400, str(error)) from error
+        if not res.get('success'): raise HTTPException(403, res.get('error', 'Peer report denied'))
+        result = {"status": "ok", "ping": res}
+        if msg_type == 'heartbeat':
+            from backend.cluster.apprentice_inventory import local_inventory
+            from backend.cluster.local_load import local_load_metrics
+            result['inventory_proof'] = transport.create_signed_message(sender_id, 'inventory_snapshot', {'node_id': k_identity.node_id, 'apprentice_inventory': local_inventory(), 'load_metrics': local_load_metrics()})
+        return result
 
     elif msg_type == 'group_task_assign':
         from backend.cluster.hierarchy_api import hierarchy
@@ -868,12 +944,22 @@ def handle_cluster_rpc(request: RPCMessageRequest):
         return {'status': 'ok', 'task_id': updated['id']}
 
     elif msg_type == "task_poll":
+        supported_tools = payload.get("supported_tools")
+        if supported_tools is not None:
+            analysis_tools = {"text.analyze@1.0.0", "code.python.analyze@1.0.0"}
+            if (not isinstance(supported_tools, list) or not supported_tools
+                    or len(supported_tools) > len(analysis_tools)
+                    or any(not isinstance(tool, str) or tool not in analysis_tools for tool in supported_tools)
+                    or len(set(supported_tools)) != len(supported_tools)):
+                raise HTTPException(400, "supported_tools must list distinct native analysis tools")
         if engine.execution_policy.get()["level"] == 0:
             return {"status": "ok", "tasks": []}
         tasks = engine.tasks.list("queued")
         assigned_tasks = []
         for t in tasks:
             meta = t.get("metadata", {})
+            if supported_tools is not None and meta.get("tool") not in supported_tools:
+                continue  # Filter before claiming: unsupported tasks retain their original queue/lease state.
             assigned_k = t.get("assigned_knight") or meta.get("assigned_knight")
             is_remote = meta.get("execution_target") == "remote" or (assigned_k and assigned_k not in engine.swarm.registry._knights)
             required_capability = meta.get("capability", "compute")

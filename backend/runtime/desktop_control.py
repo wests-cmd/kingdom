@@ -5,6 +5,12 @@ import os
 def validate_input(params):
     action=params.get('action');title=params.get('window_title')
     if not isinstance(title,str) or not title.strip() or len(title)>500: raise ValueError('Supply the exact foreground window title')
+    if params.get('window_handle') is not None and (type(params['window_handle']) is not int or params['window_handle']<=0):
+        raise ValueError('Use the observed window identity')
+    if params.get('observed_at') is not None:
+        import time
+        if type(params['observed_at']) not in (int,float) or not 0<=time.time()-params['observed_at']<=30:
+            raise ValueError('Desktop observation expired; no input was sent')
     if action=='click':
         if any(type(params.get(name)) is not int or params[name]<0 for name in ('x','y')): raise ValueError('Click coordinates must be nonnegative integers')
     elif action=='type_text':
@@ -36,6 +42,8 @@ def desktop_input(params):
     user32.GetWindowTextW(window,title,501)
     if not window or title.value!=params['window_title']:
         raise PermissionError('Foreground window changed or does not match the approved title; no input was sent')
+    if params.get('window_handle') is not None and window!=params['window_handle']:
+        raise PermissionError('Foreground window identity changed; no input was sent')
     def still_focused():
         if user32.GetForegroundWindow()!=window: raise PermissionError('Foreground window changed; input stopped')
     action=params['action']

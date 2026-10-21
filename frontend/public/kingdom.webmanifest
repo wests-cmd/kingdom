@@ -1,0 +1,12 @@
+{
+  "id": "/",
+  "name": "Kingdom",
+  "short_name": "Kingdom",
+  "description": "Adaptive AI harness for your approved models, agents and computer cluster.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#111827",
+  "icons": [{"src":"/branding/kingdom-icon.png","sizes":"512x512","type":"image/png","purpose":"any"}]
+}

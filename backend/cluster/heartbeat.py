@@ -10,26 +10,37 @@ class HeartbeatManager:
     def __init__(self, timeout_seconds: float = DEFAULT_TIMEOUT_THRESHOLD_SECONDS):
         self.timeout_seconds = timeout_seconds
 
-    def ping(self, node_id: str, health: str = "healthy", load_metrics: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def ping(self, node_id: str, health: str = "healthy", load_metrics: Optional[Dict[str, Any]] = None, apprentice_inventory=None) -> Dict[str, Any]:
         node = node_registry.get_node(node_id)
         if not node:
             return {"success": False, "error": f"Node {node_id} not found in cluster registry."}
 
-        state = node.status
-        state_val = state.value if isinstance(state, NodeState) else str(state)
+        state_val = node.node_state
         if state_val in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value]:
             return {"success": False, "error": f"Node {node_id} is in invalid state {state_val}."}
 
         now = time.time()
+        if apprentice_inventory is not None:
+            if state_val not in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}:
+                return {'success': False, 'error': 'Apprentice inventories require an approved peer'}
+            from backend.cluster.apprentice_inventory import validate_inventory
+            report = validate_inventory(apprentice_inventory)
+            node.connection_metadata = {**(node.connection_metadata or {}), 'apprentice_inventory': {'received_at': now, 'report': report}}
         node.last_heartbeat = now
         node.health = health
-        if load_metrics:
+        if load_metrics is not None:
             meta = node.connection_metadata or {}
+            # A new signed report without usable measurements cannot refresh
+            # the heartbeat while retaining a formerly idle load sample.
             meta["load_metrics"] = load_metrics
             node.connection_metadata = meta
 
         # Transition from DISCONNECTED / RECONNECTING back to CONNECTED
         if state_val in [NodeState.DISCONNECTED.value, NodeState.RECONNECTING.value, NodeState.APPROVED.value]:
+            # update_node_state reloads the persisted node. Persist this ping
+            # first, or reconnect restores an old timestamp and immediately
+            # expires a freshly issued task lease.
+            node_registry.repo.save(node.to_dict())
             node_registry.update_node_state(node_id, NodeState.CONNECTED)
         else:
             node_registry.repo.save(node.to_dict())
@@ -43,7 +54,7 @@ class HeartbeatManager:
         return {
             "success": True,
             "node_id": node_id,
-            "node_state": state_val,
+            "node_state": node_registry.get_node(node_id).node_state,
             "timestamp": now
         }
 
@@ -55,8 +66,7 @@ class HeartbeatManager:
         healthy_count = 0
 
         for node in all_nodes:
-            state = node.status
-            state_val = state.value if isinstance(state, NodeState) else str(state)
+            state_val = node.node_state
             if state_val in [NodeState.CONNECTED.value, NodeState.APPROVED.value]:
                 elapsed = now - (node.last_heartbeat or 0)
                 if elapsed > self.timeout_seconds:

@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from "react"
 import useLiveData from "../hooks/useLiveData"
 import SwarmGraph from "../components/graphs/SwarmGraph"
+import ComputerIdentity from "../components/ComputerIdentity"
+import OrchestrationBoard from '../components/OrchestrationBoard'
+import ComputerTopology from '../components/ComputerTopology'
 
-export default function Swarm() {
+export default function Swarm({interfaceMode='easy'}) {
+  const [view,setView]=useState(interfaceMode==='easy'?'network':'activity')
+  const {data: hierarchy, error: hierarchyError} = useLiveData("/hierarchy",10000)
   const {data,error} = useLiveData("/knights",4000)
   const knights = data?.knights || (Array.isArray(data) ? data : [])
   const loading = !data
@@ -10,15 +15,19 @@ export default function Swarm() {
   useEffect(() => {setSelectedKnight(previous => knights.find(knight => knight.id === previous?.id) || knights[0] || null)},[data])
 
   return (
-    <div>
+    <div style={{minWidth:0,overflowWrap:"anywhere"}}>
+      <ComputerIdentity data={hierarchy} error={hierarchyError}/>
+      <div className="action-row" aria-label="Swarm views"><button aria-pressed={view==='activity'} onClick={()=>setView('activity')}>Activity</button><button aria-pressed={view==='network'} onClick={()=>setView('network')}>Network map</button></div>
+      {view==='network'?<ComputerTopology hierarchy={hierarchy} advanced={interfaceMode==='advanced'}/>:<>
+      <OrchestrationBoard/>
       <h2>Knight Apprentices</h2>
       {error && <p role="alert">{error}</p>}
 
       <div className="worker-inspector-layout">
         <div>
-          <h4>Agents on this computer ({knights.length})</h4>
-          {loading ? <p style={{ color: "var(--text-muted)" }}>Loading node cluster...</p> : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "12px", marginTop: "10px" }}>
+          <h4>Agents on {hierarchy?.commander?.computer || "the controller computer"} ({knights.length})</h4>
+          {loading ? <p style={{ color: "var(--text-muted)" }}>Loading software agents…</p> : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 180px), 1fr))", gap: "12px", marginTop: "10px" }}>
               {knights.map(k => (
                 <button
                   key={k.id}
@@ -48,7 +57,7 @@ export default function Swarm() {
         </div>
 
         {/* Node Detail Drawer Panel */}
-        <div className="card" style={{ height: "fit-content" }}>
+        <div className="card" style={{ height: "fit-content", minWidth:0, overflowWrap:"anywhere" }}>
           <div className="card-title">Worker details</div>
           {selectedKnight ? (
             <div>
@@ -57,7 +66,8 @@ export default function Swarm() {
                 <div><strong>Role:</strong> {selectedKnight.role}</div>
                 <div><strong>Status:</strong> {selectedKnight.status}</div>
                 <div><strong>Health:</strong> {selectedKnight.health}</div>
-                <div><strong>Execution:</strong> {selectedKnight.is_local ? "Local Process" : "Remote Node"}</div>
+                <div><strong>Entity:</strong> Knight Apprentice (software agent)</div>
+                <div><strong>Host computer:</strong> {hierarchy?.apprentices?.find(agent => agent.id === selectedKnight.id)?.host || "Not reported"}</div>
                 <div><strong>Current Task:</strong> {selectedKnight.activity || "Status unavailable"}</div>
                 <div><strong>Current permissions:</strong></div>
                 <ul style={{ paddingLeft: "16px", fontSize: "12px", color: "var(--text-muted)" }}>
@@ -67,10 +77,11 @@ export default function Swarm() {
               </div>
             </div>
           ) : (
-            <p style={{ color: "var(--text-muted)" }}>Select a node to inspect telemetry.</p>
+            <p style={{ color: "var(--text-muted)" }}>Select an agent to inspect its reported activity.</p>
           )}
         </div>
       </div>
+      </>}
     </div>
   )
 }

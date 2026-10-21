@@ -36,7 +36,7 @@ def test_passcode_lifecycle_hash_and_throttling(client):
 def test_remote_rebinding_and_cross_origin_rejected(client):
     for headers in [{'host':'attacker.example'},{'origin':'https://attacker.example'},{'X-Kingdom-Request':''}]:
         assert client.post('/auth/local/session',json={},headers=headers).status_code==403
-    with TestClient(client.app,base_url='http://127.0.0.1',client=('100.94.65.110',1234)) as remote:
+    with TestClient(client.app,base_url='http://127.0.0.1',client=('100.64.0.2',1234)) as remote:
         assert remote.post('/auth/local/session',json={},headers={'X-Kingdom-Request':'1'}).status_code==403
 
 def test_passcode_required_and_rate_limited(client):

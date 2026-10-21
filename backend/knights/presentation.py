@@ -11,6 +11,8 @@ CAPABILITIES = {"model.inference": "Model text permission", "memory.read": "Read
 class KnightSummary(BaseModel):
     id: str
     name: str
+    public_id: str
+    entity_type: Literal["apprentice"] = "apprentice"
     display_name: str
     role: str
     is_local: bool
@@ -34,7 +36,8 @@ def knight_summary(role, knight, active, completed, security=None):
     caps = [key for key in CAPABILITIES if available and all(
         CapabilityEvaluator.evaluate(layer.nodes.get_node_capabilities(role), key) for layer in layers)]
     state = "offline" if not available or health == "unhealthy" else "unknown" if health == "unknown" else "working" if active else "ready"
-    return KnightSummary(id=f"knight-{role}", name=role, display_name=ROLES[role], role=role,
+    return KnightSummary(id=f"knight-{role}", name=role, public_id=f"Apprentices-{role}",
+                         display_name=f"Apprentices-{role}", role=role,
                          is_local=True, status=state, health=health,
                          activity="Worker unavailable" if state == "offline" else "Health unavailable" if state == "unknown" else "Processing a task" if active else "Available for tasks",
                          capabilities=caps, active=max(0, active),

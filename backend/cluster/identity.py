@@ -102,7 +102,8 @@ class KingdomIdentity(BaseNodeIdentity):
         path = filepath or os.path.join(IDENTITY_DIR, "kingdom_identity.json")
         identity = cls.load_from_file(path)
         if identity is None:
-            identity = cls()
+            from uuid import uuid4
+            identity = cls(kingdom_id="KG-" + uuid4().hex)
             identity.save_to_file(path)
         return identity
 

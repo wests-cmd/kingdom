@@ -218,6 +218,35 @@ input[type=radio],input[type=checkbox] {
   flex:1;
   min-width:0
 }
+.interface-mode-controls { min-width:0; margin-left:auto; }
+.interface-mode-switch { display:flex; flex-wrap:wrap; gap:4px; border:0; margin:0; padding:0; }
+.interface-mode-switch legend { font-size:10px; color:var(--text-muted); padding:0; }
+.interface-mode-switch button { padding:4px 10px; }
+.interface-mode-switch button[aria-pressed=true] { background:var(--accent-primary); color:var(--accent-on-primary); border-color:var(--accent-readable); }
+.layout[data-interface-mode=easy] .content { max-width:1200px; }
+.layout[data-interface-mode=easy] .sidebar-item { padding-top:12px; padding-bottom:12px; }
+.layout[data-interface-mode=easy] .nav-group-title { text-transform:none; letter-spacing:0; font-size:12px; }
+.content :is(section,article,fieldset,.panel,.card,.worker-inspector-layout)>* { min-width:0; }
+.content fieldset { min-width:0; max-width:100%; }
+.content :is(input,select,textarea,button) { max-width:100%; }
+.topbar { min-height:64px; height:auto; flex-wrap:wrap; padding-top:10px; padding-bottom:10px; }
+@media(max-width:900px) {
+  .layout:is([data-page=dashboard],[data-page=swarm],[data-page=nodes]) .content [style*="grid-template-columns"] { grid-template-columns:minmax(0,1fr)!important; }
+  .layout:is([data-page=dashboard],[data-page=swarm],[data-page=nodes]) .content [style*="display: flex"] { flex-wrap:wrap; gap:10px; }
+  .layout:is([data-page=dashboard],[data-page=swarm],[data-page=nodes]) .content [style*="display: flex"]>* { min-width:0; max-width:100%; }
+  .worker-inspector-layout { grid-template-columns:minmax(0,1fr); }
+}
+@media(max-width:650px) {
+  .layout .topbar { height:auto; min-height:64px; padding:12px 18px; }
+  .interface-mode-controls { margin-left:0; }
+  .layout .sidebar nav,.layout .sidebar-nav { flex-wrap:wrap; overflow:visible; }
+  .layout .sidebar-nav { gap:4px; }
+  .layout .sidebar-item { white-space:normal; text-align:left; }
+  .layout .content { padding:18px 12px; }
+  .layout:is([data-page=dashboard],[data-page=swarm],[data-page=nodes]) .content>div[style*="padding: 24px"] { padding:0!important; }
+  .layout .worker-row { grid-template-columns:8px minmax(0,1fr)!important; }
+  .layout .worker-row>:nth-child(n+3) { grid-column:2; }
+}
 .topbar {
   height:64px;
   border-bottom:1px solid var(--surface-border);
@@ -871,4 +900,57 @@ input[type=color] { width:56px; height:40px; padding:4px!important; cursor:point
 :root[data-large-display=true] .main-container { margin-left:0; width:100%; min-width:0; }
 :root[data-large-display=true] .main-container::before { left:0; }
 :root[data-large-display=true] :is(.appearance-fields,.grid-cards,.grid-2,.worker-inspector-layout) { grid-template-columns:1fr; }
+
+/* Worker cards respond to their available space, including half-width windows. */
+.live-workers { container-type:inline-size; }
+.live-workers .worker-row {
+  grid-template-columns:8px minmax(0,1fr) minmax(0,auto);
+  gap:8px 12px;
+  align-items:start;
+}
+.live-workers .worker-row>* { min-width:0; overflow-wrap:anywhere; }
+.worker-identity { display:grid; gap:5px; }
+.worker-identity small { color:var(--text-muted); }
+.live-workers .worker-activity { grid-column:2/-1; margin:0; line-height:1.6; }
+.live-workers .status-chip { white-space:normal; max-width:100%; }
+.orchestration-board { min-width:0; }
+.orchestration-board .section-heading { flex-wrap:wrap; align-items:flex-start; }
+.orchestration-counts { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr)); gap:12px; margin:18px 0; }
+.orchestration-counts>div { display:grid; gap:4px; border:1px solid var(--surface-border); border-radius:8px; padding:14px; min-width:0; }
+.orchestration-counts strong { font-size:28px; }
+.orchestration-counts small { color:var(--text-muted); }
+.orchestration-flow { display:flex; flex-wrap:wrap; gap:8px; list-style:none; padding:0; margin:16px 0; }
+.orchestration-flow li { display:flex; align-items:center; gap:8px; font-size:12px; line-height:1.6; }
+.orchestration-flow li:not(:last-child)::after { content:'→'; color:var(--accent-readable); }
+.orchestration-filters { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; }
+.orchestration-filters button[aria-pressed=true] { border-color:var(--accent-readable); }
+.orchestration-jobs { display:grid; gap:12px; max-height:620px; overflow:auto; padding-right:6px; scroll-padding:12px; }
+.orchestration-job { border:1px solid var(--surface-border); border-radius:8px; padding:16px; min-width:0; overflow-wrap:anywhere; }
+.orchestration-job p { line-height:1.6; margin:10px 0; }
+.job-heading { display:flex; flex-wrap:wrap; align-items:start; justify-content:space-between; gap:8px; }
+.job-facts { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr)); gap:12px; margin:12px 0; }
+.job-facts>div { min-width:0; }
+.job-facts dt { font-size:11px; color:var(--text-muted); margin-bottom:4px; }
+.job-facts dd { margin:0; font-size:13px; overflow-wrap:anywhere; }
+.job-blocker { border-left:3px solid var(--accent-orange); padding-left:10px; }
+.orchestration-job details { margin-top:12px; }
+@container(max-width:380px) {
+ .live-workers .worker-row { grid-template-columns:8px minmax(0,1fr); }
+ .live-workers .worker-row .status-chip { grid-column:2; justify-self:start; }
+}
 :root[data-large-display=true] .topbar { flex-wrap:wrap; height:auto; gap:12px; }
+
+/* Final structural overrides also cover styles defined earlier in this sheet. */
+.topbar {height:auto; min-height:64px; flex-wrap:wrap;}
+.grid-cards {grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));}
+.content {min-width:0;}
+.content :is(pre,code,h1,h2,h3,p,span) {overflow-wrap:anywhere;}
+.content textarea {box-sizing:border-box; width:100%;}
+.sidebar-toggle { width:100%; margin-bottom:12px; white-space:normal; }
+.sidebar.is-collapsed { width:76px; padding:12px 6px; }
+.sidebar.is-collapsed .sidebar-logo { padding:8px 10px; }
+.sidebar [hidden] { display:none!important; }
+.topology-computers { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:12px; }
+.topology-computers summary { cursor:pointer; overflow-wrap:anywhere; }
+.topology-computers ul { padding-left:20px; max-height:280px; overflow:auto; }
+.cluster-topology svg { width:100%; height:auto; max-height:320px; }

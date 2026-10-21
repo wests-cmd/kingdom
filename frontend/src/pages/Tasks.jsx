@@ -9,6 +9,7 @@ import TaskResult, {DebugDetails, scrubText} from '../components/common/TaskResu
 import {workerLabel} from '../components/common/presentation'
 import MissionEditor from '../components/MissionEditor'
 import DesktopActions from '../components/DesktopActions'
+import ParallelChats from '../components/ParallelChats'
 
 export default function Tasks() {
 
@@ -29,6 +30,7 @@ export default function Tasks() {
   const [attachments,setAttachments] = useState([]), [profiles,setProfiles] = useState([]), [modelProfile,setModelProfile] = useState('')
 
   const [offload,setOffload] = useState(false), [mission,setMission] = useState(null), [planText,setPlanText] = useState('')
+  const [importPlan,setImportPlan] = useState('')
 
   const {data:missions,refresh:refreshMissions} = useLiveData('/missions',4000)
 
@@ -140,6 +142,7 @@ export default function Tasks() {
 
       {loadError && <p role="alert">{loadError}</p>}
 
+      <ParallelChats/>
       <form className="task-form" onSubmit={handleCreateTask} style={{ marginBottom: "24px" }}>
 
         <label>Task <select value={taskMode} onChange={e => setTaskMode(e.target.value)}><option value="mission">Build a complete mission (review first)</option><option value="text.analyze@1.0.0">Analyze text</option><option value="code.python.analyze@1.0.0">Check Python syntax</option><option value="">Ask your configured AI</option></select></label>
@@ -168,7 +171,7 @@ export default function Tasks() {
 
         {attachments.map(item=><p key={item.id}>{item.filename} · {Math.round(item.bytes/1024)} KB · stored {Math.round(item.stored_bytes/1024)} KB <button type="button" onClick={()=>setAttachments(old=>old.filter(x=>x.id!==item.id))}>Remove from task</button>{item.kind==='image' && ' · Select a vision model to inspect its contents.'}{item.kind==='pdf'&&!item.text_extracted&&' · No text detected; OCR has not been performed.'}</p>)}
 
-        <label>Model <select value={modelProfile} onChange={e=>setModelProfile(e.target.value)}><option value="">Installation default</option>{profiles.map(p=><option key={p.id} value={p.id}>{p.id} · {p.model}{p.vision?' · vision':''}</option>)}</select></label>
+        <label>Model <select value={modelProfile} onChange={e=>setModelProfile(e.target.value)}><option value="">Automatic · choose an available model for this request</option>{[...new Set(profiles.map(p=>p.pool_group).filter(Boolean))].map(group=><option key={`pool:${group}`} value={`pool:${group}`}>Pool {group} · choose available computer</option>)}{profiles.map(p=><option key={p.id} value={p.id}>{p.id} · {p.model}{p.vision?' · vision':''}</option>)}</select></label>
 
         <label><input type="checkbox" checked={offload} onChange={e=>setOffload(e.target.checked)}/>At level 5, offload supported analysis to a healthy paired computer</label>
 
@@ -177,11 +180,12 @@ export default function Tasks() {
       </form>
 
       {error && <p role="alert">{error}</p>}
+      <details><summary>Import a prepared mission</summary><p>Use an existing plan without spending a model request on planning. Import creates a draft; review and approve it before execution.</p><textarea aria-label="Prepared mission JSON" rows={10} value={importPlan} onChange={e=>setImportPlan(e.target.value)} style={{width:'100%',minWidth:0}}/><button disabled={submitting||!importPlan.trim()} onClick={async()=>{setSubmitting(true);setError('');try{const parsed=JSON.parse(importPlan);const {data}=await api.post('/missions',parsed.plan?parsed:{plan:parsed});setMission(data);setPlanText(JSON.stringify(data.plan,null,2));setImportPlan('');refreshMissions()}catch(e){setError(e.response?.data?.detail||'Provide a valid mission plan.')}finally{setSubmitting(false)}}}>Import as draft</button></details>
       <DesktopActions onQueued={loadTasks}/>
 
       {mission && <section className="panel"><h3>Review and edit the mission</h3><p>Add or remove steps, requirements and deliverables before approving. No plan executes just because it was generated.</p><MissionEditor value={planText} onChange={setPlanText}/><details><summary>Advanced plan format</summary><textarea aria-label="Mission plan" rows={16} style={{width:'100%',minHeight:300}} value={planText} onChange={e=>setPlanText(e.target.value)}/></details><button disabled={submitting} onClick={savePlan}>Save edited plan</button></section>}
 
-      <section><h3>Missions</h3>{(missions||[]).map(item=><article className="task-record" key={item.id}><h4>{item.plan.title}</h4><p>{item.status.replaceAll('_',' ')} · revision {item.version}</p><p>Deliverables: {item.plan.deliverables.join('; ')}</p>{item.plan.missing_requirements.map((r,i)=><p role="status" key={i}>Needed: {r}</p>)}<ol>{item.plan.steps.map(step=><li key={step.id}>{step.title} · {step.kind} · {item.steps[step.id]?.status||'not started'}<small> — {step.acceptance}</small></li>)}</ol>{item.failure&&<p role="alert">{item.failure}</p>}{item.status==='draft'&&<button disabled={submitting||item.plan.missing_requirements.length>0} onClick={()=>missionAction(item,'approve')}>Approve this plan and start</button>}{['approved','running'].includes(item.status)&&<><button disabled={submitting} onClick={()=>missionAction(item,'advance')}>Continue next ready step</button><button disabled={submitting} onClick={()=>missionAction(item,'cancel')}>Cancel mission</button></>}{item.report?.length>0&&<details><summary>Completion report and why</summary>{item.report.map(r=><p key={r.task_id}>{r.step}: {r.why} · evidence task {r.task_id}</p>)}</details>}</article>)}</section>
+      <section><h3>Missions</h3>{(missions||[]).map(item=><article className="task-record" key={item.id}><h4>{item.plan.title}</h4><p>{item.status.replaceAll('_',' ')} · revision {item.version}</p><p>Deliverables: {item.plan.deliverables.join('; ')}</p>{item.plan.missing_requirements.map((r,i)=><p role="status" key={i}>Needed: {r}</p>)}<ol>{item.plan.steps.map(step=><li key={step.id}>{step.title} · {step.kind} · {item.steps[step.id]?.status||'not started'}<small> — {step.acceptance}</small></li>)}</ol>{item.placement_wait&&<p role="status">{item.placement_wait.reason} · {item.placement_wait.computer_id}</p>}{item.failure&&<p role="alert">{item.failure}</p>}{item.status==='draft'&&<button disabled={submitting||item.plan.missing_requirements.length>0} onClick={()=>missionAction(item,'approve')}>Approve this plan and start</button>}{['approved','running'].includes(item.status)&&<><button disabled={submitting} onClick={()=>missionAction(item,'advance')}>Continue next ready step</button><button disabled={submitting} onClick={()=>missionAction(item,'cancel')}>Cancel mission</button></>}{item.report?.length>0&&<details><summary>Completion report and why</summary>{item.report.map(r=><p key={r.task_id}>{r.step}: {r.why} · evidence task {r.task_id}</p>)}</details>}</article>)}</section>
 
       <h4>Active & Historical Tasks ({tasks.length})</h4>
 
@@ -197,7 +201,7 @@ export default function Tasks() {
 
               <div className="task-meta"><span className="status-chip">{t.status}</span><span>{new Date(t.created_at).toLocaleString()}</span></div>
 
-              <p className="task-input">{t.metadata?.tool === 'provider.metadata@1.0.0' ? 'Reviewed provider metadata test' : t.metadata?.tool === 'code.python.analyze@1.0.0' ? 'Python syntax analysis' : t.metadata?.tool === 'text.analyze@1.0.0' ? 'Text analysis' : 'Configured model task'}</p>
+              <p className="task-input">{t.metadata?.tool === 'build.run@1.0.0' ? 'Reviewed remote build' : t.metadata?.tool === 'provider.metadata@1.0.0' ? 'Reviewed provider metadata test' : t.metadata?.tool === 'code.python.analyze@1.0.0' ? 'Python syntax analysis' : t.metadata?.tool === 'text.analyze@1.0.0' ? 'Text analysis' : 'Configured model task'}</p>
 
               <details><summary>View supplied input</summary><pre>{scrubText(t.prompt || t.input?.prompt || '').slice(0,10000)}</pre></details>
 

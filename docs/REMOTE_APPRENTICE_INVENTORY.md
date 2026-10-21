@@ -1,0 +1,11 @@
+# Remote Apprentice inventories
+
+Counts come from live local registration plus current, identity-attested reports from directly paired Kingdoms. A report lists only that Kingdom's own local workers. Never forward another Kingdom's reported workers as local, or count the same peer twice. IDs are scoped as `kingdom_id/apprentice_id`; repeated role names on different Kingdoms are distinct workers.
+
+Heartbeat proofs include a versioned, bounded Apprentice inventory. The receiver verifies the existing signature, target, replay protection and peer approval before storing allowlisted worker fields and its own receipt timestamp. Responses contain a separately signed inventory snapshot for the sender to accept. Configured direct reconnection consumes that proof; a trusted owner SSH bridge can relay the unchanged proofs when direct networking is unavailable.
+
+Remote reports expire after 45 seconds and also require a fresh heartbeat and CONNECTED trust state. Missing, invalid, stale, disconnected and revoked reports never inflate the current total. An explicit empty report is a known zero; no report is unknown, and the dashboard labels its total partial. Inventory metadata grants no capability, changes no approval policy and contains no prompts, tokens, arbitrary files or nested inventories. A signature attests the peer's claim; it does not prove model inference or a successful repair.
+
+The UI shows local and current remote contributions, per-Kingdom report state and the reported worker names. Both hierarchy and orchestration views use the same aggregation. Older peers without this protocol remain visibly incomplete until updated.
+
+For an owner-operated SSH relay, `scripts/sync-peer-inventories.py --config PRIVATE_JSON --once` performs one exchange. `--loop --interval 15` keeps reports current without model inference. The private config supplies two hosts, each with `ssh` argv, `python`, `cwd`, `port` and a host-local `token_file`, plus a local `state_file`. Tokens are read only on their own hosts. Use strict SSH host-key verification. Only use this with owner-authorized hosts. The relay stops when its host stops; stale reports then age out normally. This is a telemetry bridge, not a coding or task-execution loop.

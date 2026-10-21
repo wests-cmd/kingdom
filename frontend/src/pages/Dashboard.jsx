@@ -3,8 +3,12 @@ import api from "../api"
 import SwarmGraph from "../components/graphs/SwarmGraph"
 import ApprovalsView from "../components/security/ApprovalsView"
 import Tasks from "./Tasks"
+import useLiveData from "../hooks/useLiveData"
+import ComputerIdentity from "../components/ComputerIdentity"
+import OrchestrationBoard from '../components/OrchestrationBoard'
 
 export default function Dashboard() {
+  const {data: hierarchy, error: hierarchyError} = useLiveData("/hierarchy", 10000)
   const [status, setStatus] = useState({})
   const [knights, setKnights] = useState([])
   const [tasks, setTasks] = useState([])
@@ -41,8 +45,10 @@ export default function Dashboard() {
   const handleStop = () => api.post("/stop").then(fetchDashboardData)
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", padding: "8px 16px", background: "var(--input-bg)", border: "1px solid var(--surface-border)", borderRadius: "6px" }}>
+    <div style={{minWidth:0, overflowWrap:"anywhere"}}>
+      <ComputerIdentity data={hierarchy} error={hierarchyError}/>
+      <OrchestrationBoard/>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", padding: "8px 16px", background: "var(--input-bg)", border: "1px solid var(--surface-border)", borderRadius: "6px" }}>
         <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
           Runtime Health Stream: <span style={{ fontWeight: "700", color: connectionState === "LIVE" ? "#4ade80" : "#f87171" }}>{connectionState}</span>
         </div>
@@ -67,8 +73,8 @@ export default function Dashboard() {
         </div>
 
         <div className="card">
-          <div className="card-title">Knight Apprentices</div>
-          <div className="card-value">{knights.length}</div>
+          <div className="card-title">Local Apprentices</div>
+          <div className="card-value">{hierarchy ? hierarchy.apprentices.length : '—'}</div>
         </div>
 
         <div className="card">
@@ -84,7 +90,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div style={{ marginBottom: "20px", display: "flex", gap: "12px" }}>
+      <div style={{ marginBottom: "20px", display: "flex", flexWrap: "wrap", gap: "12px" }}>
         <button className="primary-red" onClick={handleStart} disabled={status.running}>Start Runtime</button>
         <button onClick={handleStop} disabled={!status.running}>Stop Runtime</button>
       </div>

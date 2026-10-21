@@ -8,10 +8,10 @@ Kingdom has five active autonomy levels plus Pause:
 | 1 | Built-in text and syntax analysis; other work needs approval. |
 | 2 | Exact, single-use approval for every task. |
 | 3 | Tasks execute inside existing grants. High-risk operations require approval. |
-| 4 | Approved missions advance automatically with 20 steps and two safe retries/explicit source repairs. |
-| 5 | Up to 50 steps and three retries/repairs; supported analysis can use healthy approved remote computers. |
+| 4 | Approved missions advance automatically with 40 steps and two safe retries/explicit source repairs. |
+| 5 | Up to 100 steps and three retries/repairs; supported analysis can use healthy approved remote computers. |
 
-Level 5 queues up to three independent ready steps. Local execution remains sequential; paired computers may execute their leased analysis independently. Granting a level never grants tool capabilities or bypasses high-risk approval.
+Level 5 queues up to three independent ready steps. Local execution remains sequential; paired computers may execute their leased analysis independently. Level 5 selection provides standing authorization for already-granted high-risk tools; lower levels retain individual approvals. No level grants tool capabilities or bypasses OS permissions.
 
 Use Routing to save and test a model connection. Use Governance to grant specific computer tools to an installed Apprentice. Use Tasks to enter the objective, attach references, generate and edit a plan, and approve its exact revision. The runtime must be started to process tasks. Commands and Windows desktop input appear in the approval queue with their exact parameters.
 

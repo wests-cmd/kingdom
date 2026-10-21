@@ -11,6 +11,11 @@ from backend.security.zero_trust import ZeroTrust
 from backend.swarm.workload_balancer import WorkloadBalancer
 
 
+def execution_request(task, prompt):
+    """Bind a local swarm operation to its parent and exact subtask prompt."""
+    return {**task, 'prompt': prompt, 'id': task['id'] + ':' + hashlib.sha256(prompt.encode()).hexdigest()}
+
+
 class SwarmManager:
     def __init__(self, event_publisher, security: ZeroTrust | None = None):
         self._publish = event_publisher
@@ -75,7 +80,7 @@ class SwarmManager:
         self.registry.begin(knight_name)
         self._publish("knight.started", {"task_id": task_id, "knight": knight_name})
         try:
-            request = {**task, "prompt": prompt, "id": task_id + ":" + hashlib.sha256(prompt.encode()).hexdigest()}
+            request = execution_request(task, prompt)
             result = await asyncio.to_thread(knight.execute, request)
             from backend.runtime.execution import verify_request_result
             if result.get("status") != "completed":

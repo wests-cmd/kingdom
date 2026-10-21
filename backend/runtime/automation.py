@@ -115,6 +115,8 @@ class AutomationSupervisor:
             state['lease'] = lease
             self._save(db, state)
         event = 'automation.observed'
+        runner_started = False
+        uncertain_effects = False
         try:
             if adopted and state['owner'] != 'kingdom':
                 state['attempts'] += 1
@@ -128,6 +130,7 @@ class AutomationSupervisor:
                     self._save(db, state)
                 event = 'automation.adopted'
             runner = adapter.run_candidate if state['owner'] == 'kingdom' else adapter.run_original
+            runner_started = True
             runner()
             state['status'] = 'healthy' if state['owner'] == 'kingdom' else 'original_running'
             state['last_success'] = self.clock()
@@ -140,9 +143,16 @@ class AutomationSupervisor:
                                   if isinstance(error, ReviewRequired) else
                                   'The checked worker failed. Retain progress, recheck its inputs and dependencies, then retry after cooldown.')
             event = 'automation.rolled_back'
+            if runner_started:
+                # A failed runner may already have published. Retain the durable
+                # lease across restarts until an operator reconciles its effects.
+                uncertain_effects = True
+                state['status'] = 'recovery_required'
+                state['diagnosis'] = 'Worker effects are uncertain. Verify it stopped and reconcile its durable outputs before explicit recovery; automatic retry is blocked.'
             raise
         finally:
-            state['lease'] = None
+            if not uncertain_effects:
+                state['lease'] = None
             with closing(self.connect()) as db:
                 self._save(db, state)
             self.publish(event, {k: state[k] for k in ('id', 'owner', 'status', 'attempts', 'last_failure')})

@@ -62,3 +62,15 @@ def test_newer_ui_can_target_explicitly_compatible_older_backend(tmp_path):
     digest=build(dist,output,'1.2.1',['1.2.0','1.2.1'])
     service=UIComponents('1.2.0',tmp_path/'installed')
     assert service.install(output.read_bytes(),digest)['active']==digest
+def test_release_ui_catalog_packages_current_backend(tmp_path):
+    from pathlib import Path
+    import json
+    from backend.state import STATE
+    from scripts.build_ui_component import build
+    root = Path(__file__).resolve().parents[1]
+    compatibility = json.loads((root / 'frontend/ui-compatibility.json').read_text())['compatible_backends']
+    dist = tmp_path / 'dist'
+    dist.mkdir()
+    (dist / 'index.html').write_text('<main>Release compatibility check</main>')
+    # Use the actual shipped catalog, not a synthetic version list.
+    assert build(dist, tmp_path / 'ui.zip', STATE['version'], compatibility)

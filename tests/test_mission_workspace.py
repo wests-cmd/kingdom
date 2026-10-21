@@ -219,3 +219,49 @@ def test_captain_authority_stays_in_its_group(database):
     with pytest.raises(PermissionError): hierarchy.authorize_assignment('captain',group['id'],'outsider')
     nodes[0].node_state_val='REVOKED'
     with pytest.raises(PermissionError): hierarchy.authorize_assignment('captain',group['id'],'member')
+
+
+def bounded_plan(count):
+    return MissionPlan(title='Bounded analysis', objective='Measure reviewed inputs',
+        deliverables=[f'Receipt {index}' for index in range(count)], steps=[
+            {'id': f'step{index}', 'title': f'Measure {index}', 'kind': 'text_check',
+             'instructions': 'Reviewed source', 'acceptance': 'Verified measurement',
+             'depends_on': [f'step{prior}' for prior in range(index)]}
+            for index in range(count)])
+
+
+@pytest.mark.parametrize('level,steps,parallel,retries',
+                         [(0,10,1,0),(1,10,1,0),(2,10,1,0),(3,10,1,0),(4,40,1,2),(5,100,3,3)])
+def test_exact_bounded_mission_budgets(level,steps,parallel,retries):
+    budget = ExecutionPolicy.mission_budget(level)
+    assert budget == {'max_steps':steps, 'max_parallel':parallel, 'max_retries':retries,
+                      'auto_advance':level >= 4, 'cross_computer':level == 5}
+
+
+@pytest.mark.parametrize('level,limit', [(3,10),(4,40),(5,100)])
+def test_mission_schema_and_approval_enforce_level_budget(database,level,limit):
+    engine = SimpleNamespace(execution_policy=ExecutionPolicy(database),
+                             events=SimpleNamespace(publish=lambda *args:None))
+    engine.execution_policy.set(level)
+    service = MissionService(engine,database)
+    candidate = bounded_plan(limit)
+    validate_plan(candidate)
+    saved = service.create(candidate)
+    assert service.approve(saved['id'],1)['status'] == 'approved'
+    assert len(MissionService(engine,database).get(saved['id'])['plan']['steps']) == limit
+    if limit < 100:
+        oversized = service.create(bounded_plan(limit+1))
+        with pytest.raises(ValueError,match='step budget'):
+            service.approve(oversized['id'],1)
+    else:
+        with pytest.raises(ValueError):
+            bounded_plan(101)
+
+
+def test_mission_api_schema_advertises_current_maximum():
+    from backend.runtime.mission_api import ReviewedPlan, PlanRevision
+    for request in (ReviewedPlan, PlanRevision):
+        schema = request.model_json_schema()['$defs']
+        assert schema['MissionPlan']['properties']['steps']['maxItems'] == 100
+        assert schema['MissionPlan']['properties']['deliverables']['maxItems'] == 100
+        assert schema['MissionStep']['properties']['depends_on']['maxItems'] == 99

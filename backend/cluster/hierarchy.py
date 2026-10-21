@@ -8,6 +8,8 @@ from uuid import uuid4
 class CommandHierarchy:
     def __init__(self, database, registry, publisher):
         self.db, self.registry, self.publish = database, registry, publisher
+        from backend.cluster.topology import CoordinationTopology
+        self.topology = CoordinationTopology(database, publisher)
         with self.db.get_connection() as conn:
             conn.execute('CREATE TABLE IF NOT EXISTS command_groups(id TEXT PRIMARY KEY,data_json TEXT NOT NULL)'); conn.commit()
 
@@ -42,22 +44,49 @@ class CommandHierarchy:
         return group
 
     def export(self, apprentices):
+        from backend.cluster.apprentice_inventory import aggregate_inventories
+        computers = self.computers()
+        participating = [node for node in computers if node.node_state in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}]
+        inventory = aggregate_inventories(apprentices, [node.to_dict() for node in participating])
+        from backend.cluster.topology import topology_nodes
+        graph = self.topology.read(topology_nodes(apprentices, participating, inventory['remote_apprentices']))
         return {'commander': {'id': 'owner', 'computer': socket.gethostname(), 'authority': 'All groups; owner approval and capability policy remain highest'},
-                'knights': [node.to_dict() for node in self.computers()],
+                'topology': graph,
+                'inventory': inventory,
+                'knights': [node.to_dict() for node in participating],
+                'archived_knights': [node.to_dict() for node in computers if node not in participating],
                 'apprentices': [{**item, 'entity_type': 'knight_apprentice', 'host': socket.gethostname()} for item in apprentices],
                 'groups': self.groups(), 'definitions': {'knight': 'A connected computer', 'knight_apprentice': 'An agent or bot on a computer',
                 'knight_captain': 'An approved computer commanding its own group', 'commander': 'Highest control over approved computers and groups'}}
 
 
-def offload_candidate(registry, capability, members=None):
+def offload_candidate(registry, capability, members=None, outcomes=None, tool=None, busy_nodes=None, estimated_seconds=None):
     now = time.time()
     candidates = []
     for node in registry.list_nodes():
+        if node.node_id in (busy_nodes or set()): continue
         if node.is_local or not node.public_identity or node.node_state not in {'APPROVED','CONNECTED'} or now - node.last_heartbeat > 45 or node.health != 'healthy' or node.current_task:
             continue
         if capability not in node.granted_capabilities or (members is not None and node.node_id not in members): continue
         load = node.connection_metadata.get('load_metrics', {})
         cpu, memory = load.get('cpu_percent', 100), load.get('memory_percent', 100)
         if not all(isinstance(value, (int, float)) and 0 <= value < 85 for value in (cpu, memory)): continue
-        candidates.append((cpu + memory, node.node_id))
+        from backend.cluster.power_policy import power_budget
+        estimate = estimated_seconds if estimated_seconds is not None else (180 if capability=='process.execute' else 10)
+        if not power_budget(load.get('power'),estimate)['allowed']:continue
+        # Adapt only from controller-persisted outcomes for the same operation.
+        # Worker claims, model text and advertised capabilities are not success.
+        successes = failures = 0
+        for task in (outcomes or [])[:100]:
+            meta = task.get('metadata') or {}
+            if meta.get('execution_target') != 'remote' or (tool and meta.get('tool') != tool): continue
+            result = task.get('result') or {}
+            if (result.get('executed_by') or task.get('assigned_knight')) != node.node_id: continue
+            if task.get('status', '').lower() in {'completed', 'succeeded'} and (result.get('verification') or {}).get('state') == 'VERIFIED':
+                successes += 1
+            elif task.get('status', '').lower() == 'failed':
+                failures += 1
+        # A smoothed failure penalty cannot override eligibility or capacity.
+        penalty = 60 * failures / (successes + failures + 2)
+        candidates.append((cpu + memory + penalty, node.node_id))
     return min(candidates)[1] if candidates else None

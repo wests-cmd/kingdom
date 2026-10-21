@@ -1,0 +1,13 @@
+.agent-activity{min-width:0;overflow-wrap:anywhere}
+.agent-activity header{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
+.agent-activity-kicker{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;opacity:.75;margin-bottom:.3rem}
+.agent-activity h2{margin-top:0}
+.agent-activity-stages{list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr));gap:.7rem;padding:0}
+.agent-activity-stages li{border:1px solid currentColor;border-radius:8px;padding:.75rem;min-width:0}
+.agent-activity-stages span{display:block;font-size:.9rem;margin-top:.4rem}
+.agent-activity-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr));gap:.8rem}
+.agent-activity-facts div{min-width:0}
+.agent-activity-facts dt{font-size:.85rem;opacity:.8}
+.agent-activity-facts dd{margin:0;font-weight:600}
+.agent-activity-next,.agent-activity-notice,.agent-activity-blocker{padding:.8rem;border-left:3px solid currentColor;background:rgba(127,127,127,.08)}
+.agent-activity details{margin-top:1rem}

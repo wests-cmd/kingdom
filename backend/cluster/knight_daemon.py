@@ -114,8 +114,8 @@ class KnightDaemon:
 
     def send_heartbeat(self) -> bool:
         try:
-            import psutil
-            res = self.send_rpc("heartbeat", {"node_id": self.node_id, 'load_metrics': {'cpu_percent': psutil.cpu_percent(), 'memory_percent': psutil.virtual_memory().percent}})
+            from backend.cluster.local_load import local_load_metrics
+            res = self.send_rpc("heartbeat", {"node_id": self.node_id, 'load_metrics': local_load_metrics()})
             return res.get("status") == "ok"
         except Exception:
             return False
@@ -141,8 +141,13 @@ class KnightDaemon:
                 }
                 try:
                     from backend.runtime.execution import execute_request, verify_request_result
-                    if task.get('metadata', {}).get('tool') not in {'text.analyze@1.0.0', 'code.python.analyze@1.0.0', 'provider.metadata@1.0.0'}:
+                    if task.get('metadata', {}).get('tool') not in {'text.analyze@1.0.0', 'code.python.analyze@1.0.0', 'provider.metadata@1.0.0', 'build.run@1.0.0'}:
                         raise NotImplementedError("Remote execution requires a supported controlled tool")
+                    from backend.cluster.local_load import local_load_metrics
+                    from backend.cluster.power_policy import power_budget
+                    estimate=10 if task.get('metadata',{}).get('tool') in {'text.analyze@1.0.0','code.python.analyze@1.0.0','provider.metadata@1.0.0'} else 180
+                    power=power_budget(local_load_metrics().get('power'),estimate)
+                    if not power['allowed']:raise RuntimeError(power['reason'])
                     outcome = execute_request(task, getattr(self, "granted_capabilities", []))
                     verify_request_result(task, outcome, allow_local_model=False)
                     result_payload.update(status="completed", output=outcome)

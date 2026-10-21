@@ -30,10 +30,14 @@ class TestKingdomAPI(unittest.TestCase):
 
     def test_start_endpoint(self):
         with owner_client(app) as client:
+            # Startup may restore persisted owner intent from an earlier test.
+            # Establish the actual engine precondition, not only STATE's mirror.
+            self.assertEqual(client.post('/stop').status_code, 200)
             response = client.post("/start")
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["status"], "started")
             self.assertTrue(STATE["running"])
+            self.assertEqual(client.post('/start').json()['status'], 'already_running')
 
     def test_stop_endpoint(self):
         with owner_client(app) as client:

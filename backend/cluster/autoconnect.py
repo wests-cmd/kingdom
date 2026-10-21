@@ -8,7 +8,7 @@ class AutoConnector:
             nodes = node_registry.list_nodes(state=NodeState.APPROVED)
             if not nodes:
                 return {"connected": False, "message": "No approved nodes available for auto-connect"}
-            node_id = nodes[0]["id"]
+            node_id = nodes[0].node_id
 
         res = heartbeat_manager.ping(node_id)
         return res
