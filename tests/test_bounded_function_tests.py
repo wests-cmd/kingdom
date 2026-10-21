@@ -96,7 +96,8 @@ def test_restart_requeues_same_pure_check_id_without_replaying_models_writes_or_
     assert len(restored.list())==4
 
 @pytest.mark.parametrize('repair', [False,True])
-def test_persistent_native_model_write_read_check_receipt_and_repair(tmp_path,monkeypatch,repair):
+@pytest.mark.parametrize('formatting', ['raw','python_fence','prose','multiple','generic','repair_prose','wrong_language','trailing_prose'])
+def test_persistent_native_model_write_read_check_receipt_and_repair(tmp_path,monkeypatch,repair,formatting):
     from types import SimpleNamespace
     from backend.storage.db import Database
     from backend.storage.repository import TaskRepository
@@ -110,7 +111,14 @@ def test_persistent_native_model_write_read_check_receipt_and_repair(tmp_path,mo
     policy={'level':5,'mission_budget':{'max_steps':20,'max_parallel':1,'max_retries':1,'auto_advance':True}}
     engine=SimpleNamespace(tasks=tasks,execution_policy=SimpleNamespace(get=lambda:policy),events=SimpleNamespace(publish=lambda *args:None),submit_task=tasks.create)
     service=engine.missions=MissionService(engine,database)
-    responses=iter([GOOD.replace('max(0, min(requested, pending, hard_limit))','requested'),GOOD] if repair else [GOOD])
+    candidates=[GOOD.replace('max(0, min(requested, pending, hard_limit))','requested'),GOOD] if repair else [GOOD]
+    if formatting!='raw':candidates=['```python\n'+candidate+'```\n' for candidate in candidates]
+    if formatting=='prose':candidates=['Here is the implementation:\n'+candidate for candidate in candidates]
+    if formatting=='multiple':candidates=[candidate+'```python\n'+GOOD+'```\n' for candidate in candidates]
+    if formatting=='wrong_language':candidates=[candidate.replace('```python','```javascript') for candidate in candidates]
+    if formatting=='trailing_prose':candidates=[candidate+'That should fix it.\n' for candidate in candidates]
+    if formatting=='repair_prose' and repair:candidates[1]='Here is the repair:\n'+candidates[1]
+    responses=iter(candidates)
     async def provider_response(*args,**kwargs):return {'text':next(responses)}
     monkeypatch.setattr(ModelService,'generate',provider_response)
     plan=MissionPlan(title='Batch size',objective='Implement bounded batch size',deliverables=['batch.py'],steps=[
@@ -119,10 +127,20 @@ def test_persistent_native_model_write_read_check_receipt_and_repair(tmp_path,mo
       {'id':'read','title':'Read','kind':'read_file','path':'batch.py','depends_on':['write'],'acceptance':'Read back'},
       {'id':'check','title':'Check fixed owner cases','kind':'function_check','depends_on':['write','read'],'input_from':'read','repair_source':'write','case_profile':'bounded_batch_size.v1','acceptance':'26 fixed integer cases'},
     ])
+    if formatting=='generic':plan.steps=plan.steps[:-1]
     state=service.create(plan,model_profile='non-toolcalling-local');service.approve(state['id'],1)
     seen=[]
     for _ in range(30):
         state=service.advance(state['id'])
+        if formatting in {'prose','multiple','wrong_language','trailing_prose'}:
+            assert 'workspace.write@1.0.0' not in seen
+            if state['status']=='needs_review':
+                assert not (tmp_path/'workspace/batch.py').exists()
+                return
+        if formatting=='repair_prose' and repair and state['status']=='needs_review':
+            assert (tmp_path/'workspace/batch.py').read_text()==GOOD.replace('max(0, min(requested, pending, hard_limit))','requested')
+            assert len(state['source_normalizations'])==1 and len(state['repair_history'])==1
+            return
         if state['status']=='completed':break
         assert state['status'] not in {'needs_review','cancelled'},state
         task=tasks.claim_next()
@@ -133,6 +151,15 @@ def test_persistent_native_model_write_read_check_receipt_and_repair(tmp_path,mo
         verification=verify_request_result(request,outcome)
         tasks.complete(task['id'],{'plan':{'task_id':task['id'],'subtasks':[{'prompt':task['prompt'],'knight':'coder'}]},'results':[{'knight':'coder','verification':verification,'outcome':outcome}]})
     assert state['status']=='completed'
+    if formatting=='generic':
+        assert (tmp_path/'workspace/batch.py').read_bytes()==candidates[0].encode()
+        assert not state.get('source_normalizations')
+        return
+    if formatting=='python_fence':
+        provenance=state['source_normalizations']
+        assert len(provenance)==(2 if repair else 1)
+        assert all(item['format']=='single_python_fence' and item['raw_sha256']!=item['source_sha256'] for item in provenance)
+        assert all('```python' in service.output(tasks.get(item['model_task_id'])) for item in provenance)
     assert 'process.run@1.0.0' not in seen
     assert len(state.get('repair_history',[]))==(1 if repair else 0)
     # A separately restored task/mission store still validates actual retained receipts.

@@ -1,6 +1,8 @@
 """Durable reviewed mission plans; completion requires real verified task results."""
 import json
 import time
+import re
+import hashlib
 from threading import RLock
 from typing import Literal
 from uuid import uuid4, uuid5, NAMESPACE_URL
@@ -219,6 +221,24 @@ class MissionService:
         value = outcome.get('text', outcome.get('output', outcome)) if isinstance(outcome, dict) else outcome
         return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
 
+    def function_candidate(self,state,raw,model_task_id,write_step_id,phase):
+        """Remove one explicit Python transport wrapper, never prose or source content."""
+        source=raw;formatting='raw_python'
+        if '```' in raw:
+            match=re.fullmatch(r'\s*```python[ \t]*\r?\n(?P<body>[\s\S]*?)(?P<ending>\r?\n)```[ \t]*\s*',raw)
+            if not match or not match['body'].strip() or '```' in match['body']:
+                raise ValueError('Ambiguous fenced function candidate')
+            source=match['body']+match['ending'];formatting='single_python_fence'
+        provenance={'model_task_id':model_task_id,'write_step_id':write_step_id,'phase':phase,
+                    'raw_sha256':hashlib.sha256(raw.encode()).hexdigest(),
+                    'source_sha256':hashlib.sha256(source.encode()).hexdigest(),
+                    'format':formatting,'normalizer_version':'single-python-fence-v1'}
+        history=state.setdefault('source_normalizations',[])
+        if provenance not in history:
+            history.append(provenance)
+            self.engine.events.publish('mission.source_normalized',{'id':state['id'],**provenance})
+        return source
+
     def advance(self, ident, *, backlog_lease=None):
         with self.lock:
             state = self.get(ident); policy = self.engine.execution_policy.get(); budget = policy['mission_budget']
@@ -300,6 +320,13 @@ class MissionService:
                 text = step.instructions
                 if step.input_from:
                     text = self.output(self.engine.tasks.get(state['steps'][step.input_from]['task_id']))
+                if (step.kind=='write_file' and step.input_from
+                        and any(s['id']==step.input_from and s['kind']=='model' for s in state['plan']['steps'])
+                        and any(s['kind']=='function_check' and s['repair_source']==step.id for s in state['plan']['steps'])):
+                    try:text=self.function_candidate(state,text,state['steps'][step.input_from]['task_id'],step.id,'initial')
+                    except ValueError:
+                        state.update(status='needs_review',failure='Model function response has an ambiguous code wrapper; no source was written')
+                        self.save(state);return state
                 tool, params = None, None
                 if step.kind == 'write_file': tool, params = 'workspace.write@1.0.0', {'path': step.path, 'content': text}
                 elif step.kind == 'read_file': tool, params = 'workspace.read@1.0.0', {'path': step.path}
@@ -383,6 +410,11 @@ class MissionService:
         state['repair_history'][-1][repair['phase'] + '_task_id'] = task['id']
         if repair['phase'] == 'diagnose':
             text = self.output(task)
+            step = next(item for item in state['plan']['steps'] if item['id'] == repair['step'])
+            if step['kind']=='function_check':
+                try:text=self.function_candidate(state,text,task['id'],repair['source'],'repair')
+                except ValueError:
+                    state.update(status='needs_review',failure='Model repair has an ambiguous code wrapper. Nothing was written.');self.save(state);return state
             if not text.strip() or text.lstrip().startswith('```'):
                 state.update(status='needs_review',failure='Model returned an unusable source repair. Nothing was written.'); self.save(state); return state
             self.queue_repair_task(state,'write',text,{'tool':'workspace.write@1.0.0','tool_parameters':{'path':repair['path'],'content':text}})
