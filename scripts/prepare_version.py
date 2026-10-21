@@ -9,10 +9,10 @@ import re
 import tempfile
 
 try:
-    from scripts.validate_version import (PACKAGES, LOCKS, REVIEW_MARKER, get_authoritative_version,
+    from scripts.validate_version import (PACKAGES, LOCKS, UI_CATALOG, REVIEW_MARKER, get_authoritative_version,
                                          metadata_errors, stable_version)
 except ModuleNotFoundError:
-    from validate_version import (PACKAGES, LOCKS, REVIEW_MARKER, get_authoritative_version,
+    from validate_version import (PACKAGES, LOCKS, UI_CATALOG, REVIEW_MARKER, get_authoritative_version,
                                   metadata_errors, stable_version)
 
 
@@ -64,6 +64,13 @@ def prepare(root, version, repair_existing=False):
                 data['packages']['']['version'] = version
             return json.dumps(data, indent=2, ensure_ascii=False) + '\n'
         change(relative, package)
+
+    def ui_catalog(text):
+        data = json.loads(text)
+        # A new frontend must not inherit untested older-backend compatibility.
+        data['compatible_backends'] = [version]
+        return json.dumps(data, indent=2, ensure_ascii=False) + '\n'
+    change(UI_CATALOG, ui_catalog)
 
     def android(text):
         text, count = re.subn(r'(?m)^(\s*versionName\s+)"[^"]+"', lambda match: match[1] + json.dumps(version), text)

@@ -16,6 +16,7 @@ from pathlib import Path
 SEMVER_REGEX = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[a-zA-Z0-9]+(?:\.[a-zA-Z0-9]+)*)?")
 PACKAGES = ('frontend/package.json', 'desktop/package.json', 'apps/mobile/package.json', 'apps/mobile/native/package.json')
 LOCKS = ('frontend/package-lock.json', 'desktop/package-lock.json', 'apps/mobile/native/package-lock.json')
+UI_CATALOG = 'frontend/ui-compatibility.json'
 REVIEW_MARKER = '<!-- RELEASE_REVIEW_REQUIRED -->'
 
 
@@ -36,6 +37,13 @@ def metadata_errors(root, version):
                 errors.append(f'{relative}: root package version differs from {version}')
         except (OSError, ValueError, TypeError, AttributeError) as error:
             errors.append(f'{relative}: invalid or missing metadata ({type(error).__name__})')
+    try:
+        compatible = json.loads((Path(root) / UI_CATALOG).read_text(encoding='utf-8'))['compatible_backends']
+        if (not isinstance(compatible, list) or version not in compatible
+                or not all(isinstance(item, str) and SEMVER_REGEX.fullmatch(item) for item in compatible)):
+            errors.append(f'{UI_CATALOG}: explicit compatibility must include canonical version {version}')
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        errors.append(f'{UI_CATALOG}: invalid or missing compatibility ({type(error).__name__})')
     return errors
 
 

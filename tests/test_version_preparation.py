@@ -28,6 +28,7 @@ def release_tree(tmp_path):
     write('apps/mobile/native/android/app/build.gradle', 'versionCode 1010201\nversionName "1.1.2"\n')
     write('apps/mobile/native/ios/App/App.xcodeproj/project.pbxproj', 'CURRENT_PROJECT_VERSION = 1;\nMARKETING_VERSION = 1.0;\n')
     write('docs/releases/v1.2.2.md', '# Reviewed existing release\nActual limits are recorded here.\n')
+    write('frontend/ui-compatibility.json', json.dumps({'compatible_backends': ['1.2.1', '1.2.2'], 'retained_setting': {'mode': 'explicit'}}))
     return tmp_path
 
 
@@ -40,7 +41,7 @@ def test_dry_run_cli_performs_zero_writes_and_reports_full_plan(release_tree):
     result = subprocess.run([sys.executable, str(REPO / 'scripts/prepare_version.py'), '1.2.3',
                              '--root', str(release_tree)], capture_output=True, text=True, check=True)
     report = json.loads(result.stdout)
-    assert report['apply'] is False and len(report['files']) == 11
+    assert report['apply'] is False and len(report['files']) == 12
     assert snapshot(release_tree) == before
 
 
@@ -50,6 +51,9 @@ def test_apply_synchronizes_future_versions_without_mutating_dependencies_or_sto
     preparation.apply(release_tree, plan)
     assert get_authoritative_version(str(release_tree)) == version
     assert not metadata_errors(release_tree, version)
+    catalog = json.loads((release_tree / 'frontend/ui-compatibility.json').read_text())
+    assert catalog['compatible_backends'] == [version]
+    assert catalog['retained_setting'] == {'mode': 'explicit'}
     for relative in PACKAGES:
         assert json.loads((release_tree / relative).read_text())['dependencies']['keep'] == '1.2.2'
     for relative in LOCKS:
@@ -82,6 +86,19 @@ def test_explicit_migration_for_old_native_package_metadata(release_tree):
     assert plan['existing_metadata_errors']
     preparation.apply(release_tree, plan)
     assert not metadata_errors(release_tree, '1.2.3')
+
+
+def test_ui_compatibility_requires_current_backend_without_assuming_old_versions(release_tree):
+    catalog = release_tree / 'frontend/ui-compatibility.json'
+    catalog.write_text(json.dumps({'compatible_backends': ['1.2.1']}))
+    assert any('ui-compatibility' in error for error in metadata_errors(release_tree, '1.2.2'))
+    with pytest.raises(ValueError, match='repair-existing-metadata'):
+        preparation.prepare(release_tree, '1.2.3')
+    plan = preparation.prepare(release_tree, '1.2.3', repair_existing=True)
+    preparation.apply(release_tree, plan)
+    assert json.loads(catalog.read_text())['compatible_backends'] == ['1.2.3']
+    catalog.write_text(json.dumps({'compatible_backends': '1.2.3'}))
+    assert metadata_errors(release_tree, '1.2.3')
 
 
 def test_changed_source_and_existing_notes_fail_without_overwrite(release_tree):

@@ -15,7 +15,11 @@ not runtime or acceptance failures.
 
 Preparation synchronizes backend/state.py, frontend/desktop/mobile/native-mobile
 package versions, their existing lockfile root entries, Android versionName and
-iOS MARKETING_VERSION. Dependency versions and Android/iOS store build numbers
+iOS MARKETING_VERSION. It also resets frontend/ui-compatibility.json to the new
+backend version only, preserving other catalog keys. Older-backend compatibility
+is not inherited; add it only after independent compatibility acceptance.
+Validation requires that the explicit catalog include the canonical version.
+Dependency versions and Android/iOS store build numbers
 are preserved; store publication and signing remain separate work. Historical
 release notes and README download links are not blindly rewritten.
 
