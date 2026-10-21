@@ -92,6 +92,7 @@ class RuntimeEngine:
         return await self.start()
 
     def reconcile_startup_tasks(self) -> list[dict[str, Any]]:
+        from backend.runtime.bounded_function_tests import TOOL as FUNCTION_TOOL
         running_tasks = self.tasks.list("running")
         recovered = []
         for task in running_tasks:
@@ -101,7 +102,7 @@ class RuntimeEngine:
                 updates={"error": "Process restarted while task was running. Reconciled to RECOVERY_REQUIRED."}
             )
             self.events.publish("task.recovery_required", rec_task)
-            if task.get("metadata", {}).get("tool") in {"text.analyze@1.0.0", "code.python.analyze@1.0.0"}:
+            if task.get("metadata", {}).get("tool") in {"text.analyze@1.0.0", "code.python.analyze@1.0.0", FUNCTION_TOOL}:
                 rec_task = self.tasks.transition_task(task["id"], "queued", {"error": "Restarted idempotent analysis safely requeued"})
                 self.events.publish("task.requeued", rec_task)
             recovered.append(rec_task)
@@ -187,6 +188,11 @@ class RuntimeEngine:
     def submit_task(self, prompt: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
         meta = metadata or {}
         from backend.runtime.computer_tools import TOOL_CAPABILITIES
+        from backend.runtime.bounded_function_tests import TOOL as FUNCTION_TOOL
+        if meta.get('tool') == FUNCTION_TOOL:
+            if meta.get('subtasks') or meta.get('execution_target') == 'remote' or meta.get('offload'):
+                raise ValueError('Bounded function checks require one local retained execution')
+            meta = {**meta, 'capability':'compute', 'max_attempts':1}
         if meta.get('tool') in TOOL_CAPABILITIES:
             if meta.get('subtasks'): raise ValueError('Computer operations must be one exact reviewed task')
             meta = {**meta, 'capability': TOOL_CAPABILITIES[meta['tool']]}

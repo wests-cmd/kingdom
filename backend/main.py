@@ -14,11 +14,13 @@ async def lifespan(_app):
     if await asyncio.to_thread(engine.autostart_requested):
         await engine.start(persist=False)
     await schedule_runner.start()
+    await backlog_runner.start()
     try:
         yield
     finally:
         from backend.runtime.request_api import background
         await background.stop()
+        await backlog_runner.stop()
         await schedule_runner.stop()
         await engine.stop(persist=False)
 
@@ -108,6 +110,10 @@ from backend.runtime.automation_api import scheduled
 scheduled.enqueue_request = lambda body: request_service().create(body)
 scheduled.cancel_request = lambda ident: request_service().cancel(ident)
 schedule_runner = ScheduledRunner(scheduled, engine, requests=request_service)
+from backend.runtime.work_backlog_api import router as backlog_router, service as backlog_service
+from backend.runtime.work_backlog_runner import WorkBacklogRunner
+app.include_router(backlog_router)
+backlog_runner = WorkBacklogRunner(backlog_service, engine.events.publish)
 
 
 # Serve built frontend static assets if available

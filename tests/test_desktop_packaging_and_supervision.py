@@ -10,12 +10,13 @@ from pathlib import Path
 
 
 def test_desktop_package_json_manifest():
+    from backend.state import STATE
     desktop_pkg = Path(__file__).resolve().parents[1] / "desktop" / "package.json"
     assert desktop_pkg.exists()
 
     data = json.loads(desktop_pkg.read_text())
     assert data["name"] == "kingdom-desktop"
-    assert data["version"] == "1.2.2"
+    assert data["version"] == STATE['version']
     assert "electron" in data["devDependencies"]
     assert "build" in data
     assert "win" in data["build"]

@@ -10,6 +10,7 @@ import {workerLabel} from '../components/common/presentation'
 import MissionEditor from '../components/MissionEditor'
 import DesktopActions from '../components/DesktopActions'
 import ParallelChats from '../components/ParallelChats'
+import WorkBacklogPanel from '../components/WorkBacklogPanel'
 
 export default function Tasks() {
 
@@ -136,6 +137,7 @@ export default function Tasks() {
 
     <div>
 
+      <WorkBacklogPanel/>
       <h2>Task Management</h2>
 
       <p className="muted" style={{marginBottom:20}}>Submit work, inspect verified results, or cancel tasks that have not started.</p>

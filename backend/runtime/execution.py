@@ -33,6 +33,8 @@ def _python(params):
 
 
 HANDLERS = {"text.analyze@1.0.0": _analyze, "code.python.analyze@1.0.0": _python}
+from backend.runtime.bounded_function_tests import TOOL as FUNCTION_TOOL, check_function
+HANDLERS[FUNCTION_TOOL] = check_function
 
 
 def native_tools():
@@ -40,7 +42,7 @@ def native_tools():
     for key, handler in HANDLERS.items():
         tool_id, version = key.split("@")
         tools.register_tool(ToolDefinition(tool_id, version, "kingdom.native", tool_id,
-            "Analyze supplied text without external side effects", {"required": ["text"]}, {},
+            "Bounded arithmetic AST interpreter; not CPython" if key==FUNCTION_TOOL else "Analyze supplied text without external side effects", {"required": ["source","profile_id"] if key==FUNCTION_TOOL else ["text"]}, {},
             ["compute"], [], "LOW"))
         tools.register_handler(key, handler)
     from backend.integrations.public_apis import probe_provider
@@ -85,7 +87,7 @@ def execute_request(task, capabilities):
             params['_task_context']['task_id'] = params['_task_context'].pop('id')
         output = native_tools().execute(tool, params, list(capabilities), [])
         return {"kind": "native_tool", "tool": tool, "output": output,
-                **(receipt(task, output) if tool in TOOL_CAPABILITIES else {})}
+                **(receipt(task, output) if tool in TOOL_CAPABILITIES or tool == FUNCTION_TOOL else {})}
     if "model.inference" not in capabilities:
         raise PermissionError("Model inference is not granted")
     prompt = task['prompt']
@@ -132,6 +134,10 @@ def verify_request_result(task, result, allow_local_model=True):
                 raise ValueError('Mismatched build receipt')
             return verify_build(task, result.get('output'))
         from backend.runtime.computer_tools import TOOL_CAPABILITIES, verify_receipt
+        if tool == FUNCTION_TOOL:
+            if not allow_local_model or result.get('kind')!='native_tool' or result.get('tool')!=tool:
+                raise ValueError('Function acceptance requires retained local evidence')
+            verify_receipt(task,result)
         if tool in TOOL_CAPABILITIES:
             if not allow_local_model or result.get('tool') != tool or result.get('kind') != 'native_tool':
                 raise ValueError('Computer operations require local independent evidence')
