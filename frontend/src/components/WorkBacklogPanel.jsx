@@ -38,6 +38,7 @@ export default function WorkBacklogPanel() {
         {Object.entries(counts).map(([name, count]) => <div key={name}><strong>{count}</strong><br/>{name}</div>)}
       </div>
       <p><strong>{data.enabled ? 'Automatic selection enabled' : 'Automatic selection paused'}</strong>. Execution also requires a running runtime, autonomy level 4 or 5 and existing permissions. Planning notes do not execute.</p>
+      <p>Pausing selection prevents new mission steps. Already queued or running tasks may finish. Review or request cancellation of committed work in Tasks.</p>
       <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
         <button disabled={busy} onClick={() => perform(() => api.post('/work-backlog/settings', {enabled:!data.enabled, expected_revision:data.revision}))}>{data.enabled ? 'Pause automatic selection' : 'Enable reviewed work'}</button>
         <button disabled={busy} onClick={() => perform(() => api.post('/work-backlog/review'))}>Review current evidence</button>

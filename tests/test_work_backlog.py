@@ -22,7 +22,7 @@ def setup(tmp_path, monkeypatch):
                              status=lambda: {'running': True}, tasks=TaskManager(TaskRepository(db)))
     engine.missions = MissionService(engine, db)
     calls = []
-    def advance(ident):
+    def advance(ident, *, backlog_lease=None):
         calls.append(ident)
         return engine.missions.get(ident)
     monkeypatch.setattr(engine.missions, 'advance', advance)
@@ -96,7 +96,7 @@ def test_idempotency_and_project_dependencies_survive_restart(setup):
 def test_stopped_worker_recovery_uses_same_mission_and_lease(setup, monkeypatch):
     queue, engine, db, mission, calls = setup
     mission(); item = register(queue); activate(queue)
-    def interrupted(ident):
+    def interrupted(ident, *, backlog_lease=None):
         calls.append(ident)
         raise RuntimeError('Interrupted after possible submission')
     monkeypatch.setattr(engine.missions, 'advance', interrupted)
@@ -111,7 +111,7 @@ def test_stopped_worker_recovery_uses_same_mission_and_lease(setup, monkeypatch)
         restarted.reconcile('kingdom', item['id'], current['revision'], 'wrong')
     resumed = restarted.reconcile('kingdom', item['id'], current['revision'], current['lease'])
     assert resumed['intent'] == item['intent'] and resumed['status'] == 'ready'
-    monkeypatch.setattr(engine.missions, 'advance', lambda ident: engine.missions.get(ident))
+    monkeypatch.setattr(engine.missions, 'advance', lambda ident, **kwargs: engine.missions.get(ident))
     assert restarted.tick()['intent']['mission_id'] == 'mission'
 
 

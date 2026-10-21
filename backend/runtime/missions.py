@@ -140,6 +140,10 @@ class MissionService:
     def advance_all(self):
         if self.engine.execution_policy.get()['level'] < 4: return
         for state in self.list():
+            # Tracked work has its own enable/dependency/priority selection.
+            # The legacy runtime poller must not bypass that selection.
+            if self._backlog_tracking(state['id'])[0]:
+                continue
             if state['status'] in {'approved', 'running'}:
                 try:
                     self.advance(state['id'])
@@ -148,6 +152,34 @@ class MissionService:
                     state.update(status='needs_review', failure='Mission could not advance. Review permissions and retained task evidence before retrying.')
                     self.save(state)
                     self.engine.events.publish('mission.needs_review', {'id': state['id']})
+
+    def _backlog_tracking(self, ident):
+        with self.db.get_connection() as conn:
+            if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_backlog'").fetchone():
+                return [], [], False
+            states = [json.loads(row[0]) for row in conn.execute('SELECT state_json FROM work_backlog')]
+            setting = conn.execute('SELECT enabled FROM work_backlog_settings WHERE id=1').fetchone()
+        return [item for item in states if item['intent']['mission_id'] == ident], states, bool(setting and setting[0] == 1)
+
+    def _require_backlog_selection(self, state, policy, lease):
+        tracked, states, globally_enabled = self._backlog_tracking(state['id'])
+        if not tracked:
+            if lease is not None:
+                raise ValueError('Backlog selection has no tracked mission')
+            return
+        if len(tracked) != 1:
+            raise ValueError('Ambiguous tracked mission')
+        item = tracked[0]
+        by_id = {candidate['id']: candidate for candidate in states}
+        if (not globally_enabled or item['enabled'] is not True or item['status'] != 'running'
+                or not lease or item['lease'] != lease or policy['level'] not in {4, 5}
+                or not self.engine.status().get('running')
+                or item['intent']['mission_version'] != state['version']):
+            raise ValueError('Tracked missions require current enabled backlog selection')
+        for ident in item['intent']['depends_on']:
+            dependency = by_id.get(ident)
+            if not dependency or dependency['project'] != item['project'] or dependency['status'] != 'completed':
+                raise ValueError('Tracked mission dependencies are unfinished')
 
     @staticmethod
     def verified_outputs(task):
@@ -187,9 +219,10 @@ class MissionService:
         value = outcome.get('text', outcome.get('output', outcome)) if isinstance(outcome, dict) else outcome
         return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
 
-    def advance(self, ident):
+    def advance(self, ident, *, backlog_lease=None):
         with self.lock:
             state = self.get(ident); policy = self.engine.execution_policy.get(); budget = policy['mission_budget']
+            self._require_backlog_selection(state, policy, backlog_lease)
             if policy['level'] == 0 or state['status'] not in {'approved', 'running'} or state['approved_version'] != state['version']:
                 return state
             from backend.runtime.bounded_function_tests import profile_hash, validated_acceptance

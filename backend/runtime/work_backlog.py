@@ -255,7 +255,7 @@ class WorkBacklog:
         try:
             intent = state['intent']; mission = self.engine.missions.get(intent['mission_id'])
             self._reviewed(mission, intent['mission_version'], intent['acceptance_step'])
-            mission = self.engine.missions.advance(intent['mission_id'])
+            mission = self.engine.missions.advance(intent['mission_id'], backlog_lease=lease)
             status, evidence = 'running', None
             reason = 'Existing mission has unfinished governed tasks'
             if mission['status'] == 'completed':
