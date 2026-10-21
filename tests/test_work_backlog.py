@@ -50,6 +50,27 @@ def activate(queue):
     queue.settings(True, queue.snapshot()['revision'])
 
 
+def test_owner_can_disable_failed_selection_without_dismissing_review(setup):
+    queue, engine, db, mission, calls = setup
+    state = mission(); item = register(queue); activate(queue)
+    state['status'] = 'needs_review'
+    state['failure'] = 'Fixed acceptance failed'
+    engine.missions.save(state)
+    failed = queue.tick()
+    assert failed['status'] == 'review_required'
+    saved = queue.configure('kingdom', item['id'], False, failed['revision'])
+    assert saved['enabled'] is False
+    for key in ('status', 'reason', 'evidence', 'intent', 'lease'):
+        assert saved[key] == failed[key]
+    assert engine.missions.get(state['id'])['failure'] == 'Fixed acceptance failed'
+    with pytest.raises(ValueError):
+        queue.configure('kingdom', item['id'], True, saved['revision'])
+    with pytest.raises(ValueError):
+        queue.configure('kingdom', item['id'], False, failed['revision'])
+    queue.tick()
+    assert not calls and not engine.tasks.list()
+
+
 def test_unplanned_owner_items_stay_visible_and_never_execute(setup):
     queue, engine, db, mission, calls = setup
     item = queue.register('kingdom', 'historical45', title='Remaining hardware acceptance',

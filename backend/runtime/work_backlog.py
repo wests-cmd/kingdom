@@ -118,10 +118,16 @@ class WorkBacklog:
             if not row:
                 raise KeyError(ident)
             state = json.loads(row[0])
-            if state['revision'] != expected_revision or state['lease'] or state['status'] in {'completed', 'failed', 'review_required', 'needs_planning'}:
+            if state['revision'] != expected_revision or state['lease']:
                 raise ValueError('Reload or reconcile this retained checkpoint first')
-            state.update(enabled=enabled, status='ready' if enabled else 'paused',
-                         reason='Awaiting eligible scheduler tick' if enabled else 'Paused by owner')
+            if state['status'] in {'failed', 'review_required'} and enabled is False:
+                # Disabling selection cannot dismiss a failure or rearm its mission.
+                state['enabled'] = False
+            elif state['status'] in {'completed', 'failed', 'review_required', 'needs_planning'}:
+                raise ValueError('Reload or reconcile this retained checkpoint first')
+            else:
+                state.update(enabled=enabled, status='ready' if enabled else 'paused',
+                             reason='Awaiting eligible scheduler tick' if enabled else 'Paused by owner')
             self._save(conn, state); conn.commit()
         self._publish(state)
         return state

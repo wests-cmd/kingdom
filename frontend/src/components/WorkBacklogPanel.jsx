@@ -50,6 +50,7 @@ export default function WorkBacklogPanel() {
         <p>{item.reason}</p>
         {item.next_step && <p>Next: {item.next_step}</p>}
         {['ready','paused'].includes(item.status) && !item.lease && <button disabled={busy} onClick={() => perform(() => api.post(`/work-backlog/items/${encodeURIComponent(item.project)}/${encodeURIComponent(item.id)}/settings`, {enabled:!item.enabled,expected_revision:item.revision}))}>{item.enabled ? 'Pause this item' : 'Enable this reviewed item'}</button>}
+        {['review_required','failed'].includes(item.status) && item.enabled && !item.lease && <button disabled={busy} onClick={() => perform(() => api.post(`/work-backlog/items/${encodeURIComponent(item.project)}/${encodeURIComponent(item.id)}/settings`, {enabled:false,expected_revision:item.revision}))}>Disable selection; retain review</button>}
         {item.description && <details><summary>Requested outcome</summary><p style={{whiteSpace:'pre-wrap'}}>{item.description}</p></details>}
         <details><summary>Mission and verification receipt</summary>
           <p>Mission: {item.intent?.mission_id || 'No executable mission yet'}{item.intent?.mission_version ? ` · version ${item.intent.mission_version}` : ''}</p>
