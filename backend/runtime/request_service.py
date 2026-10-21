@@ -63,6 +63,19 @@ class RequestService:
         state = {**body, 'id':uuid4().hex,'status':'queued','answer':'','evidence':[], 'created_at':time.time(),'updated_at':time.time(), 'agent_session_id':None}
         text = body['prompt'].strip().lower().rstrip('?.!')
         route = body['mode']
+        required_tools = body.get('required_tools', [])
+        from backend.runtime.agent_sessions import TOOLS
+        if not isinstance(required_tools, list) or len(required_tools) > 4 or any(not isinstance(tool, str) or tool not in TOOLS for tool in required_tools):
+            raise ValueError('Choose known required tool evidence')
+        if required_tools:
+            if route == 'quick':
+                raise ValueError('Required tool evidence requires the agent route')
+            if 'process_run' in required_tools and not body.get('allow_process'):
+                raise ValueError('Process evidence requires the process option and normal grants')
+            window_title = body.get('desktop_window_title')
+            if any(tool.startswith('desktop_') for tool in required_tools) and (not isinstance(window_title, str) or not window_title.strip()):
+                raise ValueError('Desktop evidence requires an owner-selected window and normal grants')
+            route = 'agent'
         if body.get('desktop_expected_text') and not body.get('desktop_window_title'):
             raise ValueError('Desktop acceptance requires an owner-selected window')
         if body.get('desktop_window_title'):

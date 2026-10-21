@@ -219,3 +219,31 @@ def test_request_input_accepts_only_known_required_tools():
     data['required_tools'] = ['unrestricted_shell']
     with pytest.raises(ValidationError):
         RequestInput.model_validate(data)
+
+
+@pytest.mark.parametrize('prompt', ['what time is it?', 'runtime status', 'Please repair the saved project'])
+def test_required_tools_force_agent_before_auto_routing(tmp_path, prompt):
+    service, models, agents = setup(tmp_path)
+    data = body(required_tools=['workspace_read', 'workspace_write'])
+    data['prompt'] = prompt
+    saved = service.create(data)
+    assert saved['route'] == 'agent'
+    asyncio.run(service.run(saved['id']))
+    assert agents.created == 1
+    assert models.calls == 0
+
+
+@pytest.mark.parametrize('options, expected', [
+    ({'mode': 'quick', 'required_tools': ['workspace_write']}, 'agent route'),
+    ({'required_tools': ['process_run']}, 'process option'),
+    ({'required_tools': ['desktop_observe']}, 'owner-selected window'),
+    ({'required_tools': ['desktop_input']}, 'owner-selected window'),
+])
+def test_invalid_required_tool_route_or_options_rejected_before_insertion(tmp_path, options, expected):
+    service, models, agents = setup(tmp_path)
+    data = body()
+    data.update(options)
+    with pytest.raises(ValueError, match=expected):
+        service.create(data)
+    assert service.list(data['session_scope'], data['project_scope']) == []
+    assert models.calls == agents.created == 0

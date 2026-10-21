@@ -91,3 +91,34 @@ Centipede repository. Its service health, boot, reconnection and desktop shell
 must support these contracts without embedding personal IPs or credentials.
 The existing OptiPlex persistent Kingdom service is verified; this roadmap does
 not authorize another disk write or reinstall.
+
+## Parsec-inspired experience acceptance (unimplemented)
+
+Official-source review: [PARSEC_EXPERIENCE_REVIEW.md](PARSEC_EXPERIENCE_REVIEW.md).
+These are proposed delivery items, not shipped remote-desktop capabilities.
+
+- [ ] P01 Computer cards and distinct actions: show verified identity, online
+  freshness and real capabilities; separate Connect, Observe and Control.
+  Acceptance: an offline or unsupported host cannot appear controllable;
+  connection alone grants neither screen observation nor input authority.
+- [ ] P02 Scoped session authority: explicit host-approved observation/input
+  grants bind user, computer, capability, expiry and session. Acceptance:
+  unapproved input fails at the host; revocation stops active and queued input;
+  expired/replayed grants fail after reconnect; clipboard/files/shell and agent
+  jobs require independent authority. Record redacted grant/revoke evidence.
+- [ ] P03 Measured quality: report timestamped transport RTT, supported
+  capture/encode/decode timings, achieved frame rate/bitrate and lost frames.
+  Acceptance: controlled network degradation changes real metrics and warnings;
+  unavailable measurements are marked unavailable; RTT is not advertised as
+  end-to-end input latency. Benchmark DT1's actual GPU/driver/capture path before
+  claiming hardware encoding, supported codecs, resolution or frame rate.
+- [ ] P04 Reconnect without privilege growth: bounded retry with visible cause,
+  host identity recheck and grant revalidation. Acceptance: network interruption,
+  host restart, expiry and revocation never replay input, duplicate a job, or
+  restore control without valid authority. Keep observation/control/job state
+  distinct and offer cancel/disconnect throughout recovery.
+- [ ] P05 Beginner and advanced settings: understandable defaults, quality
+  tradeoffs and reset, with supported expert options behind Advanced.
+  Acceptance: effective settings and restart requirements are visible; invalid
+  options recover safely; no unsupported DT1 GPU or Linux-host promises. Test
+  on real endpoints before marking any streaming capability implemented.
