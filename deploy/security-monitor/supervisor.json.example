@@ -1,0 +1,6 @@
+{
+  "allowed_peer_uid": 12345,
+  "socket_path": "/run/kingdom-monitor/monitor.sock",
+  "key_path": "/etc/kingdom-monitor/signing.key",
+  "audit_path": "/var/lib/kingdom-monitor/events.jsonl"
+}
