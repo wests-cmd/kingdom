@@ -8,7 +8,7 @@ export default function SwarmControls({hierarchy}) {
  const title=id=>nodes.find(node=>(node.node_id||node.id)===id)?.hostname||id
  const teams=groups||hierarchy.groups||[]
  const action=async work=>{setBusy(true);try{await work()}catch(error){setMessage(error.response?.data?.detail||'Change failed. Reload current state before retrying.')}finally{setBusy(false)}}
- return <section className="panel" aria-label="Swarm teams and access"><h3>Teams and access</h3>
+ return <section className="panel swarm-controls" aria-label="Swarm teams and access"><h3>Teams and access</h3>
  <p>These controls authorize a paired Knight to execute capabilities for this controller. They do not configure Ethernet, Wi-Fi, a firewall, vault sharing, or access between every pair of computers. Reporting lines never grant permissions.</p>
  <h4>What this controller allows each Knight to do</h4>
  {!nodes.length&&<p>No currently approved paired Knights. Pair and verify a computer in Nodes first.</p>}
