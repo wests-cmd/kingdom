@@ -9,13 +9,14 @@ from uuid import uuid4, uuid5, NAMESPACE_URL
 from pydantic import BaseModel, Field, ConfigDict
 from backend.runtime.remote_build import BuildSpec
 from backend.runtime.policy import MAX_MISSION_STEPS
+from backend.runtime.project_tests import ProjectTestDescriptor
 
 
 class MissionStep(BaseModel):
     model_config = ConfigDict(extra='forbid')
     id: str = Field(pattern=r'^[a-z][a-z0-9_-]{0,50}$')
     title: str = Field(min_length=1, max_length=300)
-    kind: Literal['model', 'write_file', 'read_file', 'python_check', 'text_check', 'command', 'package', 'desktop_input', 'build', 'function_check']
+    kind: Literal['model', 'write_file', 'read_file', 'python_check', 'text_check', 'command', 'package', 'desktop_input', 'build', 'function_check', 'project_test']
     instructions: str = Field(default='', max_length=100000)
     path: str | None = Field(default=None, max_length=300)
     argv: list[str] = Field(default_factory=list, max_length=40)
@@ -27,6 +28,7 @@ class MissionStep(BaseModel):
     build: BuildSpec | None = None
     case_profile: str | None = Field(default=None,max_length=100)
     case_profile_sha256: str | None = Field(default=None,pattern=r'^[0-9a-f]{64}$')
+    project_test: ProjectTestDescriptor | None = None
 
 
 class MissionPlan(BaseModel):
@@ -44,6 +46,12 @@ def validate_plan(plan):
     seen = set()
     by_id = {step.id: step for step in plan.steps}
     for step in plan.steps:
+        if step.kind == 'project_test':
+            if (step.project_test is None or step.input_from or step.repair_source or not step.argv
+                    or any(not x or len(x)>4000 or '\x00' in x for x in step.argv)):
+                raise ValueError('Project tests require a fixed reviewed argv and descriptor, without generated bindings')
+        elif step.project_test is not None:
+            raise ValueError('Project test descriptors belong only to project_test steps')
         if step.kind == 'function_check':
             from backend.runtime.bounded_function_tests import profile_hash
             expected=profile_hash(step.case_profile)
@@ -144,7 +152,7 @@ class MissionService:
         for state in self.list():
             # Tracked work has its own enable/dependency/priority selection.
             # The legacy runtime poller must not bypass that selection.
-            if self._backlog_tracking(state['id'])[0]:
+            if self._backlog_tracking(state['id'])[0] or self._programme_pending(state['id']):
                 continue
             if state['status'] in {'approved', 'running'}:
                 try:
@@ -154,6 +162,18 @@ class MissionService:
                     state.update(status='needs_review', failure='Mission could not advance. Review permissions and retained task evidence before retrying.')
                     self.save(state)
                     self.engine.events.publish('mission.needs_review', {'id': state['id']})
+
+    def _programme_pending(self, ident):
+        with self.db.get_connection() as conn:
+            if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_programmes'").fetchone():
+                return False
+            for saved in conn.execute('SELECT state_json FROM work_programmes'):
+                state = json.loads(saved[0])
+                for section in state['sections']:
+                    for row in [*section['items'], section['integration']]:
+                        if row.get('mission_id') == ident and row['planning'] != 'reviewed':
+                            return True
+        return False
 
     def _backlog_tracking(self, ident):
         with self.db.get_connection() as conn:
@@ -242,10 +262,13 @@ class MissionService:
     def advance(self, ident, *, backlog_lease=None):
         with self.lock:
             state = self.get(ident); policy = self.engine.execution_policy.get(); budget = policy['mission_budget']
+            if self._programme_pending(ident):
+                raise ValueError('Programme review binding is incomplete; inspect its retained checkpoint')
             self._require_backlog_selection(state, policy, backlog_lease)
             if policy['level'] == 0 or state['status'] not in {'approved', 'running'} or state['approved_version'] != state['version']:
                 return state
-            from backend.runtime.bounded_function_tests import profile_hash, validated_acceptance
+            from backend.runtime.bounded_function_tests import profile_hash
+            from backend.runtime.mission_acceptance import validated_acceptance
             if any(s['kind']=='function_check' and s.get('case_profile_sha256')!=profile_hash(s.get('case_profile')) for s in state['plan']['steps']):
                 state.update(status='needs_review',failure='Approved immutable case profile changed');self.save(state);return state
             if state.get('repair'):
@@ -261,6 +284,8 @@ class MissionService:
                     try:
                         outputs = self.verified_outputs(task)
                         if step['kind']=='function_check' and outputs[0].get('accepted') is True:
+                            validated_acceptance(self.engine,state['id'],state['version'],step['id'])
+                        if step['kind']=='project_test':
                             validated_acceptance(self.engine,state['id'],state['version'],step['id'])
                         if step.get('computer_id') and (task.get('result') or {}).get('executed_by') != step['computer_id']:
                             raise ValueError('Result came from a different computer than the reviewed plan')
@@ -335,7 +360,7 @@ class MissionService:
                     from backend.runtime.bounded_function_tests import TOOL
                     tool,params=TOOL,{'source':text,'profile_id':step.case_profile}
                 elif step.kind == 'text_check': tool, params = 'text.analyze@1.0.0', {'text': text}
-                elif step.kind == 'command': tool, params = 'process.run@1.0.0', {'argv': step.argv}
+                elif step.kind in {'command', 'project_test'}: tool, params = 'process.run@1.0.0', {'argv': step.argv}
                 elif step.kind == 'package': tool, params = 'workspace.package@1.0.0', {'path': step.path}
                 elif step.kind == 'desktop_input': tool, params = 'computer.input@1.0.0', json.loads(step.instructions)
                 elif step.kind == 'build': tool, params = 'build.run@1.0.0', step.build.model_dump()
@@ -348,6 +373,8 @@ class MissionService:
                             'max_attempts': 1 + budget['max_retries'] if step.kind in {'model','text_check','python_check','read_file'} else 1,
                             'mission_version':state['version'],'step_id':step.id}
                 if tool: metadata.update(tool=tool, tool_parameters=params)
+                if step.kind == 'project_test':
+                    metadata.update(project_test=step.project_test.model_dump(), capability='process.execute', max_attempts=1)
                 if step.computer_id:
                     metadata.update(execution_target='remote', assigned_knight=step.computer_id,
                                     capability='process.execute' if step.kind == 'build' else 'compute')

@@ -2,5 +2,5 @@
 STATE = {
     "running": False,
     "mode": "adaptive",
-    "version": "1.2.3"
+    "version": "1.2.4"
 }

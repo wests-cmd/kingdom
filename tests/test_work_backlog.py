@@ -343,6 +343,42 @@ def test_api_requires_owner_and_rejects_extra_authority_fields():
     app = FastAPI(); app.include_router(router)
     with TestClient(app) as client:
         assert client.get('/work-backlog').status_code in {401, 403, 503}
+        assert client.get('/work-backlog/type-priorities').status_code in {401, 403, 503}
+        assert client.put('/work-backlog/type-priorities', json={'priorities': {'security': 100}, 'expected_revision': 1}).status_code in {401, 403, 503}
         assert client.post('/work-backlog/settings', json={'enabled': True, 'expected_revision': 1}).status_code in {401, 403, 503}
     with pytest.raises(ValidationError):
         Item(idempotency_key='k', title='No authority escalation', grant_process=True)
+
+
+def test_type_priority_orders_eligible_work_without_skipping_dependencies(setup):
+    queue,engine,db,mission,calls=setup
+    for name in ('normal','urgent','dependent'): mission(name)
+    normal=queue.register('kingdom','normal',mission_id='normal',mission_version=1,acceptance_step='accept',enabled=True,priority=99)
+    queue.register('kingdom','urgent',mission_id='urgent',mission_version=1,acceptance_step='accept',enabled=True,priority=1,task_type='security')
+    queue.register('kingdom','dependent',mission_id='dependent',mission_version=1,acceptance_step='accept',enabled=True,task_type='critical',depends_on=[normal['id']])
+    config=queue.type_priorities()
+    saved=queue.set_type_priorities({'security':80,'critical':100},config['revision'])
+    assert WorkBacklog(db,engine).type_priorities()==saved
+    activate(queue)
+    queue.tick()
+    assert calls==['urgent']
+    with pytest.raises(ValueError): queue.set_type_priorities({},config['revision'])
+
+
+def test_type_priority_never_enables_paused_or_unplanned_work(setup):
+    queue,engine,db,mission,calls=setup
+    queue.register('kingdom','note',task_type='security')
+    mission('paused')
+    queue.register('kingdom','paused',mission_id='paused',mission_version=1,acceptance_step='accept',enabled=False,task_type='security')
+    queue.set_type_priorities({'security':100},1)
+    activate(queue)
+    assert queue.tick()['status']=='idle' and not calls
+    engine.execution_policy.get=lambda:{'level':3}
+    assert queue.tick()['status']=='stopped'
+
+
+@pytest.mark.parametrize('priorities',[{'security':True},{'security':101},{'security':-1},{'bad type':50},dict((str(n),1) for n in range(21))])
+def test_type_priority_settings_are_bounded(setup,priorities):
+    queue,*_=setup
+    with pytest.raises(ValueError): queue.set_type_priorities(priorities,1)
+    assert queue.type_priorities()=={'revision':1,'priorities':{}}

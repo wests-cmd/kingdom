@@ -954,3 +954,8 @@ input[type=color] { width:56px; height:40px; padding:4px!important; cursor:point
 .topology-computers summary { cursor:pointer; overflow-wrap:anywhere; }
 .topology-computers ul { padding-left:20px; max-height:280px; overflow:auto; }
 .cluster-topology svg { width:100%; height:auto; max-height:320px; }
+.swarm-controls form { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr)); gap:14px; align-items:end; }
+.swarm-controls form>label { display:grid; gap:6px; min-width:0; }
+.swarm-controls form>fieldset { grid-column:1/-1; }
+.swarm-controls form :is(input:not([type=checkbox]),select) { width:100%; box-sizing:border-box; }
+.swarm-controls h4 { margin-top:22px; }

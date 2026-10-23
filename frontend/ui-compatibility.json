@@ -1,1 +1,5 @@
-{"compatible_backends":["1.2.3"]}
+{
+  "compatible_backends": [
+    "1.2.4"
+  ]
+}

@@ -152,6 +152,10 @@ class ZeroTrust:
                         "approval_id": approval_id,
                     }
 
+                self.audit.record(actor=actor_id, operation=operation, capability=capability,
+                    decision="DENIED", reason="Explicit approval is expired, consumed or outside its exact scope",
+                    approval_id=approval_id)
+
             # Otherwise, request approval and deny current execution
             appr_req = self.approvals.create_request(
                 capability=capability,

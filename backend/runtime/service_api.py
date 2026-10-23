@@ -9,7 +9,7 @@ router=APIRouter(prefix='/service-nodes',dependencies=[Depends(require_owner)])
 @router.get('/discovery')
 def discovery():
     from backend.runtime.service_discovery import discover_local_services
-    return {**discover_local_services(),'scope':'Observed services on this Kingdom host only; discovery grants no control or update permissions.'}
+    return {**discover_local_services(),'notice':'Observed service scopes only; discovery grants no control or update permissions.'}
 def service():
     from backend.api import engine
     from backend.storage.db import db

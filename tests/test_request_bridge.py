@@ -146,6 +146,33 @@ def test_project_priorities_do_not_leak_other_scope(tmp_path):
     assert 'private elsewhere' not in result['answer']
     assert result['evidence'][0]['task_ids']==[]
 
+
+def test_natural_work_list_question_reads_real_scoped_backlog_without_model(tmp_path):
+    service, models, agents = setup(tmp_path)
+    from backend.runtime.work_backlog import WorkBacklog
+    service.engine.events = SimpleNamespace(publish=lambda *args, **kwargs: None)
+    backlog = WorkBacklog(service.db, service.engine)
+    lower = backlog.register('kingdom', 'later', title='Later real work', priority=10)
+    first = backlog.register('kingdom', 'first', title='First real security work', priority=100)
+    backlog.register('private', 'hidden', title='Private other project', priority=100)
+    data = body()
+    data.update(project_scope='kingdom', prompt='What should we do next on the project work list? Show the highest-priority unfinished work and its blockers. Do not claim the updates are complete.')
+    result = asyncio.run(service.run(service.create(data)['id']))
+    assert result['route'] == 'priorities'
+    assert models.calls == agents.created == 0
+    assert result['answer'].index(first['title']) < result['answer'].index(lower['title'])
+    assert first['reason'] in result['answer']
+    assert 'Private other project' not in result['answer']
+    assert result['evidence'][1]['work_ids'] == [first['id'], lower['id']]
+
+
+@pytest.mark.parametrize('prompt', ['How should a priority queue work?',
+                                   'What are priorities in project management?'])
+def test_priority_explanation_questions_keep_model_route(tmp_path, prompt):
+    service, _, _ = setup(tmp_path)
+    data = body(); data['prompt'] = prompt
+    assert service.create(data)['route'] == 'quick'
+
 @pytest.mark.parametrize('prompt,route',[('fix the workspace bug','agent'),('How do I fix a bug?','quick'),('please inspect the project','agent'),('Tell me the history of clocks','quick')])
 def test_automatic_action_vs_question_routing(tmp_path,prompt,route):
     service,models,agents=setup(tmp_path)

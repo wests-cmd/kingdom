@@ -31,6 +31,42 @@ import shlex
 from pathlib import Path
 from datetime import datetime
 OWNER_CODE = secrets.token_urlsafe(48)
+_DIAGNOSTICS = None
+
+
+def _logged_process(command, directory, name, **kwargs):
+    """Never leave a child blocked on a full, unread Windows pipe."""
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    with (directory / (name + '.stdout.log')).open('wb') as out, (directory / (name + '.stderr.log')).open('wb') as error:
+        return subprocess.Popen(command, stdout=out, stderr=error, **kwargs)
+
+
+def _capture_timeout():
+    # Child stacks contain no locals; keep only this isolated fixture's logs.
+    if _DIAGNOSTICS is None:
+        return
+    directory, trigger = _DIAGNOSTICS
+    trigger.touch()
+    deadline = time.monotonic() + 1
+    stack = directory / 'commander.stacks.log'
+    while time.monotonic() < deadline and (trigger.exists() or not stack.exists()):
+        time.sleep(.02)
+    destination = Path(__file__).resolve().parents[2] / 'evidence' / ('process-timeout-' + directory.name)
+    destination.mkdir(parents=True, exist_ok=True)
+    for source in directory.glob('*.log'):
+        # Never retain the generated owner credential even if a dependency logs it.
+        text = source.read_text(encoding='utf-8', errors='replace').replace(OWNER_CODE, '<REDACTED>')
+        (destination / source.name).write_text(text[-100000:], encoding='utf-8')
+    print('Isolated process timeout diagnostics:', destination)
+
+
+def _open_http(request, timeout):
+    try:
+        return urllib.request.urlopen(request, timeout=timeout)
+    except TimeoutError:
+        _capture_timeout()
+        raise
 
 
 def test_reviewed_build_on_real_remote_computer(commander_process, tmp_path_factory):
@@ -110,7 +146,7 @@ COMMANDER_URL = f"http://127.0.0.1:{COMMANDER_PORT}"
 
 def _http_get(url: str, timeout: float = 3.0) -> dict:
     req = urllib.request.Request(url, headers={"Authorization": "Bearer " + OWNER_CODE}, method="GET")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with _open_http(req, timeout) as resp:
         body = resp.read().decode("utf-8")
         return json.loads(body) if body else {}
 
@@ -119,7 +155,7 @@ def _http_post(url: str, payload: dict | None = None, timeout: float = 5.0) -> d
     data_bytes = json.dumps(payload).encode("utf-8") if payload else None
     headers = {"Content-Type": "application/json", "Authorization": "Bearer " + OWNER_CODE}
     req = urllib.request.Request(url, data=data_bytes, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with _open_http(req, timeout) as resp:
         body = resp.read().decode("utf-8")
         return json.loads(body) if body else {}
 
@@ -147,26 +183,47 @@ def commander_process(tmp_path_factory):
     env["DATA_DIR"] = str(cmd_dir)
     env["KINGDOM_OWNER_TOKEN"] = OWNER_CODE
 
-    # Configure isolated DB path via backend.storage.db.DEFAULT_DB_PATH
-    cmd = [
-        sys.executable, "-c",
-        f"import os, sys, uvicorn, pathlib; from backend.storage import db; db.db.db_path=pathlib.Path({str(db_file)!r}); db.db.init_db(); uvicorn.run('backend.main:app', host='127.0.0.1', port={COMMANDER_PORT}, log_level='warning')"
-    ]
-
-    proc = subprocess.Popen(cmd, cwd=Path(__file__).resolve().parents[2], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if not wait_for_url(f"{COMMANDER_URL}/health/ready", max_wait_sec=30.0):
-        proc.terminate()
-        _, error = proc.communicate(timeout=5)
-        raise AssertionError("Commander failed to start: " + error.decode(errors='replace')[-2000:])
-
-    yield proc
-
-    proc.terminate()
+    # A filesystem trigger works on Windows and POSIX without exposing a debug API
+    # or using platform-specific signals. It dumps all child threads, never locals.
+    diagnostic_dir = cmd_dir / 'diagnostics'
+    diagnostic_dir.mkdir()
+    trigger = diagnostic_dir / 'dump.request'
+    stack = diagnostic_dir / 'commander.stacks.log'
+    bootstrap = f"""
+import pathlib, threading, time, faulthandler, uvicorn
+from backend.storage import db
+def dump_on_request():
+    trigger = pathlib.Path({str(trigger)!r})
+    while True:
+        if trigger.exists():
+            with open({str(stack)!r}, 'a') as output:
+                faulthandler.dump_traceback(file=output, all_threads=True)
+            trigger.unlink(missing_ok=True)
+        time.sleep(.02)
+threading.Thread(target=dump_on_request, daemon=True).start()
+db.db.db_path = pathlib.Path({str(db_file)!r})
+db.db.init_db()
+uvicorn.run('backend.main:app', host='127.0.0.1', port={COMMANDER_PORT}, log_level='warning')
+"""
+    proc = _logged_process([sys.executable, '-c', bootstrap], diagnostic_dir, 'commander',
+                          cwd=Path(__file__).resolve().parents[2], env=env)
+    global _DIAGNOSTICS
+    _DIAGNOSTICS = (diagnostic_dir, trigger)
     try:
-        _, error = proc.communicate(timeout=3.0)
-        if error: print(error.decode(errors='replace')[-6000:])
-    except subprocess.TimeoutExpired:
-        proc.kill()
+        if not wait_for_url(f"{COMMANDER_URL}/health/ready", max_wait_sec=30.0):
+            _capture_timeout()
+            raise AssertionError("Commander failed to start; isolated diagnostics retained")
+        yield proc
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=3.0)
+        except subprocess.TimeoutExpired:
+            _capture_timeout()
+            proc.kill()
+            proc.wait(timeout=3.0)
+        _DIAGNOSTICS = None
+
 
 
 def test_process_distributed_enrollment_task_execution_lifecycle(commander_process, tmp_path_factory):
@@ -200,7 +257,8 @@ def test_process_distributed_enrollment_task_execution_lifecycle(commander_proce
         "--data-dir", str(kn_data_dir)
     ]
 
-    kn_proc = subprocess.Popen(cmd_kn, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    diagnostic_dir = _DIAGNOSTICS[0]
+    kn_proc = _logged_process(cmd_kn, diagnostic_dir, 'knight-first')
     try:
         # Give Knight process time to submit pairing request
         time.sleep(2.0)
@@ -250,9 +308,9 @@ def test_process_distributed_enrollment_task_execution_lifecycle(commander_proce
         kn_proc.wait(timeout=3.0)
 
         # 7. Restart same Knight process -> Identity persists, reconnect succeeds
-        kn_proc_restarted = subprocess.Popen(
+        kn_proc_restarted = _logged_process(
             [c for c in cmd_kn if c != "--pairing-code" and c != pairing_code],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            diagnostic_dir, "knight-restarted"
         )
         try:
             time.sleep(2.5)
@@ -401,3 +459,31 @@ def test_verified_mission_dependency_across_two_worker_processes(commander_proce
         for proc in workers:
             if proc.poll() is None:proc.terminate()
             proc.communicate(timeout=5)
+
+def test_process_logs_cannot_fill_unread_pipes(tmp_path):
+    """Real child output exceeds the Windows anonymous-pipe buffer on both streams."""
+    proc = _logged_process([sys.executable, '-c',
+        "import sys; sys.stdout.write('x'*1048576); sys.stdout.flush(); sys.stderr.write('y'*1048576); sys.stderr.flush()"],
+        tmp_path, 'verbose-child')
+    try:
+        assert proc.wait(timeout=5) == 0
+        assert (tmp_path / 'verbose-child.stdout.log').stat().st_size == 1048576
+        assert (tmp_path / 'verbose-child.stderr.log').stat().st_size == 1048576
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=3)
+
+
+def test_commander_diagnostic_trigger_captures_real_child_threads(commander_process):
+    directory, trigger = _DIAGNOSTICS
+    trigger.touch()
+    deadline = time.monotonic() + 3
+    stack = directory / 'commander.stacks.log'
+    while time.monotonic() < deadline and (trigger.exists() or not stack.exists()):
+        time.sleep(.02)
+    assert stack.exists(), 'Cross-platform timeout stack capture failed'
+    text = stack.read_text(errors='replace')
+    assert 'dump_on_request' in text
+    assert 'uvicorn' in text
+    assert OWNER_CODE not in text

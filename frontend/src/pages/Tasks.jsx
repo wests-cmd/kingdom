@@ -11,6 +11,7 @@ import MissionEditor from '../components/MissionEditor'
 import DesktopActions from '../components/DesktopActions'
 import ParallelChats from '../components/ParallelChats'
 import WorkBacklogPanel from '../components/WorkBacklogPanel'
+import WorkProgrammePanel from '../components/WorkProgrammePanel'
 
 export default function Tasks() {
 
@@ -137,6 +138,7 @@ export default function Tasks() {
 
     <div>
 
+      <WorkProgrammePanel/>
       <WorkBacklogPanel/>
       <h2>Task Management</h2>
 

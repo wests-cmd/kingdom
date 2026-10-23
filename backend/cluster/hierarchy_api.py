@@ -14,6 +14,8 @@ class GroupRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     captain: str = Field(max_length=128)
     members: list[str] = Field(min_length=1, max_length=100)
+    flags: list[str] = Field(default_factory=list, max_length=12)
+    preferred_task_types: list[str] = Field(default_factory=list, max_length=12)
 
 
 @router.get('')
@@ -22,8 +24,14 @@ def status(): return hierarchy.export(engine.swarm.registry.status())
 
 @router.post('/groups')
 def create(request: GroupRequest):
-    try: return hierarchy.create_group(request.name, request.captain, request.members)
+    try: return hierarchy.create_group(request.name, request.captain, request.members, request.flags, request.preferred_task_types)
     except ValueError as error: raise HTTPException(400, str(error)) from error
+
+
+@router.delete('/groups/{ident}')
+def delete_group(ident: str):
+    try: return hierarchy.delete_group(ident)
+    except ValueError as error: raise HTTPException(404, str(error)) from error
 
 
 class TopologyRequest(BaseModel):

@@ -2,6 +2,7 @@
 import json
 import time
 import os
+import uuid
 from pathlib import Path
 from urllib.request import Request, urlopen
 from threading import RLock
@@ -44,12 +45,13 @@ class ExecutionPolicy:
         if self.authority_token_file:
             return self._authority()
         with self._lock, self.db.get_connection() as conn:
-            row = conn.execute("SELECT value_json FROM runtime_state WHERE key='execution_policy'").fetchone()
+            row = conn.execute("SELECT value_json,updated_at FROM runtime_state WHERE key='execution_policy'").fetchone()
         # Preserve the existing bounded runtime behavior on upgrade.
-        level = json.loads(row[0])["level"] if row else 3
+        stored = json.loads(row[0]) if row else {}
+        level = stored["level"] if row else 3
         if type(level) is not int or level not in range(6):
             level = 0  # Invalid persisted policy fails closed.
-        return {"level": level, "levels": LEVELS, "mission_budget": self.mission_budget(level), "scope": "New task execution; authentication and capability checks always apply; level 5 provides standing owner authorization for high-risk tools."}
+        return {"level": level, "revision": stored.get("revision", str(row[1]) if row else "default"), "levels": LEVELS, "mission_budget": self.mission_budget(level), "scope": "New task execution; authentication and capability checks always apply; level 5 provides standing owner authorization for high-risk tools."}
 
     def set(self, level):
         if type(level) is not int or level not in range(6):
@@ -57,7 +59,7 @@ class ExecutionPolicy:
         if self.authority_token_file:
             return self._authority(level)
         with self._lock, self.db.get_connection() as conn:
-            conn.execute("INSERT INTO runtime_state(key,value_json,updated_at) VALUES('execution_policy',?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at", (json.dumps({"level": level}), time.time()))
+            conn.execute("INSERT INTO runtime_state(key,value_json,updated_at) VALUES('execution_policy',?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at", (json.dumps({"level": level, "revision": uuid.uuid4().hex}), time.time()))
             conn.commit()
         return self.get()
 

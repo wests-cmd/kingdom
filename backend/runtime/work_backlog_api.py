@@ -24,6 +24,7 @@ class Item(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(default='', max_length=12000)
     priority: int = Field(default=50, ge=0, le=100)
+    task_type: str = Field(default='generic', pattern=r'^[A-Za-z0-9_-]{1,80}$')
     mission_id: str | None = Field(default=None, pattern=r'^[A-Za-z0-9_-]{1,80}$')
     mission_version: int | None = Field(default=None, ge=1)
     acceptance_step: str | None = Field(default=None, pattern=r'^[A-Za-z0-9_-]{1,80}$')
@@ -34,6 +35,12 @@ class Item(BaseModel):
 class Settings(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     enabled: bool
+    expected_revision: int = Field(ge=1)
+
+
+class TypePriorities(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    priorities: dict[str, int] = Field(max_length=20)
     expected_revision: int = Field(ge=1)
 
 
@@ -63,6 +70,16 @@ def boundary(operation):
 @router.get('')
 def listing():
     return boundary(lambda: service().snapshot())
+
+
+@router.get('/type-priorities')
+def type_priorities():
+    return boundary(lambda: service().type_priorities())
+
+
+@router.put('/type-priorities')
+def set_type_priorities(request: TypePriorities):
+    return boundary(lambda: service().set_type_priorities(**request.model_dump()))
 
 
 @router.post('/settings')

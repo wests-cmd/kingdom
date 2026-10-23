@@ -282,11 +282,12 @@ class RuntimeEngine:
             event_type = "task.requeued" if recovered["status"] == "queued" else "task.failed"
             self.events.publish(event_type, recovered)
 
-    def authorize_task(self, task):
+    def authorize_task(self, task, *, execution_node=None, execution_capability=None):
         """Same exact owner approval boundary for local execution and remote dispatch."""
         actor = task["metadata"].get("actor", "system")
         capability = task["metadata"].get("capability", "node.execute")
         approval_id = task["metadata"].get("approval_id")
+        policy = self.execution_policy.get()
         return self.security.authorize(
                 actor_id=actor,
                 token=(self.security.nodes.get_node(actor) or {}).get("token"),
@@ -296,6 +297,11 @@ class RuntimeEngine:
                 approval_id=approval_id,
                 require_human_approval=self.execution_policy.requires_approval(task),
                 parameters={"task_id": task["id"], "prompt": task["prompt"],
+                            "execution_context": {"node": execution_node,
+                                "placement": "local" if execution_node is None else "remote",
+                                "capability": execution_capability or capability,
+                                "policy_level": policy["level"],
+                                "policy_revision": policy.get("revision", "unversioned")},
                             "metadata": {k: v for k, v in task["metadata"].items() if k != "approval_id"}},
             )
 
@@ -319,7 +325,7 @@ class RuntimeEngine:
                 if capability != 'process.execute' or offload_candidate(node_registry, capability,
                         members=[node_id], busy_nodes=leases.busy_node_ids()) != node_id:
                     return None
-            auth = self.authorize_task(task)
+            auth = self.authorize_task(task, execution_node=node_id, execution_capability=capability)
             if not auth["authorized"]:
                 if auth.get("approval_id"):
                     waiting = self.tasks.transition_task(task_id, "WAITING_APPROVAL",

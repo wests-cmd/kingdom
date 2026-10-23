@@ -8,6 +8,15 @@ from uuid import uuid4
 from backend.events.event_bus import event_bus
 
 
+def priority_question(text):
+    # Recognize explicit questions about saved work, not general priority advice.
+    question = text.split('?', 1)[0].strip().rstrip('.!')
+    return question in {'priorities', 'what are my priorities', 'what needs doing',
+                        'what is on my work list', 'show my work list',
+                        'what is left on my work list'} or bool(re.fullmatch(
+        r'what should (?:we|i) do next(?: on| for) (?:the |my |our )?(?:project )?work list', question))
+
+
 class RequestService:
     def __init__(self, database, engine, models, agents):
         self.db, self.engine, self.models, self.agents = database, engine, models, agents
@@ -85,7 +94,7 @@ class RequestService:
             if text in {'what time is it','time','what is the current time'}: route='time'
             elif text in {'status','system status','runtime status','what is the status',
                           'what is the runtime status','what is the system status'}: route='status'
-            elif text in {'priorities','what are my priorities','what needs doing'}: route='priorities'
+            elif priority_question(text): route='priorities'
             elif re.match(r'^(?:please\s+)?(?:inspect|implement|edit|modify|fix|refactor|build|run tests|test the|create a file|write a file)\b', text): route='agent'
             else: route='quick'
         state['route']=route
@@ -110,6 +119,20 @@ class RequestService:
     def list(self, session_scope, project_scope):
         with self.db.get_connection() as conn:
             return [json.loads(row[0]) for row in conn.execute('SELECT state_json FROM conversation_requests WHERE session_scope=? AND project_scope=? ORDER BY rowid DESC LIMIT 100',(session_scope,project_scope))]
+
+    def priority_snapshot(self, project_scope):
+        """Read exact-scope saved records; never initialize or advance executors."""
+        tasks = [task for task in self.engine.tasks.list()
+                 if task.get('metadata', {}).get('project_scope') == project_scope
+                 and task['status'].lower() not in {'completed', 'succeeded', 'cancelled'}][:20]
+        work = []
+        with self.db.get_connection() as conn:
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_backlog'").fetchone():
+                rows = conn.execute("""SELECT state_json FROM work_backlog WHERE project=?
+                    AND json_extract(state_json,'$.status') != 'completed'
+                    ORDER BY CAST(json_extract(state_json,'$.priority') AS INTEGER) DESC, rowid LIMIT 20""", (project_scope,)).fetchall()
+                work = [json.loads(row[0]) for row in rows]
+        return tasks, work
 
     def update(self, ident, change, expected=None):
         with self.db.get_connection() as conn:
@@ -140,9 +163,14 @@ class RequestService:
                 answer='Runtime: '+('running' if status.get('running') else 'stopped')+'. Mode: '+str(status.get('mode','not reported'))+'.'
                 evidence=[{'type':'runtime_status','snapshot':status}]
             elif route=='priorities':
-                tasks=[task for task in await asyncio.to_thread(self.engine.tasks.list) if task.get('metadata',{}).get('project_scope')==state['project_scope'] and task['status'].lower() not in {'completed','succeeded','cancelled'}]
-                answer='\n'.join(f"{task['status']}: {task['prompt'][:160]}" for task in tasks[:20]) or 'No unfinished tasks recorded for this project scope.'
-                evidence=[{'type':'project_tasks','task_ids':[task['id'] for task in tasks[:20]]}]
+                tasks, work = await asyncio.to_thread(self.priority_snapshot, state['project_scope'])
+                lines = [f"{task['status']}: {task['prompt'][:160]}" for task in tasks]
+                lines += [f"Priority {item['priority']} · {item['status']}: {item['title']}\nBlocker/status: {item.get('reason', 'Not recorded')[:300]}"
+                          for item in work]
+                answer = ('Saved records for project scope ' + state['project_scope'] + ':\n' + '\n'.join(lines)
+                          + '\nPlanning notes and saved status are not proof of completed work.') if lines else 'No unfinished tasks or work-list items recorded for this exact project scope. Select the intended project scope to inspect another list.'
+                evidence=[{'type':'project_tasks','task_ids':[task['id'] for task in tasks]},
+                          {'type':'project_work_list','project_scope':state['project_scope'],'work_ids':[item['id'] for item in work]}]
             elif route=='agent':
                 if not state['agent_session_id']:
                     objective = state['prompt']
