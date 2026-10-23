@@ -41,9 +41,13 @@ def test_migration_idempotency_and_version_registry():
     """
     Verifies that running database schema migrations multiple times is idempotent.
     """
+    version_before = STATE['version']
     run_migrations()
     run_migrations()
-    assert STATE["version"] == "1.2.2"
+    assert STATE["version"] == version_before
+    from pathlib import Path
+    from scripts.validate_version import get_authoritative_version
+    assert STATE['version'] == get_authoritative_version(str(Path(__file__).resolve().parents[1]))
 
 
 def test_updater_transaction_pipeline(tmp_path):

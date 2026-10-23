@@ -3,13 +3,15 @@ from tests.auth_support import owner_client
 Kingdom Release Installation Contract Suite.
 Tests:
 - Clean machine startup & readiness health check contracts
-- Single source version reporting (1.0.0)
+- Canonical version reporting and packaged metadata consistency
 - Data backup, schema migration, and automatic rollback routines
 """
 
 import pytest
 import os
 import hashlib
+import json
+from pathlib import Path
 from fastapi.testclient import TestClient
 from backend.main import app
 from backend.state import STATE
@@ -33,14 +35,16 @@ def test_version_consistency_contract():
     assert res.status_code == 200
     data = res.json()
     assert data["version"] == STATE["version"]
-    assert data["version"] == "1.2.2"
+    root = Path(__file__).resolve().parents[1]
+    for relative in ('frontend/package.json', 'desktop/package.json'):
+        assert data['version'] == json.loads((root / relative).read_text(encoding='utf-8'))['version']
 
 
 def test_updater_release_and_rollback_contract(tmp_path):
     # Check update
     check_res = updater_engine.check_updates()
     assert "update_available" in check_res
-    assert check_res["current_version"] == "1.2.2"
+    assert check_res["current_version"] == STATE['version']
 
     # Verify checksum
     sample_data = b"Kingdom release artifact content v1.0.0"

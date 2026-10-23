@@ -3,12 +3,14 @@ from tests.auth_support import owner_client
 Kingdom Deployment Master Smoke & Health Suite.
 Validates:
 - Clean machine startup & runtime health checks (/health/live, /health/ready, /system/check)
-- Version consistency across single source of truth (1.2.2)
+- Version consistency across canonical state, packaged metadata and runtime APIs
 - Database migration execution, backup creation, and rollback safety
 - Zero-Trust security endpoint availability and audit logging
 """
 
 import pytest
+import json
+from pathlib import Path
 from fastapi.testclient import TestClient
 from backend.main import app
 from backend.state import STATE
@@ -26,7 +28,9 @@ def test_single_source_version_truth():
     assert res.status_code == 200
     data = res.json()
     assert data["version"] == STATE["version"]
-    assert data["version"] == "1.2.2"
+    root = Path(__file__).resolve().parents[1]
+    for relative in ('frontend/package.json', 'desktop/package.json'):
+        assert data['version'] == json.loads((root / relative).read_text(encoding='utf-8'))['version']
 
 
 def test_health_liveness_and_readiness_endpoints():
@@ -56,7 +60,7 @@ def test_system_check_and_diagnostics_export():
     res_diag = client.get("/diagnostics/export")
     assert res_diag.status_code == 200
     diag = res_diag.json()
-    assert diag["kingdom_version"] == "1.2.2"
+    assert diag["kingdom_version"] == STATE['version']
     assert "commander_identity" in diag
 
 
@@ -70,4 +74,4 @@ def test_deployment_updater_backup_and_migration():
     # Updater check
     update_res = updater_engine.check_updates()
     assert "update_available" in update_res
-    assert update_res["current_version"] == "1.2.2"
+    assert update_res["current_version"] == STATE['version']

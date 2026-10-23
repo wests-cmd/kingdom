@@ -1,6 +1,8 @@
 """Durable reviewed mission plans; completion requires real verified task results."""
 import json
 import time
+import re
+import hashlib
 from threading import RLock
 from typing import Literal
 from uuid import uuid4, uuid5, NAMESPACE_URL
@@ -13,7 +15,7 @@ class MissionStep(BaseModel):
     model_config = ConfigDict(extra='forbid')
     id: str = Field(pattern=r'^[a-z][a-z0-9_-]{0,50}$')
     title: str = Field(min_length=1, max_length=300)
-    kind: Literal['model', 'write_file', 'read_file', 'python_check', 'text_check', 'command', 'package', 'desktop_input', 'build']
+    kind: Literal['model', 'write_file', 'read_file', 'python_check', 'text_check', 'command', 'package', 'desktop_input', 'build', 'function_check']
     instructions: str = Field(default='', max_length=100000)
     path: str | None = Field(default=None, max_length=300)
     argv: list[str] = Field(default_factory=list, max_length=40)
@@ -23,6 +25,8 @@ class MissionStep(BaseModel):
     repair_source: str | None = Field(default=None, max_length=51)
     computer_id: str | None = Field(default=None, min_length=1, max_length=200)
     build: BuildSpec | None = None
+    case_profile: str | None = Field(default=None,max_length=100)
+    case_profile_sha256: str | None = Field(default=None,pattern=r'^[0-9a-f]{64}$')
 
 
 class MissionPlan(BaseModel):
@@ -40,6 +44,18 @@ def validate_plan(plan):
     seen = set()
     by_id = {step.id: step for step in plan.steps}
     for step in plan.steps:
+        if step.kind == 'function_check':
+            from backend.runtime.bounded_function_tests import profile_hash
+            expected=profile_hash(step.case_profile)
+            if step.case_profile_sha256 is None:step.case_profile_sha256=expected
+            if step.case_profile_sha256!=expected:raise ValueError('Immutable case profile changed')
+            read=by_id.get(step.input_from)
+            source=by_id.get(step.repair_source)
+            if (not read or read.kind!='read_file' or not source or source.kind!='write_file'
+                    or read.path!=source.path or source.id not in read.depends_on):
+                raise ValueError('Function checks need a dependent read of their governed source write')
+        elif step.case_profile is not None or step.case_profile_sha256 is not None:
+            raise ValueError('Case profiles belong only to bounded function checks')
         if step.computer_id and step.kind not in {'text_check', 'python_check', 'build'}:
             raise ValueError('Explicit computers support only independently verified text and Python analysis')
         if step.kind == 'build' and (not step.computer_id or not step.build or step.input_from or step.argv):
@@ -60,7 +76,7 @@ def validate_plan(plan):
             validate_input(json.loads(step.instructions))
         if step.repair_source:
             source = by_id.get(step.repair_source)
-            if step.kind != 'command' or step.repair_source not in step.depends_on or not source or source.kind != 'write_file':
+            if step.kind not in {'command','function_check'} or step.repair_source not in step.depends_on or not source or source.kind != 'write_file':
                 raise ValueError('A repair must name an earlier directly dependent write_file step; only that file may change')
         seen.add(step.id)
     return plan
@@ -126,6 +142,10 @@ class MissionService:
     def advance_all(self):
         if self.engine.execution_policy.get()['level'] < 4: return
         for state in self.list():
+            # Tracked work has its own enable/dependency/priority selection.
+            # The legacy runtime poller must not bypass that selection.
+            if self._backlog_tracking(state['id'])[0]:
+                continue
             if state['status'] in {'approved', 'running'}:
                 try:
                     self.advance(state['id'])
@@ -134,6 +154,34 @@ class MissionService:
                     state.update(status='needs_review', failure='Mission could not advance. Review permissions and retained task evidence before retrying.')
                     self.save(state)
                     self.engine.events.publish('mission.needs_review', {'id': state['id']})
+
+    def _backlog_tracking(self, ident):
+        with self.db.get_connection() as conn:
+            if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_backlog'").fetchone():
+                return [], [], False
+            states = [json.loads(row[0]) for row in conn.execute('SELECT state_json FROM work_backlog')]
+            setting = conn.execute('SELECT enabled FROM work_backlog_settings WHERE id=1').fetchone()
+        return [item for item in states if item['intent']['mission_id'] == ident], states, bool(setting and setting[0] == 1)
+
+    def _require_backlog_selection(self, state, policy, lease):
+        tracked, states, globally_enabled = self._backlog_tracking(state['id'])
+        if not tracked:
+            if lease is not None:
+                raise ValueError('Backlog selection has no tracked mission')
+            return
+        if len(tracked) != 1:
+            raise ValueError('Ambiguous tracked mission')
+        item = tracked[0]
+        by_id = {candidate['id']: candidate for candidate in states}
+        if (not globally_enabled or item['enabled'] is not True or item['status'] != 'running'
+                or not lease or item['lease'] != lease or policy['level'] not in {4, 5}
+                or not self.engine.status().get('running')
+                or item['intent']['mission_version'] != state['version']):
+            raise ValueError('Tracked missions require current enabled backlog selection')
+        for ident in item['intent']['depends_on']:
+            dependency = by_id.get(ident)
+            if not dependency or dependency['project'] != item['project'] or dependency['status'] != 'completed':
+                raise ValueError('Tracked mission dependencies are unfinished')
 
     @staticmethod
     def verified_outputs(task):
@@ -173,11 +221,33 @@ class MissionService:
         value = outcome.get('text', outcome.get('output', outcome)) if isinstance(outcome, dict) else outcome
         return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
 
-    def advance(self, ident):
+    def function_candidate(self,state,raw,model_task_id,write_step_id,phase):
+        """Remove one explicit Python transport wrapper, never prose or source content."""
+        source=raw;formatting='raw_python'
+        if '```' in raw:
+            match=re.fullmatch(r'\s*```python[ \t]*\r?\n(?P<body>[\s\S]*?)(?P<ending>\r?\n)```[ \t]*\s*',raw)
+            if not match or not match['body'].strip() or '```' in match['body']:
+                raise ValueError('Ambiguous fenced function candidate')
+            source=match['body']+match['ending'];formatting='single_python_fence'
+        provenance={'model_task_id':model_task_id,'write_step_id':write_step_id,'phase':phase,
+                    'raw_sha256':hashlib.sha256(raw.encode()).hexdigest(),
+                    'source_sha256':hashlib.sha256(source.encode()).hexdigest(),
+                    'format':formatting,'normalizer_version':'single-python-fence-v1'}
+        history=state.setdefault('source_normalizations',[])
+        if provenance not in history:
+            history.append(provenance)
+            self.engine.events.publish('mission.source_normalized',{'id':state['id'],**provenance})
+        return source
+
+    def advance(self, ident, *, backlog_lease=None):
         with self.lock:
             state = self.get(ident); policy = self.engine.execution_policy.get(); budget = policy['mission_budget']
+            self._require_backlog_selection(state, policy, backlog_lease)
             if policy['level'] == 0 or state['status'] not in {'approved', 'running'} or state['approved_version'] != state['version']:
                 return state
+            from backend.runtime.bounded_function_tests import profile_hash, validated_acceptance
+            if any(s['kind']=='function_check' and s.get('case_profile_sha256')!=profile_hash(s.get('case_profile')) for s in state['plan']['steps']):
+                state.update(status='needs_review',failure='Approved immutable case profile changed');self.save(state);return state
             if state.get('repair'):
                 if policy['level'] < 4: return state
                 return self.advance_repair(state, budget)
@@ -190,6 +260,8 @@ class MissionService:
                     step = next(step for step in state['plan']['steps'] if step['id'] == key)
                     try:
                         outputs = self.verified_outputs(task)
+                        if step['kind']=='function_check' and outputs[0].get('accepted') is True:
+                            validated_acceptance(self.engine,state['id'],state['version'],step['id'])
                         if step.get('computer_id') and (task.get('result') or {}).get('executed_by') != step['computer_id']:
                             raise ValueError('Result came from a different computer than the reviewed plan')
                     except (ValueError, TypeError, AttributeError):
@@ -248,10 +320,20 @@ class MissionService:
                 text = step.instructions
                 if step.input_from:
                     text = self.output(self.engine.tasks.get(state['steps'][step.input_from]['task_id']))
+                if (step.kind=='write_file' and step.input_from
+                        and any(s['id']==step.input_from and s['kind']=='model' for s in state['plan']['steps'])
+                        and any(s['kind']=='function_check' and s['repair_source']==step.id for s in state['plan']['steps'])):
+                    try:text=self.function_candidate(state,text,state['steps'][step.input_from]['task_id'],step.id,'initial')
+                    except ValueError:
+                        state.update(status='needs_review',failure='Model function response has an ambiguous code wrapper; no source was written')
+                        self.save(state);return state
                 tool, params = None, None
                 if step.kind == 'write_file': tool, params = 'workspace.write@1.0.0', {'path': step.path, 'content': text}
                 elif step.kind == 'read_file': tool, params = 'workspace.read@1.0.0', {'path': step.path}
                 elif step.kind == 'python_check': tool, params = 'code.python.analyze@1.0.0', {'text': text}
+                elif step.kind == 'function_check':
+                    from backend.runtime.bounded_function_tests import TOOL
+                    tool,params=TOOL,{'source':text,'profile_id':step.case_profile}
                 elif step.kind == 'text_check': tool, params = 'text.analyze@1.0.0', {'text': text}
                 elif step.kind == 'command': tool, params = 'process.run@1.0.0', {'argv': step.argv}
                 elif step.kind == 'package': tool, params = 'workspace.package@1.0.0', {'path': step.path}
@@ -263,7 +345,8 @@ class MissionService:
                 state['status'] = 'running'; self.save(state)
                 metadata = {'actor': 'owner', 'actor_id': 'owner', 'mission_id': ident, '_mission_step_key': key,
                             'model_profile': state['model_profile'], 'attachment_ids': state['attachment_ids'] if step.kind == 'model' else [],
-                            'max_attempts': 1 + budget['max_retries'] if step.kind in {'model','text_check','python_check','read_file'} else 1}
+                            'max_attempts': 1 + budget['max_retries'] if step.kind in {'model','text_check','python_check','read_file'} else 1,
+                            'mission_version':state['version'],'step_id':step.id}
                 if tool: metadata.update(tool=tool, tool_parameters=params)
                 if step.computer_id:
                     metadata.update(execution_target='remote', assigned_knight=step.computer_id,
@@ -308,7 +391,8 @@ class MissionService:
         repair.update(phase=phase, task_id=str(uuid5(NAMESPACE_URL, 'kingdom-mission:' + key)), task_prompt=prompt, task_metadata=metadata)
         self.save(state)
         self.engine.submit_task(prompt, {'actor':'owner', 'actor_id':'owner', 'mission_id':state['id'],
-            '_mission_step_key':key, 'model_profile':state['model_profile'], 'max_attempts':1, **metadata})
+            '_mission_step_key':key, 'model_profile':state['model_profile'], 'max_attempts':1,
+            'mission_version':state['version'],'step_id':repair['step'], **metadata})
         self.save(state)
 
     def advance_repair(self, state, budget):
@@ -326,13 +410,27 @@ class MissionService:
         state['repair_history'][-1][repair['phase'] + '_task_id'] = task['id']
         if repair['phase'] == 'diagnose':
             text = self.output(task)
+            step = next(item for item in state['plan']['steps'] if item['id'] == repair['step'])
+            if step['kind']=='function_check':
+                try:text=self.function_candidate(state,text,task['id'],repair['source'],'repair')
+                except ValueError:
+                    state.update(status='needs_review',failure='Model repair has an ambiguous code wrapper. Nothing was written.');self.save(state);return state
             if not text.strip() or text.lstrip().startswith('```'):
                 state.update(status='needs_review',failure='Model returned an unusable source repair. Nothing was written.'); self.save(state); return state
             self.queue_repair_task(state,'write',text,{'tool':'workspace.write@1.0.0','tool_parameters':{'path':repair['path'],'content':text}})
         elif repair['phase'] == 'write':
             state['steps'][repair['source']] = {'task_id':task['id'],'status':'verified'}
             step = next(item for item in state['plan']['steps'] if item['id'] == repair['step'])
-            self.queue_repair_task(state,'retest',step['title'],{'tool':'process.run@1.0.0','tool_parameters':{'argv':step['argv']}})
+            if step['kind']=='function_check':
+                self.queue_repair_task(state,'read',step['title'],{'tool':'workspace.read@1.0.0','tool_parameters':{'path':repair['path']}})
+            else:self.queue_repair_task(state,'retest',step['title'],{'tool':'process.run@1.0.0','tool_parameters':{'argv':step['argv']}})
+        elif repair['phase'] == 'read':
+            from backend.runtime.bounded_function_tests import TOOL,profile_hash
+            step = next(item for item in state['plan']['steps'] if item['id'] == repair['step'])
+            if step['case_profile_sha256']!=profile_hash(step['case_profile']):
+                state.update(status='needs_review',failure='Approved case profile changed');self.save(state);return state
+            state['steps'][step['input_from']]={'task_id':task['id'],'status':'verified'}
+            self.queue_repair_task(state,'retest',step['title'],{'tool':TOOL,'tool_parameters':{'source':self.output(task),'profile_id':step['case_profile']}})
         else:
             step = next(item for item in state['plan']['steps'] if item['id'] == repair['step'])
             if any(item.get('outcome',{}).get('output',{}).get('exit_code',0) != 0 for item in results):

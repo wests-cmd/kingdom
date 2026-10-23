@@ -10,8 +10,53 @@ import os
 import json
 import re
 import argparse
+import ast
+from pathlib import Path
 
-SEMVER_REGEX = re.compile(r"^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?$")
+SEMVER_REGEX = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[a-zA-Z0-9]+(?:\.[a-zA-Z0-9]+)*)?")
+PACKAGES = ('frontend/package.json', 'desktop/package.json', 'apps/mobile/package.json', 'apps/mobile/native/package.json')
+LOCKS = ('frontend/package-lock.json', 'desktop/package-lock.json', 'apps/mobile/native/package-lock.json')
+UI_CATALOG = 'frontend/ui-compatibility.json'
+REVIEW_MARKER = '<!-- RELEASE_REVIEW_REQUIRED -->'
+
+
+def stable_version(version):
+    if not isinstance(version, str) or not SEMVER_REGEX.fullmatch(version) or '-' in version:
+        raise ValueError('Stable releases require an exact X.Y.Z version')
+    return version
+
+
+def metadata_errors(root, version):
+    errors = []
+    for relative in PACKAGES + LOCKS:
+        try:
+            data = json.loads((Path(root) / relative).read_text(encoding='utf-8'))
+            if data.get('version') != version:
+                errors.append(f'{relative}: version differs from {version}')
+            if relative in LOCKS and data.get('packages', {}).get('', {}).get('version') != version:
+                errors.append(f'{relative}: root package version differs from {version}')
+        except (OSError, ValueError, TypeError, AttributeError) as error:
+            errors.append(f'{relative}: invalid or missing metadata ({type(error).__name__})')
+    try:
+        compatible = json.loads((Path(root) / UI_CATALOG).read_text(encoding='utf-8'))['compatible_backends']
+        if (not isinstance(compatible, list) or version not in compatible
+                or not all(isinstance(item, str) and SEMVER_REGEX.fullmatch(item) for item in compatible)):
+            errors.append(f'{UI_CATALOG}: explicit compatibility must include canonical version {version}')
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        errors.append(f'{UI_CATALOG}: invalid or missing compatibility ({type(error).__name__})')
+    return errors
+
+
+def release_identity(root):
+    version = stable_version(get_authoritative_version(str(root)))
+    errors = metadata_errors(root, version)
+    if errors:
+        raise ValueError('; '.join(errors))
+    notes = f'docs/releases/v{version}.md'
+    text = (Path(root) / notes).read_text(encoding='utf-8')
+    if not text.strip() or REVIEW_MARKER in text:
+        raise ValueError('Release notes need review before native release automation')
+    return {'version': version, 'tag': f'v{version}', 'notes': notes}
 
 def get_authoritative_version(root_dir: str) -> str:
     state_file = os.path.join(root_dir, "backend", "state.py")
@@ -21,12 +66,13 @@ def get_authoritative_version(root_dir: str) -> str:
     with open(state_file, "r") as f:
         content = f.read()
 
-    match = re.search(r'"version"\s*:\s*"([^"]+)"', content)
-    if not match:
-        raise ValueError(f"Could not parse 'version' from {state_file}")
-
-    version = match.group(1)
-    if not SEMVER_REGEX.match(version):
+    tree = ast.parse(content)
+    assignments = [node for node in tree.body if isinstance(node, ast.Assign)
+                   and any(isinstance(target, ast.Name) and target.id == 'STATE' for target in node.targets)]
+    if len(assignments) != 1:
+        raise ValueError('Exactly one literal STATE assignment is required')
+    version = ast.literal_eval(assignments[0].value)['version']
+    if not isinstance(version, str) or not SEMVER_REGEX.fullmatch(version):
         raise ValueError(f"Authoritative version '{version}' does not match semver format X.Y.Z")
 
     return version
@@ -47,8 +93,7 @@ def check_package_json(filepath: str, expected_version: str) -> bool:
     return True
 
 def validate_tag(tag: str, expected_version: str) -> bool:
-    normalized_tag = tag.lstrip("v")
-    if normalized_tag != expected_version:
+    if tag not in (expected_version, 'v' + expected_version):
         print(f"[ERROR] Git tag mismatch: tag '{tag}' vs canonical version '{expected_version}'")
         return False
     print(f"[OK] Git tag '{tag}' matches version '{expected_version}'")
@@ -76,9 +121,20 @@ def main():
     parser.add_argument("--tag", help="Git tag to validate against canonical version")
     parser.add_argument("--manifest", help="Path to release-manifest.json to validate")
     parser.add_argument("--print-version", action="store_true", help="Print canonical version and exit")
+    parser.add_argument('--release-identity', action='store_true', help='Emit reviewed stable version/tag/notes as GitHub outputs')
 
     args = parser.parse_args()
     root_dir = os.path.abspath(args.root)
+
+    if args.release_identity:
+        try:
+            identity = release_identity(root_dir)
+            if os.environ.get('GITHUB_REF', '').startswith('refs/tags/') and os.environ['GITHUB_REF'] != 'refs/tags/' + identity['tag']:
+                raise ValueError('Triggered tag does not match authoritative version')
+            print('\n'.join(f'{key}={value}' for key, value in identity.items()))
+            return
+        except (OSError, ValueError, KeyError, TypeError, SyntaxError) as error:
+            parser.exit(1, f'Release identity blocked: {error}\n')
 
     try:
         canonical_version = get_authoritative_version(root_dir)
@@ -94,15 +150,14 @@ def main():
 
     success = True
 
-    package_files = [
-        os.path.join(root_dir, "frontend", "package.json"),
-        os.path.join(root_dir, "desktop", "package.json"),
-        os.path.join(root_dir, "apps", "mobile", "package.json")
-    ]
+    package_files = [os.path.join(root_dir, relative) for relative in PACKAGES]
 
     for pkg in package_files:
         if not check_package_json(pkg, canonical_version):
             success = False
+    for error in metadata_errors(root_dir, canonical_version):
+        print('[ERROR] ' + error)
+        success = False
 
     if args.tag:
         if not validate_tag(args.tag, canonical_version):

@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react'
 import api from '../api'
 import DurableSchedulesPanel from '../components/DurableSchedulesPanel'
+import WorkBacklogPanel from '../components/WorkBacklogPanel'
 
 export default function Automations() {
   const [items, setItems] = useState([]), [error, setError] = useState(''), [loading, setLoading] = useState(true)
@@ -15,6 +16,7 @@ export default function Automations() {
     catch { setError('Approval failed. Refresh and approve the installed revision again.') }
   }
   return <section><h1>Automations</h1><p>Let Kingdom supervise connected work. The original runner stays available until the replacement passes its checks.</p>
+    <WorkBacklogPanel/>
     <DurableSchedulesPanel/>
     {loading && <p role="status">Reading connected automations…</p>}
     {error && <p role="alert">{error}</p>}
