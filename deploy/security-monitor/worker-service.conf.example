@@ -1,0 +1,13 @@
+# TEMPLATE ONLY; evaluate against the actual worker service and preserve identity/state.
+[Unit]
+Requires=kingdom-security-monitor.service
+After=kingdom-security-monitor.service
+
+[Service]
+User=kingdom-worker
+SupplementaryGroups=kingdom-monitor-client
+EnvironmentFile=/etc/kingdom-monitor/worker.env
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadOnlyPaths=/opt/kingdom-monitor /etc/kingdom-monitor
+ReadWritePaths=/var/lib/kingdom-worker

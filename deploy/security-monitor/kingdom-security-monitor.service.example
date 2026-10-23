@@ -1,0 +1,50 @@
+[Unit]
+Description=Kingdom separately protected audit receipt supervisor
+After=local-fs.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=exec
+User=kingdom-monitor
+Group=kingdom-monitor-client
+WorkingDirectory=/opt/kingdom-monitor
+ExecStart=/opt/kingdom-monitor/.venv/bin/python -m backend.security.monitor_supervisor --config /etc/kingdom-monitor/supervisor.json
+UMask=0077
+RuntimeDirectory=kingdom-monitor
+RuntimeDirectoryMode=0750
+StateDirectory=kingdom-monitor
+StateDirectoryMode=0700
+ReadOnlyPaths=/opt/kingdom-monitor /etc/kingdom-monitor
+ReadWritePaths=/run/kingdom-monitor /var/lib/kingdom-monitor
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectProc=invisible
+ProcSubset=pid
+MemoryMax=128M
+TasksMax=8
+CPUQuota=20%
+LimitNOFILE=32
+WatchdogSec=10s
+NotifyAccess=main
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=2s
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target
