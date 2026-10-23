@@ -106,8 +106,11 @@ class WorkBacklog:
                 or mission['status'] not in {'approved', 'running', 'completed'}):
             raise ValueError('Exact executable owner-reviewed mission required')
         step = next((step for step in mission['plan']['steps'] if step['id'] == acceptance_step), None)
-        if not step or step['kind'] != 'function_check':
-            raise ValueError('Select the reviewed native function acceptance step')
+        if not step or step['kind'] not in {'function_check', 'project_test'}:
+            raise ValueError('Select a reviewed native function or project test acceptance step')
+        if step['kind'] == 'project_test':
+            from backend.runtime.missions import MissionPlan, validate_plan
+            validate_plan(MissionPlan.model_validate(mission['plan']))
 
     def configure(self, project, ident, enabled, expected_revision):
         if type(enabled) is not bool:
@@ -205,8 +208,9 @@ class WorkBacklog:
             try:
                 mission = self.engine.missions.get(state['intent']['mission_id'])
                 if state['status'] == 'completed':
-                    from backend.runtime.bounded_function_tests import validated_acceptance
+                    from backend.runtime.mission_acceptance import validated_acceptance
                     try:
+                        self._programme_binding(state)
                         validated_acceptance(self.engine, state['intent']['mission_id'], state['intent']['mission_version'], state['intent']['acceptance_step'])
                     except (ValueError, KeyError, OSError, ImportError):
                         with self.db.get_connection() as conn:
@@ -227,7 +231,43 @@ class WorkBacklog:
                         self._save(conn, current); conn.commit()
                     self._publish(current)
                 self._finding(state, {}, 'Linked mission no longer exists')
+        # Invalidate downstream completion transitively before any new selection.
+        # Retained receipts are kept; changed prerequisites never authorize replay.
+        while True:
+            states = self.list()
+            by_id = {state['id']: state for state in states}
+            changed = False
+            for state in states:
+                if state['status'] != 'completed' or all(by_id.get(dep, {}).get('status') == 'completed'
+                        for dep in state['intent']['depends_on']):
+                    continue
+                with self.db.get_connection() as conn:
+                    conn.execute('BEGIN IMMEDIATE')
+                    current = json.loads(conn.execute('SELECT state_json FROM work_backlog WHERE id=?', (state['id'],)).fetchone()[0])
+                    if current['status'] != 'completed':
+                        continue
+                    current.update(status='review_required', reason='Previously accepted prerequisite is no longer current', evidence=None)
+                    self._save(conn, current); conn.commit()
+                self._publish(current)
+                changed = True
+            if not changed:
+                break
         return self.snapshot()
+
+    def _programme_binding(self, item):
+        with self.db.get_connection() as conn:
+            if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_programmes'").fetchone():
+                return
+            programmes = [json.loads(row[0]) for row in conn.execute('SELECT state_json FROM work_programmes')]
+        from backend.runtime.work_programmes import validate_binding
+        for programme in programmes:
+            for section in programme['sections']:
+                for row in [*section['items'], section['integration']]:
+                    if row['work_id'] == item['id']:
+                        try:
+                            validate_binding(self.engine, programme, row, item)
+                        except (KeyError, StopIteration, TypeError) as error:
+                            raise ValueError('Programme binding unavailable') from error
 
     def tick(self, limit=1):
         with _advancement_guard:
@@ -265,14 +305,15 @@ class WorkBacklog:
             status, evidence = 'running', None
             reason = 'Existing mission has unfinished governed tasks'
             if mission['status'] == 'completed':
-                from backend.runtime.bounded_function_tests import validated_acceptance
+                from backend.runtime.mission_acceptance import validated_acceptance
                 record = mission['steps'].get(intent['acceptance_step'])
                 if not record:
                     raise ValueError('Acceptance task receipt missing')
                 evidence = validated_acceptance(self.engine, intent['mission_id'], intent['mission_version'], intent['acceptance_step'])
                 if evidence.get('accepted') is not True:
                     raise ValueError('Native acceptance did not pass')
-                status, reason = 'completed', 'Native fixed-case acceptance verified; broader roadmap remains open'
+                self._programme_binding(state)
+                status, reason = 'completed', 'Reviewed acceptance verified within its reported scope; broader roadmap remains open'
             elif mission['status'] in {'needs_review', 'cancelled'}:
                 status, reason = 'review_required', 'Mission stopped for review; inspect its failed or exhausted steps'
             if status == 'review_required':
