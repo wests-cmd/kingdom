@@ -28,7 +28,30 @@ class WorkBacklog:
                 id TEXT PRIMARY KEY, work_id TEXT NOT NULL, finding_json TEXT NOT NULL)''')
             conn.execute('CREATE TABLE IF NOT EXISTS work_backlog_settings(id INTEGER PRIMARY KEY,enabled INTEGER,revision INTEGER)')
             conn.execute('INSERT OR IGNORE INTO work_backlog_settings VALUES(1,0,1)')
+            conn.execute('CREATE TABLE IF NOT EXISTS work_type_priorities(id INTEGER PRIMARY KEY,revision INTEGER,data_json TEXT)')
+            conn.execute("INSERT OR IGNORE INTO work_type_priorities VALUES(1,1,'{}')")
             conn.commit()
+
+    def type_priorities(self):
+        with self.db.get_connection() as conn:
+            row = conn.execute('SELECT revision,data_json FROM work_type_priorities WHERE id=1').fetchone()
+        return {'revision': row[0], 'priorities': json.loads(row[1])}
+
+    def set_type_priorities(self, priorities, expected_revision):
+        if type(expected_revision) is not int or not isinstance(priorities, dict) or len(priorities) > 20:
+            raise ValueError('Use at most 20 task types and the current revision')
+        for kind, value in priorities.items():
+            identifier(kind)
+            if type(value) is not int or not 0 <= value <= 100:
+                raise ValueError('Task type priorities must be integers from 0 to 100')
+        with self.db.get_connection() as conn:
+            changed = conn.execute('UPDATE work_type_priorities SET revision=revision+1,data_json=? WHERE id=1 AND revision=?',
+                                   (json.dumps(priorities), expected_revision)).rowcount
+            if not changed:
+                raise ValueError('Task type priorities changed; reload before saving')
+            conn.commit()
+        self.engine.events.publish('backlog.type_priorities_updated', {'revision': expected_revision + 1})
+        return self.type_priorities()
 
     def _publish(self, state):
         self.engine.events.publish('backlog.updated', {'id': state['id'], 'project': state['project'],
@@ -54,8 +77,9 @@ class WorkBacklog:
             return [json.loads(row[0]) for row in rows]
 
     def register(self, project, idempotency_key, mission_id=None, mission_version=None, acceptance_step=None,
-                 depends_on=None, enabled=False, title='Reviewed work', description='', priority=50):
+                 depends_on=None, enabled=False, title='Reviewed work', description='', priority=50, task_type='generic'):
         identifier(project); identifier(idempotency_key)
+        identifier(task_type)
         if type(enabled) is not bool or type(priority) is not int or not 0 <= priority <= 100 or not isinstance(title, str) or not 1 <= len(title) <= 200 or not isinstance(description, str) or len(description) > 12000:
             raise ValueError('Choose an exact mission version and explicit enabled setting')
         depends_on = depends_on or []
@@ -72,6 +96,8 @@ class WorkBacklog:
         intent = {'mission_id': mission_id, 'mission_version': mission_version,
                   'acceptance_step': acceptance_step, 'depends_on': depends_on,
                   'title': title, 'description': description, 'priority': priority}
+        if task_type != 'generic':
+            intent['task_type'] = task_type
         with self.db.get_connection() as conn:
             conn.execute('BEGIN IMMEDIATE')
             previous = conn.execute('SELECT state_json FROM work_backlog WHERE project=? AND idem=?',
@@ -285,7 +311,9 @@ class WorkBacklog:
                 return {'status': 'stopped', 'reason': 'Backlog is paused'}
             rows = conn.execute('SELECT state_json FROM work_backlog ORDER BY rowid').fetchall()
             states = [json.loads(row[0]) for row in rows]
-            states.sort(key=lambda item: (-item['priority'], item['created_at'], item['id']))
+            priorities = json.loads(conn.execute('SELECT data_json FROM work_type_priorities WHERE id=1').fetchone()[0])
+            states.sort(key=lambda item: (-priorities.get(item['intent'].get('task_type', 'generic'), 0),
+                                          -item['priority'], item['created_at'], item['id']))
             if any(state['lease'] for state in states):
                 return {'status': 'recovery_required', 'reason': 'An outstanding durable lease requires reconciliation'}
             by_id = {state['id']: state for state in states}

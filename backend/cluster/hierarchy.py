@@ -20,17 +20,30 @@ class CommandHierarchy:
     def computers(self):
         return [node for node in self.registry.list_nodes() if not node.is_local and node.public_identity and node.fingerprint]
 
-    def create_group(self, name, captain, members):
+    def create_group(self, name, captain, members, flags=None, preferred_task_types=None):
+        flags, preferred_task_types = flags or [], preferred_task_types or []
+        for values in (flags, preferred_task_types):
+            if len(values) > 12 or any(not isinstance(value, str) or not value.strip() or len(value) > 80 for value in values) or len(set(values)) != len(values):
+                raise ValueError('Use at most 12 distinct nonempty labels, up to 80 characters each')
         known = {node.node_id: node for node in self.computers()}
         if not name.strip() or len(name) > 100 or not members or len(set(members)) != len(members) or len(members) > 100:
             raise ValueError('Supply a group name and distinct member computers')
         if captain not in members or any(ident not in known or known[ident].node_state not in {'APPROVED','CONNECTED'} for ident in members):
             raise ValueError('Captain and members must be approved paired computers')
-        group = {'id': uuid4().hex, 'name': name, 'captain': captain, 'members': members, 'created_at': time.time(), 'created_by': 'owner'}
+        group = {'id': uuid4().hex, 'name': name.strip(), 'captain': captain, 'members': members, 'flags': flags, 'preferred_task_types': preferred_task_types, 'preference_scope': 'planning_only', 'created_at': time.time(), 'created_by': 'owner'}
         with self.db.get_connection() as conn:
             conn.execute('INSERT INTO command_groups VALUES(?,?)', (group['id'], json.dumps(group))); conn.commit()
         self.publish('hierarchy.group_created', {'group_id': group['id'], 'captain': captain, 'members': members})
         return group
+
+    def delete_group(self, ident):
+        with self.db.get_connection() as conn:
+            deleted = conn.execute('DELETE FROM command_groups WHERE id=?', (ident,)).rowcount
+            conn.commit()
+        if not deleted:
+            raise ValueError('Team no longer exists')
+        self.publish('hierarchy.group_deleted', {'group_id': ident})
+        return {'deleted': ident}
 
     def authorize_assignment(self, actor, group_id, target):
         group = next((item for item in self.groups() if item['id'] == group_id), None)

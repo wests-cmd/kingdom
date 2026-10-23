@@ -8,6 +8,7 @@ export default function WorkBacklogPanel() {
   const {data, error: readError, refresh} = useLiveData('/work-backlog', 5000)
   const {data: missions} = useLiveData('/missions', 10000)
   const [title, setTitle] = useState(''), [description, setDescription] = useState('')
+  const [taskType,setTaskType]=useState('generic')
   const [selected, setSelected] = useState(''), [showAll, setShowAll] = useState(false)
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [key, setKey] = useState(() => `owner-${Date.now()}-${Math.random().toString(36).slice(2)}`)
@@ -46,7 +47,7 @@ export default function WorkBacklogPanel() {
       {!items.length && <p>No work saved yet. Add a note or link a reviewed mission below.</p>}
       {(showAll ? items : items.slice(0, 8)).map(item => <article key={item.id} className="record-detail">
         <h3>{item.title}</h3>
-        <p><strong>{label(item.status)}</strong> · priority {item.priority}</p>
+        <p><strong>{label(item.status)}</strong> · priority {item.priority} · type {item.intent?.task_type||'generic'}</p>
         <p>{item.reason}</p>
         {item.next_step && <p>Next: {item.next_step}</p>}
         {['ready','paused'].includes(item.status) && !item.lease && <button disabled={busy} onClick={() => perform(() => api.post(`/work-backlog/items/${encodeURIComponent(item.project)}/${encodeURIComponent(item.id)}/settings`, {enabled:!item.enabled,expected_revision:item.revision}))}>{item.enabled ? 'Pause this item' : 'Enable this reviewed item'}</button>}
@@ -73,11 +74,12 @@ export default function WorkBacklogPanel() {
       <form onSubmit={event => {event.preventDefault(); perform(async () => {
         const mission = choices.find(item => item.id === selected)
         const step = mission?.plan.steps.find(item => item.kind === 'function_check')
-        await api.post('/work-backlog/items', {project:'kingdom',idempotency_key:key,title,description,
+        await api.post('/work-backlog/items', {project:'kingdom',idempotency_key:key,title,description,task_type:taskType,
           ...(mission ? {mission_id:mission.id,mission_version:mission.version,acceptance_step:step.id} : {})})
         setTitle('');setDescription('');setSelected('');setKey(`owner-${Date.now()}-${Math.random().toString(36).slice(2)}`)
       })}}>
         <label>Outcome<input required maxLength={200} value={title} onChange={e => setTitle(e.target.value)}/></label>
+        <label>Task type<input required pattern="[A-Za-z0-9_-]{1,80}" maxLength={80} value={taskType} onChange={e=>setTaskType(e.target.value)}/></label>
         <label>What should be different when it is finished?<textarea maxLength={12000} rows={3} value={description} onChange={e => setDescription(e.target.value)}/></label>
         <label>Reviewed mission (optional)<select value={selected} onChange={e => setSelected(e.target.value)}><option value="">Save as a planning note</option>{choices.map(item => <option key={item.id} value={item.id}>{item.plan.title} · version {item.version}</option>)}</select></label>
         <p>New entries start paused. A planning note needs an executable reviewed mission before it can run. Current automatic checks cover a bounded arithmetic function subset, not arbitrary repository builds.</p>

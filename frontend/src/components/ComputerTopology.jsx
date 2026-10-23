@@ -1,6 +1,7 @@
 import React from 'react'
 import useLiveData from '../hooks/useLiveData'
 import CoordinationGraph from './CoordinationGraph'
+import SwarmControls from './SwarmControls'
 import {apprenticeLabel} from './common/presentation'
 import {jobStatus,peerVisibility,serviceScope,serviceStatus} from './common/fleetVisibility'
 
@@ -32,5 +33,5 @@ export default function ComputerTopology({hierarchy,advanced=false}){
   <details><summary>Running and startup services {computer.services?.state==='observed'?`(${computer.services.services.length})`:''}</summary>{computer.services?.state==='observed'?<ul>{computer.services.services.map(item=><li key={item.id}>{item.name} · {serviceStatus(item)}{advanced?` · ${item.id}`:''}</li>)}</ul>:<p>Observation is {computer.services?.state||'not available'} on this computer.</p>}
   <p>{serviceScope(computer.services)}</p>{computer.services?.startup_state!=='observed'&&<p>Startup information is not available. Running does not mean startup is enabled.</p>}{computer.services?.truncated&&<p>Service list limited to 128 records.</p>}<p className="muted">Detection does not grant control or inventory every program. Starting, stopping or updating requires a separate reviewed management connection.</p></details>
   {advanced&&<p className="muted">Identity: {computer.id} · {computer.id==='local'?'local observation':'signed peer inventory; execution is verified separately'}</p>}
- </details>)}</div>{!!hierarchy.archived_knights?.length&&<details><summary>Previously paired computers</summary>{hierarchy.archived_knights.map(node=><p key={node.node_id}>🖥 {node.hostname||node.node_id} · {node.node_state||'Not reported'} · current work and services unavailable</p>)}</details>}<CoordinationGraph graph={hierarchy.topology}/></section>
+ </details>)}</div>{!!hierarchy.archived_knights?.length&&<details><summary>Previously paired computers</summary>{hierarchy.archived_knights.map(node=><p key={node.node_id}>🖥 {node.hostname||node.node_id} · {node.node_state||'Not reported'} · current work and services unavailable</p>)}</details>}<SwarmControls hierarchy={hierarchy}/><CoordinationGraph graph={hierarchy.topology}/></section>
 }
