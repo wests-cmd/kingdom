@@ -370,11 +370,17 @@ class WorkProgrammes:
                 if changed:
                     self._save(state, state['revision'])
 
-    async def tick(self):
+    def _next_automatic_proposal(self):
+        """SQLite may wait for concurrent writers; never run this on the RPC loop."""
         self.backlog.review()
         if not self.engine.status().get('running') or self.engine.execution_policy.get()['level'] == 0:
             return
         for state in self.list():
             if state['auto_plan'] and self._next(state)[0] is not None:
-                await self.plan_next(state['id'], state['revision'])
-                return  # One bounded proposal per cycle; execution belongs to the backlog.
+                return state['id'], state['revision']
+
+    async def tick(self):
+        proposal = await asyncio.to_thread(self._next_automatic_proposal)
+        if proposal is not None:
+            await self.plan_next(*proposal)
+            # One bounded proposal per cycle; execution belongs to the backlog.
