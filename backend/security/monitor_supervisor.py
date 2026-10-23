@@ -182,18 +182,7 @@ class Supervisor:
             peer_pid, peer_uid, peer_gid = struct.unpack('3i', connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize('3i')))
             if peer_uid != self.allowed_peer_uid:
                 raise PermissionError('Unapproved peer UID')
-            deadline = time.monotonic() + 0.5
-            while not raw.endswith(b'\n'):
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise TimeoutError('Input deadline exceeded')
-                connection.settimeout(remaining)
-                chunk = connection.recv(min(256, MAX_REQUEST + 1 - len(raw)))
-                if not chunk:
-                    raise ValueError('Truncated request')
-                raw.extend(chunk)
-                if len(raw) > MAX_REQUEST:
-                    raise ValueError('Request too large')
+            read_request(connection, raw)
             response = self.record_and_sign(json.loads(raw, object_pairs_hook=unique_object), peer_uid)
             connection.settimeout(0.25)
             connection.sendall(canonical(response) + b'\n')
@@ -205,6 +194,22 @@ class Supervisor:
             except Exception:
                 pass
             # Deliberately close without an error oracle or signed receipt.
+
+
+def read_request(connection, raw):
+    """Bound transport input independently from peer authorization and signing."""
+    deadline = time.monotonic() + 0.5
+    while not raw.endswith(b'\n'):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('Input deadline exceeded')
+        connection.settimeout(remaining)
+        chunk = connection.recv(min(256, MAX_REQUEST + 1 - len(raw)))
+        if not chunk:
+            raise ValueError('Truncated request')
+        raw.extend(chunk)
+        if len(raw) > MAX_REQUEST:
+            raise ValueError('Request too large')
 
 
 def notify_watchdog():

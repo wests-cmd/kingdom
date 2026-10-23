@@ -180,3 +180,22 @@ def test_real_durable_audit_fsync_precedes_signature(monkeypatch):
             assert json.loads((Path(directory)/'events.jsonl').read_text())['event'] == 'recorded'
         finally:
             audit.close()
+
+@pytest.mark.skipif(sys.platform != 'linux', reason='Real Linux bounded transport parser; no authentication simulated')
+@pytest.mark.parametrize('failure', ['oversized', 'truncated', 'timeout'])
+def test_socket_input_bounds_without_simulating_peer_identity(failure):
+    server, client = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+    with server, client:
+        if failure == 'oversized': client.sendall(b'x' * 513)
+        if failure == 'truncated':
+            client.sendall(b'partial')
+            client.shutdown(socket.SHUT_WR)
+        raw = bytearray()
+        with pytest.raises((ValueError, TimeoutError, socket.timeout)):
+            monitor.read_request(server, raw)
+        assert len(raw) <= 513
+
+
+def test_duplicate_json_fields_are_rejected():
+    with pytest.raises(ValueError):
+        json.loads('{"nonce":"first","nonce":"substituted"}', object_pairs_hook=monitor.unique_object)
