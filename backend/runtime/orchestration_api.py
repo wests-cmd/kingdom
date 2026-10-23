@@ -7,6 +7,12 @@ from backend.security.http_auth import require_owner
 router = APIRouter(prefix='/orchestration', dependencies=[Depends(require_owner)])
 
 
+@router.get('/activity')
+def activity():
+    from backend.runtime.fleet_activity import local_activity
+    return local_activity()
+
+
 def job_view(request, agent=None, tasks=()):
     agent = agent or {}
     related = [t for t in tasks if request.get('agent_session_id') and t.get('metadata', {}).get('agent_session_id') == request['agent_session_id']]

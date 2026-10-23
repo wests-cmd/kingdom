@@ -34,14 +34,11 @@ def validate_inventory(report):
         result['release']=ReleaseReport.model_validate(report['release']).model_dump()
     services=report.get('services')
     if services is not None:
-        if not isinstance(services,dict) or services.get('state') not in {'observed','unsupported','unavailable'} or not isinstance(services.get('services'),list) or len(services['services'])>128:
-            raise ValueError('Invalid service inventory')
-        rows=[]
-        for item in services['services']:
-            if not isinstance(item,dict) or item.get('state')!='running' or any(not isinstance(item.get(key),str) or not 1<=len(item[key])<=160 or any(ord(c)<32 for c in item[key]) for key in ('id','name')):
-                raise ValueError('Invalid observed service')
-            rows.append({key:item[key] for key in ('id','name','state')})
-        result['services']={'state':services['state'],'services':rows,'truncated':services.get('truncated') is True}
+        from backend.runtime.service_inventory import validate_services
+        result['services']=validate_services(services)
+    if report.get('activity') is not None:
+        from backend.runtime.fleet_activity import validate_activity
+        result['activity']=validate_activity(report['activity'])
     return result
 
 
@@ -49,14 +46,15 @@ def local_inventory():
     from backend.api import knights
     from backend.runtime.service_discovery import discover_local_services
     from backend.cluster.release_status import local_release
-    return validate_inventory({'version': 1,'release':local_release(),'services':discover_local_services(), 'apprentices': [
+    from backend.runtime.fleet_activity import local_activity
+    return validate_inventory({'version': 1,'release':local_release(),'services':discover_local_services(),'activity':local_activity(), 'apprentices': [
         {key: row[key] for key in ('id', 'display_name', 'role', 'status', 'active') if key in row}
         for row in knights()['knights']]})
 
 
 def aggregate_inventories(local, peers, now=None):
     now = time.time() if now is None else now
-    remote, reports, seen = [], [], set()
+    remote, reports, seen, jobs = [], [], set(), []
     for node in peers:
         ident = node.get('node_id') or node.get('id')
         if not ident or ident in seen: continue
@@ -75,9 +73,16 @@ def aggregate_inventories(local, peers, now=None):
                     remote.extend({**row, 'kingdom_id': ident, 'scoped_id': ident + '/' + row['id'],
                                    'host': node.get('hostname') or ident, 'entity_type': 'knight_apprentice',
                                    'provenance': 'signed_peer_report'} for row in report['apprentices'])
+                    if report.get('activity',{}).get('state') == 'observed':
+                        jobs.extend({**row, 'kingdom_id': ident, 'scoped_id': ident + '/' + row['kind'] + '/' + row['id'],
+                                     'provenance':'signed_peer_report','received_at':received}
+                                    for row in report['activity']['jobs'])
+        if node.get('node_state') in {'REVOKED','REJECTED','QUARANTINED'}:
+            state=node['node_state'].lower()
         reports.append({'kingdom_id': ident, 'state': state, 'received_at': saved.get('received_at') if isinstance(saved,dict) else None,
                         'services':report.get('services') if state=='current' else None,
+                        'activity':report.get('activity') if state=='current' else None,
                         'release':report.get('release') if state=='current' else None})
     return {'local_count': len(local), 'remote_count': len(remote), 'total_current': len(local) + len(remote),
-            'complete': all(r['state'] == 'current' for r in reports), 'reports': reports, 'remote_apprentices': remote,
+            'complete': all(r['state'] == 'current' for r in reports), 'reports': reports, 'remote_apprentices': remote,'remote_jobs':jobs,
             'notice': 'Remote workers are identity-attested peer reports, not independent proof of running models or successful execution.'}
