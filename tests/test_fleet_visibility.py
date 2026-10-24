@@ -1,10 +1,57 @@
 import contextlib
 import json
 import sqlite3
+import os
+import time
 import pytest
 from backend.runtime.fleet_activity import local_activity, validate_activity
 from backend.cluster.apprentice_inventory import aggregate_inventories
 from backend.runtime import service_discovery as services
+
+
+def host_report():
+    return {'version':1, 'state':'observed', 'observed_at':time.time(),
+            'containers':[{'name':'kingdom-workshop','state':'running','restart_policy':'unless-stopped',
+                           'environment':'SECRET-MUST-NOT-PROPAGATE'}]}
+
+
+def test_readonly_host_report_reaches_signed_peer_inventory(tmp_path):
+    report=tmp_path/'containers.json'; report.write_text(json.dumps(host_report()));report.chmod(0o644)
+    observed=services.read_host_container_report(report, owner_uid=os.getuid())
+    assert observed['state']=='observed' and observed['observation_source']=='host_report'
+    assert observed['services'][0]['id']=='docker:kingdom-workshop'
+    assert observed['services'][0]['restart_policy']=='unless-stopped'
+    assert observed['services'][0]['startup']=='unknown'
+    from backend.cluster.apprentice_inventory import validate_inventory
+    signed_payload=validate_inventory({'version':1,'apprentices':[],'services':observed})
+    assert signed_payload['services']==observed
+    assert 'SECRET-MUST-NOT-PROPAGATE' not in json.dumps(signed_payload)
+
+
+@pytest.mark.parametrize('problem',['stale','future','symlink','writable','oversize','nonfinite','bad_name'])
+def test_untrusted_host_report_never_claims_current_containers(tmp_path, problem):
+    data=host_report();p=tmp_path/'containers.json'
+    if problem=='stale':data['observed_at']-=120
+    if problem=='future':data['observed_at']+=120
+    if problem=='nonfinite':data['observed_at']=float('nan')
+    if problem=='bad_name':data['containers'][0]['name']='token=secret'
+    p.write_text(json.dumps(data));p.chmod(0o644)
+    if problem=='oversize':p.write_text('x'*65537)
+    if problem=='writable':p.chmod(0o666)
+    if problem=='symlink':
+        link=tmp_path/'linked.json';link.symlink_to(p);p=link
+    result=services.read_host_container_report(p, owner_uid=os.getuid())
+    assert result['state']=='unavailable' and result['services']==[]
+
+
+def test_container_consumes_configured_report_without_docker_access(tmp_path,monkeypatch):
+    monkeypatch.setattr(services.platform,'system',lambda:'Linux')
+    monkeypatch.setattr(services,'in_container',lambda:True)
+    monkeypatch.setenv('KINGDOM_HOST_CONTAINER_REPORT',str(tmp_path/'host.json'))
+    expected={'state':'unavailable','scope':'container','observation_source':'host_report','services':[]}
+    monkeypatch.setattr(services,'read_host_container_report',lambda path:expected)
+    monkeypatch.setattr(services,'read_rows',lambda _:pytest.fail('Docker/host execution must not occur in agent container'))
+    assert services.discover_local_services()==expected
 
 
 def activity():

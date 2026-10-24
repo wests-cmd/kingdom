@@ -6,6 +6,9 @@ from pathlib import Path
 import shutil
 import subprocess
 import time
+import stat
+import re
+import math
 from backend.memory.portable_vault import clean_text
 from backend.runtime.service_inventory import validate_services
 
@@ -30,11 +33,65 @@ def label(value):
     return clean_text(value)
 
 
+def read_host_container_report(path, *, now=None, owner_uid=0):
+    """Consume an operator-installed report, never a Docker socket or host command.
+
+    The production reader accepts only root-owned, non-group/world-writable
+    regular files. Atomic replacement by the host observer keeps snapshots whole.
+    """
+    now=time.time() if now is None else now
+    unavailable=validate_services({'state':'unavailable','scope':'container',
+        'observation_source':'host_report','services':[], 'observed_at':now})
+    try:
+        path=Path(path)
+        if not path.is_absolute() or path.resolve()!=path:
+            return unavailable
+        fd=os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+        with os.fdopen(fd,'rb') as stream:
+            info=os.fstat(stream.fileno())
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid!=owner_uid
+                    or info.st_mode & 0o022 or info.st_size>65536):
+                return unavailable
+            raw=stream.read(65537)
+        if len(raw)>65536:
+            return unavailable
+        data=json.loads(raw)
+        if not isinstance(data,dict) or type(data.get('version')) is not int or data['version']!=1:
+            return unavailable
+        observed=data.get('observed_at')
+        if (type(observed) not in (int,float) or not math.isfinite(observed)
+                or not 0<=now-observed<=60 or data.get('state')!='observed'):
+            return unavailable
+        containers=data.get('containers')
+        if (not isinstance(containers,list) or len(containers)>128
+                or type(data.get('truncated',False)) is not bool):
+            return unavailable
+        rows=[]
+        for item in containers:
+            if not isinstance(item,dict) or not isinstance(item.get('name'),str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}',item['name']):
+                return unavailable
+            state={'running':'running','created':'stopped','exited':'stopped','dead':'stopped',
+                   'paused':'unknown','restarting':'unknown','removing':'unknown'}.get(item.get('state'))
+            if state is None:
+                return unavailable
+            restart=item.get('restart_policy','unknown')
+            rows.append({'id':'docker:'+item['name'],'name':item['name'],'state':state,
+                         'startup':'unknown','restart_policy':restart})
+        return validate_services({'state':'observed','scope':'container','observation_source':'host_report',
+            'services':rows,'observed_at':float(observed),'running_state':'observed',
+            'startup_state':'unavailable','truncated':data.get('truncated',False)})
+    except (OSError,ValueError,TypeError,AttributeError):
+        return unavailable
+
+
 def discover_local_services():
     system=platform.system()
     result={'state':'unsupported','services':[],'observed_at':time.time(),'scope':'unknown',
             'running_state':'unsupported','startup_state':'unsupported','truncated':False}
     if system=='Linux' and in_container():
+        host_report=os.environ.get('KINGDOM_HOST_CONTAINER_REPORT')
+        if host_report:
+            return read_host_container_report(host_report)
         return validate_services({**result,'scope':'container'})
     if system=='Linux' and shutil.which('systemctl'):
         manager=shutil.which('systemctl')

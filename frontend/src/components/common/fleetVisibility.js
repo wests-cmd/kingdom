@@ -13,11 +13,16 @@ export function jobStatus(status) {
 
 export function serviceStatus(service) {
   const running = {running:'Running', stopped:'Not running', unknown:'Running state unknown'}[service.state] || 'Running state unknown'
+  if (service.id?.startsWith('docker:')) {
+    const restart = {'no':'Never restart automatically','always':'Always restart','unless-stopped':'Restart unless stopped','on-failure':'Restart on failure'}[service.restart_policy] || 'Restart policy unknown'
+    return `${running} · ${restart}`
+  }
   const startup = {enabled:'Startup enabled', disabled:'Startup disabled', manual:'Started on demand', unknown:'Startup unknown'}[service.startup] || 'Startup unknown'
   return `${running} · ${startup}`
 }
 
 export function serviceScope(report) {
+  if (report?.observation_source === 'host_report') return 'Host container status from a read-only observer. Restart policy is configuration, not proof of successful startup. Other host programs are not included.'
   if (report?.scope === 'container') return 'Host services are unavailable inside this container.'
   if (report?.scope === 'user_services') return 'User services only. Startup enabled is configuration, not a verified restart.'
   if (report?.scope === 'windows_services') return 'Windows services only. Desktop startup apps and scheduled tasks are not included.'

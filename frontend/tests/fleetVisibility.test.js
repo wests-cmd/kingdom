@@ -15,3 +15,10 @@ test('beginner labels distinguish startup, running and acceptance',()=>{
   assert.equal(jobStatus('completed'),'Recorded complete')
   assert.equal(jobStatus('unrecognized'),'Not reported')
 })
+
+test('host observer labels do not claim container startup or control',()=>{
+  assert.match(serviceScope({scope:'container',observation_source:'host_report'}),/read-only observer/)
+  const label=serviceStatus({id:'docker:kingdom-workshop',state:'running',restart_policy:'unless-stopped',startup:'unknown'})
+  assert.equal(label,'Running · Restart unless stopped')
+  assert.doesNotMatch(label,/Startup enabled/)
+})
