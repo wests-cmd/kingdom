@@ -3,6 +3,21 @@ import pytest
 from test_agent_sessions import setup, reply, call
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize('text,finish', [('', 'stop'), ('truncated private text', 'length')])
+async def test_incomplete_model_response_has_actionable_safe_category(setup, text, finish):
+    response = reply(text)
+    response['choices'][0]['finish_reason'] = finish
+    service, engine, _ = setup([response])
+    state = await service.advance(service.create('Implement', 'local')['id'])
+    assert state['status'] == 'needs_review'
+    assert state['error_code'] == 'model_output_incomplete'
+    assert not engine.records
+    activity = service.activity(state['id'])
+    assert 'budget' in activity['next_action'].lower()
+    assert 'private text' not in str(activity)
+
+
 def test_activity_explains_wait_and_separates_model_from_tools(setup):
     service, _, _ = setup([])
     state=service.create('Inspect','local')

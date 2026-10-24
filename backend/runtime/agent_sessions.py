@@ -323,6 +323,8 @@ class AgentSessionService:
                 choices = response.get('choices', [])
                 if len(choices) != 1:
                     raise ValueError('Model must return one assistant choice')
+                if choices[0].get('finish_reason') == 'length':
+                    raise AgentRejection('model_output_incomplete')
                 message = choices[0].get('message', {})
                 calls = message.get('tool_calls') or []
                 content = message.get('content')
@@ -364,7 +366,7 @@ class AgentSessionService:
                     pending.append({'call_id': call_id, 'name': name, 'tool': available[name][0], 'arguments': arguments,
                                     'key': key, 'task_id': str(uuid5(NAMESPACE_URL, 'kingdom-mission:' + key))})
                 if not calls and (not content or not content.strip() or choices[0].get('finish_reason') == 'length'):
-                    raise ValueError('Model returned no complete response')
+                    raise AgentRejection('model_output_incomplete')
                 state['messages'].append({'role': 'assistant', 'content': content, **({'tool_calls': calls} if calls else {})})
                 state['turns'] += 1
                 state['tool_count'] += len(calls)

@@ -77,6 +77,85 @@ def setup(tmp_path):
     return RequestService(db,engine,models,agents),models,agents
 
 
+def test_project_references_cannot_overflow_small_model_or_drop_current_question(tmp_path):
+    import json
+    from backend.models.profiles import ModelProfiles
+    from backend.memory.portable_vault import project_identity
+    from backend.memory.tiered_vault import configured_vault
+    service, models, _ = setup(tmp_path)
+    ModelProfiles(service.db).save('small-local', {
+        'provider':'ollama', 'endpoint':'http://127.0.0.1:11434',
+        'model':'installed-model', 'variant':'standard', 'context_characters':4000})
+    vault = configured_vault(service.db)
+    for index in range(3):
+        vault.put(project_identity('projects/a'), 'planning ' + ('reference ' * 400),
+                  {'source':'test'}, [], ident='large_note_'+str(index), expected_revision=0)
+    captured = []
+    async def bounded_chat(profile, payload):
+        captured.append(payload['messages'])
+        assert len(json.dumps(payload['messages'])) <= 4000
+        return {'choices':[{'message':{'content':'Scoped proposal'}}], 'kingdom_profile':profile}
+    models.chat = bounded_chat
+    data = body(); data.update(mode='quick', model_profile='small-local',
+                               prompt='planning: critique the proposals; preserve this exact question')
+    result = asyncio.run(service.run(service.create(data)['id']))
+    assert result['status'] == 'completed'
+    assert captured[0][-1] == {'role':'user','content':data['prompt']}
+    assert any('UNTRUSTED PROJECT REFERENCES' in m['content'] for m in captured[0])
+
+
+@pytest.mark.parametrize('text,finish', [('', 'stop'), ('unfinished proposal', 'length')])
+def test_incomplete_quick_answer_is_not_a_completed_plan(tmp_path, text, finish):
+    service, models, _ = setup(tmp_path)
+    async def incomplete(*args):
+        return {'choices':[{'message':{'content':text}, 'finish_reason':finish}]}
+    models.chat = incomplete
+    data = body(); data.update(mode='quick', prompt='Draft a proposal')
+    ident = service.create(data)['id']
+    with pytest.raises(ValueError):
+        asyncio.run(service.run(ident))
+    failed = service.get(ident)
+    assert failed['status'] == 'failed'
+    assert failed['error_code'] == 'model_output_incomplete'
+    assert 'unfinished proposal' not in failed['error']
+
+
+def test_context_keeps_recent_complete_turns_and_exact_unicode_question(tmp_path):
+    import json
+    from backend.models.profiles import ModelProfiles
+    service, _, _ = setup(tmp_path)
+    ModelProfiles(service.db).save('small-local', {
+        'provider':'ollama','endpoint':'http://127.0.0.1:11434',
+        'model':'installed-model','variant':'standard','context_characters':4000})
+    for key, prompt, answer in [('old', 'old ' * 1000, 'old answer ' * 1000),
+                                ('recent', 'Recent question', 'Recent answer')]:
+        data = body(); data.update(idempotency_key=key, prompt=prompt)
+        previous = service.create(data)
+        service.update(previous['id'], {'status':'completed','answer':answer})
+    data = body(); data.update(idempotency_key='new', model_profile='small-local', prompt='Question ☃ "\\"' * 20)
+    current = service.create(data)
+    messages = service.messages(current)
+    assert len(json.dumps(messages)) <= 4000
+    assert messages[-1]['content'] == data['prompt']
+    assert messages[:2] == [{'role':'user','content':'Recent question'},
+                            {'role':'assistant','content':'Recent answer'}]
+
+
+def test_oversize_current_question_is_retained_without_inference(tmp_path):
+    from backend.models.profiles import ModelProfiles
+    service, models, _ = setup(tmp_path)
+    ModelProfiles(service.db).save('small-local', {
+        'provider':'ollama','endpoint':'http://127.0.0.1:11434',
+        'model':'installed-model','variant':'standard','context_characters':4000})
+    data=body();data.update(mode='quick',model_profile='small-local',prompt='x'*4500)
+    ident=service.create(data)['id']
+    with pytest.raises(ValueError):asyncio.run(service.run(ident))
+    failed=service.get(ident)
+    assert failed['prompt']==data['prompt']
+    assert failed['error_code']=='context_budget_exceeded'
+    assert models.calls==0
+
+
 def body(**extra):
     return dict(idempotency_key='key',session_scope='chat',project_scope='projects/a',prompt='what time is it?',mode='auto',model_profile='explicit-model',allow_process=False,**extra)
 
