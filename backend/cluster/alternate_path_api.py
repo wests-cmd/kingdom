@@ -1,5 +1,6 @@
 """Owner opt-in configuration and bounded independent signed control probes."""
 import asyncio
+import threading
 from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -7,17 +8,19 @@ from backend.security.http_auth import require_owner
 
 router = APIRouter(prefix='/peer-paths', dependencies=[Depends(require_owner)])
 _service = None
+_guard = threading.Lock()
 
 
 def service():
     global _service
-    if _service is None:
-        from backend.storage.db import db
-        from backend.cluster.node_registry import node_registry
-        from backend.cluster.identity import KingdomIdentity
-        from backend.events.event_bus import event_bus
-        from backend.cluster.alternate_paths import AlternatePaths
-        _service = AlternatePaths(db, node_registry, KingdomIdentity.get_or_create(), event_bus)
+    with _guard:
+        if _service is None:
+            from backend.storage.db import db
+            from backend.cluster.node_registry import node_registry
+            from backend.cluster.identity import KingdomIdentity
+            from backend.events.event_bus import event_bus
+            from backend.cluster.alternate_paths import AlternatePaths
+            _service = AlternatePaths(db, node_registry, KingdomIdentity.get_or_create(), event_bus)
     return _service
 
 
@@ -63,9 +66,10 @@ def configure(peer: str, request: Configuration):
 
 @router.post('/{peer}/probe')
 async def probe(peer: str, request: Batch):
+    selected = await asyncio.to_thread(service)
     async def one(item):
         try:
-            return await service().probe(peer, item.key, item.path)
+            return await selected.probe(peer, item.key, item.path)
         except (ValueError, KeyError):
             return {'path': item.path, 'status': 'not_sent', 'reason': 'Unknown, changed or restricted path; no automatic retry authorized'}
     return await asyncio.gather(*(one(p) for p in request.probes))
