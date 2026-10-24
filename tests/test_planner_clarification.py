@@ -76,3 +76,20 @@ def test_codex_is_rejected_before_chat_transport(monkeypatch, selection):
     monkeypatch.setattr(capacity, 'acquire', forbidden)
     with pytest.raises(ValueError, match='non-Codex'):
         asyncio.run(ModelService().plan_chat('Plan this', selection))
+
+
+def test_model_changed_during_reservation_cannot_become_codex(monkeypatch):
+    from contextlib import asynccontextmanager
+    from backend.models.service import ModelService
+    from backend.models.profiles import ModelProfiles
+    from backend.models.capacity import capacity
+    profile = {'id': 'chat', 'model': 'chat-model'}
+    monkeypatch.setattr(ModelProfiles, 'list', lambda self: [profile])
+    monkeypatch.setattr(ModelProfiles, 'get', lambda self, ident, **kwargs:
+                        {**profile, 'model': 'codex'} if kwargs.get('credential') else profile)
+    @asynccontextmanager
+    async def reserve(*args, **kwargs):
+        yield profile
+    monkeypatch.setattr(capacity, 'acquire', reserve)
+    with pytest.raises(ValueError, match='changed'):
+        asyncio.run(ModelService().plan_chat('Plan this', 'chat'))
