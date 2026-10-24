@@ -70,6 +70,15 @@ def test_idle_poll_does_not_execute():
     assert calls==['poll']
 
 
+@pytest.mark.parametrize('host',['controller','worker'])
+def test_changed_pinned_identity_cannot_poll_or_execute(host):
+    config,api,worker,calls=harness()
+    config[host]['expected_identity']={'node_id':config[host]['id'],'fingerprint':'expected-key'}
+    with pytest.raises(ValueError,match='Pinned Kingdom identity changed'):
+        relay.relay_once(config,api,worker)
+    assert calls==[]
+
+
 def test_relay_requires_controller_verified_receipt():
     config,api,worker,calls=harness()
     assert relay.relay_once(config,api,worker)['status']=='verified'
