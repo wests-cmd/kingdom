@@ -1,6 +1,7 @@
 """Owner-reviewed plain-language programmes; planning never grants execution."""
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
 from backend.security.http_auth import require_owner
 
 router = APIRouter(prefix='/work-programmes', dependencies=[Depends(require_owner)])
@@ -25,6 +26,8 @@ class NewProgramme(BaseModel):
     text: str = Field(min_length=1, max_length=24000)
     model_profile: str = Field(default='auto', min_length=1, max_length=100)
     source_revision: str | None = Field(default=None, pattern=r'^[a-fA-F0-9]{40}$')
+    planner_mode: Literal['configured_chat', 'chatgpt', 'deliberative'] = 'deliberative'
+    planner_routing: Literal['local', 'cloud', 'mixed'] = 'local'
 
 
 class Revision(BaseModel):
@@ -34,6 +37,14 @@ class Revision(BaseModel):
 
 class Settings(Revision):
     enabled: bool
+
+
+class Answer(Revision):
+    answer: str = Field(min_length=1, max_length=4000)
+
+
+class ChatGPTResponse(Revision):
+    text: str = Field(min_length=1, max_length=100000)
 
 
 def boundary(operation):
@@ -78,3 +89,13 @@ def approve(ident: str, key: str, request: Revision):
 @router.post('/{ident}/items/{key}/retry-planning')
 def retry(ident: str, key: str, request: Revision):
     return boundary(lambda: service().retry_planning(ident, key, request.expected_revision))
+
+
+@router.post('/{ident}/items/{key}/answer')
+def answer(ident: str, key: str, request: Answer):
+    return boundary(lambda: service().answer(ident, key, request.answer, request.expected_revision))
+
+
+@router.post('/{ident}/items/{key}/chatgpt-response')
+def chatgpt_response(ident: str, key: str, request: ChatGPTResponse):
+    return boundary(lambda: service().chatgpt_response(ident, key, request.text, request.expected_revision))
