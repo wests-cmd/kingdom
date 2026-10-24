@@ -20,6 +20,7 @@ export default function ComputerTopology({hierarchy,advanced=false}){
  const point=index=>index===0?{x:320,y:40}:{x:80+((index-1)%4)*160,y:130+Math.floor((index-1)/4)*90}
  return <section className="panel cluster-topology"><h2>One Kingdom · {computers.length} {computers.length===1?'Knight':'Knights'}</h2>
  <p>Each computer is a Knight. Open one to see its reported work, Apprentices and running or startup-enabled services. Private prompts and conversations are not shared here.</p>
+ <p className="muted">Paired Knights stay members when offline. A stale heartbeat means availability is unknown; it does not expire pairing or require another invitation. A verified returning Knight can reconnect with its existing permissions.</p>
  <svg viewBox="0 0 640 270" role="img" aria-label={`Logical collaboration map of ${computers.length} computers. Lines show pairing, not physical cables.`}>
  {shown.slice(1).map((computer,index)=>{const p=point(index+1);return <line key={computer.id} x1="320" y1="55" x2={p.x} y2={p.y} stroke="currentColor" strokeWidth="2" strokeDasharray={computer.current?undefined:'5 5'}/>})}
  {shown.map((computer,index)=>{const p=point(index);return <g key={computer.id}><rect x={p.x-43} y={p.y-19} width="86" height="38" rx="10" fill="var(--surface-dark)" stroke="var(--accent-readable)"/><text x={p.x} y={p.y+5} textAnchor="middle" fill="var(--text-main)">Knight {index+1}</text></g>})}

@@ -5,6 +5,7 @@ export default function KingdomPeers({nodes=[]}){
  const peers=nodes.filter(n=>n.public_identity?.node_type==='commander')
  const act=async fn=>{setBusy(true);setMessage('');try{await fn()}catch(e){setMessage(typeof e.response?.data?.detail==='string'?e.response.data.detail:e.message)}finally{setBusy(false)}}
  return <section className="panel"><h2>Connect another Kingdom</h2><p>Two separate Kingdom installations can each be a Knight to the other. Pair and approve both directions; each keeps its own permissions and task evidence.</p>
+ <p>Pairing stays in place through sleep, restart and network outages. Offline status does not remove membership. Invitations expire; an approved pairing does not expire because its heartbeat stopped.</p>
  <button disabled={busy} onClick={()=>act(async()=>{const {data}=await api.post('/nodes/invitation',{});setExported(JSON.stringify(data,null,2))})}>Create invitation for another Kingdom</button>
  {exported&&<label>Share this temporary invitation with the other owner<textarea readOnly rows={6} value={exported}/></label>}
  <form onSubmit={e=>{e.preventDefault();act(async()=>{const {data}=await api.post('/federation/connect',{endpoint:address,invitation:JSON.parse(invitation),capabilities:['compute']});setMessage(data.message)})}}>
