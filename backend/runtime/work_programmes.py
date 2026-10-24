@@ -416,7 +416,8 @@ class WorkProgrammes:
                                 item.setdefault('planning_stages', {})[stage] = evidence
                                 self._save(checkpoint, checkpoint['revision'])
                         await asyncio.to_thread(persist)
-                    response = await deliberate(self.engine.models, prompt, state.get('planner_routing', 'local'), record)
+                    response = await deliberate(self.engine.models, prompt, state.get('planner_routing', 'local'), record,
+                                                preferred_profile=state.get('model_profile'))
                 else:
                     response = await self.engine.models.plan_chat(prompt, profile=state['model_profile'])
                 result = self._validate_planner_response(response, state, selected, integration)

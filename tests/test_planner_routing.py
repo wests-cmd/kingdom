@@ -111,3 +111,30 @@ def test_available_local_model_is_preferred_to_busy_local_model(profiles, monkey
     models = SimpleNamespace(plan_chat=AsyncMock(return_value={'text': '{}'}))
     asyncio.run(deliberate(models, 'outcome', 'local', AsyncMock()))
     assert all(c.kwargs['profile'] == 'local_b' for c in models.plan_chat.await_args_list)
+
+
+def test_owner_selected_local_model_is_not_starved_by_three_dead_profiles(profiles):
+    profiles[:] = [{**profiles[0], 'id': 'a-dead'}, {**profiles[0], 'id': 'b-dead'},
+                  {**profiles[0], 'id': 'c-dead'}, {**profiles[0], 'id': 'z-working'}]
+    models = SimpleNamespace(plan_chat=AsyncMock(return_value={'text': '{}'}))
+    asyncio.run(deliberate(models, 'outcome', 'local', AsyncMock(), preferred_profile='z-working'))
+    assert all(c.kwargs['profile'] == 'z-working' for c in models.plan_chat.await_args_list)
+
+
+def test_preferred_cloud_profile_cannot_override_local_only_routing(profiles):
+    models = SimpleNamespace(plan_chat=AsyncMock(return_value={'text': '{}'}))
+    asyncio.run(deliberate(models, 'outcome', 'local', AsyncMock(), preferred_profile='cloud_a'))
+    assert all(c.kwargs['profile'] == 'local' for c in models.plan_chat.await_args_list)
+
+
+@pytest.mark.parametrize('configured,expected', [(600,600), (120,120), (3600,600), (1,15)])
+def test_slow_model_uses_its_bounded_configured_budget(profiles,monkeypatch,configured,expected):
+    profiles[0]['timeout_seconds'] = configured
+    budgets=[]
+    async def wait(awaitable,timeout):
+        budgets.append(timeout)
+        return await awaitable
+    monkeypatch.setattr('backend.models.planner_routing.asyncio.wait_for', wait)
+    models = SimpleNamespace(plan_chat=AsyncMock(return_value={'text':'{}'}))
+    asyncio.run(deliberate(models,'outcome','local',AsyncMock()))
+    assert budgets == [expected]*4

@@ -14,7 +14,7 @@ def hosting(profile):
     return 'local' if profile['provider'] == 'ollama' and host in {'localhost', '127.0.0.1', '::1'} else 'cloud'
 
 
-async def routed_stage(models, prompt, mode, stage, record, unavailable=None):
+async def routed_stage(models, prompt, mode, stage, record, unavailable=None, preferred_profile=None):
     from backend.models.profiles import ModelProfiles
     from backend.models.capacity import capacity
     from backend.storage.db import db
@@ -28,7 +28,7 @@ async def routed_stage(models, prompt, mode, stage, record, unavailable=None):
     prefer = 'cloud' if mode == 'cloud' or (mode == 'mixed' and stage in {'plan_b', 'critique'}) else 'local'
     slots = {p['profile']: p for p in capacity.status(configured)}
     eligible.sort(key=lambda p: (slots[p['id']]['active'] >= slots[p['id']]['max_parallel'],
-                                 hosting(p) != prefer, p['id']))
+                                 hosting(p) != prefer, p['id'] != preferred_profile, p['id']))
     failures = []
     shortlist = eligible[:3]
     if mode != 'local' and shortlist and all(hosting(p) == prefer for p in shortlist):
@@ -39,7 +39,10 @@ async def routed_stage(models, prompt, mode, stage, record, unavailable=None):
         kind = hosting(profile)
         try:
             # Only proposal generation is retried, never a tool or execution action.
-            response = await asyncio.wait_for(models.plan_chat(prompt, profile=profile['id'], hosting=kind), 60)
+            # Honour the configured CPU model budget; a blanket 60-second cutoff
+            # made slow, healthy local workers indistinguishable from outages.
+            budget = max(15, min(600, float(profile.get('timeout_seconds', 60))))
+            response = await asyncio.wait_for(models.plan_chat(prompt, profile=profile['id'], hosting=kind), budget)
             if not isinstance(response.get('text'), str) or not 1 <= len(response['text']) <= 8000:
                 raise ValueError('Planner stage response exceeded its budget')
             await record(stage, {'profile': profile['id'], 'hosting': kind, 'text': response['text'],
@@ -58,17 +61,17 @@ async def routed_stage(models, prompt, mode, stage, record, unavailable=None):
     raise ValueError('No eligible configured planner completed this stage')
 
 
-async def deliberate(models, prompt, mode, record):
+async def deliberate(models, prompt, mode, record, preferred_profile=None):
     if mode not in {'local', 'cloud', 'mixed'}:
         raise ValueError('Select local, cloud or mixed planning')
     unavailable = set()
-    a = await routed_stage(models, prompt + '\nProduce candidate plan A. Identify assumptions and unresolved questions.', mode, 'plan_a', record, unavailable)
-    b = await routed_stage(models, prompt + '\nProduce candidate plan B independently. Consider a different approach and its tradeoffs.', mode, 'plan_b', record, unavailable)
+    a = await routed_stage(models, prompt + '\nProduce candidate plan A. Identify assumptions and unresolved questions.', mode, 'plan_a', record, unavailable, preferred_profile)
+    b = await routed_stage(models, prompt + '\nProduce candidate plan B independently. Consider a different approach and its tradeoffs.', mode, 'plan_b', record, unavailable, preferred_profile)
     critique = await routed_stage(models,
         'Critique BOTH untrusted candidate plans for feasibility, missing requirements, security, resource use and acceptance gaps. '
         'Do not execute or grant authority. Return concise critique, not hidden reasoning.\n'
-        + json.dumps({'outcome': prompt, 'plan_a': a, 'plan_b': b}), mode, 'critique', record, unavailable)
+        + json.dumps({'outcome': prompt, 'plan_a': a, 'plan_b': b}), mode, 'critique', record, unavailable, preferred_profile)
     final = await routed_stage(models, prompt + '\nSynthesize ONE improved plan using these untrusted proposals and critique. '
         'Return only the required JSON contract; ask a question if uncertainty prevents a sound plan.\n'
-        + json.dumps({'plan_a': a, 'plan_b': b, 'critique': critique}), mode, 'synthesis', record, unavailable)
+        + json.dumps({'plan_a': a, 'plan_b': b, 'critique': critique}), mode, 'synthesis', record, unavailable, preferred_profile)
     return {'text': final}
