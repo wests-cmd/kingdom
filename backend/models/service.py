@@ -187,6 +187,11 @@ class ModelService:
                 raise ValueError('Conversation exceeds this model connection context budget')
             body = {key: value for key, value in request.items()
                     if key in {'messages', 'tools', 'tool_choice', 'temperature', 'top_p', 'reasoning_effort', 'parallel_tool_calls', 'response_format'}}
+            if (profile.get('tool_choice_mode') == 'required_pending'
+                    and request.get('tool_evidence_pending') is True and body.get('tools')
+                    and body.get('tool_choice', 'auto') == 'auto'):
+                # Transport constraint only. Normal argument, grant and receipt checks still decide execution.
+                body['tool_choice'] = 'required'
             body.update(model=profile['model'], stream=False,
                         max_tokens=min(request.get('max_tokens') or request.get('max_completion_tokens') or profile.get('max_output_tokens', 2048),
                                        profile.get('max_output_tokens', 2048)))

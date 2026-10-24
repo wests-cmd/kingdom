@@ -312,6 +312,7 @@ class AgentSessionService:
             self._event(state,'model_started'); self._save(state)
             try:
                 response = await self.engine.models.chat(state['model_profile'], {'messages': state['messages'],
+                    'tool_evidence_pending': bool(set(state.get('required_tools', [])) - set(state.get('verified_tools_since_review', []))),
                     'tools': tools, 'tool_choice': 'auto', 'parallel_tool_calls': False, 'stream': False, 'max_tokens': 2048})
                 state['model_finished_at']=time.time()
                 self._event(state,'model_returned')

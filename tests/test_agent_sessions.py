@@ -21,6 +21,20 @@ def call(name, args, ident='call1'):
 
 
 @pytest.mark.asyncio
+async def test_pending_tool_transport_hint_clears_only_after_verified_execution(setup):
+    service, engine, _ = setup([
+        reply(calls=[call('workspace_read', {'path': 'README.md'})]), reply('Read complete')])
+    state = service.create('Read the project file', 'local', required_tools=['workspace_read'])
+    state = await service.advance(state['id'])
+    assert engine.requests[-1][1]['tool_evidence_pending'] is True
+    engine.finish(state['pending'][0]['task_id'], {'content': 'actual test fixture file'})
+    await service.advance(state['id'])
+    state = await service.advance(state['id'])
+    assert engine.requests[-1][1]['tool_evidence_pending'] is False
+    assert state['status'] == 'completed'
+
+
+@pytest.mark.asyncio
 async def test_desktop_tools_are_opt_in_and_initial_input_is_not_offered(setup):
     service, engine, _ = setup([reply('No desktop requested'), reply('Window selected')])
     await service.advance(service.create('Inspect code','local')['id'])
