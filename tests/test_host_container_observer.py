@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 import subprocess
+import os
 
 
 def observer():
@@ -40,5 +41,6 @@ def test_observer_publishes_complete_readable_snapshot(tmp_path):
     module=observer();target=tmp_path/'run/containers.json'
     module.publish(target,{'version':1,'containers':[]})
     assert json.loads(target.read_text())=={'version':1,'containers':[]}
-    assert target.stat().st_mode & 0o777==0o644
+    if os.name=='posix':
+        assert target.stat().st_mode & 0o777==0o644
     assert not target.with_suffix('.tmp').exists()

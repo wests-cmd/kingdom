@@ -15,6 +15,7 @@ def host_report():
                            'environment':'SECRET-MUST-NOT-PROPAGATE'}]}
 
 
+@pytest.mark.skipif(os.name!='posix',reason='Host report permissions require POSIX')
 def test_readonly_host_report_reaches_signed_peer_inventory(tmp_path):
     report=tmp_path/'containers.json'; report.write_text(json.dumps(host_report()));report.chmod(0o644)
     observed=services.read_host_container_report(report, owner_uid=os.getuid())
@@ -29,6 +30,7 @@ def test_readonly_host_report_reaches_signed_peer_inventory(tmp_path):
 
 
 @pytest.mark.parametrize('problem',['stale','future','symlink','writable','oversize','nonfinite','bad_name'])
+@pytest.mark.skipif(os.name!='posix',reason='Host report permissions require POSIX')
 def test_untrusted_host_report_never_claims_current_containers(tmp_path, problem):
     data=host_report();p=tmp_path/'containers.json'
     if problem=='stale':data['observed_at']-=120
