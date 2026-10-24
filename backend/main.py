@@ -15,6 +15,7 @@ async def lifespan(_app):
         await engine.start(persist=False)
     await schedule_runner.start()
     await programme_runner.start()
+    await boss_runner.start()
     await backlog_runner.start()
     try:
         yield
@@ -22,6 +23,7 @@ async def lifespan(_app):
         from backend.runtime.request_api import background
         await background.stop()
         await programme_runner.stop()
+        await boss_runner.stop()
         await backlog_runner.stop()
         await schedule_runner.stop()
         await engine.stop(persist=False)
@@ -120,6 +122,9 @@ from backend.runtime.work_programme_api import router as programme_router, servi
 from backend.runtime.work_programme_runner import WorkProgrammeRunner
 app.include_router(programme_router)
 programme_runner = WorkProgrammeRunner(programme_service, engine.events.publish)
+from backend.runtime.boss_review_api import router as boss_router, service as boss_service
+app.include_router(boss_router)
+boss_runner = WorkProgrammeRunner(boss_service, engine.events.publish, name='boss')
 
 
 # Serve built frontend static assets if available
