@@ -41,6 +41,7 @@ def task_artifact(task_id: str):
 
 
 class ProfileRequest(BaseModel):
+    hosting: Literal['auto', 'local', 'cloud'] = 'auto'
     provider: Literal['ollama', 'openai_compatible']
     endpoint: str = Field(max_length=500)
     model: str = Field(min_length=1, max_length=200)

@@ -26,7 +26,8 @@ class NewProgramme(BaseModel):
     text: str = Field(min_length=1, max_length=24000)
     model_profile: str = Field(default='auto', min_length=1, max_length=100)
     source_revision: str | None = Field(default=None, pattern=r'^[a-fA-F0-9]{40}$')
-    planner_mode: Literal['configured_chat', 'chatgpt'] = 'configured_chat'
+    planner_mode: Literal['configured_chat', 'chatgpt', 'deliberative'] = 'deliberative'
+    planner_routing: Literal['local', 'cloud', 'mixed'] = 'local'
 
 
 class Revision(BaseModel):

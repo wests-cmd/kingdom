@@ -1,8 +1,45 @@
 # Chat planning and clarification
 
+## Current default: local two-plan deliberation
+
+The owner's later instruction supersedes the ChatGPT-only default below. New UI
+and API programmes default to `planner_mode: deliberative`,
+`planner_routing: local`. Four sequential proposal calls produce independent
+candidate A, independent candidate B, a critique of both, and one final synthesis.
+Only the final synthesis enters the existing strict question/mission validator.
+Each stage's output, selected profile, hosting label and fallback receipts are
+saved. Interrupted stages are retained for review, not automatically replayed.
+
+Routing options:
+- `local`: local connections only; exhaustion never enables cloud.
+- `cloud`: prefer configured cloud connections, with local fallback allowed.
+- `mixed`: prefer local for A and synthesis, cloud for B and critique; either
+  permitted type can serve as fallback.
+
+Busy slots sort after available slots. Each stage tries at most three configured
+connections, reserving a fallback of the alternate hosting type when available.
+Each call is bounded to sixty seconds. HTTP402/408/429/500/502/503/504 and network
+timeouts can advance to another candidate; failed connections are excluded for
+the remainder of this deliberation. No execution tool or approval is retried.
+Authentication/validation failures do not silently expand scope. This responds
+to provider quota signals, not a claim to read ChatGPT subscription allowance.
+
+Model connections expose `hosting: auto | local | cloud`. Auto classifies only
+loopback native Ollama as local; other endpoints are conservatively cloud.
+Label trusted LAN/Knight models explicitly local in model settings. These are
+configuration labels, not attestation of an upstream provider behind a proxy.
+Cloud and mixed send the task and prior planning outputs to permitted cloud
+connections. Only already configured endpoints/models are used; none are
+downloaded or granted tools. Two candidates can use one model if only one fits;
+they are separate context-free calls, not independent human reviewers.
+
+Cloud API endpoints and the ChatGPT consumer app remain distinct. The manual
+ChatGPT handoff is a separate explicit option; it does not transparently become
+one of these automatic cloud connections. Existing programmes retain their mode.
+
 ## ChatGPT specifically
 
-New lists in the interface default to `planner_mode: chatgpt`. This prepares and
+The explicit `planner_mode: chatgpt` option prepares and
 persists an external planning request; it does not call a configured model, Codex,
 or any fallback. The interface exposes the request for the owner to copy into
 ChatGPT and an input for its JSON response. This is an explicit **manual handoff**,
@@ -14,7 +51,8 @@ acceptance rules as configured planning. It may save a clarification question or
 a proposal awaiting review. It cannot approve or execute. Its origin is declared by
 the owner, not cryptographically attested as ChatGPT. Pending requests survive
 restart and do not cause local inference. Existing lists retain their configured
-planner; API creation remains backward-compatible unless `planner_mode` is explicit.
+planner. New API creation now defaults to local deliberation; use an explicit
+`configured_chat` mode to request the legacy single-model behavior.
 
 Official connection route: a ChatGPT custom MCP plugin can call Kingdom tools
 through a supported MCP server, subject to account/workspace permissions and server

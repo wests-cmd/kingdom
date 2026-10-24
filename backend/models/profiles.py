@@ -30,6 +30,8 @@ class ModelProfiles:
             conn.commit()
 
     def save(self, ident, config, api_key=None):
+        if config.get('hosting', 'auto') not in {'auto', 'local', 'cloud'}:
+            raise ValueError('Choose local or cloud model hosting')
         if not re.fullmatch(r'[a-z][a-z0-9_-]{0,63}', ident): raise ValueError('Invalid model profile name')
         parts = urlsplit(config['endpoint'])
         if parts.scheme not in {'http', 'https'} or not parts.hostname or parts.username or parts.password or parts.query or parts.fragment:

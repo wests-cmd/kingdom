@@ -118,7 +118,7 @@ class WorkProgrammes:
         with self.db.get_connection() as conn:
             return [json.loads(r[0]) for r in conn.execute('SELECT state_json FROM work_programmes ORDER BY rowid DESC')]
 
-    def create(self, project, idempotency_key, text, model_profile='auto', source_revision=None, planner_mode='configured_chat'):
+    def create(self, project, idempotency_key, text, model_profile='auto', source_revision=None, planner_mode='deliberative', planner_routing='local'):
         identifier(project); identifier(idempotency_key)
         if source_revision is not None:
             if not isinstance(source_revision, str) or not re.fullmatch(r'[0-9a-fA-F]{40}', source_revision):
@@ -126,12 +126,14 @@ class WorkProgrammes:
             source_revision = source_revision.lower()
         if not isinstance(model_profile, str) or not 1 <= len(model_profile) <= 100:
             raise ValueError('Select a configured model profile')
-        if planner_mode not in {'configured_chat', 'chatgpt'}:
+        if planner_mode not in {'configured_chat', 'chatgpt', 'deliberative'} or planner_routing not in {'local', 'cloud', 'mixed'}:
             raise ValueError('Choose a supported planner mode')
         sections = outline(text)
         digest = hashlib.sha256(json.dumps([text, model_profile, source_revision], ensure_ascii=False).encode()).hexdigest()
         if planner_mode != 'configured_chat':
             digest = hashlib.sha256((digest + ':' + planner_mode).encode()).hexdigest()
+        if planner_mode == 'deliberative':
+            digest = hashlib.sha256((digest + ':' + planner_routing).encode()).hexdigest()
         ident = uuid5(NAMESPACE_URL, 'kingdom-programme:' + project + ':' + idempotency_key).hex
         with _guard:
             try:
@@ -143,7 +145,7 @@ class WorkProgrammes:
             except KeyError:
                 state = {'id': ident, 'project': project, 'idempotency_key': idempotency_key,
                          'input_sha256': digest, 'source_text': text, 'model_profile': model_profile,
-                         'source_revision': source_revision, 'planner_mode': planner_mode,
+                         'source_revision': source_revision, 'planner_mode': planner_mode, 'planner_routing': planner_routing,
                          'revision': 0, 'auto_plan': False, 'initialized': False, 'sections': [], 'created_at': time.time()}
                 self._save(state)
             compiled, previous_gate = [], None
@@ -341,6 +343,11 @@ class WorkProgrammes:
             if row.get('planning_attempts', 0) >= 3:
                 raise ValueError('Planning attempt budget exhausted')
             row['planning_attempts'] = row.get('planning_attempts', 0) + 1
+            if state.get('planner_mode') == 'deliberative':
+                previous = row.pop('planning_stages', None)
+                if previous:
+                    row['planning_stage_history'] = (row.get('planning_stage_history', []) + [previous])[-3:]
+                row['planning_stages'] = {}
             row['planning'] = 'planning'
             self._save(state, expected_revision)
         prompt = ('Propose ONE executable Kingdom mission as JSON only: {"plan": {"title": str, "objective": str, '
@@ -376,7 +383,21 @@ class WorkProgrammes:
             if state.get('planner_mode') == 'chatgpt':
                 result = {'planning': 'awaiting_chatgpt', 'planning_request': prompt}
             else:
-                response = await self.engine.models.plan_chat(prompt, profile=state['model_profile'])
+                if state.get('planner_mode') == 'deliberative':
+                    from backend.models.planner_routing import deliberate
+                    async def record(stage, evidence):
+                        def persist():
+                            with _guard:
+                                checkpoint = self.get(ident)
+                                item = next(r for r in self.rows(checkpoint) if r['key'] == selected['key'])
+                                if item['planning'] != 'planning':
+                                    raise ValueError('Planning checkpoint changed')
+                                item.setdefault('planning_stages', {})[stage] = evidence
+                                self._save(checkpoint, checkpoint['revision'])
+                        await asyncio.to_thread(persist)
+                    response = await deliberate(self.engine.models, prompt, state.get('planner_routing', 'local'), record)
+                else:
+                    response = await self.engine.models.plan_chat(prompt, profile=state['model_profile'])
                 result = self._validate_planner_response(response, state, selected, integration)
         except Exception:
             result = {'planning': 'blocked', 'blocked_reasons': ['The selected model did not produce a valid executable plan. No mission was approved or executed.']}

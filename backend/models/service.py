@@ -132,17 +132,17 @@ class ModelService:
         self._record(result.usage)
         return {**result.export(), 'profile': ident, 'context': {k:v for k,v in context.items() if k != 'text'}}
 
-    async def plan_chat(self, prompt, profile='auto'):
+    async def plan_chat(self, prompt, profile='auto', hosting=None):
         """Plan through chat connections; coding models are not planner fallbacks."""
         payload = await self.chat(profile, {'messages': [
             {'role': 'system', 'content': 'You are Kingdom’s planning assistant. Identify uncertainty, ask a specific question when needed, and reconsider the answer before proposing work. Never execute or grant authority.'},
-            {'role': 'user', 'content': prompt}]}, planner=True)
+            {'role': 'user', 'content': prompt}]}, planner=True, **({'planner_hosting': hosting} if hosting else {}))
         choice = payload['choices'][0]
         if choice.get('finish_reason') == 'length':
             raise RuntimeError('Planner response was incomplete')
         return {'text': choice['message']['content'], 'profile': payload['kingdom_profile']}
 
-    async def chat(self, ident, request, *, planner=False):
+    async def chat(self, ident, request, *, planner=False, planner_hosting=None):
         """Forward a complete chat/tool conversation to one owner-approved computer."""
         from backend.models.profiles import ModelProfiles
         from backend.models.profiles import model_tls_context
@@ -179,6 +179,10 @@ class ModelService:
             import json
             if planner and ('codex' in profile['model'].casefold() or 'codex' in profile['id'].casefold()):
                 raise ValueError('Planner model changed; select a non-Codex chat connection')
+            if planner_hosting is not None:
+                from backend.models.planner_routing import hosting
+                if hosting(profile) != planner_hosting:
+                    raise ValueError('Planner hosting changed; review the connection')
             if len(json.dumps(request['messages'])) > profile.get('context_characters', 24000):
                 raise ValueError('Conversation exceeds this model connection context budget')
             body = {key: value for key, value in request.items()

@@ -12,7 +12,7 @@ from backend.runtime.work_programmes import WorkProgrammes
 def test_question_survives_restart_and_answer_replans_without_execution(runtime):
     engine, backlog, _ = runtime
     service = WorkProgrammes(backlog.db, engine, backlog)
-    state = service.create('kingdom', 'question', '- Check recovery', source_revision='a'*40)
+    state = service.create('kingdom', 'question', '- Check recovery', source_revision='a'*40, planner_mode='configured_chat')
     engine.models = SimpleNamespace(plan_chat=AsyncMock(side_effect=[
         {'text': json.dumps({'question': 'Which recovery behavior should be checked?'})},
         {'text': json.dumps({'plan': plan().model_dump(), 'acceptance_step': 'suite'})}]))
@@ -74,7 +74,7 @@ def test_planner_mode_is_part_of_programme_identity(runtime):
 def test_repeated_questions_are_bounded_and_stale_answers_rejected(runtime):
     engine, backlog, _ = runtime
     service = WorkProgrammes(backlog.db, engine, backlog)
-    state = service.create('kingdom', 'bounded', '- Check recovery')
+    state = service.create('kingdom', 'bounded', '- Check recovery', planner_mode='configured_chat')
     engine.models = SimpleNamespace(plan_chat=AsyncMock(return_value={'text': '{"question":"Which target?"}'}))
     for _ in range(3):
         state = asyncio.run(service.plan_next(state['id'], state['revision']))

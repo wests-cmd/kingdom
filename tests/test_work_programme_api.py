@@ -44,7 +44,7 @@ def test_owner_can_answer_saved_question_once_over_http(runtime, monkeypatch):
     from backend.runtime.work_programmes import WorkProgrammes
     engine, backlog, _ = runtime
     service = WorkProgrammes(backlog.db, engine, backlog)
-    state = service.create('kingdom', 'http-question', '- Check recovery')
+    state = service.create('kingdom', 'http-question', '- Check recovery', planner_mode='configured_chat')
     engine.models = SimpleNamespace(plan_chat=AsyncMock(return_value={'text': '{"question":"Which target?"}'}))
     state = asyncio.run(service.plan_next(state['id'], state['revision']))
     app = FastAPI()
@@ -78,13 +78,13 @@ def test_http_saved_list_review_and_actual_command_receipt_keep_section_gate(run
     monkeypatch.setattr(api, 'service', lambda: service)
     client = TestClient(app)
     response = client.post('/work-programmes', json={'project':'kingdom',
-        'idempotency_key':'http-proof', 'text':'Recovery:\n- Check a component',
+        'idempotency_key':'http-proof', 'text':'Recovery:\n- Check a component', 'planner_mode':'configured_chat',
         'source_revision':'a'*40})
     assert response.status_code == 201
     state = response.json()
     ident = state['id']
     repeated = client.post('/work-programmes', json={'project':'kingdom',
-        'idempotency_key':'http-proof', 'text':'Recovery:\n- Check a component',
+        'idempotency_key':'http-proof', 'text':'Recovery:\n- Check a component', 'planner_mode':'configured_chat',
         'source_revision':'a'*40})
     assert repeated.json()['id'] == ident
     response = client.post(f'/work-programmes/{ident}/plan-next', json={'expected_revision':state['revision']})

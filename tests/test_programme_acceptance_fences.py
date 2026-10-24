@@ -19,7 +19,7 @@ def programme(runtime, sections=1):
         '    def test_join(self): self.assertEqual("a"+"b","ab")\n', encoding='utf-8')
     service = WorkProgrammes(backlog.db, engine, backlog)
     state = service.create('kingdom', 'fences', '# First\n- first outcome' +
-                           ('\n# Second\n- second outcome' if sections == 2 else ''), source_revision='a'*40)
+                           ('\n# Second\n- second outcome' if sections == 2 else ''), source_revision='a'*40, planner_mode='configured_chat')
     backlog.settings(True, backlog.snapshot()['revision'])
     return engine, backlog, service, state
 
