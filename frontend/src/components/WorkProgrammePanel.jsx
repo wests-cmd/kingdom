@@ -55,9 +55,9 @@ export default function WorkProgrammePanel() {
     {(data || []).map(list=><article key={list.id} className="record-detail">
       <h3>{list.project} · {list.status}</h3>
       <p>Planner: {list.planner_mode==='chatgpt' ? 'ChatGPT (external handoff)' : 'Configured chat model'}</p>
-      <p>{list.auto_plan ? 'Kingdom proposes the next eligible plan automatically.' : 'Automatic planning paused.'}</p>
+      <p>{list.auto_plan ? (list.planner_mode==='chatgpt' ? 'Kingdom prepares the next eligible ChatGPT request automatically and waits for its response.' : 'Kingdom proposes the next eligible plan automatically.') : 'Automatic planning paused.'}</p>
       <button disabled={busy} onClick={()=>act(()=>api.post(`/work-programmes/${list.id}/settings`,{enabled:!list.auto_plan,expected_revision:list.revision}))}>{list.auto_plan ? 'Pause planning' : 'Enable automatic planning'}</button>
-      <button disabled={busy} onClick={()=>act(()=>api.post(`/work-programmes/${list.id}/plan-next`,{expected_revision:list.revision}))}>Propose next plan</button>
+      <button disabled={busy} onClick={()=>act(()=>api.post(`/work-programmes/${list.id}/plan-next`,{expected_revision:list.revision}))}>{list.planner_mode==='chatgpt' ? 'Prepare next ChatGPT request' : 'Propose next plan'}</button>
       {list.sections.map((section,i)=><section key={i}>
         <h4>{section.title} · {section.status}</h4>
         {[...section.items, section.integration].map(item=><details key={item.key}>
