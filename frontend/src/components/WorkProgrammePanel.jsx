@@ -12,6 +12,17 @@ function PlannerQuestion({item, list, busy, act}) {
   </div>
 }
 
+function ChatGPTHandoff({item, list, busy, act}) {
+  const [reply, setReply] = useState('')
+  return <div>
+    <p>Waiting for ChatGPT. Direct connection is not established. Copy this request into ChatGPT, then paste its JSON response below. No other model will take over this request.</p>
+    <label>Request for ChatGPT <textarea readOnly rows={8} value={item.planning_request}/></label>
+    <label>ChatGPT JSON response <textarea rows={6} maxLength={100000} value={reply} onChange={e=>setReply(e.target.value)}/></label>
+    <button disabled={busy || !reply.trim()} onClick={()=>act(()=>api.post(`/work-programmes/${list.id}/items/${item.key}/chatgpt-response`, {text:reply, expected_revision:list.revision}))}>Validate ChatGPT response</button>
+    <p>Imported origin is your declaration. Kingdom still validates the plan and requires its existing approvals and tests.</p>
+  </div>
+}
+
 export default function WorkProgrammePanel() {
   const {data, error: readError, refresh} = useLiveData('/work-programmes', 5000)
   const {data: modelProfiles} = useLiveData('/workspace/model-profiles', 30000)
@@ -19,6 +30,7 @@ export default function WorkProgrammePanel() {
   const [profile, setProfile] = useState('auto'), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [key, setKey] = useState(() => `list-${crypto.randomUUID()}`)
   const [revision, setRevision] = useState('')
+  const [plannerMode, setPlannerMode] = useState('chatgpt')
   const act = async operation => {
     setBusy(true); setError('')
     try {await operation(); await refresh()}
@@ -31,16 +43,18 @@ export default function WorkProgrammePanel() {
     <p>Automatic planning does not approve plans or enable execution. Enable reviewed work separately in the work list. Missing tools and failed checks stay visible.</p>
     {(error || readError) && <p role="alert">{error || 'Could not read saved programmes.'}</p>}
     <label>Project <select value={project} onChange={e=>setProject(e.target.value)}>{['kingdom','threadmap','centipede'].map(p=><option key={p}>{p}</option>)}</select></label>
-    <label>Chat planner <select value={profile} onChange={e=>setProfile(e.target.value)}><option value="auto">Choose an available non-Codex chat model</option>{(modelProfiles?.profiles||[]).filter(p=>!`${p.id} ${p.model}`.toLowerCase().includes('codex')).map(p=><option key={p.id} value={p.id}>{p.name||p.id}</option>)}</select></label>
-    <p>The planner uses a configured chat connection, asks when requirements are unclear, and waits for your answer. ChatGPT requires a supported configured connection; this setting does not connect a ChatGPT account automatically.</p>
+    <label>Planner <select value={plannerMode} onChange={e=>setPlannerMode(e.target.value)}><option value="chatgpt">ChatGPT — manual handoff until connected</option><option value="configured_chat">Configured chat model</option></select></label>
+    <label>{plannerMode==='chatgpt' ? 'Execution model' : 'Chat planner and execution model'} <select value={profile} onChange={e=>setProfile(e.target.value)}><option value="auto">Choose an available configured model</option>{(modelProfiles?.profiles||[]).filter(p=>plannerMode==='chatgpt'||!`${p.id} ${p.model}`.toLowerCase().includes('codex')).map(p=><option key={p.id} value={p.id}>{p.name||p.id}</option>)}</select></label>
+    <p>ChatGPT mode waits for an external response and never uses the execution model as a planner fallback. This does not sign into ChatGPT automatically.</p>
     <details><summary>Project test source</summary>
       <label>Reviewed source commit (required for project tests) <input value={revision} maxLength={40} onChange={e=>setRevision(e.target.value)} placeholder="40-character commit"/></label>
       <p>The commit is your declaration. Test receipts do not attest the checkout automatically. Without a reviewed commit, project tests remain blocked.</p>
     </details>
     <label>Work to do <textarea value={text} maxLength={24000} rows={6} onChange={e=>setText(e.target.value)} placeholder={'Recovery:\n- Preserve queued conversations after restart\n- Cancel without duplicate work'}/></label>
-    <button disabled={busy || !text.trim() || (revision!=='' && !/^[a-fA-F0-9]{40}$/.test(revision))} onClick={()=>act(async()=>{await api.post('/work-programmes',{project,idempotency_key:key,text,model_profile:profile,source_revision:revision||null});setKey(`list-${crypto.randomUUID()}`);setText('')})}>Save this list</button>
+    <button disabled={busy || !text.trim() || (revision!=='' && !/^[a-fA-F0-9]{40}$/.test(revision))} onClick={()=>act(async()=>{await api.post('/work-programmes',{project,idempotency_key:key,text,model_profile:profile,planner_mode:plannerMode,source_revision:revision||null});setKey(`list-${crypto.randomUUID()}`);setText('')})}>Save this list</button>
     {(data || []).map(list=><article key={list.id} className="record-detail">
       <h3>{list.project} · {list.status}</h3>
+      <p>Planner: {list.planner_mode==='chatgpt' ? 'ChatGPT (external handoff)' : 'Configured chat model'}</p>
       <p>{list.auto_plan ? 'Kingdom proposes the next eligible plan automatically.' : 'Automatic planning paused.'}</p>
       <button disabled={busy} onClick={()=>act(()=>api.post(`/work-programmes/${list.id}/settings`,{enabled:!list.auto_plan,expected_revision:list.revision}))}>{list.auto_plan ? 'Pause planning' : 'Enable automatic planning'}</button>
       <button disabled={busy} onClick={()=>act(()=>api.post(`/work-programmes/${list.id}/plan-next`,{expected_revision:list.revision}))}>Propose next plan</button>
@@ -51,6 +65,7 @@ export default function WorkProgrammePanel() {
           <p>{item.reason}</p>
           {(item.blocked_reasons || []).map((reason,n)=><p key={n}>{reason}</p>)}
           {item.planning==='awaiting_answer' && <PlannerQuestion item={item} list={list} busy={busy} act={act}/>}
+          {item.planning==='awaiting_chatgpt' && <ChatGPTHandoff item={item} list={list} busy={busy} act={act}/>}
           {(item.clarifications||[]).map((entry,n)=><p key={n}>Question: {entry.question}<br/>Answer: {entry.answer}</p>)}
           {item.planning==='blocked' && !item.mission_id && (item.planning_attempts||0)<3 && <button disabled={busy} onClick={()=>act(()=>api.post(`/work-programmes/${list.id}/items/${item.key}/retry-planning`,{expected_revision:list.revision}))}>Allow another planning attempt</button>}
           {item.proposal && <><p>Review the exact commands, paths, changes and acceptance scope before approval. A passing command only proves its reviewed test summary.</p><pre style={{whiteSpace:'pre-wrap'}}>{JSON.stringify(item.proposal,null,2)}</pre></>}

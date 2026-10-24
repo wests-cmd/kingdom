@@ -32,6 +32,45 @@ def test_question_survives_restart_and_answer_replans_without_execution(runtime)
     assert engine.missions.list() == [] and engine.tasks.list() == []
 
 
+def test_chatgpt_handoff_never_calls_local_planner_and_preserves_validation(runtime):
+    engine, backlog, _ = runtime
+    service = WorkProgrammes(backlog.db, engine, backlog)
+    engine.models = SimpleNamespace(plan_chat=AsyncMock(side_effect=AssertionError('No model fallback')))
+    state = service.create('kingdom', 'external', '- Check recovery', source_revision='a'*40,
+                           planner_mode='chatgpt')
+    state = asyncio.run(service.plan_next(state['id'], state['revision']))
+    row = state['sections'][0]['items'][0]
+    assert row['planning'] == 'awaiting_chatgpt' and 'OWNER OUTCOME DATA' in row['planning_request']
+    service = WorkProgrammes(backlog.db, engine, backlog)
+    service.recover_startup()
+    assert service.get(state['id'])['sections'][0]['items'][0]['planning'] == 'awaiting_chatgpt'
+    assert asyncio.run(service.plan_next(state['id'], state['revision']))['revision'] == state['revision']
+    with pytest.raises(ValueError):
+        service.chatgpt_response(state['id'], row['key'], '{"approve":true}', state['revision'])
+    assert service.get(state['id'])['revision'] == state['revision']
+    state = service.chatgpt_response(state['id'], row['key'], '{"question":"Which target?"}', state['revision'])
+    state = service.answer(state['id'], row['key'], 'Queued conversations', state['revision'])
+    state = asyncio.run(service.plan_next(state['id'], state['revision']))
+    assert 'Queued conversations' in state['sections'][0]['items'][0]['planning_request']
+    reply = json.dumps({'plan': plan().model_dump(), 'acceptance_step': 'suite'})
+    with pytest.raises(ValueError):
+        service.chatgpt_response(state['id'], row['key'], reply, state['revision']-1)
+    state = service.chatgpt_response(state['id'], row['key'], reply, state['revision'])
+    assert state['sections'][0]['items'][0]['planning'] == 'needs_review'
+    with pytest.raises(ValueError):
+        service.chatgpt_response(state['id'], row['key'], reply, state['revision'])
+    engine.models.plan_chat.assert_not_awaited()
+    assert engine.missions.list() == [] and engine.tasks.list() == []
+
+
+def test_planner_mode_is_part_of_programme_identity(runtime):
+    engine, backlog, _ = runtime
+    service = WorkProgrammes(backlog.db, engine, backlog)
+    service.create('kingdom', 'mode', '- Check recovery', planner_mode='chatgpt')
+    with pytest.raises(ValueError, match='another list'):
+        service.create('kingdom', 'mode', '- Check recovery')
+
+
 def test_repeated_questions_are_bounded_and_stale_answers_rejected(runtime):
     engine, backlog, _ = runtime
     service = WorkProgrammes(backlog.db, engine, backlog)

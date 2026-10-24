@@ -118,7 +118,7 @@ class WorkProgrammes:
         with self.db.get_connection() as conn:
             return [json.loads(r[0]) for r in conn.execute('SELECT state_json FROM work_programmes ORDER BY rowid DESC')]
 
-    def create(self, project, idempotency_key, text, model_profile='auto', source_revision=None):
+    def create(self, project, idempotency_key, text, model_profile='auto', source_revision=None, planner_mode='configured_chat'):
         identifier(project); identifier(idempotency_key)
         if source_revision is not None:
             if not isinstance(source_revision, str) or not re.fullmatch(r'[0-9a-fA-F]{40}', source_revision):
@@ -126,8 +126,12 @@ class WorkProgrammes:
             source_revision = source_revision.lower()
         if not isinstance(model_profile, str) or not 1 <= len(model_profile) <= 100:
             raise ValueError('Select a configured model profile')
+        if planner_mode not in {'configured_chat', 'chatgpt'}:
+            raise ValueError('Choose a supported planner mode')
         sections = outline(text)
         digest = hashlib.sha256(json.dumps([text, model_profile, source_revision], ensure_ascii=False).encode()).hexdigest()
+        if planner_mode != 'configured_chat':
+            digest = hashlib.sha256((digest + ':' + planner_mode).encode()).hexdigest()
         ident = uuid5(NAMESPACE_URL, 'kingdom-programme:' + project + ':' + idempotency_key).hex
         with _guard:
             try:
@@ -139,7 +143,7 @@ class WorkProgrammes:
             except KeyError:
                 state = {'id': ident, 'project': project, 'idempotency_key': idempotency_key,
                          'input_sha256': digest, 'source_text': text, 'model_profile': model_profile,
-                         'source_revision': source_revision,
+                         'source_revision': source_revision, 'planner_mode': planner_mode,
                          'revision': 0, 'auto_plan': False, 'initialized': False, 'sections': [], 'created_at': time.time()}
                 self._save(state)
             compiled, previous_gate = [], None
@@ -222,7 +226,7 @@ class WorkProgrammes:
             if section['status'] == 'completed':
                 continue
             for row in section['items']:
-                if row['planning'] == 'awaiting_answer':
+                if row['planning'] in {'awaiting_answer', 'awaiting_chatgpt'}:
                     return None, False
                 if row['planning'] == 'unplanned':
                     return row, False
@@ -275,6 +279,56 @@ class WorkProgrammes:
             raise ValueError('Reviewed component context exceeds the integration planning budget')
         return context
 
+    def _validate_planner_response(self, response, state, selected, integration):
+        if not isinstance(response.get('text'), str) or len(response['text']) > 100000:
+            raise ValueError('Planning response exceeded its budget')
+        data = json.loads(response['text'])
+        if not isinstance(data, dict) or set(data) - {'plan', 'acceptance_step', 'blocked_reasons', 'question'}:
+            raise ValueError('Unrecognized planning response')
+        blocked = data.get('blocked_reasons')
+        if 'question' in data:
+            question = data['question']
+            if set(data) != {'question'} or not isinstance(question, str) or not question.strip() or len(question) > 1000:
+                raise ValueError('Invalid clarification question')
+            result = ({'planning': 'awaiting_answer', 'question': question.strip()}
+                      if len(selected.get('clarifications', [])) < 3 else
+                      {'planning': 'blocked', 'blocked_reasons': ['Three clarification rounds did not resolve this outcome. Owner review is required.']})
+        elif blocked is not None:
+            if not isinstance(blocked, list) or not 1 <= len(blocked) <= 20 or any(not isinstance(v, str) or not 1 <= len(v) <= 1000 for v in blocked):
+                raise ValueError('Invalid planning blockers')
+            result = {'planning': 'blocked', 'blocked_reasons': blocked}
+        else:
+            plan = MissionPlan.model_validate(data['plan']); validate_plan(plan)
+            validate_declared_source(state, plan.model_dump())
+            step = next(s for s in plan.steps if s.id == data['acceptance_step'])
+            if step.kind not in ({'project_test'} if integration else {'function_check', 'project_test'}):
+                raise ValueError('A separate reviewed test acceptance is required')
+            if integration:
+                section = next(s for s in state['sections'] if s['integration']['key'] == selected['key'])
+                validate_integration(self.engine, section, step.model_dump())
+            result = {'planning': 'needs_review', 'acceptance_step': step.id, 'proposal': plan.model_dump()}
+        return result
+
+
+    def chatgpt_response(self, ident, key, text, expected_revision):
+        """Owner-submitted external proposal; origin is declared, not attested."""
+        with _guard:
+            state = self.get(ident)
+            if state['revision'] != expected_revision or state.get('planner_mode') != 'chatgpt':
+                raise ValueError('ChatGPT planning request changed')
+            row = next((r for r in self.rows(state) if r['key'] == key), None)
+            if not row or row['planning'] != 'awaiting_chatgpt' or row.get('mission_id'):
+                raise ValueError('Select a pending ChatGPT planning request')
+            integration = any(s['integration']['key'] == key for s in state['sections'])
+            try:
+                result = self._validate_planner_response({'text': text}, state, row, integration)
+            except (ValueError, TypeError, KeyError, StopIteration) as error:
+                raise ValueError('ChatGPT response does not satisfy the planning contract') from error
+            row.update(result, planner_origin='owner-submitted ChatGPT response; origin not independently attested')
+            row.pop('planning_request', None)
+            self._save(state, expected_revision)
+            return self.snapshot(ident)
+
     async def plan_next(self, ident, expected_revision):
         with _guard:
             state = self.get(ident)
@@ -319,34 +373,11 @@ class WorkProgrammes:
                            'The listed commands and test summaries establish only their reported scopes. '
                            'Do not repeat a component acceptance argv or infer application correctness. '
                            'A source revision is an owner declaration, not an attestation.')
-            response = await self.engine.models.plan_chat(prompt, profile=state['model_profile'])
-            if not isinstance(response.get('text'), str) or len(response['text']) > 100000:
-                raise ValueError('Planning response exceeded its budget')
-            data = json.loads(response['text'])
-            if not isinstance(data, dict) or set(data) - {'plan', 'acceptance_step', 'blocked_reasons', 'question'}:
-                raise ValueError('Unrecognized planning response')
-            blocked = data.get('blocked_reasons')
-            if 'question' in data:
-                question = data['question']
-                if set(data) != {'question'} or not isinstance(question, str) or not question.strip() or len(question) > 1000:
-                    raise ValueError('Invalid clarification question')
-                result = ({'planning': 'awaiting_answer', 'question': question.strip()}
-                          if len(selected.get('clarifications', [])) < 3 else
-                          {'planning': 'blocked', 'blocked_reasons': ['Three clarification rounds did not resolve this outcome. Owner review is required.']})
-            elif blocked is not None:
-                if not isinstance(blocked, list) or not 1 <= len(blocked) <= 20 or any(not isinstance(v, str) or not 1 <= len(v) <= 1000 for v in blocked):
-                    raise ValueError('Invalid planning blockers')
-                result = {'planning': 'blocked', 'blocked_reasons': blocked}
+            if state.get('planner_mode') == 'chatgpt':
+                result = {'planning': 'awaiting_chatgpt', 'planning_request': prompt}
             else:
-                plan = MissionPlan.model_validate(data['plan']); validate_plan(plan)
-                validate_declared_source(state, plan.model_dump())
-                step = next(s for s in plan.steps if s.id == data['acceptance_step'])
-                if step.kind not in ({'project_test'} if integration else {'function_check', 'project_test'}):
-                    raise ValueError('A separate reviewed test acceptance is required')
-                if integration:
-                    section = next(s for s in state['sections'] if s['integration']['key'] == selected['key'])
-                    validate_integration(self.engine, section, step.model_dump())
-                result = {'planning': 'needs_review', 'acceptance_step': step.id, 'proposal': plan.model_dump()}
+                response = await self.engine.models.plan_chat(prompt, profile=state['model_profile'])
+                result = self._validate_planner_response(response, state, selected, integration)
         except Exception:
             result = {'planning': 'blocked', 'blocked_reasons': ['The selected model did not produce a valid executable plan. No mission was approved or executed.']}
         with _guard:

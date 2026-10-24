@@ -20,6 +20,7 @@ def test_all_programme_routes_require_owner_and_validation_hides_private_input(m
             ('/work-programmes/a/settings','post'),('/work-programmes/a/plan-next','post'),
             ('/work-programmes/a/items/s1-t1/approve','post'),
             ('/work-programmes/a/items/s1-t1/answer','post'),
+            ('/work-programmes/a/items/s1-t1/chatgpt-response','post'),
             ('/work-programmes/a/items/s1-t1/retry-planning','post')]:
         response = getattr(client, method)(path, **({'json':{}} if method=='post' else {}))
         assert response.status_code == 403
