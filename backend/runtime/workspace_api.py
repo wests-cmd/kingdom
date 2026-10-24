@@ -49,6 +49,7 @@ class ProfileRequest(BaseModel):
     vision: bool = False
     supports_tools: bool = False
     tool_choice_mode: Literal['auto', 'required_pending'] = 'auto'
+    auto_select: StrictBool = True
     disabled: bool = False
     context_characters: int = Field(default=24000, ge=4000, le=400000)
     pool_group: str = Field(default='', max_length=64)

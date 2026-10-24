@@ -30,6 +30,8 @@ class ModelProfiles:
             conn.commit()
 
     def save(self, ident, config, api_key=None):
+        if type(config.get('auto_select', True)) is not bool:
+            raise ValueError('Automatic selection must be an explicit boolean')
         if config.get('tool_choice_mode', 'auto') not in {'auto', 'required_pending'}:
             raise ValueError('Choose a supported tool selection mode')
         if config.get('tool_choice_mode') == 'required_pending' and config.get('provider') != 'openai_compatible':

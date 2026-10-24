@@ -104,3 +104,14 @@ async def test_required_pending_is_opt_in_and_does_not_force_completed_work(prof
 def test_native_ollama_cannot_be_mislabeled_as_supporting_required_choice(profiles):
     with pytest.raises(ValueError, match='compatible OpenAI'):
         save(profiles, 'native', 'http://127.0.0.1:1234', tool_choice_mode='required_pending')
+
+
+@pytest.mark.asyncio
+async def test_trial_model_stays_out_of_automatic_selection_but_can_be_explicitly_tested(profiles):
+    with server() as (endpoint, calls):
+        save(profiles, 'trial', endpoint, auto_select=False)
+        with pytest.raises(ValueError, match='eligible'):
+            await ModelService().chat('auto', {'messages': [{'role':'user','content':'test'}]})
+        assert calls == []
+        await ModelService().chat('trial', {'messages': [{'role':'user','content':'test'}]})
+        assert len(calls) == 1

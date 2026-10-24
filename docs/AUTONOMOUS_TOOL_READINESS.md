@@ -25,3 +25,9 @@ Required tools are not a substitute for independent acceptance tests.
 These changes alone do not establish autonomous completion of an arbitrary
 backlog, repair, release, training or trading. A real end-to-end task must still
 pass source-bound independent acceptance before those claims are made.
+
+Candidate connections may set `auto_select: false`. Automatic chat/generation,
+readiness selection and deliberative planner routing then exclude them. An
+explicit profile or deliberately selected pool can still test the candidate;
+existing disabled, capacity and grant checks remain authoritative. This prevents
+a protocol experiment from silently becoming the default production worker.

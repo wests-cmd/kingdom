@@ -20,7 +20,7 @@ async def routed_stage(models, prompt, mode, stage, record, unavailable=None):
     from backend.storage.db import db
     configured = ModelProfiles(db).list()
     unavailable = unavailable if unavailable is not None else set()
-    eligible = [p for p in configured if p['id'] not in unavailable and not p.get('disabled')
+    eligible = [p for p in configured if p['id'] not in unavailable and not p.get('disabled') and p.get('auto_select', True)
                 and 'codex' not in (p['id'] + ' ' + p['model']).casefold()
                 and len(prompt) + 500 <= p.get('context_characters', 24000)
                 and (mode != 'local' or hosting(p) == 'local')]

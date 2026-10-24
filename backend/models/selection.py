@@ -25,7 +25,7 @@ async def available(profile):
 
 
 async def eligible_profiles(profiles, *, characters=0, images=False, tools=False):
-    candidates = [p for p in profiles if not p.get('disabled', False)
+    candidates = [p for p in profiles if not p.get('disabled', False) and p.get('auto_select', True)
                   and (not images or p.get('vision') is True)
                   and (not tools or p.get('supports_tools') is True)
                   and characters <= p.get('context_characters', 24000)]
