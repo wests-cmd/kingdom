@@ -92,6 +92,37 @@ def test_unknown_remote_host_is_not_silently_local():
     assert hosting({'provider': 'ollama', 'endpoint': 'https://worker.example', 'hosting': 'local'}) == 'local'
 
 
+def test_invalid_synthesis_gets_one_contract_repair_without_execution(runtime, profiles):
+    engine, backlog, _ = runtime
+    engine.models = SimpleNamespace(plan_chat=AsyncMock(side_effect=[
+        {'text': 'A'}, {'text': 'B'}, {'text': 'gaps'}, {'text': '**Ready**.'},
+        {'text': json.dumps({'question': 'Which reviewed source revision should be used?'})}]))
+    service = WorkProgrammes(backlog.db, engine, backlog)
+    state = service.create('kingdom', 'repair-synthesis', '- Check recovery', source_revision='a'*40)
+    state = asyncio.run(service.plan_next(state['id'], state['revision']))
+    row = state['sections'][0]['items'][0]
+    assert row['planning'] == 'awaiting_answer'
+    assert row['question'] == 'Which reviewed source revision should be used?'
+    assert len(engine.models.plan_chat.await_args_list) == 5
+    assert row['planning_stages']['synthesis_rejection']['reason'] == 'invalid_planning_contract'
+    assert row['planning_stages']['synthesis_repair']['hosting'] == 'local'
+    assert engine.missions.list() == [] and engine.tasks.list() == []
+
+
+def test_synthesis_repair_budget_exhaustion_stays_blocked(runtime, profiles):
+    engine, backlog, _ = runtime
+    engine.models = SimpleNamespace(plan_chat=AsyncMock(side_effect=[
+        {'text': 'A'}, {'text': 'B'}, {'text': 'gaps'}, {'text': 'Ready'}, {'text': 'Done'}]))
+    service = WorkProgrammes(backlog.db, engine, backlog)
+    state = service.create('kingdom', 'exhaust-synthesis', '- Check recovery', source_revision='a'*40)
+    state = asyncio.run(service.plan_next(state['id'], state['revision']))
+    row = state['sections'][0]['items'][0]
+    assert row['planning'] == 'blocked'
+    assert len(engine.models.plan_chat.await_args_list) == 5
+    assert row['planning_stages']['synthesis_repair_rejection']['reason'] == 'invalid_planning_contract'
+    assert engine.missions.list() == [] and engine.tasks.list() == []
+
+
 def test_many_cloud_connections_cannot_push_local_fallback_out_of_budget(profiles):
     profiles.append({**profiles[-1], 'id': 'cloud_c', 'endpoint': 'https://c.example'})
     async def respond(prompt, profile, hosting):
