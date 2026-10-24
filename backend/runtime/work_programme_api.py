@@ -36,6 +36,10 @@ class Settings(Revision):
     enabled: bool
 
 
+class Answer(Revision):
+    answer: str = Field(min_length=1, max_length=4000)
+
+
 def boundary(operation):
     try:
         return operation()
@@ -78,3 +82,8 @@ def approve(ident: str, key: str, request: Revision):
 @router.post('/{ident}/items/{key}/retry-planning')
 def retry(ident: str, key: str, request: Revision):
     return boundary(lambda: service().retry_planning(ident, key, request.expected_revision))
+
+
+@router.post('/{ident}/items/{key}/answer')
+def answer(ident: str, key: str, request: Answer):
+    return boundary(lambda: service().answer(ident, key, request.answer, request.expected_revision))
