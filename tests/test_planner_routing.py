@@ -101,3 +101,13 @@ def test_many_cloud_connections_cannot_push_local_fallback_out_of_budget(profile
     models = SimpleNamespace(plan_chat=AsyncMock(side_effect=respond))
     asyncio.run(deliberate(models, 'outcome', 'cloud', AsyncMock()))
     assert [c.kwargs['profile'] for c in models.plan_chat.await_args_list][:3] == ['cloud_a', 'cloud_b', 'local']
+
+
+def test_available_local_model_is_preferred_to_busy_local_model(profiles, monkeypatch):
+    from backend.models.capacity import capacity
+    profiles.append({**profiles[0], 'id': 'local_b', 'endpoint': 'http://127.0.0.1:11435'})
+    monkeypatch.setattr(capacity, 'status', lambda rows: [
+        {'profile': p['id'], 'active': int(p['id'] == 'local'), 'max_parallel': 1} for p in rows])
+    models = SimpleNamespace(plan_chat=AsyncMock(return_value={'text': '{}'}))
+    asyncio.run(deliberate(models, 'outcome', 'local', AsyncMock()))
+    assert all(c.kwargs['profile'] == 'local_b' for c in models.plan_chat.await_args_list)
