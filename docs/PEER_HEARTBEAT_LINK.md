@@ -1,0 +1,15 @@
+# Persistent heartbeat transport
+
+`scripts/peer-heartbeat-link.py` is an operator-installed bridge for already paired Kingdoms whose local API listens only on loopback. It carries heartbeat inventories, not execution, pairing, owner administration or arbitrary HTTP requests. It does not create or renew grants.
+
+The listener accepts only POST `/heartbeat` from configured sender IDs addressed to its pinned local Kingdom. Native `/nodes/rpc` remains responsible for signature verification, current trust/revocation, timestamps, inventory validation and durable replay prevention. Its signed inventory response is verified by the client's own native RPC receiver. The listener has no owner access code. Clients read their own local owner code only to request a signed heartbeat on loopback; that code never crosses the peer connection.
+
+Operators provide a local API URL and pinned local node ID/fingerprint. The server configuration additionally supplies bind address, port, certificate/private-key paths and permitted peer IDs. Client configuration supplies peer ID, remote HTTPS origin, explicit CA file, local token path and status-file path. Keep configuration and private keys private. Certificates must contain the actual destination address in their SAN. Never disable TLS verification. Track certificate expiry and replace the public CA on clients during an authorized rotation.
+
+Install as a user service with restart-on-failure/always, an eight-second restart delay and user lingering where boot startup is required. Clients send every fifteen seconds, with bounded backoff to thirty seconds on failure. Native forty-five-second freshness checks remain unchanged. Missing reports must still become disconnected. Requests have timeouts and bounded bodies; the single-threaded TLS listener bounds pending connections and handshake time. Keep it on approved private networks.
+
+Older Kingdom receivers that only accept running service rows need the current typed service inventory validator before receiving inventories with stopped containers. Do not delete stopped rows from signed reports, rewrite signatures, or label stale reports connected. An operator compatibility overlay is not a complete application release; retain its exact hashes and rollback source.
+
+The October 25 owner deployment uses Laptop 2 as the heartbeat hub: DT1 ↔ Laptop 2 ↔ Laptop 3. This does not imply a direct DT1–Laptop 3 link, relayed task execution, transitive trust or complete distributed job visibility. A future general federation transport must implement those capabilities explicitly under existing authorization.
+
+Validation: run `python tests/test_peer_heartbeat_link.py`, then verify current native node states and advancing receipt timestamps over more than forty-five seconds. Test invalid signatures, duplicate messages, wrong targets and non-heartbeat message types against the live listener. Confirm automatic service recovery after a bounded crash test. A running service alone is not evidence of connection.
