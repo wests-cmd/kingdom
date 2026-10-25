@@ -21,7 +21,10 @@ def main():
     try:
         while True:
             state={'observed_at':time.time(),'pid':os.getpid(),'peers':{}}
-            for name in ['laptop2','laptop3','dt1']:
+            names = ['laptop2','laptop3','dt1']
+            if (root/'listener.json').is_file():
+                names.append('listener')
+            for name in names:
                 child=children.get(name)
                 if child is None or child.poll() is not None:
                     child=subprocess.Popen([sys.executable,str(root/'link.py'),'--config',str(root/(name+'.json'))],
