@@ -4,12 +4,12 @@ from urllib.request import Request, urlopen
 from fastapi import APIRouter, Depends, HTTPException
 from backend.security.http_auth import require_owner
 from backend.state import STATE
-from backend.system.ui_updates import UIComponents
+from backend.system.ui_updates import UIComponents, native_build_identity
 
 router=APIRouter(prefix='/updates/ui',dependencies=[Depends(require_owner)])
 
 
-def components(): return UIComponents(STATE['version'])
+def components(): return UIComponents(STATE['version'], backend_identity=native_build_identity())
 
 
 def candidate():

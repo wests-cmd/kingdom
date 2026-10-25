@@ -142,7 +142,7 @@ function OwnerApp() {
         <header className="topbar">
           <div className="page-title">{currentPage === 'SkillMaps' ? 'Skill maps & Discord' : currentPage}</div>
           <div className="status-indicator">
-            Kingdom:{" "}
+            Local app:{" "}
             <span className={isConnected ? "badge-online" : "badge-offline"}>
               {isConnected ? "Connected" : "Disconnected"}
             </span>

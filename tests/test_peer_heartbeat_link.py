@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('heartbeat_link', Path(__file__).parents[1] / 'scripts/peer-heartbeat-link.py')
 link = importlib.util.module_from_spec(spec)
@@ -19,6 +20,18 @@ class HeartbeatBoundaryTests(unittest.TestCase):
         for message in [None, [], {}, 'connected']:
             with self.subTest(message=message), self.assertRaises(ValueError):
                 link.validate_envelope(message, 'a', 'b', 'inventory_snapshot')
+
+    def test_local_session_preserves_owner_passcode(self):
+        config={'local':'http://127.0.0.1:8000','auth_mode':'local_session'}
+        with patch.object(link,'request',return_value={'passcode_enabled':True}) as request:
+            with self.assertRaises(ValueError):link.local_client(config)
+            self.assertEqual(request.call_count,1)
+            self.assertEqual(request.call_args.args[0],'http://127.0.0.1:8000/auth/local/status')
+
+    def test_owner_session_never_uses_remote_origin(self):
+        for origin in ['http://192.168.1.2:8000','https://127.0.0.1:8000','http://127.0.0.1:8000/path','http://owner@127.0.0.1:8000']:
+            with self.subTest(origin=origin),self.assertRaises(ValueError):
+                link.local_client({'local':origin,'auth_mode':'local_session'})
 
 
 if __name__ == '__main__':

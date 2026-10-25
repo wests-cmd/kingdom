@@ -7,7 +7,7 @@ from pathlib import Path
 import zipfile
 
 
-def build(dist, output, version, compatible_backends=None):
+def build(dist, output, version, compatible_backends=None, compatible_backend_builds=None):
     dist,output=Path(dist),Path(output)
     files={path.relative_to(dist).as_posix():hashlib.sha256(path.read_bytes()).hexdigest() for path in dist.rglob('*') if path.is_file()}
     if 'index.html' not in files: raise ValueError('Build the frontend first')
@@ -15,6 +15,10 @@ def build(dist, output, version, compatible_backends=None):
     if version not in compatible_backends or not all(re.fullmatch(r'\d+\.\d+\.\d+',item) for item in compatible_backends):
         raise ValueError('Explicit UI compatibility must include the current backend version')
     manifest={'format':'kingdom.ui.v1','ui_version':version,'compatible_backends':compatible_backends,'files':files}
+    if compatible_backend_builds is not None:
+        if not compatible_backend_builds or any(not isinstance(item,str) or not re.fullmatch('[a-f0-9]{40}',item) for item in compatible_backend_builds):
+            raise ValueError('Use exact reviewed native build revisions')
+        manifest['compatible_backend_builds']=compatible_backend_builds
     output.parent.mkdir(parents=True,exist_ok=True)
     with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as archive:
         for name in sorted(files): archive.write(dist/name,name)
@@ -23,5 +27,5 @@ def build(dist, output, version, compatible_backends=None):
 
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--version',required=True);parser.add_argument('--dist',default='frontend/dist');parser.add_argument('--output',required=True);parser.add_argument('--compatible-backend',action='append')
-    args=parser.parse_args();print(build(args.dist,args.output,args.version,args.compatible_backend))
+    parser=argparse.ArgumentParser();parser.add_argument('--version',required=True);parser.add_argument('--dist',default='frontend/dist');parser.add_argument('--output',required=True);parser.add_argument('--compatible-backend',action='append');parser.add_argument('--compatible-backend-build',action='append')
+    args=parser.parse_args();print(build(args.dist,args.output,args.version,args.compatible_backend,args.compatible_backend_build))

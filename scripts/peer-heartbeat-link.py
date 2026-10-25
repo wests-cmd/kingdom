@@ -7,24 +7,29 @@ import argparse
 import json
 import ssl
 import time
+import subprocess
 import urllib.request
+import http.cookiejar
+from urllib.parse import urlsplit
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 LIMIT = 262144
 
 
-def request(url, payload=None, token=None, context=None):
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args):
+        return None
+
+
+def request(url, payload=None, token=None, context=None, opener=None):
     headers = {'Content-Type': 'application/json', 'X-Kingdom-Request': '1'}
     if token:
         headers['Authorization'] = 'Bearer ' + token
     req = urllib.request.Request(url, data=None if payload is None else json.dumps(payload).encode(), headers=headers)
     # Fixed URLs only: never follow redirects with an owner credential.
-    class NoRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, *args):
-            return None
-    opener = urllib.request.build_opener(NoRedirect(), urllib.request.ProxyHandler({}),
-                                        urllib.request.HTTPSHandler(context=context))
+    opener = opener or urllib.request.build_opener(NoRedirect(), urllib.request.ProxyHandler({}),
+                                                   urllib.request.HTTPSHandler(context=context))
     with opener.open(req, timeout=6) as response:
         raw = response.read(LIMIT + 1)
     if len(raw) > LIMIT:
@@ -85,15 +90,67 @@ def make_handler(config):
     return Handler
 
 
+def local_client(config):
+    local = urlsplit(config['local'])
+    if local.scheme != 'http' or local.hostname not in {'127.0.0.1', 'localhost', '::1'} or local.username or local.password or local.path or local.query or local.fragment:
+        raise ValueError('Local owner access requires an exact loopback origin')
+    if config.get('auth_mode') == 'local_session':
+        # Use the documented same-computer session flow, never extract a native
+        # process credential. Cookies stay in memory and only on loopback.
+        opener = urllib.request.build_opener(NoRedirect(), urllib.request.ProxyHandler({}),
+                                             urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        invoke = lambda path, body=None: request(config['local'] + path, body, opener=opener)
+        if invoke('/auth/local/status', {}).get('passcode_enabled') is not False:
+            raise ValueError('Owner unlock required; startup passcode is preserved')
+        if invoke('/auth/local/session', {}).get('identity') != 'owner':
+            raise ValueError('Local session was not authorized')
+        return invoke
+    token = Path(config['token_file']).read_text().strip()
+    return lambda path, body=None: request(config['local'] + path, body, token)
+
+
 def sync(config):
     identity(config['local'], config['identity'])
-    token = Path(config['token_file']).read_text().strip()
-    proof = request(config['local'] + '/federation/' + config['peer_id'] + '/heartbeat-proof', {}, token)
+    invoke = local_client(config)
+    proof = invoke('/federation/' + config['peer_id'] + '/heartbeat-proof', {})
     validate_envelope(proof, config['identity']['node_id'], config['peer_id'], 'heartbeat')
-    context = ssl.create_default_context(cafile=config['ca_file'])
-    reply = request(config['remote'] + '/heartbeat', proof, context=context)
+    if config.get('transport') == 'pinned_ssh':
+        # Existing operator-approved SSH identity, not port forwarding. The
+        # fixed remote program can only submit this signed report to loopback.
+        program = f'''import json,urllib.request
+message={proof!r}
+with urllib.request.urlopen('http://127.0.0.1:{int(config['peer_port'])}/nodes/identity',timeout=6) as r:identity=json.load(r)
+assert identity['node_id']=={config['peer_id']!r} and identity['fingerprint']=={config['peer_fingerprint']!r}
+req=urllib.request.Request('http://127.0.0.1:{int(config['peer_port'])}/nodes/rpc',data=json.dumps(message).encode(),headers={{'Content-Type':'application/json'}})
+with urllib.request.urlopen(req,timeout=6) as r:
+ data=r.read({LIMIT + 1})
+ assert len(data)<={LIMIT}
+ print(data.decode())
+'''
+        completed = subprocess.run(config['ssh_command'] + [config['remote_python'] + ' -'],
+                                   input=program, text=True, capture_output=True, timeout=18)
+        if completed.returncode or len(completed.stdout) > LIMIT:
+            raise ValueError('Pinned peer transport failed')
+        result = json.loads(completed.stdout)
+        if not result.get('ping', {}).get('success'):
+            raise ValueError('Peer heartbeat was not accepted')
+        reply = result.get('inventory_proof')
+    else:
+        context = ssl.create_default_context(cafile=config['ca_file'])
+        origins = [config['remote'], *config.get('remote_fallbacks', [])]
+        if len(origins) > 3 or any(not origin.startswith('https://') for origin in origins):
+            raise ValueError('Use up to three owner-configured HTTPS routes')
+        for index, origin in enumerate(origins):
+            try:
+                reply = request(origin + '/heartbeat', proof, context=context)
+                break
+            except urllib.error.HTTPError:
+                raise  # An authorization rejection is never a reason to switch routes.
+            except (urllib.error.URLError, TimeoutError):
+                if index + 1 == len(origins):
+                    raise
     validate_envelope(reply, config['peer_id'], config['identity']['node_id'], 'inventory_snapshot')
-    accepted = request(config['local'] + '/nodes/rpc', reply)
+    accepted = invoke('/nodes/rpc', reply)
     if not accepted.get('ping', {}).get('success'):
         raise ValueError('Peer response was not accepted')
 
@@ -121,7 +178,7 @@ def main():
         server = TLSServer((config['bind'], config['port']), make_handler(config))
         server.serve_forever()
     else:
-        if not config['remote'].startswith('https://'):
+        if config.get('transport') != 'pinned_ssh' and not config['remote'].startswith('https://'):
             raise ValueError('Peer transport requires TLS')
         failures = 0
         while True:
