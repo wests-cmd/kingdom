@@ -78,3 +78,11 @@ failed tasks, approve operations or restart ambiguous model turns. Missing,
 approval-held, failed and recovery-required tasks still stop for review.
 This removes a premature stop after tool dispatch; it does not establish the
 whole autonomous engineering-and-release cycle or unattended restart recovery.
+
+The optional `serve-approved-local-model.py` TLS relay remains text-only by
+default. An operator may explicitly allow `workspace_read`, `workspace_list` and
+`workspace_write` schemas for tool-call generation. Unknown/process tools,
+duplicate schemas, oversized input and inference resource overrides are rejected.
+The relay generates model responses only: the requesting Kingdom validates and
+executes any returned calls under its existing permissions. This option does not
+grant a tool, execute code, change TLS trust or download a model.

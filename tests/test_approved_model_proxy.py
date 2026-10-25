@@ -27,6 +27,16 @@ def test_proxy_rejects_oversize_and_strips_resource_overrides():
     assert result['think'] is False and result['options']=={'num_ctx':2048,'num_predict':128}
 
 
+def test_file_tool_generation_requires_explicit_opt_in_and_never_exposes_processes():
+    tool={'type':'function','function':{'name':'workspace_read','parameters':{'type':'object'}}}
+    data={'model':'small','stream':False,'messages':[],'tools':[tool]}
+    raw=json.dumps(data).encode()
+    with pytest.raises(ValueError):proxy.bounded_payload(raw,'small')
+    assert proxy.bounded_payload(raw,'small',['workspace_read'])['tools']==[tool]
+    for tools in ([tool,tool],[{**tool,'function':{'name':'process_run','parameters':{}}}], [{'type':'function','function':{'name':'workspace_read','parameters':[]}}]):
+        with pytest.raises(ValueError):proxy.bounded_payload(json.dumps({**data,'tools':tools}).encode(),'small',['workspace_read'])
+
+
 def test_actual_http_auth_routes_and_allowed_source_before_upstream():
     calls=[]
     config={'allowed_ips':['127.0.0.1'],'token':'test-secret','model':'small','node_id':'known'}

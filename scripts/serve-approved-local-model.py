@@ -1,4 +1,4 @@
-"""Operator-installed TLS proxy to one existing local Ollama model; no tools."""
+"""TLS proxy to one local model; optional bounded tool-call text, never execution."""
 import argparse
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -9,7 +9,10 @@ import threading
 import urllib.request
 
 
-def bounded_payload(raw, model):
+FILE_TOOLS={'workspace_read','workspace_write','workspace_list'}
+
+
+def bounded_payload(raw, model, allowed_tools=()):
     if len(raw) > 65536:
         raise ValueError('Request too large')
     data = json.loads(raw)
@@ -18,7 +21,18 @@ def bounded_payload(raw, model):
     if set(data) - {'model','messages','prompt','stream','options','think','format','tools'}:
         raise ValueError('Unsupported inference parameter')
     if data.get('tools'):
-        raise ValueError('This connection supports planning text only')
+        tools=data['tools'];allowed=set(allowed_tools)
+        if (not allowed or not allowed<=FILE_TOOLS or not isinstance(tools,list)
+                or len(tools)>3 or len(json.dumps(tools))>16000):
+            raise ValueError('Tool-call generation is not enabled for this request')
+        names=set()
+        for tool in tools:
+            function=tool.get('function') if isinstance(tool,dict) else None
+            if (not isinstance(function,dict) or tool.get('type')!='function'
+                    or function.get('name') not in allowed or function['name'] in names
+                    or not isinstance(function.get('parameters'),dict)):
+                raise ValueError('Unsupported tool-call schema')
+            names.add(function['name'])
     if not isinstance(data.get('options', {}), dict):
         raise ValueError('Invalid model options')
     options = data.get('options', {})
@@ -63,7 +77,7 @@ def handler(config, forward):
             if not self.authorized():return
             if self.path == '/health':
                 self.answer(200, {'status':'ready','node_id':config['node_id'],
-                                  'model':config['model'],'scope':'planning text only'})
+                                  'model':config['model'],'scope':'bounded file-tool call generation; no execution' if config.get('allowed_tools') else 'planning text only'})
             elif self.path == '/api/tags':
                 try:
                     inventory=forward('/api/tags',None)
@@ -79,7 +93,7 @@ def handler(config, forward):
             try:
                 length = int(self.headers.get('Content-Length','0'))
                 if not 0 < length <= 65536:raise ValueError()
-                payload = bounded_payload(self.rfile.read(length), config['model'])
+                payload = bounded_payload(self.rfile.read(length), config['model'],config.get('allowed_tools',()))
                 if self.path == '/api/chat' and not isinstance(payload.get('messages'),list):raise ValueError()
                 if self.path == '/api/generate' and not isinstance(payload.get('prompt'),str):raise ValueError()
             except (ValueError, TypeError, UnicodeError):
@@ -128,6 +142,9 @@ def main():
     parser=argparse.ArgumentParser();parser.add_argument('--config',required=True)
     args=parser.parse_args();config=json.loads(Path(args.config).read_text())
     if not config['token'] or len(config['token']) < 32:raise ValueError('Authentication must be configured')
+    allowed=config.get('allowed_tools',[])
+    if not isinstance(allowed,list) or any(not isinstance(t,str) or t not in FILE_TOOLS for t in allowed) or len(set(allowed))!=len(allowed):
+        raise ValueError('Configure only distinct bounded file-tool names')
     # Upstream is fixed at installation; client input never chooses a URL.
     if config['upstream'] != 'http://127.0.0.1:11435':raise ValueError('Unsupported upstream')
     def forward(route,payload):
