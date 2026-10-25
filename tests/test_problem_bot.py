@@ -10,7 +10,8 @@ def rig(tmp_path):
     events=[]
     bus=SimpleNamespace(publish=lambda *a,**k:events.append((a,k)))
     db=Database(tmp_path/'problems.db')
-    backlog=WorkBacklog(db,SimpleNamespace(events=bus))
+    backlog=WorkBacklog(db,SimpleNamespace(events=bus,status=lambda:{'running':True},
+        execution_policy=SimpleNamespace(get=lambda:{'level':5})))
     states=[{'id':'programme1','project':'kingdom','sections':[{'items':[{'key':'s1-t1','planning':'blocked','work_status':'needs_planning',
               'blocked_reasons':['api_key=secret raw provider response']}],
               'integration':{'key':'s1-integration','planning':'unplanned','work_status':'needs_planning'}}]}]
@@ -76,3 +77,31 @@ def test_problem_status_requires_owner(rig,monkeypatch):
     monkeypatch.setattr(problem_api,'_service',rig[0])
     app=FastAPI();app.include_router(problem_api.router)
     assert TestClient(app).get('/problems').status_code in {401,403}
+
+def test_stopped_runtime_never_creates_repair_work(rig):
+    bot,backlog,_,_=rig
+    backlog.engine.status=lambda:{'running':False}
+    bot.tick()
+    assert bot.listing()==[] and backlog.list()==[]
+
+def test_policy_stop_never_creates_repair_work(rig):
+    bot,backlog,_,_=rig
+    backlog.engine.execution_policy.get=lambda:{'level':0}
+    bot.tick()
+    assert bot.listing()==[] and backlog.list()==[]
+
+def test_runner_stops_without_leaving_a_detached_writer():
+    import asyncio,threading
+    from backend.runtime.problem_bot import ProblemBotRunner
+    entered=threading.Event();release=threading.Event()
+    def tick():entered.set();assert release.wait(5)
+    async def check():
+        runner=ProblemBotRunner(lambda:SimpleNamespace(tick=tick),lambda *a:None,interval=60)
+        await runner.start();original=runner.task;await runner.start()
+        assert runner.task is original
+        assert await asyncio.to_thread(entered.wait,5)
+        stopping=asyncio.create_task(runner.stop());await asyncio.sleep(0)
+        assert not stopping.done()
+        release.set();await asyncio.wait_for(stopping,5)
+        assert runner.task is None
+    asyncio.run(check())

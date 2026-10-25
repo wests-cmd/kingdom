@@ -5,6 +5,8 @@ The service-owned problem guide scans up to 100 local saved programmes every
 durable incidents, links the original programme/item correlation identifier,
 and routes a disabled repair note to the planner, connection researcher or coder
 role. Routing is a recommendation, not proof that a worker acknowledged it.
+It creates no incidents or repair notes while the runtime is stopped or policy
+level is zero. Shutdown waits for the current scan instead of detaching a writer.
 
 The existing work-list loop still owns planning, approval, execution, bounded
 repairs, immutable checks and separate section integration. A repair note cannot

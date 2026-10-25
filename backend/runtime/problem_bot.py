@@ -49,6 +49,11 @@ class ProblemBot:
             conn.execute('UPDATE problem_incidents SET state_json=? WHERE id=?',(json.dumps(incident),incident['id']));conn.commit()
 
     def tick(self):
+        # A stopped runtime (including copied-state update candidates) must not
+        # create new work merely because the owner opens its status interface.
+        engine=self.backlog.engine
+        if not engine.status().get('running') or engine.execution_policy.get()['level']==0:
+            return
         # Current authoritative checkpoints recover missed events after restart.
         snapshots=[]
         for state in self.programmes.list()[:100]:
@@ -93,24 +98,26 @@ class ProblemBotRunner:
     def __init__(self, service, publish, interval=30):
         self.service,self.publish,self.interval=service,publish,interval
         self.task=None
+        self.stopping=None
 
     async def start(self):
         if self.task and not self.task.done():return
+        self.stopping=asyncio.Event()
         self.task=asyncio.create_task(self.run(),name='kingdom-problem-guide')
 
     async def stop(self):
         if self.task:
-            self.task.cancel()
-            try:await self.task
-            except asyncio.CancelledError:pass
+            self.stopping.set()
+            await self.task
             self.task=None
 
     async def run(self):
         failed=False
-        while True:
+        while not self.stopping.is_set():
             try:
                 await asyncio.to_thread(self.service().tick);failed=False
             except Exception:
                 if not failed:self.publish('problem.runner_error',{'notice':'Problem routing unavailable; original work and security monitoring remain authoritative.'})
                 failed=True
-            await asyncio.sleep(self.interval)
+            try:await asyncio.wait_for(self.stopping.wait(),timeout=self.interval)
+            except asyncio.TimeoutError:pass
