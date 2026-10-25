@@ -23,3 +23,15 @@ _Avoid_: Physical network, hosting hierarchy
 **Autonomy level**:
 The owner's authority policy for how work proceeds and when approval is required. It is independent of the participant's position in the coordination hierarchy.
 _Avoid_: Hierarchy level, graph depth
+
+**King Knight (King)**:
+The single Knight designated by the human owner to govern a Kingdom. Being offline does not vacate the crown.
+_Avoid_: Owner account, elected-on-disconnect leader
+
+**Knight Commander**:
+A Knight entrusted with authority over its assigned groups when there is no King, or under the King's explicit delegation.
+_Avoid_: Any group organizer, unrestricted administrator
+
+**Ghost Key**:
+The optional, single mobile credential with the King's authority. It is distinct from ordinary mobile pairing and is off until explicitly established.
+_Avoid_: Backup owner password, automatically issued mobile session
