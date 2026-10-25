@@ -9,7 +9,10 @@ import zipfile
 
 def build(dist, output, version, compatible_backends=None, compatible_backend_builds=None):
     dist,output=Path(dist),Path(output)
-    files={path.relative_to(dist).as_posix():hashlib.sha256(path.read_bytes()).hexdigest() for path in dist.rglob('*') if path.is_file()}
+    # These root resources belong to the native shell; component asset routing
+    # intentionally serves only index.html, assets/ and branding/.
+    native_resources={'kingdom-sw.js','kingdom.webmanifest'}
+    files={path.relative_to(dist).as_posix():hashlib.sha256(path.read_bytes()).hexdigest() for path in dist.rglob('*') if path.is_file() and path.relative_to(dist).as_posix() not in native_resources}
     if 'index.html' not in files: raise ValueError('Build the frontend first')
     compatible_backends=compatible_backends or [version]
     if version not in compatible_backends or not all(re.fullmatch(r'\d+\.\d+\.\d+',item) for item in compatible_backends):
