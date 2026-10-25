@@ -57,5 +57,24 @@ class CandidateBoundaryTests(unittest.TestCase):
             self.assertNotIn('never-publish',json.dumps(calls))
             supervisor.publish();self.assertEqual(len(calls),2)
 
+    def test_changed_protected_source_cannot_start_a_container(self):
+        import tempfile,time
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            supervisor=object.__new__(module.Supervisor);supervisor.root=Path(directory)
+            source=Path(directory)/'inputs/backend/cluster';source.mkdir(parents=True)
+            (source/'shared_groups.py').write_text('changed')
+            supervisor.config={'deadline_at':time.time()+60,'source_root':str(Path(directory)/'inputs'),
+                'source_hashes':{'backend/cluster/shared_groups.py':'0'*64}}
+            with patch.object(module.subprocess,'run') as execute:
+                with self.assertRaisesRegex(RuntimeError,'Protected verification source changed'):supervisor.verify(GOOD)
+                execute.assert_not_called()
+
+    def test_terminal_assignment_never_resumes_execution(self):
+        supervisor=object.__new__(module.Supervisor)
+        supervisor.state={'phase':'review_required'}
+        supervisor.api=lambda *args:(_ for _ in ()).throw(AssertionError('No API execution for terminal work'))
+        supervisor.run()
+
 
 if __name__=='__main__':unittest.main()

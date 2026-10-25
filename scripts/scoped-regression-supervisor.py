@@ -9,6 +9,7 @@ import ast
 import base64
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -65,6 +66,7 @@ def validate_candidate(source):
                 if isinstance(method,ast.Expr) and isinstance(method.value,ast.Constant) and isinstance(method.value.value,str):continue
                 if (not isinstance(method,ast.FunctionDef) or not method.name.startswith('test_') or method.decorator_list
                         or method.returns or method.args.defaults or method.args.kw_defaults or method.args.kwonlyargs
+                        or getattr(method,'type_params',[])
                         or method.args.vararg or method.args.kwarg or method.args.posonlyargs
                         or [a.arg for a in method.args.args]!=['self'] or method.args.args[0].annotation):
                     raise ValueError('Only test_ methods with the self argument are allowed')
@@ -108,7 +110,7 @@ class Supervisor:
         if c['api_base']!='http://127.0.0.1:8012' or not re.fullmatch('[a-f0-9]{32}',c['initial_request']):raise ValueError('Use the fixed local Kingdom and an exact request ID')
         if not re.fullmatch('sha256:[a-f0-9]{64}',c['image']):raise ValueError('Pin an existing local test image by digest')
         if type(c['max_repairs']) is not int or not 0<=c['max_repairs']<=2:raise ValueError('At most two repairs')
-        if type(c['deadline_at']) not in (int,float) or c['deadline_at']>time.time()+1800:raise ValueError('Use the existing bounded job deadline')
+        if type(c['deadline_at']) not in (int,float) or not math.isfinite(c['deadline_at']) or c['deadline_at']>time.time()+1800:raise ValueError('Use the existing bounded job deadline')
         if set(c['source_hashes'])!={'backend/cluster/shared_groups.py','backend/cluster/team_editing.py'}:raise ValueError('Both protected source modules are required')
         self.token=Path(c['token_file']).read_text().strip()
         self.opener=urllib.request.build_opener(NoRedirect(),urllib.request.ProxyHandler({}))
@@ -172,7 +174,7 @@ class Supervisor:
         for path,digest in self.config['source_hashes'].items():
             if path not in {'backend/cluster/shared_groups.py','backend/cluster/team_editing.py'}:raise ValueError('Unexpected verification input')
             data=(Path(self.config['source_root'])/path).read_bytes()
-            if hashlib.sha256(data).hexdigest()!=digest:raise ValueError('Protected verification source changed')
+            if hashlib.sha256(data).hexdigest()!=digest:raise RuntimeError('Protected verification source changed; independent owner review is required')
             originals[path]=data
         outcomes={}
         for case in ('baseline',*MUTANTS):
