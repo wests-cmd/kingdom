@@ -146,7 +146,7 @@ def test_compact_blueprint_is_compiled_validated_and_reviewed_as_proposal(runtim
     service.configure_standing_review(state['id'],{**scope(),'read_sources':{'projects/accepted/candidate.py':hashlib.sha256(source.read_bytes()).hexdigest()}},state['revision'])
     state=service.get(state['id'])
     choice={'blueprint':'function_copy.v1','source':'projects/accepted/candidate.py','target':'projects/standing/candidate.py'}
-    engine.models=SimpleNamespace(plan_chat=AsyncMock(side_effect=[{'text':'A'},{'text':'B'},{'text':'gaps'},{'text':json.dumps(choice)}]))
+    engine.models=SimpleNamespace(plan_chat=AsyncMock(side_effect=[{'text':'A'},{'text':'B'},{'text':'gaps'},{'text':'```json\n'+json.dumps(choice)+'\n```'}]))
     result=asyncio.run(service.plan_next(state['id'],state['revision']))
     row=result['sections'][0]['items'][0]
     assert row['planning']=='needs_review' and row['proposal']['steps'][-1]['case_profile']=='bounded_batch_size.v1'

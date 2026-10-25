@@ -331,7 +331,8 @@ class WorkProgrammes:
     def _validate_planner_response(self, response, state, selected, integration):
         if not isinstance(response.get('text'), str) or len(response['text']) > 100000:
             raise ValueError('Planning response exceeded its budget')
-        data = json.loads(response['text'])
+        from backend.models.planning_json import parse_proposal
+        data = parse_proposal(response['text'])
         if isinstance(data,dict) and 'blueprint' in data:
             if integration or not selected.get('blueprint_contract'):
                 raise ValueError('No blueprint selected for this outcome')

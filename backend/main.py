@@ -16,11 +16,13 @@ async def lifespan(_app):
     await schedule_runner.start()
     await programme_runner.start()
     await backlog_runner.start()
+    await problem_runner.start()
     try:
         yield
     finally:
         from backend.runtime.request_api import background
         await background.stop()
+        await problem_runner.stop()
         await programme_runner.stop()
         await backlog_runner.stop()
         await schedule_runner.stop()
@@ -120,6 +122,10 @@ from backend.runtime.work_programme_api import router as programme_router, servi
 from backend.runtime.work_programme_runner import WorkProgrammeRunner
 app.include_router(programme_router)
 programme_runner = WorkProgrammeRunner(programme_service, engine.events.publish)
+from backend.runtime.problem_api import router as problem_router,service as problem_service
+from backend.runtime.problem_bot import ProblemBotRunner
+app.include_router(problem_router)
+problem_runner=ProblemBotRunner(problem_service,engine.events.publish)
 
 
 # Serve built frontend static assets if available

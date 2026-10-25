@@ -12,6 +12,7 @@ import DesktopActions from '../components/DesktopActions'
 import ParallelChats from '../components/ParallelChats'
 import WorkBacklogPanel from '../components/WorkBacklogPanel'
 import WorkProgrammePanel from '../components/WorkProgrammePanel'
+import ProblemGuide from '../components/ProblemGuide'
 
 export default function Tasks() {
 
@@ -139,6 +140,7 @@ export default function Tasks() {
     <div>
 
       <WorkProgrammePanel/>
+      <ProblemGuide/>
       <WorkBacklogPanel/>
       <h2>Task Management</h2>
 
