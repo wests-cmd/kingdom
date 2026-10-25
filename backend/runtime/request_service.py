@@ -114,6 +114,8 @@ class RequestService:
         if not isinstance(sequence,list) or len(sequence)>8 or any(not isinstance(t,str) or t not in TOOLS for t in sequence):raise ValueError('Choose known ordered tool stages')
         protocol=body.get('tool_protocol','native')
         if protocol not in {'native','structured'} or (protocol=='structured' and not sequence):raise ValueError('Structured arguments require an ordered sequence')
+        from backend.runtime.stage_paths import validate_paths
+        validate_paths(body.get('tool_paths'),sequence,protocol)
         if sequence:
             if route=='quick':raise ValueError('Ordered tool stages require the agent route')
             if 'process_run' in sequence and not body.get('allow_process'):raise ValueError('Process stages require the process option')
@@ -147,7 +149,7 @@ class RequestService:
             old=conn.execute('SELECT state_json FROM conversation_requests WHERE session_scope=? AND project_scope=? AND idem=?',(body['session_scope'],body['project_scope'],body['idempotency_key'])).fetchone()
             if old:
                 existing=json.loads(old[0])
-                if any(existing.get(key,{'tool_sequence':[],'tool_protocol':'native'}.get(key))!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
+                if any(existing.get(key,{'tool_sequence':[],'tool_protocol':'native','tool_paths':[]}.get(key))!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
                 return existing
             conn.execute('INSERT INTO conversation_requests VALUES(?,?,?,?,?)',(state['id'],body['session_scope'],body['project_scope'],body['idempotency_key'],json.dumps(state)))
             conn.commit()
@@ -228,6 +230,7 @@ class RequestService:
                                      if state.get('desktop_window_title') else {})
                     if state.get('tool_sequence'):desktop_options['tool_sequence']=state['tool_sequence']
                     if state.get('tool_protocol')=='structured':desktop_options['tool_protocol']='structured'
+                    if state.get('tool_paths'):desktop_options['tool_paths']=state['tool_paths']
                     agent=await asyncio.to_thread(self.agents.create,objective,state['model_profile'],workspace=state['project_scope'],allow_process=state['allow_process'],use_owner_memory=False,required_tools=required_tools,**desktop_options)
                     state=await asyncio.to_thread(self.update,ident,{'agent_session_id':agent['id']},expected={'running'})
                     if state is None:

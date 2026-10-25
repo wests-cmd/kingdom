@@ -217,6 +217,7 @@ class Supervisor:
             'allow_process':False,'required_tools':['workspace_read','workspace_write'],
             'tool_sequence':['workspace_read','workspace_write','workspace_read'],
             'tool_protocol':c.get('tool_protocol','native'),
+              **({'tool_paths':['test_remap_metadata.py']*3} if c.get('tool_protocol')=='structured' else {}),
             'prompt':('Repair test_remap_metadata.py. Read that file, write the corrected COMPLETE file, then read it back. '
                 'Use unittest and import remap from backend.cluster.shared_groups. CALL remap with groups, source, target. '
                 'Its result must replace matching members and captain, preserve id/name/flags, and leave the original input unchanged. '

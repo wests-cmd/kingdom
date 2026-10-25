@@ -30,6 +30,7 @@ class RequestInput(BaseModel):
     required_tools:list[Literal['workspace_read','workspace_list','workspace_write','process_run','desktop_observe','desktop_input']]=Field(default_factory=list,max_length=4)
     tool_sequence:list[Literal['workspace_read','workspace_list','workspace_write','process_run','desktop_observe','desktop_input']]=Field(default_factory=list,max_length=8)
     tool_protocol:Literal['native','structured']='native'
+    tool_paths:list[str]=Field(default_factory=list,max_length=8)
     review_instructions:str=Field(default='',max_length=2000)
     desktop_window_title:str|None=Field(default=None,min_length=1,max_length=500)
     desktop_expected_text:str|None=Field(default=None,min_length=1,max_length=2000)

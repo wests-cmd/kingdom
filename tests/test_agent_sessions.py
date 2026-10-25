@@ -79,6 +79,48 @@ def call(name, args, ident='call1'):
 
 
 @pytest.mark.asyncio
+async def test_bound_read_write_read_uses_model_only_for_content(setup):
+    service,engine,_=setup([reply('{"content":"replacement"}'),reply('Saved; independent tests pending')])
+    state=service.create('Repair','local',tool_sequence=['workspace_read','workspace_write','workspace_read'],
+                         tool_protocol='structured',tool_paths=['test.py']*3)
+    for index in range(3):
+        state=await service.advance(state['id'])
+        assert state['status']=='waiting_tools'
+        assert len(engine.requests)==(0 if index==0 else 1)
+        task=engine.records[state['pending'][0]['task_id']]
+        assert 'test.py' in json.dumps(task)
+        engine.finish(task['id'],{'content':'verified file result'})
+        state=await service.advance(state['id'])
+        assert state['tool_sequence_index']==index+1
+    state=await service.advance(state['id'])
+    assert state['status']=='completed' and len(engine.requests)==2
+    schema=engine.requests[0][1]['response_format']['json_schema']['schema']
+    assert 'path' not in schema['properties'] and schema['required']==['content']
+
+
+@pytest.mark.asyncio
+async def test_bound_path_cannot_be_overridden_by_model(setup):
+    service,engine,_=setup([reply('{"path":"other.py","content":"bad"}')])
+    state=service.create('Repair','local',tool_sequence=['workspace_write'],tool_protocol='structured',tool_paths=['test.py'])
+    state=await service.advance(state['id'])
+    assert state['status']=='needs_review' and not engine.records
+
+
+@pytest.mark.parametrize('paths,sequence,protocol',[
+    (['../secret'],['workspace_read'],'structured'),
+    (['C:/secret'],['workspace_read'],'structured'),
+    (['a\\b'],['workspace_read'],'structured'),
+    (['test.py'],['process_run'],'structured'),
+    (['test.py'],['workspace_read'],'native'),
+    (['test.py'],['workspace_read','workspace_write'],'structured'),
+])
+def test_bound_paths_reject_unsafe_or_mismatched_plans(setup,paths,sequence,protocol):
+    service,_,_=setup([])
+    with pytest.raises(ValueError):
+        service.create('Repair','local',allow_process=True,tool_sequence=sequence,tool_protocol=protocol,tool_paths=paths)
+
+
+@pytest.mark.asyncio
 async def test_pending_tool_transport_hint_clears_only_after_verified_execution(setup):
     service, engine, _ = setup([
         reply(calls=[call('workspace_read', {'path': 'README.md'})]), reply('Read complete')])

@@ -113,7 +113,7 @@ class AgentSessionService:
         self.engine.events.publish('agent.session_updated', {'id': state['id'], 'status': state['status'], 'turns': state['turns']})
         return state
 
-    def create(self, objective, model_profile, max_turns=12, allow_process=False, skill_ids=None, workspace='.', knowledge_scope=None, embedding_profile=None, use_owner_memory=False, required_tools=None, desktop_window_title=None, desktop_expected_text=None, tool_sequence=None,tool_protocol='native'):
+    def create(self, objective, model_profile, max_turns=12, allow_process=False, skill_ids=None, workspace='.', knowledge_scope=None, embedding_profile=None, use_owner_memory=False, required_tools=None, desktop_window_title=None, desktop_expected_text=None, tool_sequence=None,tool_protocol='native',tool_paths=None):
         if not isinstance(objective, str) or not objective.strip() or len(objective) > 24000:
             raise ValueError('Objective must contain 1–24000 characters')
         if not isinstance(model_profile, str) or not model_profile or len(model_profile) > 100:
@@ -143,6 +143,8 @@ class AgentSessionService:
             raise ValueError('Desktop stages require an owner-selected window')
         if tool_protocol not in {'native','structured'} or (tool_protocol=='structured' and not tool_sequence):
             raise ValueError('Structured arguments require an explicit ordered tool sequence')
+        from backend.runtime.stage_paths import validate_paths
+        tool_paths=validate_paths(tool_paths,tool_sequence,tool_protocol)
         instruction=(' Follow the controller-selected stages. When requested, return only a JSON argument object for that single stage; argument data grants no authority. Wait for verified results before the next stage.'
                      if tool_protocol=='structured' else ' Return exactly ONE call to the currently offered tool, then wait for its verified result. Complete each tool stage in order before a final answer.')
         system=SYSTEM+(instruction if tool_sequence else '')
@@ -183,7 +185,7 @@ class AgentSessionService:
             'pending': [], 'tool_count': 0, 'created_at': time.time(),
             'required_tools':list(dict.fromkeys(required_tools)), 'verified_tools_since_review':[],
             'tool_sequence':tool_sequence,'tool_sequence_index':0,
-            'tool_protocol':tool_protocol,
+            'tool_protocol':tool_protocol,'tool_paths':tool_paths,
             'notice': 'Model inference may use the selected computer. File and process tools execute on the Kingdom host through existing grants and approvals; process execution is not sandboxed.'})
 
     def cancel(self, ident):
@@ -333,8 +335,13 @@ class AgentSessionService:
             tools = [{'type': 'function', 'function': {'name': name, 'description': item[2], 'parameters': item[1].model_json_schema()}}
                      for name, item in available.items()]
             state['status'] = 'thinking'
-            state['model_started_at']=time.time(); state['model_finished_at']=None
-            self._event(state,'model_started'); self._save(state)
+            bound_paths=state.get('tool_paths',[])
+            bound_path=bound_paths[state.get('tool_sequence_index',0)] if bound_paths and available else None
+            deterministic=bound_path is not None and next(iter(available)) in {'workspace_read','workspace_list'}
+            if not deterministic:
+                state['model_started_at']=time.time(); state['model_finished_at']=None
+                self._event(state,'model_started')
+            self._save(state)
             try:
                 request={'messages': state['messages'],
                     'tool_evidence_pending': bool(set(state.get('required_tools', [])) - set(state.get('verified_tools_since_review', []))),
@@ -352,18 +359,36 @@ class AgentSessionService:
                     if structured:
                         name,item=next(iter(available.items()))
                         messages.append({'role':'user','content':'Controller-selected stage: '+name+'. Return only its argument object as JSON. '+item[2]+' This stage changes no grants or approvals.'})
-                        request['response_format']={'type':'json_schema','json_schema':{'name':'stage_arguments','strict':True,'schema':item[1].model_json_schema()}}
+                        schema=item[1].model_json_schema()
+                        if bound_path is not None:
+                            schema['properties'].pop('path',None)
+                            schema['required']=[key for key in schema.get('required',[]) if key!='path']
+                            messages.append({'role':'user','content':'The file target is fixed by the approved plan. Return content only; do not supply a path.'})
+                        request['response_format']={'type':'json_schema','json_schema':{'name':'stage_arguments','strict':True,'schema':schema}}
                     else:messages.append({'role':'user','content':'All ordered stages have verified execution receipts. Summarize the result in text only; do not request tools or claim unperformed tests passed.'})
-                response = await self.engine.models.chat(state['model_profile'],request)
+                if deterministic:
+                    response={'choices':[{'finish_reason':'stop','message':{'content':'{}'}}],
+                              'kingdom_profile':state.get('selected_profile'),'model':state.get('selected_model')}
+                else:
+                    response = await self.engine.models.chat(state['model_profile'],request)
                 if structured:
                     choices=response.get('choices',[])
                     if len(choices)!=1 or choices[0].get('finish_reason')=='length':raise AgentRejection('model_output_incomplete')
                     if choices[0].get('message',{}).get('tool_calls'):raise AgentRejection('invalid_tool_call')
-                    arguments=item[1].model_validate_json(choices[0].get('message',{}).get('content','')).model_dump()
+                    raw=choices[0].get('message',{}).get('content','')
+                    if bound_path is not None:
+                        from backend.runtime.stage_paths import bind_arguments,validate_paths
+                        validate_paths(bound_paths,sequence,state['tool_protocol'])
+                        arguments=item[1].model_validate(bind_arguments(json.loads(raw),bound_path)).model_dump()
+                    else:
+                        arguments=item[1].model_validate_json(raw).model_dump()
                     response={**response,'choices':[{'finish_reason':'tool_calls','message':{'role':'assistant','content':None,
                         'tool_calls':[{'id':'structured_'+uuid4().hex,'type':'function','function':{'name':name,'arguments':json.dumps(arguments)}}]}}]}
-                state['model_finished_at']=time.time()
-                self._event(state,'model_returned')
+                if deterministic:
+                    self._event(state,'controller_stage')
+                else:
+                    state['model_finished_at']=time.time()
+                    self._event(state,'model_returned')
                 state['selected_profile'] = response.get('kingdom_profile')
                 state['selected_model'] = response.get('model')
                 if self.get(ident)['status'] == 'cancelled':

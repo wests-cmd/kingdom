@@ -42,3 +42,10 @@ Verifier self-tests must use a separate checkpoint root and
 Automatic restart after ambiguous inference or an interrupted tool remains a
 separate recovery concern. A terminal review/expired state requires inspection,
 not a loop that increases its own budget.
+
+
+For explicit structured file stages, `tool_paths` binds one workspace-relative
+path per stage. Read/list stages dispatch the normal governed task without
+model inference. Write stages ask only for content; a model-supplied path is
+rejected. The existing workspace resolver still checks containment and symlinks
+at dispatch. This reduces argument errors, not the independent correctness bar.
