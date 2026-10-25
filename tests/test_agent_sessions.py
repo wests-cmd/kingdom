@@ -16,6 +16,40 @@ def reply(content=None, calls=None):
         **({'tool_calls': calls} if calls else {})}, 'finish_reason': 'tool_calls' if calls else 'stop'}]}
 
 
+@pytest.mark.asyncio
+async def test_ordered_tools_offer_one_stage_and_advance_only_after_receipts(setup):
+    service,engine,db=setup([
+        reply(calls=[call('workspace_read',{'path':'source.py'})]),
+        reply(calls=[call('workspace_write',{'path':'test_source.py','content':'test'})]),
+        reply(calls=[call('workspace_read',{'path':'test_source.py'})]),reply('Written and read back; tests not run')])
+    state=service.create('Write a regression test','local',tool_sequence=['workspace_read','workspace_write','workspace_read'])
+    for index,name in enumerate(['workspace_read','workspace_write','workspace_read']):
+        state=await service.advance(state['id'])
+        assert [t['function']['name'] for t in engine.requests[-1][1]['tools']]==[name]
+        assert state['tool_sequence_index']==index and state['status']=='waiting_tools'
+        engine.finish(state['pending'][0]['task_id'],{'content':'retained test evidence'})
+        state=await service.advance(state['id'])
+        assert state['tool_sequence_index']==index+1
+        service=AgentSessionService(engine,db)
+    state=await service.advance(state['id'])
+    assert state['status']=='completed' and engine.requests[-1][1]['tools']==[]
+    assert len(engine.records)==3
+
+
+@pytest.mark.asyncio
+async def test_ordered_tool_cannot_skip_a_read_or_finish_without_evidence(setup):
+    for response in (reply('Done'),reply(calls=[call('workspace_write',{'path':'x','content':'bad'})])):
+        service,engine,_=setup([response])
+        state=await service.advance(service.create('Read first','local',tool_sequence=['workspace_read','workspace_write'])['id'])
+        assert state['status']=='needs_review' and not engine.records
+
+
+def test_ordered_tools_do_not_grant_process_permission(setup):
+    service,engine,_=setup([])
+    with pytest.raises(ValueError):service.create('Run','local',tool_sequence=['process_run'])
+    with pytest.raises(ValueError):service.create('Run','local',tool_sequence=['unknown'])
+
+
 def call(name, args, ident='call1'):
     return {'id': ident, 'type': 'function', 'function': {'name': name, 'arguments': json.dumps(args)}}
 

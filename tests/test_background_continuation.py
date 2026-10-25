@@ -89,6 +89,39 @@ def test_completed_request_is_never_repeated():
     assert run_fixture([('completed', 'completed')]).calls == 1
 
 
+def test_expired_saved_budget_does_not_dispatch_or_renew():
+    import time
+    service=ScriptedService([('completed','completed')])
+    service.current.update(background_deadline_at=time.time()-1,background_budget_seconds=310,background_chunk_limit=6)
+    runner=BackgroundRequests(lambda:service)
+    try:runner.start('job')
+    except ValueError:pass
+    else:raise AssertionError('Expired budget must be rejected')
+    asyncio.run(runner._run('job'))
+    assert service.calls==0
+
+
+def test_previously_used_chunks_survive_new_runner_instance():
+    import time
+    service=ScriptedService([('waiting_review','ready')])
+    service.current.update(background_deadline_at=time.time()+120,background_budget_seconds=120,
+                           background_chunk_limit=3,background_chunks_used=2)
+    asyncio.run(BackgroundRequests(lambda:service)._run('job'))
+    assert service.calls==1 and service.current['background_chunks_used']==3
+
+
+def test_long_local_job_has_explicit_bounded_options():
+    async def scenario():
+        service=ScriptedService([('completed','completed')])
+        runner=BackgroundRequests(lambda:service)
+        runner.start('job',max_seconds=1200,max_chunks=8)
+        assert service.current['background_budget_seconds']==1200
+        assert service.current['background_chunk_limit']==8
+        await asyncio.gather(*runner.active.values())
+        assert service.calls==1
+    asyncio.run(scenario())
+
+
 def test_cancelled_request_is_never_repeated():
     assert run_fixture([('cancelled', 'cancelled')]).calls == 1
 

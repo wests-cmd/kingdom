@@ -1,5 +1,6 @@
 """Bounded browser-independent request advancement; no permission changes or blind retries."""
 import asyncio
+import time
 
 
 class BackgroundRequests:
@@ -11,19 +12,35 @@ class BackgroundRequests:
         return {'active_request_ids': list(self.active), 'max_parallel': 1,
                 'notice': 'Runs on this Kingdom server. Closing the browser does not stop work. Server restart requires review, not automatic replay.'}
 
-    def start(self, ident):
+    def start(self, ident, max_seconds=310, max_chunks=6):
         current = self.service().get(ident)
         if ident in self.active: return self.status()
         if self.active: raise ValueError('This Kingdom background slot is occupied')
+        if type(max_seconds) is not int or not 30<=max_seconds<=1800 or type(max_chunks) is not int or not 1<=max_chunks<=12:
+            raise ValueError('Choose 30–1800 seconds and 1–12 bounded chunks')
         if current['status'] not in {'queued', 'ready'}: raise ValueError('Inspect retained evidence before continuing this request')
-        self.service().update(ident, {'background_owner': 'server'}, expected={'queued', 'ready'})
+        if current.get('background_deadline_at') is not None:
+            if current['background_deadline_at']<=time.time() or current.get('background_chunks_used',0)>=current.get('background_chunk_limit',6):
+                raise ValueError('The saved background budget is exhausted; review before creating new work')
+            if (current.get('background_budget_seconds'),current.get('background_chunk_limit'))!=(max_seconds,max_chunks):
+                raise ValueError('An existing request budget cannot be silently replaced')
+            budget={}
+        else:
+            budget={'background_budget_seconds':max_seconds,'background_chunk_limit':max_chunks,
+                    'background_chunks_used':0,'background_deadline_at':time.time()+max_seconds}
+        self.service().update(ident, {'background_owner': 'server',**budget}, expected={'queued', 'ready'})
         self.active[ident] = asyncio.create_task(self._run(ident))
         return self.status()
 
     async def _run(self, ident):
         loop = asyncio.get_running_loop()
-        deadline = loop.time() + 310
-        max_chunks = 6
+        saved=self.service().get(ident)
+        remaining=saved.get('background_budget_seconds',310)
+        if saved.get('background_deadline_at') is not None:
+            remaining=min(remaining,saved['background_deadline_at']-time.time())
+        deadline = loop.time() + max(0,remaining)
+        used=saved.get('background_chunks_used',0)
+        max_chunks = max(0,saved.get('background_chunk_limit',6)-used)
         original_agent_session_id = None
 
         try:
@@ -33,6 +50,8 @@ class BackgroundRequests:
                     raise TimeoutError()
 
                 service = self.service()
+                if saved.get('background_deadline_at') is not None:
+                    service.update(ident,{'background_chunks_used':used+chunk+1},expected={'queued','ready','waiting_review'})
 
                 await asyncio.wait_for(
                     service.run(ident),
@@ -85,7 +104,7 @@ class BackgroundRequests:
                     'status': 'waiting_review',
                     'error': 'Background execution interrupted; inspect agent and tool checkpoints before resuming',
                 },
-                expected={'running'},
+                expected={'running','waiting_review'},
             )
         except Exception:
             self.service().update(

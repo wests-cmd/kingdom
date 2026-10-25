@@ -110,6 +110,12 @@ class RequestService:
         route = body['mode']
         required_tools = body.get('required_tools', [])
         from backend.runtime.agent_sessions import TOOLS
+        sequence=body.get('tool_sequence',[])
+        if not isinstance(sequence,list) or len(sequence)>8 or any(not isinstance(t,str) or t not in TOOLS for t in sequence):raise ValueError('Choose known ordered tool stages')
+        if sequence:
+            if route=='quick':raise ValueError('Ordered tool stages require the agent route')
+            if 'process_run' in sequence and not body.get('allow_process'):raise ValueError('Process stages require the process option')
+            route='agent'
         if not isinstance(required_tools, list) or len(required_tools) > 4 or any(not isinstance(tool, str) or tool not in TOOLS for tool in required_tools):
             raise ValueError('Choose known required tool evidence')
         if required_tools:
@@ -139,7 +145,7 @@ class RequestService:
             old=conn.execute('SELECT state_json FROM conversation_requests WHERE session_scope=? AND project_scope=? AND idem=?',(body['session_scope'],body['project_scope'],body['idempotency_key'])).fetchone()
             if old:
                 existing=json.loads(old[0])
-                if any(existing.get(key)!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
+                if any(existing.get(key,[] if key=='tool_sequence' else None)!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
                 return existing
             conn.execute('INSERT INTO conversation_requests VALUES(?,?,?,?,?)',(state['id'],body['session_scope'],body['project_scope'],body['idempotency_key'],json.dumps(state)))
             conn.commit()
@@ -218,6 +224,7 @@ class RequestService:
                     desktop_options=({'desktop_window_title':state['desktop_window_title'],
                                       'desktop_expected_text':state.get('desktop_expected_text')}
                                      if state.get('desktop_window_title') else {})
+                    if state.get('tool_sequence'):desktop_options['tool_sequence']=state['tool_sequence']
                     agent=await asyncio.to_thread(self.agents.create,objective,state['model_profile'],workspace=state['project_scope'],allow_process=state['allow_process'],use_owner_memory=False,required_tools=required_tools,**desktop_options)
                     state=await asyncio.to_thread(self.update,ident,{'agent_session_id':agent['id']},expected={'running'})
                     if state is None:

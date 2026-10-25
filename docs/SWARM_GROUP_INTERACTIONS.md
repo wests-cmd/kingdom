@@ -79,6 +79,21 @@ approval-held, failed and recovery-required tasks still stop for review.
 This removes a premature stop after tool dispatch; it does not establish the
 whole autonomous engineering-and-release cycle or unattended restart recovery.
 
+Authenticated callers can now explicitly choose 30–1800 seconds and 1–12
+chunks when starting fresh work. The conversation UI offers short, standard,
+15-minute and 30-minute limits. The original default remains 310 seconds and
+six chunks. Deadline and consumed chunks are retained in the request record;
+starting another runner cannot renew an expired or exhausted request. Model
+timeouts and agent turn limits still apply independently.
+
+For a reviewed scoped workflow, `tool_sequence` can name up to eight ordered
+stages, for example read → write → read. Only the next stage's tool is offered,
+and the stage advances only after its actual governed receipt is verified.
+Premature completion, skipped stages and multiple calls are rejected. This
+reduces schema/context overhead and keeps small models from selecting parallel
+operations in a serial workflow. It neither creates the plan nor approves its
+tools; process and desktop stages keep their existing separate requirements.
+
 The optional `serve-approved-local-model.py` TLS relay remains text-only by
 default. An operator may explicitly allow `workspace_read`, `workspace_list` and
 `workspace_write` schemas for tool-call generation. Unknown/process tools,

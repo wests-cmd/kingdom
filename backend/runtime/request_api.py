@@ -28,6 +28,7 @@ class RequestInput(BaseModel):
     model_profile:str=Field(default='auto',min_length=1,max_length=100)
     allow_process:bool=False
     required_tools:list[Literal['workspace_read','workspace_list','workspace_write','process_run','desktop_observe','desktop_input']]=Field(default_factory=list,max_length=4)
+    tool_sequence:list[Literal['workspace_read','workspace_list','workspace_write','process_run','desktop_observe','desktop_input']]=Field(default_factory=list,max_length=8)
     review_instructions:str=Field(default='',max_length=2000)
     desktop_window_title:str|None=Field(default=None,min_length=1,max_length=500)
     desktop_expected_text:str|None=Field(default=None,min_length=1,max_length=2000)
@@ -62,8 +63,13 @@ def cancel(ident:str):
 from backend.runtime.background_requests import BackgroundRequests
 background = BackgroundRequests(service)
 
+class BackgroundOptions(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    max_seconds:int=Field(default=310,ge=30,le=1800)
+    max_chunks:int=Field(default=6,ge=1,le=12)
+
 @router.post('/{ident}/background', status_code=202)
-async def start_background(ident: str):
-    try: return background.start(ident)
+async def start_background(ident: str,options:BackgroundOptions|None=None):
+    try: return background.start(ident,**(options or BackgroundOptions()).model_dump())
     except KeyError: raise HTTPException(404, 'Request not found')
     except ValueError as error: raise HTTPException(409, str(error)) from error
