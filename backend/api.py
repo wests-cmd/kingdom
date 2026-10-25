@@ -954,6 +954,8 @@ def handle_cluster_rpc(request: RPCMessageRequest):
         return {'status': 'ok', 'task_id': updated['id']}
 
     elif msg_type == "task_poll":
+        if payload.get('require_running') is True and not engine.status()['running']:
+            return {'status':'ok','tasks':[]}
         supported_tools = payload.get("supported_tools")
         if supported_tools is not None:
             analysis_tools = {"text.analyze@1.0.0", "code.python.analyze@1.0.0"}

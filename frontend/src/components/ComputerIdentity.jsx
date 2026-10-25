@@ -15,7 +15,7 @@ export default function ComputerIdentity({data, error}) {
     {error && <p role="alert">Computer identities could not be refreshed.</p>}
     {!data ? <p>Loading computer identities…</p> : <>
       <p><strong>Commander computer:</strong> {data.commander?.computer || 'Not reported'} · this Kingdom controller</p>
-      <p><strong>Paired Knight computers:</strong> {(data.knights || []).length} · <strong>Local Apprentices:</strong> {(data.apprentices || []).length} · <strong>Current remote reports:</strong> {data.inventory?.remote_count ?? 'Not available'}</p>
+      <p><strong>Visible paired Knight computers:</strong> {(data.knights || []).length} · <strong>Local Apprentices:</strong> {(data.apprentices || []).length} · <strong>Current remote reports:</strong> {data.inventory?.remote_count ?? 'Not available'}</p>
       {data.inventory && !data.inventory.complete && <p className="muted">Totals are partial: missing or stale peer inventories are not treated as zero workers.</p>}
       {!(data.knights || []).length && <p className="muted">No paired Knight computers are recorded. Local agents and model connections do not create paired computers.</p>}
     </>}

@@ -4,13 +4,14 @@ import time
 
 
 class PeerConnections:
-    def __init__(self, registry, reconnect, events, interval=15, refresh=None):
+    def __init__(self, registry, reconnect, events, interval=15, refresh=None, work=None):
         self.registry, self.reconnect, self.events = registry, reconnect, events
         self.interval = interval
         self.task = None
         self.status = {}
         self.limit = asyncio.Semaphore(4)
         self.refresh = refresh
+        self.work = work
 
     async def tick(self):
         if self.refresh:
@@ -50,6 +51,14 @@ class PeerConnections:
                 if self.status.get(node_id) != state:
                     self.status[node_id] = state
                     self.events.publish('cluster.peer_connection', {'node_id': node_id, 'status': state})
+                if state=='verified' and self.work:
+                    try:
+                        await asyncio.wait_for(self.work(node_id),timeout=20)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        # A held/failed task must not turn a healthy link red.
+                        self.events.publish('cluster.native_analysis_held',{'controller_id':node_id})
 
         await asyncio.gather(*(connect(node_id) for node_id in peers))
 

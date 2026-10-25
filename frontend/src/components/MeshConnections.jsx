@@ -21,7 +21,7 @@ export default function MeshConnections({hierarchy}) {
     <p>Join once, then connect to every approved Knight. Choose one computer to keep the approved member list. This shares connections and activity reports; task permissions stay separate.</p>
     {error && <p role="alert">Connection settings are unavailable. This installation may need its backend updated.</p>}
     {mesh && <p>{mesh.enabled ? `Membership authority: ${names.get(mesh.authority_id) || mesh.authority_id}` : 'Automatic group joining has not been set up on this computer.'}</p>}
-    {links && <ul>{Object.entries(links.peers || {}).map(([id, status]) => <li key={id}>{names.get(id) || id}: {peerConnectionLabel(status, peers.get(id))}</li>)}</ul>}
+    {links && <details><summary>Connection health · {Object.keys(links.peers||{}).filter(id=>peers.has(id)).length} peer Knights</summary><ul>{Object.entries(links.peers || {}).filter(([id])=>peers.has(id)).map(([id, status]) => <li key={id}>{names.get(id) || id}: {peerConnectionLabel(status, peers.get(id))}</li>)}</ul></details>}
     <details><summary>Set up or join this Kingdom</summary>
       <label>This computer’s reachable HTTPS address<input type="url" value={local} onChange={e => setLocal(e.target.value)} placeholder="https://this-knight.example" /></label>
       <details><summary>Private certificate trust, if needed</summary><label>Trusted public CA certificates<textarea value={ca} onChange={e => setCa(e.target.value)} rows={3} placeholder="Public PEM certificates only" /></label></details>

@@ -151,7 +151,30 @@ async def refresh_mesh():
     from backend.cluster.mesh_api import sync_mesh
     await sync_mesh()
 
-peer_connections = PeerConnections(node_registry, reconnect, event_bus, refresh=refresh_mesh)
+_analysis_worker=None
+async def consume_peer_analysis(node_id):
+    global _analysis_worker
+    if _analysis_worker is None:
+        from backend.api import engine
+        from backend.storage.db import db
+        from backend.cluster.peer_analysis import PeerAnalysis
+        def permitted():
+            coder=engine.swarm.registry.get('coder')
+            return (engine.status()['running'] and engine.execution_policy.get()['level']==5 and coder is not None
+                    and 'compute' in engine.security.nodes.get_node_capabilities('coder')
+                    and 'compute' in coder.zero_trust.nodes.get_node_capabilities('coder'))
+        async def exchange(peer_id,message):
+            peer=node_registry.get_node(peer_id)
+            if not peer:raise ValueError('Peer is no longer approved')
+            address=endpoint((peer.connection_metadata or {})['kingdom_endpoint'])
+            from backend.cluster.mesh_api import mesh_tls
+            async with httpx.AsyncClient(timeout=8,follow_redirects=False,trust_env=False,verify=mesh_tls()) as client:
+                response=await client.post(address+'/nodes/rpc',json=message)
+                response.raise_for_status();return response.json()
+        _analysis_worker=PeerAnalysis(db,node_registry,KingdomIdentity.get_or_create(),permitted,exchange,event_bus.publish)
+    return await _analysis_worker.tick(node_id)
+
+peer_connections = PeerConnections(node_registry, reconnect, event_bus, refresh=refresh_mesh,work=consume_peer_analysis)
 
 
 @router.get('/connections/status')

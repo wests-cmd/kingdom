@@ -12,6 +12,38 @@ class CommandHierarchy:
         self.topology = CoordinationTopology(database, publisher)
         with self.db.get_connection() as conn:
             conn.execute('CREATE TABLE IF NOT EXISTS command_groups(id TEXT PRIMARY KEY,data_json TEXT NOT NULL)'); conn.commit()
+            conn.execute('CREATE TABLE IF NOT EXISTS swarm_preferences(id TEXT PRIMARY KEY,data_json TEXT NOT NULL)'); conn.commit()
+
+    def group_version(self):
+        from backend.cluster.team_editing import version
+        return version(self.groups())
+
+    def edit_groups(self, expected, operation, **kwargs):
+        from backend.cluster.team_editing import edit
+        return edit(self, expected, operation, **kwargs)
+
+    def visibility(self):
+        with self.db.get_connection() as conn:
+            row=conn.execute("SELECT data_json FROM swarm_preferences WHERE id='visibility'").fetchone()
+        return json.loads(row[0]) if row else {'offline_hours':168}
+
+    def set_visibility(self, hours):
+        import math
+        if type(hours) not in (float,int) or not math.isfinite(hours) or not 12<=hours<=240:
+            raise ValueError('Choose an offline timeout between 12 hours and 10 days')
+        value={'offline_hours':hours}
+        with self.db.get_connection() as conn:
+            conn.execute("INSERT INTO swarm_preferences VALUES('visibility',?) ON CONFLICT(id) DO UPDATE SET data_json=excluded.data_json",(json.dumps(value),));conn.commit()
+        self.publish('hierarchy.visibility_changed',value)
+        return value
+
+    def visible_computers(self):
+        import math
+        cutoff=time.time()-self.visibility()['offline_hours']*3600
+        def recent(node):
+            stamp=node.last_heartbeat or node.created_at
+            return type(stamp) in (int,float) and math.isfinite(stamp) and stamp>=cutoff
+        return [n for n in self.computers() if n.node_state in {'APPROVED','CONNECTED','DISCONNECTED','RECONNECTING'} and recent(n)]
 
     def groups(self):
         with self.db.get_connection() as conn:
@@ -32,6 +64,9 @@ class CommandHierarchy:
             raise ValueError('Captain and members must be approved paired computers')
         group = {'id': uuid4().hex, 'name': name.strip(), 'captain': captain, 'members': members, 'flags': flags, 'preferred_task_types': preferred_task_types, 'preference_scope': 'planning_only', 'created_at': time.time(), 'created_by': 'owner'}
         with self.db.get_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            if any(set(json.loads(row[0])['members']).intersection(members) for row in conn.execute('SELECT data_json FROM command_groups')):
+                raise ValueError('Knights already belong to a team; confirm a move in the diagram')
             conn.execute('INSERT INTO command_groups VALUES(?,?)', (group['id'], json.dumps(group))); conn.commit()
         self.publish('hierarchy.group_created', {'group_id': group['id'], 'captain': captain, 'members': members})
         return group
@@ -59,17 +94,19 @@ class CommandHierarchy:
     def export(self, apprentices):
         from backend.cluster.apprentice_inventory import aggregate_inventories
         computers = self.computers()
-        participating = [node for node in computers if node.node_state in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}]
+        participating = self.visible_computers()
         inventory = aggregate_inventories(apprentices, [node.to_dict() for node in participating])
         from backend.cluster.topology import topology_nodes
         graph = self.topology.read(topology_nodes(apprentices, participating, inventory['remote_apprentices']))
+        groups=self.groups()
+        from backend.cluster.team_editing import version
         result = {'commander': {'id': 'owner', 'computer': socket.gethostname(), 'authority': 'All groups; owner approval and capability policy remain highest'},
                 'topology': graph,
                 'inventory': inventory,
                 'knights': [node.to_dict() for node in participating],
                 'archived_knights': [node.to_dict() for node in computers if node not in participating],
                 'apprentices': [{**item, 'entity_type': 'knight_apprentice', 'host': socket.gethostname()} for item in apprentices],
-                'groups': self.groups(), 'definitions': {'knight': 'A connected computer', 'knight_apprentice': 'An agent or bot on a computer',
+                'groups': groups, 'groups_version':version(groups), 'visibility':self.visibility(), 'definitions': {'knight': 'A connected computer', 'knight_apprentice': 'An agent or bot on a computer',
                 'knight_captain': 'An approved computer commanding its own group', 'commander': 'Highest control over approved computers and groups'}}
         from backend.cluster.computer_display import display_hierarchy
         return display_hierarchy(result, self.db)

@@ -8,7 +8,7 @@ import MeshConnections from '../components/MeshConnections'
 
 export default function Swarm({interfaceMode='easy'}) {
   const [view,setView]=useState(interfaceMode==='easy'?'network':'activity')
-  const {data: hierarchy, error: hierarchyError} = useLiveData("/hierarchy",10000)
+  const {data: hierarchy, error: hierarchyError,refresh:refreshHierarchy} = useLiveData("/hierarchy",10000)
   const {data,error} = useLiveData("/knights",4000)
   const knights = data?.knights || (Array.isArray(data) ? data : [])
   const loading = !data
@@ -20,7 +20,7 @@ export default function Swarm({interfaceMode='easy'}) {
       <ComputerIdentity data={hierarchy} error={hierarchyError}/>
       <MeshConnections hierarchy={hierarchy}/>
       <div className="action-row" aria-label="Swarm views"><button aria-pressed={view==='activity'} onClick={()=>setView('activity')}>Activity</button><button aria-pressed={view==='network'} onClick={()=>setView('network')}>Network map</button></div>
-      {view==='network'?<ComputerTopology hierarchy={hierarchy} advanced={interfaceMode==='advanced'}/>:<>
+      {view==='network'?<ComputerTopology hierarchy={hierarchy} advanced={interfaceMode==='advanced'} onRefresh={refreshHierarchy}/>:<>
       <OrchestrationBoard/>
       <h2>Knight Apprentices</h2>
       {error && <p role="alert">{error}</p>}
