@@ -113,6 +113,7 @@ function startBackend(profilePath) {
     backendProcess = spawn(pythonCmd, ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)], {
       cwd: path.resolve(__dirname, '..'),
       env,
+      windowsHide: true,
       detached: process.platform !== 'win32',
       stdio: 'inherit'
     });

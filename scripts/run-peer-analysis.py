@@ -68,7 +68,8 @@ def remote_worker(host, request):
             + f'exec(compile({source!r},"peer-analysis-worker","exec"),scope)\n'
             + f'print(json.dumps(scope["worker_operation"]({request!r})))\n')
     completed = subprocess.run(host['ssh'] + [host['python'] + ' -'], input=code,
-                               text=True,encoding="utf-8",capture_output=True,timeout=45)
+                               text=True,encoding="utf-8",capture_output=True,timeout=45,
+                               creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
     if completed.returncode:
         raise RuntimeError('Pinned worker execution failed; inspect the worker service')
     return json.loads(completed.stdout)

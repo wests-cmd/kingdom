@@ -16,7 +16,8 @@ request=urllib.request.Request('http://127.0.0.1:{int(host['port'])}'+{path!r},d
 with urllib.request.urlopen(request,timeout=8) as response:print(response.read().decode())
 '''
     completed = subprocess.run(host['ssh'] + [host.get('python', 'python3') + ' -'], input=code,
-                               capture_output=True, text=True, encoding="utf-8", timeout=15)
+                               capture_output=True, text=True, encoding="utf-8", timeout=15,
+                               creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
     if completed.returncode: raise RuntimeError('Peer inventory transport failed; inspect host service status')
     return json.loads(completed.stdout)
 

@@ -9,6 +9,18 @@ spec.loader.exec_module(link)
 
 
 class HeartbeatBoundaryTests(unittest.TestCase):
+    def test_background_ssh_does_not_open_windows_console(self):
+        config={'local':'http://127.0.0.1:8000','identity':{'node_id':'a'},
+                'peer_id':'b','peer_fingerprint':'fingerprint','peer_port':8014,
+                'transport':'pinned_ssh','ssh_command':['ssh','approved-host'], 'remote_python':'python3'}
+        from types import SimpleNamespace
+        proof=dict(sender_id='a',target_id='b',msg_type='heartbeat',protocol_version='kingdom.cluster.v1')
+        with patch.object(link,'identity'),patch.object(link,'local_client',return_value=lambda *args:proof), \
+             patch.object(link.subprocess,'run',return_value=SimpleNamespace(returncode=1,stdout='')) as run:
+            with self.assertRaises(ValueError):link.sync(config)
+        self.assertEqual(run.call_args.kwargs.get('creationflags'),0x08000000 if __import__('os').name=='nt' else 0)
+        self.assertEqual(run.call_args.kwargs.get('encoding'),'utf-8')
+
     def test_native_analysis_opt_in_never_exposes_other_execution(self):
         config={'identity':{'node_id':'controller'}}
         message={'target_id':'controller','msg_type':'task_poll','payload':{

@@ -7,6 +7,7 @@ import argparse
 import json
 from pathlib import Path
 import subprocess
+import os
 
 
 def api(host,path,body=None,method=None):
@@ -19,7 +20,8 @@ try:
  with urllib.request.urlopen(r,timeout=90) as response:print(response.read().decode())
 except urllib.error.HTTPError as e:print(json.dumps({{'http_error':e.code,'detail':e.read().decode()[:1000]}}))
 '''
-    result=subprocess.run(host['ssh']+[host.get('python','python3')+' -'],input=code,capture_output=True,text=True,timeout=110)
+    result=subprocess.run(host['ssh']+[host.get('python','python3')+' -'],input=code,capture_output=True,text=True,encoding='utf-8',timeout=110,
+                          creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
     if result.returncode:raise RuntimeError('Owner transport failed; no completion claimed')
     value=json.loads(result.stdout)
     if isinstance(value,dict) and 'http_error' in value:raise RuntimeError(json.dumps(value))

@@ -8,6 +8,7 @@ import json
 import ssl
 import time
 import subprocess
+import os
 import urllib.request
 import http.cookiejar
 from urllib.parse import urlsplit
@@ -184,7 +185,8 @@ with urllib.request.urlopen(req,timeout=6) as r:
  print(data.decode())
 '''
         completed = subprocess.run(config['ssh_command'] + [config['remote_python'] + ' -'],
-                                   input=program, text=True, capture_output=True, timeout=18)
+                                   input=program, text=True, encoding='utf-8', capture_output=True, timeout=18,
+                                   creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
         if completed.returncode or len(completed.stdout) > LIMIT:
             raise ValueError('Pinned peer transport failed')
         result = json.loads(completed.stdout)

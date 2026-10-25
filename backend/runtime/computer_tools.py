@@ -72,7 +72,8 @@ def run_process(params, *, max_timeout=120, environment=None):
             code = process.returncode
         except subprocess.TimeoutExpired:
             if os.name == 'nt':
-                subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], capture_output=True, timeout=10)
+                subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], capture_output=True, timeout=10,
+                               creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
             else:
                 import signal
                 os.killpg(process.pid, signal.SIGKILL)
