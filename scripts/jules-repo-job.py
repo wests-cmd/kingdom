@@ -54,7 +54,12 @@ class Job:
         tmp = self.file.with_suffix('.tmp')
         with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), 'w') as out:
             json.dump(self.state, out, indent=2)
+            out.flush()
+            os.fsync(out.fileno())
         tmp.replace(self.file)
+        directory=os.open(self.root,os.O_RDONLY)
+        try:os.fsync(directory)
+        finally:os.close(directory)
         self.publish()
 
     def secret(self):
@@ -100,6 +105,8 @@ class Job:
         reply = self.request(self.state['session'])
         if reply.get('name') != self.state['session']:
             raise ValueError('Jules session identity changed')
+        if reply.get('sourceContext',{}).get('source',self.config['source']) != self.config['source']:
+            raise ValueError('Jules source changed')
         remote = reply.get('state', 'STATE_UNSPECIFIED')
         known = {'STATE_UNSPECIFIED','QUEUED','PLANNING','AWAITING_PLAN_APPROVAL','AWAITING_USER_FEEDBACK','IN_PROGRESS','PAUSED','FAILED','COMPLETED'}
         if remote not in known:
