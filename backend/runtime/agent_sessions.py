@@ -474,6 +474,10 @@ class AgentSessionService:
                 from backend.models.selection import ModelSelectionError
                 from backend.models.ollama_chat import NativeChatProtocolError
                 code = error.code if isinstance(error,AgentRejection) else ('invalid_tool_arguments' if isinstance(error,ValidationError) else 'model_protocol_error' if isinstance(error,NativeChatProtocolError) else 'model_unavailable' if isinstance(error,ModelSelectionError) else 'dispatch_rejected')
+                provider_status=getattr(getattr(error,'response',None),'status_code',None)
+                if type(provider_status) is int and 100<=provider_status<=599:
+                    code='model_unavailable'
+                    state['provider_status']=provider_status
                 self._event(state,'response_rejected')
                 state.update(status='needs_review', error=str(error) if isinstance(error,(AgentRejection,ModelSelectionError,NativeChatProtocolError)) else 'Model response or governed dispatch could not be accepted. Review retained tasks and model configuration; no automatic retry was made.', error_class=type(error).__name__,error_code=code)
                 return self._save(state)

@@ -236,7 +236,11 @@ class RequestService:
                     if state is None:
                         await asyncio.to_thread(self.agents.cancel,agent['id'])
                         return await asyncio.to_thread(self.get,ident)
-                agent=await self.agents.run(state['agent_session_id'],2,300)
+                seconds=300
+                if state.get('background_deadline_at') is not None:
+                    seconds=min(600,int(state['background_deadline_at']-time.time()))
+                    if seconds<5:raise TimeoutError('Background budget expired before agent dispatch')
+                agent=await self.agents.run(state['agent_session_id'],2,seconds)
                 answer=next((message.get('content','') for message in reversed(agent['messages']) if message['role']=='assistant' and message.get('content')), 'Agent work saved; inspect progress and pending approvals.')
                 evidence=[{'type':'agent_session','id':agent['id'],'status':agent['status'],'pending':agent.get('pending',[]),'turns':agent['turns'],'messages':agent['messages']}]
                 status='completed' if agent['status']=='completed' else 'waiting_review'

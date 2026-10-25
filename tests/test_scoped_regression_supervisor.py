@@ -76,5 +76,21 @@ class CandidateBoundaryTests(unittest.TestCase):
         supervisor.api=lambda *args:(_ for _ in ()).throw(AssertionError('No API execution for terminal work'))
         supervisor.run()
 
+    def test_provider_failure_does_not_consume_a_code_repair(self):
+        import time
+        supervisor=object.__new__(module.Supervisor)
+        supervisor.state={'phase':'watching','request_id':'known','repairs':0}
+        supervisor.config={'deadline_at':time.time()+60,'expected_identity':'pinned'}
+        answers={'/nodes/identity':{'node_id':'pinned'},
+                 '/requests/known':{'id':'known','status':'waiting_review','agent_session_id':'agent'},
+                 '/orchestration':{'background':{'active_request_ids':[]}},
+                 '/agent-sessions/agent':{'status':'needs_review','error_class':'HTTPStatusError'}}
+        supervisor.api=lambda path:answers[path]
+        supervisor.save=lambda **values:supervisor.state.update(values)
+        supervisor.repair=lambda *args:(_ for _ in ()).throw(AssertionError('No code repair for provider failure'))
+        supervisor.run()
+        self.assertEqual(supervisor.state['phase'],'review_required')
+        self.assertEqual(supervisor.state['repairs'],0)
+
 
 if __name__=='__main__':unittest.main()

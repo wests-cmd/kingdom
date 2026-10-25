@@ -207,6 +207,30 @@ def test_agent_delegation_and_cancel_checkpoint(tmp_path):
     assert agents.created==1
 
 
+@pytest.mark.parametrize('remaining,lower,upper',[(1000,599,600),(90,88,90)])
+def test_background_deadline_reaches_inner_agent_without_default_five_minute_cutoff(tmp_path,remaining,lower,upper):
+    import time
+    service,_,agents=setup(tmp_path);seen=[]
+    original=agents.run
+    async def capture(*args):seen.append(args[2]);return await original(*args)
+    agents.run=capture
+    data=body();data['mode']='agent'
+    ident=service.create(data)['id']
+    service.update(ident,{'background_deadline_at':time.time()+remaining})
+    asyncio.run(service.run(ident))
+    assert lower<=seen[0]<=upper
+
+
+def test_expired_background_deadline_cannot_dispatch_an_agent_turn(tmp_path):
+    import time
+    service,_,agents=setup(tmp_path)
+    data=body();data['mode']='agent'
+    ident=service.create(data)['id']
+    service.update(ident,{'background_deadline_at':time.time()-1})
+    with pytest.raises(TimeoutError):asyncio.run(service.run(ident))
+    assert agents.runs==0
+
+
 def test_restart_running_checkpoint_does_not_replay(tmp_path):
     service,models,agents=setup(tmp_path)
     data=body();data['mode']='agent'

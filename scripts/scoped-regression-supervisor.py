@@ -247,6 +247,8 @@ class Supervisor:
             if request['id'] in active or request['status'] in {'queued','running','ready'}:
                 self.save(phase='watching');time.sleep(5);continue
             agent=self.api('/agent-sessions/'+request['agent_session_id'])
+            if agent.get('error_code') in {'turn_interrupted','model_unavailable','context_budget_exceeded'} or agent.get('error_class') in {'HTTPStatusError','ReadTimeout','ConnectError'}:
+                self.save(phase='review_required',reason='Provider or interrupted-inference failure; no code repair is attempted. Reconcile model health and existing work before a new assignment.');return
             if agent.get('status')=='thinking' or agent.get('pending'):
                 self.save(phase='review_required',reason='Ambiguous or pending agent work; no automatic replay');return
             try:

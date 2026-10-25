@@ -427,3 +427,16 @@ async def test_run_completes_plain_reply_within_budget(setup):
     service,engine,db=setup([reply('Done')])
     state=service.create('Answer','local')
     assert (await service.run(state['id'],1,5))['status']=='completed'
+
+
+@pytest.mark.asyncio
+async def test_provider_http_failure_has_safe_status_and_no_request_body_leak(setup):
+    import httpx
+    service,engine,_=setup([])
+    async def fail(*args):
+        request=httpx.Request('POST','https://provider.invalid/private?api_key=never-save')
+        raise httpx.HTTPStatusError('secret-body-never-save',request=request,response=httpx.Response(429,request=request))
+    engine.models.chat=fail
+    state=await service.advance(service.create('Work','local')['id'])
+    assert state['error_code']=='model_unavailable' and state['provider_status']==429
+    assert 'never-save' not in json.dumps(state) and not engine.records
