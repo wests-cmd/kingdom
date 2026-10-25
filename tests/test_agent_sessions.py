@@ -50,6 +50,30 @@ def test_ordered_tools_do_not_grant_process_permission(setup):
     with pytest.raises(ValueError):service.create('Run','local',tool_sequence=['unknown'])
 
 
+@pytest.mark.asyncio
+async def test_structured_arguments_use_controller_stage_and_normal_governed_tasks(setup):
+    service,engine,_=setup([reply(json.dumps({'path':'source.py'})),reply('Read completed')])
+    state=service.create('Read source','local',tool_sequence=['workspace_read'],tool_protocol='structured')
+    state=await service.advance(state['id'])
+    body=engine.requests[-1][1]
+    assert body['tools']==[] and body['tool_choice']=='none' and body['response_format']['type']=='json_schema'
+    task=engine.records[state['pending'][0]['task_id']]
+    assert task['metadata']['tool']=='workspace.read@1.0.0' and task['metadata']['actor']=='owner'
+    engine.finish(task['id'],{'text':'actual content'})
+    await service.advance(state['id']);state=await service.advance(state['id'])
+    assert state['status']=='completed' and len(engine.records)==1
+    assert engine.requests[-1][1]['tool_choice']=='none'
+    assert all(m['role']!='tool' for m in engine.requests[-1][1]['messages'])
+
+
+@pytest.mark.asyncio
+async def test_structured_argument_injection_and_path_escape_cannot_dispatch(setup):
+    for content in ('{"tool":"process_run","argv":["shell"]}', '{"path":"../../owner-token"}', 'I already did it'):
+        service,engine,_=setup([reply(content)])
+        state=await service.advance(service.create('Read','local',tool_sequence=['workspace_read'],tool_protocol='structured')['id'])
+        assert state['status']=='needs_review' and not engine.records
+
+
 def call(name, args, ident='call1'):
     return {'id': ident, 'type': 'function', 'function': {'name': name, 'arguments': json.dumps(args)}}
 
