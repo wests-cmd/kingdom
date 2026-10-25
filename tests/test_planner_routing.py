@@ -20,6 +20,9 @@ def profiles(monkeypatch):
         {'id': 'cloud_b', 'provider': 'openai_compatible', 'model': 'chat', 'endpoint': 'https://b.example', 'context_characters': 100000},
     ]
     monkeypatch.setattr(ModelProfiles, 'list', lambda self: configured)
+    monkeypatch.setattr(ModelProfiles, 'get', lambda self, ident, **kwargs:
+                        {**next(p for p in configured if p['id']==ident), 'api_key':''})
+    monkeypatch.setattr('backend.models.selection.availability', AsyncMock(return_value={'available':True,'retryable':False}), raising=False)
     return configured
 
 
@@ -150,6 +153,20 @@ def test_owner_selected_local_model_is_not_starved_by_three_dead_profiles(profil
     models = SimpleNamespace(plan_chat=AsyncMock(return_value={'text': '{}'}))
     asyncio.run(deliberate(models, 'outcome', 'local', AsyncMock(), preferred_profile='z-working'))
     assert all(c.kwargs['profile'] == 'z-working' for c in models.plan_chat.await_args_list)
+
+
+def test_live_model_probe_prevents_dead_catalogue_entries_starving_healthy_worker(profiles,monkeypatch):
+    profiles[:]=[{**profiles[0],'id':x} for x in ['a-dead','b-dead','c-dead','z-live']]
+    async def health(profile):
+        return {'available':profile['id']=='z-live','retryable':profile['id']!='z-live'}
+    monkeypatch.setattr('backend.models.selection.availability',health,raising=False)
+    async def respond(prompt,profile,hosting):
+        if profile!='z-live':raise TimeoutError()
+        return {'text':'{}'}
+    models=SimpleNamespace(plan_chat=AsyncMock(side_effect=respond))
+    asyncio.run(deliberate(models,'outcome','local',AsyncMock()))
+    assert len(models.plan_chat.await_args_list)==4
+    assert all(c.kwargs['profile']=='z-live' for c in models.plan_chat.await_args_list)
 
 
 def test_preferred_cloud_profile_cannot_override_local_only_routing(profiles):

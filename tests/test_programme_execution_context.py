@@ -3,6 +3,7 @@ import json
 from types import SimpleNamespace
 
 from backend.runtime.work_programmes import WorkProgrammes
+from test_project_test_missions import runtime
 
 
 def test_context_reports_granted_tools_and_missing_controller_dependencies(monkeypatch):
@@ -40,3 +41,17 @@ def test_missing_inventory_is_unknown_and_never_invents_a_worker():
     result = json.loads(service._execution_context())
     assert result['worker_inventory_available'] is False
     assert result['workers'] == []
+
+
+def test_function_planner_is_told_the_required_case_profile_contract(runtime):
+    import asyncio
+    from unittest.mock import AsyncMock
+    engine,backlog,_=runtime
+    engine.models=SimpleNamespace(plan_chat=AsyncMock(return_value={'text':'{"question":"Which source?"}'}))
+    service=WorkProgrammes(backlog.db,engine,backlog)
+    state=service.create('kingdom','function-contract','- Check bounded function',planner_mode='configured_chat')
+    asyncio.run(service.plan_next(state['id'],state['revision']))
+    prompt=engine.models.plan_chat.await_args.args[0]
+    assert 'case_profile' in prompt and 'bounded_batch_size.v1' in prompt
+    assert 'repair_source' in prompt and 'input_from' in prompt
+

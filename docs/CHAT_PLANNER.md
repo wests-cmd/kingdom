@@ -18,11 +18,25 @@ Routing options:
 
 Busy slots sort after available slots. Each stage tries at most three configured
 connections, reserving a fallback of the alternate hosting type when available.
-Each call is bounded to sixty seconds. HTTP402/408/429/500/502/503/504 and network
+Each call uses its configured timeout, clamped to15–600 seconds. HTTP402/408/429/500/502/503/504 and network
 timeouts can advance to another candidate; failed connections are excluded for
 the remainder of this deliberation. No execution tool or approval is retried.
 Authentication/validation failures do not silently expand scope. This responds
 to provider quota signals, not a claim to read ChatGPT subscription allowance.
+
+Before selecting its three inference candidates, each stage probes the permitted
+connections' model lists with bounded concurrency. Unreachable catalogue entries
+cannot crowd a healthy later connection out of selection. Local mode probes only
+local-labelled candidates. Readiness failures are recorded without credentials.
+
+When an automatic programme exhausts a transient connection failure, its saved
+planning checkpoint includes a safe category, retry deadline and attempt number.
+The Kingdom runner retries proposal generation after60 then120 seconds, within
+the existing three-attempt limit. Disabling automatic planning stops this recovery.
+Invalid contracts, missing configuration, authorization failures and interrupted
+binding/execution remain held. Model text cannot request a retry or reset a budget.
+Final invalid synthesis separately gets one contract correction; a second failure
+remains blocked. None of these proposal mechanisms approve a mission.
 
 Model connections expose `hosting: auto | local | cloud`. Auto classifies only
 loopback native Ollama as local; other endpoints are conservatively cloud.

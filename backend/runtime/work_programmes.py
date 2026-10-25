@@ -11,6 +11,8 @@ import threading
 import time
 from uuid import NAMESPACE_URL, uuid5
 
+import httpx
+
 from backend.memory.portable_vault import identifier
 from backend.runtime.missions import MissionPlan, validate_plan
 
@@ -215,6 +217,9 @@ class WorkProgrammes:
                     or row.get('planning_attempts', 0) >= 3):
                 raise ValueError('Retry only blocked planning without a mission and fewer than three attempts')
             row['planning'] = 'unplanned'
+            failure = row.pop('planning_failure', None)
+            if failure:
+                row['planning_failure_history'] = (row.get('planning_failure_history', []) + [failure])[-3:]
             for field in ('proposal', 'acceptance_step', 'blocked_reasons'):
                 row.pop(field, None)
             self._save(state, expected_revision)
@@ -381,7 +386,10 @@ class WorkProgrammes:
                   '(fixed argv, project_test descriptor with project kingdom/threadmap/centipede, exact owner-supplied source_revision, '
                   'runner pytest/unittest, minimum_tests). project_test requires existing process.execute grants and approvals. '
                   'Do not fabricate a source revision. Function checks need an earlier write_file and matching dependent read_file, '
-                  'repair_source and input_from. Other allowed steps: model, read_file, write_file, python_check, text_check. '
+                  'repair_source and input_from. Every function_check must include "case_profile":"bounded_batch_size.v1", '
+                  '"repair_source":the write step ID, "input_from":the read step ID and "depends_on":[both IDs]. '
+                  'The read step must depend on that write and use the same path. '
+                  'Other allowed steps: model, read_file, write_file, python_check, text_check. '
                   'Model text and syntax are not acceptance. No action is authorized by this planning response. '
                   + ('This is a SECTION INTEGRATION gate: acceptance must be a separate project_test suite, not a component/function check. ' if integration else '')
                   + '\nOWNER OUTCOME DATA:\n' + selected['description'])
@@ -423,8 +431,21 @@ class WorkProgrammes:
                 else:
                     response = await self.engine.models.plan_chat(prompt, profile=state['model_profile'])
                 result = self._validate_planner_response(response, state, selected, integration)
-        except Exception:
-            result = {'planning': 'blocked', 'blocked_reasons': ['The selected model did not produce a valid executable plan. No mission was approved or executed.']}
+        except Exception as error:
+            from backend.models.planner_routing import PlannerUnavailable
+            transient = isinstance(error, (PlannerUnavailable, TimeoutError, httpx.TransportError))
+            if isinstance(error, httpx.HTTPStatusError):
+                transient = error.response.status_code in {402, 408, 429, 500, 502, 503, 504}
+            retryable = transient and row['planning_attempts'] < 3
+            category = 'model_unavailable' if transient else 'planning_requires_review'
+            reason = ('Configured planning models are unavailable or busy. Proposal-only retry is bounded by the saved deadline and attempt budget.'
+                      if retryable else
+                      'Planning retry budget exhausted; review the model connection and retained stages.' if transient else
+                      'The selected model did not produce a valid executable plan. Review configuration, authority and the planning contract.')
+            result = {'planning': 'blocked', 'blocked_reasons': [reason + ' No mission was approved or executed.'],
+                      'planning_failure': {'category': category, 'retryable': retryable,
+                          'attempt': row['planning_attempts'],
+                          'retry_at': time.time() + min(300, 60 * 2**(row['planning_attempts']-1)) if retryable else None}}
         with _guard:
             current = self.get(ident)
             target = next(r for r in self.rows(current) if r['key'] == selected['key'])
@@ -486,7 +507,21 @@ class WorkProgrammes:
         if not self.engine.status().get('running') or self.engine.execution_policy.get()['level'] == 0:
             return
         for state in self.list():
-            if state['auto_plan'] and self._next(state)[0] is not None:
+            if not state['auto_plan']:
+                continue
+            # Retry only read-only proposal generation with an independently
+            # classified transient failure. Never replay binding or execution,
+            # reset attempts, or interpret model text as permission to retry.
+            due = next((row for row in self.rows(state)
+                        if row['planning'] == 'blocked' and not row.get('mission_id')
+                        and row.get('planning_attempts', 0) < 3
+                        and row.get('planning_failure', {}).get('retryable') is True
+                        and type(row['planning_failure'].get('retry_at')) in (int, float)
+                        and row['planning_failure']['retry_at'] <= time.time()), None)
+            if due is not None:
+                self.retry_planning(state['id'], due['key'], state['revision'])
+                state = self.get(state['id'])
+            if self._next(state)[0] is not None:
                 return state['id'], state['revision']
 
     async def tick(self):
