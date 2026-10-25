@@ -142,8 +142,22 @@ async def reconnect(node_id:str):
                 raise ValueError('Other Kingdom has not approved this identity')
         if result.get('inventory_proof'):
             from backend.api import handle_cluster_rpc, RPCMessageRequest
+            proof = result['inventory_proof']
+            if proof.get('sender_id') != node_id or proof.get('msg_type') != 'inventory_snapshot':
+                raise ValueError('Peer returned an unexpected inventory proof')
             handle_cluster_rpc(RPCMessageRequest.model_validate(result['inventory_proof']))
-        else: heartbeat_manager.ping(node_id)
+        else: raise ValueError('Peer did not return a signed inventory proof')
         return {'peer':node_id,'connected':True,'mutual_identity_accepted':True}
     except (ValueError,KeyError) as e:raise HTTPException(409,str(e)) from e
     except httpx.HTTPError as e:raise HTTPException(502,'Peer connection failed; identity and grants retained for retry') from e
+
+
+from backend.cluster.peer_connections import PeerConnections
+from backend.events.event_bus import event_bus
+peer_connections = PeerConnections(node_registry, reconnect, event_bus)
+
+
+@router.get('/connections/status')
+def connection_status():
+    return {'automatic_reconnect': True, 'peers': dict(peer_connections.status),
+            'membership': 'explicit_owner_approval', 'interval_seconds': peer_connections.interval}

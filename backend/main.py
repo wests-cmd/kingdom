@@ -17,11 +17,13 @@ async def lifespan(_app):
     await programme_runner.start()
     await backlog_runner.start()
     await problem_runner.start()
+    await peer_connections.start()
     try:
         yield
     finally:
         from backend.runtime.request_api import background
         await background.stop()
+        await peer_connections.stop()
         await problem_runner.stop()
         await programme_runner.stop()
         await backlog_runner.stop()
@@ -63,7 +65,7 @@ from backend.runtime.mission_api import router as mission_router
 app.include_router(mission_router)
 from backend.cluster.hierarchy_api import router as hierarchy_router
 app.include_router(hierarchy_router)
-from backend.cluster.federation_api import router as federation_router
+from backend.cluster.federation_api import router as federation_router, peer_connections
 app.include_router(federation_router)
 from backend.system.ui_update_api import router as ui_update_router
 app.include_router(ui_update_router)
