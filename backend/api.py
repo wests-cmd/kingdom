@@ -894,6 +894,12 @@ def handle_cluster_rpc(request: RPCMessageRequest):
     sender_id = verified["sender_id"]
     msg_type = verified["msg_type"]
     payload = verified["payload"]
+    if msg_type=='mesh_group_request':
+        from backend.cluster.shared_groups import configured
+        try:result=configured().receive(sender_id,payload)
+        except PermissionError as error:raise HTTPException(403,str(error)) from error
+        except (ValueError,KeyError,TypeError) as error:raise HTTPException(409,'Shared group edit was rejected; refresh the current layout') from error
+        return transport.create_signed_message(sender_id,'mesh_group_result',result)
     if msg_type in {'mesh_roster_request', 'mesh_roster_response'}:
         from backend.cluster.mesh_api import membership
         try:

@@ -24,10 +24,24 @@ retained. Fresh verified peer reports bring it back automatically.
 
 Backend edits are one SQLite transaction with an expected snapshot version.
 Stale screens get a conflict, not an overwrite. A Knight belongs to at most one
-organizational group in this controller. Existing overlapping legacy groups must
+organizational group in the shared layout. Existing overlapping legacy groups must
 be resolved explicitly. Group edits do not change grants, workload policy or
-operating-system permissions. Groups remain controller-scoped; cross-controller
-authoritative group editing is a separate federation feature.
+operating-system permissions.
+
+When mesh membership is configured, its existing owner-selected authority stores
+one organizational layout. Authenticated owners on approved member Knights send
+signed edits to that authority. Requests and responses are bound to each other,
+the expected peer identity and the normal durable replay checks. Canonical IDs
+refer to actual computer identities; each screen maps its own identity to This
+Knight. Concurrent stale saves are rejected. Offline clients show their last
+verified layout read-only and never save a competing local layout. Legacy
+single-controller group mutation endpoints reject edits while shared membership
+is enabled. A standalone installation still uses its local layout.
+
+The private peer listener needs explicit `groups_enabled` opt-in. This exposes
+organizational group requests only, not execution, permission or autonomy RPCs.
+Shared group editing is not the King/Commander authority feature: scoped role
+enforcement is still a separate, unfinished integration.
 
 ## Actual work consumption
 
@@ -53,3 +67,14 @@ RPCs and non-analysis tools remain unavailable through that listener.
 This closes a specific autonomous dispatch gap. It does not demonstrate general
 repository editing, independent engineering review, integration testing or
 automatic release. Those require their own actual receipts.
+
+## Background agent continuation
+
+The server's request loop now observes the exact durable tasks an agent is
+waiting for. Once they finish, the same agent collects and verifies their
+receipts before its next model turn. Waiting shares the existing 310-second
+deadline and six-chunk budget. It does not resubmit tools, switch agents, retry
+failed tasks, approve operations or restart ambiguous model turns. Missing,
+approval-held, failed and recovery-required tasks still stop for review.
+This removes a premature stop after tool dispatch; it does not establish the
+whole autonomous engineering-and-release cycle or unattended restart recovery.

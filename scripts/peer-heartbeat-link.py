@@ -25,6 +25,13 @@ def validate_mesh_rpc(message, config):
         raise ValueError('Wrong target')
     if kind in {'heartbeat','inventory_snapshot','mesh_roster_request','mesh_roster_response'}:
         return
+    if kind=='mesh_group_request' and config.get('groups_enabled') is True:
+        payload=message.get('payload')
+        if (not isinstance(payload,dict) or set(payload)!={'request_id','edit'}
+                or not isinstance(payload['request_id'],str) or not 1<=len(payload['request_id'])<=100
+                or (payload['edit'] is not None and not isinstance(payload['edit'],dict))):
+            raise ValueError('Invalid organizational group request')
+        return
     if config.get('analysis_enabled') is not True or kind not in {'task_poll','task_result'}:
         raise ValueError('Execution RPC is not exposed by the peer listener')
     payload=message.get('payload')

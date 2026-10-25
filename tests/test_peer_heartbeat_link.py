@@ -9,6 +9,14 @@ spec.loader.exec_module(link)
 
 
 class HeartbeatBoundaryTests(unittest.TestCase):
+    def test_groups_are_explicitly_opted_in_without_execution_rpc(self):
+        config={'identity':{'node_id':'authority'}}
+        message={'target_id':'authority','msg_type':'mesh_group_request','payload':{'request_id':'one','edit':None}}
+        with self.assertRaises(ValueError):link.validate_mesh_rpc(message,config)
+        config['groups_enabled']=True
+        link.validate_mesh_rpc(message,config)
+        with self.assertRaises(ValueError):link.validate_mesh_rpc({**message,'msg_type':'knight_management'},config)
+        with self.assertRaises(ValueError):link.validate_mesh_rpc({**message,'payload':{'request_id':'one','edit':[]}},config)
     def test_background_ssh_does_not_open_windows_console(self):
         config={'local':'http://127.0.0.1:8000','identity':{'node_id':'a'},
                 'peer_id':'b','peer_fingerprint':'fingerprint','peer_port':8014,

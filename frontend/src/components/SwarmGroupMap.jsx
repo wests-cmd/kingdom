@@ -25,8 +25,9 @@ export default function SwarmGroupMap({computers,hierarchy,onRefresh}) {
  const all=[...computers,...(hierarchy.archived_knights||[]).filter(n=>['APPROVED','CONNECTED','DISCONNECTED','RECONNECTING'].includes(n.node_state)).map(n=>({id:n.node_id||n.id,name:computerName(n.display_username,n.display_computer||n.hostname,n.node_id||n.id),state:'Archived · offline',archived:true}))]
  const title=id=>all.find(c=>c.id===id)?.name||`Unavailable Knight ${id.slice(-8)}`
  const close=()=>{setDraft(null);setConfirm(null)}
- const edit=(group=null,people=[])=>{setMenu(null);setMessage('');setDraft({kind:'save',version,group_ids:group?[group.id]:[],name:group?.name||'',members:group?[...group.members]:people,captain:group?.captain||people[0]||'',flags:(group?.flags||[]).join(', '),preferred:(group?.preferred_task_types||[]).join(', '),move:false})}
+ const edit=(group=null,people=[])=>{if(hierarchy.groups_read_only){setMessage(hierarchy.groups_notice);setMenu(null);return}setMenu(null);setMessage('');setDraft({kind:'save',version,group_ids:group?[group.id]:[],name:group?.name||'',members:group?[...group.members]:people,captain:group?.captain||people[0]||'',flags:(group?.flags||[]).join(', '),preferred:(group?.preferred_task_types||[]).join(', '),move:false})}
  const mutate=async body=>{
+  if(hierarchy.groups_read_only){setMessage(hierarchy.groups_notice);return}
   setBusy(true);setMessage('')
   try {const {data}=await api.post('/hierarchy/groups/edit',body);setSnapshot(data);close();setMenu(null);setMessage('Groups saved. Permissions are unchanged.');await onRefresh?.()}
   catch(e){setMessage(e.response?.data?.detail||'Could not save groups. Refresh and try again.')}
@@ -45,13 +46,13 @@ export default function SwarmGroupMap({computers,hierarchy,onRefresh}) {
  }
  const openMenu=(event,target)=>{event.preventDefault();event.stopPropagation();setMenu({target,x:Math.max(8,Math.min(event.clientX,window.innerWidth-245)),y:Math.max(8,Math.min(event.clientY,window.innerHeight-330))})}
  const drop=(event,target)=>{
-  event.preventDefault();event.stopPropagation();if(busy)return
+  event.preventDefault();event.stopPropagation();if(busy||hierarchy.groups_read_only)return
   const id=event.dataTransfer.getData('text/plain');if(!computers.some(c=>c.id===id))return
   if(target?.members){edit(target);setDraft(old=>({...old,members:[...new Set([...target.members,id])]}))}
   else if(target?.id&&target.id!==id)edit(null,[target.id,id])
   else if(!target&&groups.some(g=>g.members.includes(id)))setConfirm({text:`Remove ${title(id)} from its group?`,run:()=>mutate({version,operation:'unassign',members:[id]})})
  }
- const node=computer=><button type="button" key={computer.id} className={`swarm-knight ${computer.current||computer.id==='local'?'':'disconnected'}`} draggable={!busy}
+ const node=computer=><button type="button" key={computer.id} className={`swarm-knight ${computer.current||computer.id==='local'?'':'disconnected'}`} draggable={!busy&&!hierarchy.groups_read_only}
   onDragStart={e=>e.dataTransfer.setData('text/plain',computer.id)} onDragOver={e=>e.preventDefault()} onDrop={e=>drop(e,computer)}
   onContextMenu={e=>openMenu(e,computer)} onClick={e=>openMenu(e,computer)} disabled={busy} aria-label={`${computer.name}: ${computer.state}. Open Knight actions`}>
   <strong>{computer.name}</strong><span>{computer.state}</span><span className="muted">Actions ⋯</span>
@@ -59,6 +60,7 @@ export default function SwarmGroupMap({computers,hierarchy,onRefresh}) {
  const grouped=new Set(groups.flatMap(g=>g.members))
  const context=menu?.target,team=context?.members?context:null
  return <section className="swarm-group-map" aria-label="Interactive Kingdom diagram">
+  {hierarchy.groups_notice&&<p role={hierarchy.groups_read_only?'status':undefined}>{hierarchy.groups_notice}</p>}
   <div className="action-row"><button type="button" disabled={busy||!version} onClick={()=>edit()}>Make group</button><button type="button" onClick={()=>{setMenu(null);setDraft({kind:'visibility'})}}>Offline list timeout</button><button type="button" onClick={()=>onRefresh?.()}>Refresh map</button></div>
   <p>Drag a Knight onto another to make a group, into a group to add it, or onto Ungrouped to remove it. Right-click or select any card for actions. Disconnected Knights keep their place until the offline-list timeout.</p>
   <div className="swarm-fit-map" onContextMenu={e=>openMenu(e,null)}>
@@ -73,7 +75,7 @@ export default function SwarmGroupMap({computers,hierarchy,onRefresh}) {
   {menu&&<div className="swarm-context card" role="menu" aria-label="Swarm actions" style={{left:menu.x,top:menu.y}}>
    <strong>{team?.name||context?.name||'Kingdom'}</strong>
    <button role="menuitem" onClick={()=>edit()}>Make group</button>
-   {team?<><button role="menuitem" onClick={()=>edit(team)}>Edit members, name, leader or flags</button><button role="menuitem" disabled={groups.length<2} onClick={()=>{setDraft({kind:'combine',version,group_ids:[team.id],name:team.name});setMenu(null)}}>Combine groups</button><button role="menuitem" disabled={team.members.length<2} onClick={()=>{setDraft({kind:'split',version,group_ids:[team.id],source:team,count:2,names:[`${team.name} 1`,`${team.name} 2`]});setMenu(null)}}>Split group</button><button role="menuitem" onClick={()=>{setMenu(null);setConfirm({text:`Dissolve ${team.name}? Its Knights remain in this Kingdom.`,run:()=>mutate({version,operation:'remove',group_ids:[team.id]})})}}>Dissolve group</button></>:context?<><button role="menuitem" onClick={()=>{setMenu(null);setDraft({kind:'inspect',computer:context})}}>View work, Apprentices and services</button><button role="menuitem" onClick={()=>edit(null,[context.id])}>Make group with this Knight</button>{groups.map(g=><button key={g.id} role="menuitem" onClick={()=>{edit(g);setDraft(old=>({...old,members:[...new Set([...g.members,context.id])]}))}}>Add to {g.name}</button>)}{grouped.has(context.id)&&<button role="menuitem" onClick={()=>{setMenu(null);setConfirm({text:`Remove ${context.name} from its group?`,run:()=>mutate({version,operation:'unassign',members:[context.id]})})}}>Remove from group</button>}</>:null}
+   {team?<><button role="menuitem" onClick={()=>edit(team)}>Edit members, name, leader or flags</button><button role="menuitem" disabled={groups.length<2} onClick={()=>{setDraft({kind:'combine',version,group_ids:[team.id],name:team.name});setMenu(null)}}>Combine groups</button><button role="menuitem" disabled={team.members.length<2} onClick={()=>{setDraft({kind:'split',version,group_ids:[team.id],source:team,count:2,names:[`${team.name} 1`,`${team.name} 2`]});setMenu(null)}}>Split group</button><button role="menuitem" onClick={()=>{setMenu(null);setConfirm({text:`Dissolve ${team.name}? Its Knights remain in this Kingdom.`,run:()=>mutate({version,operation:'remove',group_ids:[team.id]})})}}>Dissolve group</button></>:context?<><button role="menuitem" onClick={()=>{setMenu(null);setDraft({kind:'inspect',computer:context})}}>View work, Apprentices and services</button><button role="menuitem" onClick={()=>edit(null,[context.id])}>Make group with this Knight</button>{groups.map(g=><button key={g.id} role="menuitem" onClick={()=>{if(hierarchy.groups_read_only)return;edit(g);setDraft(old=>({...old,members:[...new Set([...g.members,context.id])]}))}}>Add to {g.name}</button>)}{grouped.has(context.id)&&<button role="menuitem" onClick={()=>{setMenu(null);setConfirm({text:`Remove ${context.name} from its group?`,run:()=>mutate({version,operation:'unassign',members:[context.id]})})}}>Remove from group</button>}</>:null}
    <button role="menuitem" onClick={()=>{setMenu(null);setDraft({kind:'visibility'})}}>Offline list timeout</button><button role="menuitem" onClick={()=>setMenu(null)}>Close menu</button>
   </div>}
   {draft&&<Modal title={({save:'Group settings',combine:'Combine groups',split:'Split group',inspect:draft.computer?.name,visibility:'Offline list timeout'})[draft.kind]} busy={busy} onClose={close}>

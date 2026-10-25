@@ -54,6 +54,37 @@ def test_pending_tool_or_approval_is_not_blindly_replayed():
     assert service.calls == 1
 
 
+def test_completed_governed_tool_resumes_same_agent_without_resubmission():
+    service=ScriptedService([('waiting_review','waiting_tools'),('completed','completed')])
+    service.agent['pending']=[{'task_id':'existing-task'}]
+    service.engine=SimpleNamespace(tasks=SimpleNamespace(get=lambda ident:{'status':'completed'}))
+    asyncio.run(BackgroundRequests(lambda:service)._run('job'))
+    assert service.calls==2
+    assert service.current['status']=='completed'
+
+
+def test_waits_for_existing_queued_tool_then_collects_it_once(monkeypatch):
+    service=ScriptedService([('waiting_review','waiting_tools'),('completed','completed')])
+    service.agent['pending']=[{'task_id':'existing-task'}]
+    polls=[]
+    def task(ident):
+        polls.append(ident)
+        return {'status':'queued' if len(polls)==1 else 'completed'}
+    service.engine=SimpleNamespace(tasks=SimpleNamespace(get=task))
+    runner=BackgroundRequests(lambda:service,poll_interval=0)
+    asyncio.run(runner._run('job'))
+    assert service.calls==2 and polls==['existing-task','existing-task']
+
+
+def test_waiting_approval_and_unknown_task_do_not_resume():
+    for task in ({'status':'waiting_approval'},None,{'status':'failed'},{'status':'recovery_required'}):
+        service=ScriptedService([('waiting_review','waiting_tools')])
+        service.agent['pending']=[{'task_id':'existing-task'}]
+        service.engine=SimpleNamespace(tasks=SimpleNamespace(get=lambda ident:task))
+        asyncio.run(BackgroundRequests(lambda:service)._run('job'))
+        assert service.calls==1
+
+
 def test_completed_request_is_never_repeated():
     assert run_fixture([('completed', 'completed')]).calls == 1
 

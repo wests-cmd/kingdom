@@ -3,8 +3,9 @@ import asyncio
 
 
 class BackgroundRequests:
-    def __init__(self, service):
+    def __init__(self, service, poll_interval=1):
         self.service, self.active = service, {}
+        self.poll_interval = poll_interval
 
     def status(self):
         return {'active_request_ids': list(self.active), 'max_parallel': 1,
@@ -66,13 +67,12 @@ class BackgroundRequests:
                 if not agent:
                     break
 
-                if agent.get('status') != 'ready':
-                    break
-
                 if agent.get('error'):
                     break
-
-                if agent.get('pending'):
+                if agent.get('status')=='waiting_tools':
+                    if not await self._wait_for_tools(service,ident,original_agent_session_id,deadline):
+                        break
+                elif agent.get('status')!='ready' or agent.get('pending'):
                     break
 
                 if deadline - loop.time() <= 0:
@@ -98,6 +98,31 @@ class BackgroundRequests:
             )
         finally:
             self.active.pop(ident, None)
+
+    async def _wait_for_tools(self,service,ident,agent_id,deadline):
+        """Observe durable task identities; never submit, approve or retry work.
+
+        Completion only allows the native agent collector to verify receipts.
+        Failed, missing, interrupted and approval-held tasks still need review.
+        Waiting consumes the existing wall-clock budget, not new model chunks.
+        """
+        engine=getattr(service,'engine',None)
+        if engine is None:return False
+        while asyncio.get_running_loop().time()<deadline:
+            current=service.get(ident)
+            if current.get('status')!='waiting_review' or current.get('agent_session_id')!=agent_id or current.get('error'):
+                return False
+            agent=service.agents.get(agent_id)
+            pending=agent.get('pending',[]) if agent else []
+            if not agent or agent.get('error') or agent.get('status')!='waiting_tools' or not pending:
+                return False
+            tasks=[engine.tasks.get(record.get('task_id')) for record in pending]
+            if any(not task or task.get('status','').lower() not in {'queued','running','completed','succeeded'} for task in tasks):
+                return False
+            if all(task['status'].lower() in {'completed','succeeded'} for task in tasks):
+                return True
+            await asyncio.sleep(min(self.poll_interval,max(0,deadline-asyncio.get_running_loop().time())))
+        return False
 
     async def stop(self):
         tasks = list(self.active.values())
