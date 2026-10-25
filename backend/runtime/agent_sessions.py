@@ -324,6 +324,15 @@ class AgentSessionService:
                 except Exception:
                     state.update(status='needs_review',error='Scoped knowledge retrieval failed; check its embedding connection. No model turn was dispatched.')
                     return self._save(state)
+            completed_sequence=state.get('tool_sequence',[])
+            if (state.get('tool_protocol')=='structured' and state.get('tool_paths')
+                    and completed_sequence and state.get('tool_sequence_index',0)==len(completed_sequence)
+                    and not state.get('pending')
+                    and set(state.get('required_tools',[]))<=set(state.get('verified_tools_since_review',[]))):
+                state['messages'].append({'role':'assistant','content':'Ordered file operations have verified execution receipts. Independent application tests and review are still required.'})
+                self._event(state,'controller_completed')
+                state['status']='completed'
+                return self._save(state)
             available = {name: item for name, item in TOOLS.items()
                          if (name != 'process_run' or state['allow_process'])
                          and (not name.startswith('desktop_') or state.get('desktop_window_title'))

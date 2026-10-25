@@ -49,3 +49,11 @@ path per stage. Read/list stages dispatch the normal governed task without
 model inference. Write stages ask only for content; a model-supplied path is
 rejected. The existing workspace resolver still checks containment and symlinks
 at dispatch. This reduces argument errors, not the independent correctness bar.
+
+
+Verified bound file sequences finish with a controller-generated execution
+summary instead of an additional inference. Completion still requires the
+ordered tool receipts and every declared required tool; it is not application
+acceptance. Provider failures and interrupted inference hold the independent
+job without consuming code-repair attempts. Background deadlines propagate to
+the agent with a maximum 600-second inner run; they are never renewed.

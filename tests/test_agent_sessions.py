@@ -93,7 +93,7 @@ async def test_bound_read_write_read_uses_model_only_for_content(setup):
         state=await service.advance(state['id'])
         assert state['tool_sequence_index']==index+1
     state=await service.advance(state['id'])
-    assert state['status']=='completed' and len(engine.requests)==2
+    assert state['status']=='completed' and len(engine.requests)==1
     schema=engine.requests[0][1]['response_format']['json_schema']['schema']
     assert 'path' not in schema['properties'] and schema['required']==['content']
 
@@ -104,6 +104,17 @@ async def test_bound_path_cannot_be_overridden_by_model(setup):
     state=service.create('Repair','local',tool_sequence=['workspace_write'],tool_protocol='structured',tool_paths=['test.py'])
     state=await service.advance(state['id'])
     assert state['status']=='needs_review' and not engine.records
+
+
+@pytest.mark.asyncio
+async def test_bound_completion_requires_all_declared_tool_evidence(setup):
+    service,engine,_=setup([reply('Done')])
+    state=service.create('Read and write','local',tool_sequence=['workspace_read'],
+                         tool_protocol='structured',tool_paths=['test.py'],required_tools=['workspace_write'])
+    state['tool_sequence_index']=1
+    service._save(state)
+    state=await service.advance(state['id'])
+    assert state['status']=='needs_review' and len(engine.requests)==1
 
 
 @pytest.mark.parametrize('paths,sequence,protocol',[
