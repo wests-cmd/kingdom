@@ -34,3 +34,15 @@ def test_verified_success_can_restore_preference_without_overriding_grants():
     assert offload_candidate(registry,'compute',outcomes=history)=='steady'
     items[1].last_heartbeat=time.time()-60
     assert offload_candidate(registry,'compute',outcomes=history) is None
+
+
+def test_shadow_selector_only_sees_current_eligible_workers():
+    items=nodes();registry=SimpleNamespace(list_nodes=lambda:items)
+    report={}
+    items[0].granted_capabilities=[]
+    assert offload_candidate(registry,'compute',decision_report=report)=='steady'
+    assert report['knights']==['steady'] and report['affects_execution'] is False
+    items[1].last_heartbeat=time.time()-60
+    report={}
+    assert offload_candidate(registry,'compute',decision_report=report) is None
+    assert report['knights']==[] and report['count']==0

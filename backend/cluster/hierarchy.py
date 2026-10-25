@@ -75,9 +75,10 @@ class CommandHierarchy:
         return display_hierarchy(result, self.db)
 
 
-def offload_candidate(registry, capability, members=None, outcomes=None, tool=None, busy_nodes=None, estimated_seconds=None):
+def offload_candidate(registry, capability, members=None, outcomes=None, tool=None, busy_nodes=None, estimated_seconds=None, decision_report=None):
     now = time.time()
     candidates = []
+    selector_candidates = []
     for node in registry.list_nodes():
         if node.node_id in (busy_nodes or set()): continue
         if node.is_local or not node.public_identity or node.node_state not in {'APPROVED','CONNECTED'} or now - node.last_heartbeat > 45 or node.health != 'healthy' or node.current_task:
@@ -104,4 +105,16 @@ def offload_candidate(registry, capability, members=None, outcomes=None, tool=No
         # A smoothed failure penalty cannot override eligibility or capacity.
         penalty = 60 * failures / (successes + failures + 2)
         candidates.append((cpu + memory + penalty, node.node_id))
+        selector_candidates.append({'id': node.node_id, 'fit': 1, 'idle': 1,
+                                    'memory_headroom': 1-memory/100,
+                                    'success': successes/(successes+failures) if successes+failures else 0,
+                                    'load': (cpu+memory)/200})
+    if decision_report is not None:
+        from backend.models.decision_selectors import recommend_knights
+        try:
+            decision_report.update(recommend_knights(selector_candidates, independent_tasks=1,
+                                                     owner_parallel_limit=1))
+            decision_report['affects_execution'] = False
+        except (OSError, ValueError, KeyError, TypeError):
+            decision_report.update({'mode': 'unavailable', 'affects_execution': False})
     return min(candidates)[1] if candidates else None

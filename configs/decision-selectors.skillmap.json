@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "map_id": "kingdom-decision-selectors",
+  "capabilities": [],
+  "skills": [
+    {"skill_id": "installed-model-selection", "capabilities": [], "provider_ids": []},
+    {"skill_id": "eligible-knight-selection", "capabilities": [], "provider_ids": []}
+  ],
+  "providers": [],
+  "preferred_resources": [],
+  "constraints": {"read_only": true, "timeout_seconds": 10, "max_tests": 5},
+  "metadata": {
+    "title": "Kingdom local decision selectors",
+    "author": "Kingdom",
+    "description": "Two small resource preference models trained on synthetic policy examples. Shadow mode. Requires the matching Kingdom runtime and artifact bundle. Import grants no tools and installs no code."
+  },
+  "test_results": []
+}

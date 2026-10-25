@@ -84,6 +84,8 @@ class ModelService:
             if ident == 'auto':
                 from backend.models.selection import selection_reason
                 result['selection'] = selection_reason(profile)
+                from backend.models.decision_selectors import shadow_models
+                result['selection']['decision_selector'] = shadow_models(candidates)
             return result
 
     async def _generate_connection(self, prompt, profile, images):
@@ -215,6 +217,8 @@ class ModelService:
             if automatic:
                 from backend.models.selection import selection_reason
                 payload['kingdom_selection'] = selection_reason(profile)
+                from backend.models.decision_selectors import shadow_models
+                payload['kingdom_selection']['decision_selector'] = shadow_models(candidates)
             self._record(payload.get('usage') or {})
             return payload
 

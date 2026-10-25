@@ -32,6 +32,7 @@ subprocess.run([
     "--add-data", f"{root / 'frontend' / 'dist'}:frontend/dist",
     "--add-data", f"{root / 'migrations'}:migrations",
     "--add-data", f"{root / 'configs' / 'install_profiles.json'}:configs",
+    "--add-data", f"{root / 'backend' / 'models' / 'decision_artifacts'}:backend/models/decision_artifacts",
     "--add-data", f"{manifest}:.",
     str(root / "scripts" / "desktop_backend.py"),
 ], cwd=root, check=True)

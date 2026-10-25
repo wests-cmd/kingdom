@@ -155,3 +155,18 @@ def test_model_lab_api_requires_owner():
     app = FastAPI(); app.include_router(router)
     with TestClient(app) as client:
         assert client.get('/model-lab').status_code in {401, 403, 503}
+        assert client.get('/model-lab/decision-selectors/status').status_code in {401, 403, 503}
+
+
+def test_decision_status_reports_real_artifacts_and_no_promotion():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from backend.runtime.model_lab_api import router
+    from backend.security.http_auth import require_owner
+    app = FastAPI(); app.include_router(router)
+    app.dependency_overrides[require_owner] = lambda: 'owner'
+    with TestClient(app) as client:
+        result = client.get('/model-lab/decision-selectors/status')
+    assert result.status_code == 200
+    assert result.json()['artifact_hashes_verified'] is True
+    assert result.json()['mode'] == 'shadow'
