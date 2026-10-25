@@ -41,7 +41,8 @@ def edit(service, expected, operation, *, group_ids=(), name='', captain='', mem
         conn.execute('BEGIN IMMEDIATE')
         groups=[json.loads(row[0]) for row in conn.execute('SELECT data_json FROM command_groups ORDER BY rowid')]
         if expected!=version(groups):raise ValueError('Teams changed on another screen; reload before saving')
-        selected=[g for g in groups if g['id'] in group_ids]
+        by_id={g['id']:g for g in groups}
+        selected=[by_id[ident] for ident in group_ids if ident in by_id]
         if len(selected)!=len(group_ids):raise ValueError('A selected team no longer exists')
         if operation=='save':
             if len(selected)>1 or not members or captain not in members:

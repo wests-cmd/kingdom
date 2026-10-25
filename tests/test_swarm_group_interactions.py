@@ -38,9 +38,10 @@ def test_combine_split_extra_in_first_and_stale_revision_rejected(tmp_path):
     a=service.create_group('A','0',['0','1','2'])
     b=service.create_group('B','3',['3','4'])
     old=service.group_version()
-    change(service,'combine',group_ids=[a['id'],b['id']],name='Together')
+    change(service,'combine',group_ids=[b['id'],a['id']],name='Together')
     group=service.groups()[0]
     assert len(group['members'])==5
+    assert group['captain']=='3'
     with pytest.raises(ValueError,match='changed'):
         service.edit_groups(old,'remove',group_ids=[group['id']])
     change(service,'split',group_ids=[group['id']],names=['First','Second'])

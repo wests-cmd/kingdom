@@ -7,9 +7,13 @@ def display_hierarchy(result, database):
         conn.execute('CREATE TABLE IF NOT EXISTS computer_display_names(node_id TEXT PRIMARY KEY, username TEXT NOT NULL, computer TEXT NOT NULL)')
         names = {row[0]: {'username': row[1], 'computer': row[2]} for row in conn.execute('SELECT node_id,username,computer FROM computer_display_names')}
         conn.commit()
-    local = names.get('local', {'username': getpass.getuser(), 'computer': result['commander']['computer']})
+    local = names.get('local')
+    if local is None:
+        try: username=getpass.getuser()
+        except (KeyError,OSError): username=''
+        local={'username':username,'computer':result['commander']['computer']}
     result['commander'].update(username=local['username'], display_computer=local['computer'])
-    labels = {'local': local['username'] + ' · ' + local['computer']}
+    labels = {'local': (local['username'] + ' · ' if local['username'] else '') + local['computer']}
     for node in result['knights'] + result.get('archived_knights', []):
         name = names.get(node['node_id'])
         if name:

@@ -28,7 +28,7 @@ def setup(tmp_path,monkeypatch,permitted=lambda:True):
         payload=message['payload']
         checked=verify_request_result(task(),payload['output'],allow_local_model=False)
         assert checked['state']=='VERIFIED'
-        return {'completed':{'id':'job','status':'completed','result':{'verification':checked}}}
+        return {'completed':{'id':'job','status':'completed','result':{'verification':checked,'executed_by':'worker'}}}
     worker=PeerAnalysis(Database(tmp_path/'worker.db'),SimpleNamespace(get_node=lambda _:node),
                         KingdomIdentity('worker'),permitted,exchange,lambda *a:events.append(a))
     return worker,node,calls,events

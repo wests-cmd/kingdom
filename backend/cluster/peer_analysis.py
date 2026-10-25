@@ -87,7 +87,9 @@ class PeerAnalysis:
             result=await send('task_result',payload)
             completed=result.get('completed',{})
             verified=(completed.get('result') or {}).get('verification',{}).get('state')=='VERIFIED'
-            if payload['status']=='completed' and (completed.get('id')!=task['id'] or not verified):
+            if payload['status']=='completed' and (completed.get('id')!=task['id'] or not verified
+                    or str(completed.get('status','')).lower()!='completed'
+                    or (completed.get('result') or {}).get('executed_by')!=self.identity.node_id):
                 raise ValueError('Controller did not independently verify the result')
             state='verified' if payload['status']=='completed' else 'failed'
             self.publish('cluster.native_analysis_'+state,{'task_id':task['id'],'controller_id':peer_id,'worker_id':self.identity.node_id})
