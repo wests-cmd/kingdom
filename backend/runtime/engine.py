@@ -284,6 +284,9 @@ class RuntimeEngine:
 
     def authorize_task(self, task, *, execution_node=None, execution_capability=None):
         """Same exact owner approval boundary for local execution and remote dispatch."""
+        from backend.runtime.standing_review import task_allowed
+        if not task_allowed(self,task):
+            return {'authorized':False,'reason':'Standing review consent or exact mission task binding changed','approval_id':None}
         actor = task["metadata"].get("actor", "system")
         capability = task["metadata"].get("capability", "node.execute")
         approval_id = task["metadata"].get("approval_id")

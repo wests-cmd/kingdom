@@ -18,6 +18,7 @@ def test_all_programme_routes_require_owner_and_validation_hides_private_input(m
     client = TestClient(app)
     for path, method in [('/work-programmes','get'),('/work-programmes','post'),
             ('/work-programmes/a/settings','post'),('/work-programmes/a/plan-next','post'),
+            ('/work-programmes/a/standing-review','post'),
             ('/work-programmes/a/items/s1-t1/approve','post'),
             ('/work-programmes/a/items/s1-t1/answer','post'),
             ('/work-programmes/a/items/s1-t1/chatgpt-response','post'),
@@ -35,6 +36,9 @@ def test_strict_request_has_no_implicit_execution_or_extra_grants():
             api.NewProgramme(project='kingdom', idempotency_key='sample', text='Check recovery', **extra)
     with pytest.raises(ValidationError):
         api.Settings(enabled='true', expected_revision=1)
+    with pytest.raises(ValidationError):
+        api.StandingReview(expected_revision=1,scope={'enabled':True,'write_prefix':'projects/reviewed',
+            'grants':['process.execute']})
 
 
 def test_owner_can_answer_saved_question_once_over_http(runtime, monkeypatch):

@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
 from backend.security.http_auth import require_owner
+from backend.runtime.standing_review import FunctionReviewScope
 
 router = APIRouter(prefix='/work-programmes', dependencies=[Depends(require_owner)])
 _service = None
@@ -37,6 +38,10 @@ class Revision(BaseModel):
 
 class Settings(Revision):
     enabled: bool
+
+
+class StandingReview(Revision):
+    scope: FunctionReviewScope
 
 
 class Answer(Revision):
@@ -79,6 +84,11 @@ async def plan(ident: str, request: Revision):
         raise HTTPException(404, 'Saved programme not found') from error
     except (ValueError, TypeError) as error:
         raise HTTPException(409, 'Programme changed; reload its checkpoint') from error
+
+
+@router.post('/{ident}/standing-review')
+def standing_review(ident: str, request: StandingReview):
+    return boundary(lambda: service().configure_standing_review(ident,request.scope.model_dump(),request.expected_revision))
 
 
 @router.post('/{ident}/items/{key}/approve')

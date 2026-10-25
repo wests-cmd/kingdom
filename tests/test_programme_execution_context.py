@@ -54,4 +54,3 @@ def test_function_planner_is_told_the_required_case_profile_contract(runtime):
     prompt=engine.models.plan_chat.await_args.args[0]
     assert 'case_profile' in prompt and 'bounded_batch_size.v1' in prompt
     assert 'repair_source' in prompt and 'input_from' in prompt
-

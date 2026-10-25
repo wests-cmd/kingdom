@@ -173,6 +173,9 @@ class MissionService:
                     for row in [*section['items'], section['integration']]:
                         if row.get('mission_id') == ident and row['planning'] != 'reviewed':
                             return True
+                        if row.get('mission_id') == ident and row.get('review_basis'):
+                            from backend.runtime.standing_review import dispatch_allowed
+                            if not dispatch_allowed(self.engine,state,row,self.get(ident)):return True
         return False
 
     def _backlog_tracking(self, ident):
