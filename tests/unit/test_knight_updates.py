@@ -181,7 +181,7 @@ def test_signed_transport_relay_binds_pending_peer_operation_and_rejects_replay(
     monkeypatch.setattr(database_module, 'db', database)
     local = identity.BaseNodeIdentity('local', 'commander')
     peer = identity.BaseNodeIdentity('peer', 'commander')
-    node = SimpleNamespace(node_state='CONNECTED', kingdom_id='local', public_identity=peer.get_public_identity())
+    node = SimpleNamespace(node_state='CONNECTED', kingdom_id='local', public_identity=peer.get_public_identity(), connection_metadata={})
     registry = SimpleNamespace(get_node=lambda ident: node if ident == 'peer' else None)
     monkeypatch.setattr(registry_module, 'node_registry', registry)
     monkeypatch.setattr(transport, 'node_registry', registry)
