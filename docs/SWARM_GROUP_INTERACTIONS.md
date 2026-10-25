@@ -34,7 +34,8 @@ authoritative group editing is a separate federation feature.
 Previously the maintained peer link exchanged heartbeat/inventory data but did
 not run a native task consumer. A queued analysis could remain queued despite a
 green connection. The connection lifecycle now runs a bounded pure-analysis
-consumer after verified reconnection. It needs a running level-five runtime,
+consumer after verified reconnection. It needs a running safe-analysis or bounded
+runtime (levels 1, 3, 4 or 5; paused and approve-every-task modes are held),
 an installed coder with compute permission in both local permission stores,
 an approved peer compute grant, fresh health, battery and capacity checks.
 
@@ -45,6 +46,9 @@ assignment/lease/fencing, stores a bounded durable result, and submits a signed
 result for independent controller recomputation. An exact repeated lease reuses
 the durable result. A failed analysis does not turn a healthy connection red.
 Native polls ask the controller to honor its stopped runtime state.
+An operator-installed private listener must explicitly opt into `analysis_enabled`;
+its default continues to permit reports only. Even with opt-in, other execution
+RPCs and non-analysis tools remain unavailable through that listener.
 
 This closes a specific autonomous dispatch gap. It does not demonstrate general
 repository editing, independent engineering review, integration testing or

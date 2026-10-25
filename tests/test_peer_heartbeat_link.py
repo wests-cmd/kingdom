@@ -9,6 +9,21 @@ spec.loader.exec_module(link)
 
 
 class HeartbeatBoundaryTests(unittest.TestCase):
+    def test_native_analysis_opt_in_never_exposes_other_execution(self):
+        config={'identity':{'node_id':'controller'}}
+        message={'target_id':'controller','msg_type':'task_poll','payload':{
+            'require_running':True,'supported_tools':['text.analyze@1.0.0']}}
+        with self.assertRaises(ValueError):link.validate_mesh_rpc(message,config)
+        config['analysis_enabled']=True
+        link.validate_mesh_rpc(message,config)
+        for tool in ('process.run@1.0.0','build.run@1.0.0','workspace.read@1.0.0'):
+            with self.subTest(tool=tool),self.assertRaises(ValueError):
+                link.validate_mesh_rpc({**message,'payload':{'require_running':True,'supported_tools':[tool]}},config)
+        for kind in ('knight_management','group_task_assign','task_submit'):
+            with self.subTest(kind=kind),self.assertRaises(ValueError):link.validate_mesh_rpc({**message,'msg_type':kind},config)
+        with self.assertRaises(ValueError):link.validate_mesh_rpc({**message,'payload':{'supported_tools':['text.analyze@1.0.0']}},config)
+        with self.assertRaises(ValueError):link.validate_mesh_rpc({'target_id':'controller','msg_type':'task_result','payload':{
+            'status':'completed','output':{'kind':'native_tool','tool':'process.run@1.0.0'}}},config)
     def test_only_expected_identity_target_and_message_type(self):
         message = dict(sender_id='a', target_id='b', msg_type='heartbeat', protocol_version='kingdom.cluster.v1')
         self.assertEqual(link.validate_envelope(message, 'a', 'b', 'heartbeat'), message)

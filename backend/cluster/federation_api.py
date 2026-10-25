@@ -160,7 +160,7 @@ async def consume_peer_analysis(node_id):
         from backend.cluster.peer_analysis import PeerAnalysis
         def permitted():
             coder=engine.swarm.registry.get('coder')
-            return (engine.status()['running'] and engine.execution_policy.get()['level']==5 and coder is not None
+            return (engine.status()['running'] and engine.execution_policy.get()['level'] in {1,3,4,5} and coder is not None
                     and 'compute' in engine.security.nodes.get_node_capabilities('coder')
                     and 'compute' in coder.zero_trust.nodes.get_node_capabilities('coder'))
         async def exchange(peer_id,message):

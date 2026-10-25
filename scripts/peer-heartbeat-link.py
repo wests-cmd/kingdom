@@ -1,4 +1,4 @@
-"""Operator-installed TLS peer transport; never forwards execution RPCs.
+"""Operator-installed TLS peer transport with optional bounded native analysis.
 
 The local Kingdom remains authoritative for identity, revocation and replay checks.
 Server has no owner token. Client uses its own token only on local loopback.
@@ -15,6 +15,34 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 LIMIT = 262144
+ANALYSIS_TOOLS={'text.analyze@1.0.0','code.python.analyze@1.0.0'}
+
+
+def validate_mesh_rpc(message, config):
+    kind=message.get('msg_type')
+    if message.get('target_id')!=config['identity']['node_id']:
+        raise ValueError('Wrong target')
+    if kind in {'heartbeat','inventory_snapshot','mesh_roster_request','mesh_roster_response'}:
+        return
+    if config.get('analysis_enabled') is not True or kind not in {'task_poll','task_result'}:
+        raise ValueError('Execution RPC is not exposed by the peer listener')
+    payload=message.get('payload')
+    if not isinstance(payload,dict):raise ValueError('Expected a typed analysis payload')
+    if kind=='task_poll':
+        tools=payload.get('supported_tools')
+        if (not isinstance(tools,list) or not tools or len(tools)>2
+                or any(not isinstance(t,str) or t not in ANALYSIS_TOOLS for t in tools)
+                or len(set(tools))!=len(tools) or payload.get('require_running') is not True):
+            raise ValueError('Only stopped-state-aware native analysis polls are supported')
+    else:
+        if payload.get('status') not in {'completed','failed'}:
+            raise ValueError('Expected an analysis result')
+        if payload['status']=='completed':
+            output=payload.get('output')
+            if not isinstance(output,dict) or output.get('kind')!='native_tool' or output.get('tool') not in ANALYSIS_TOOLS:
+                raise ValueError('Only pure analysis results are supported')
+    # Native RPC still verifies signature, current compute grant, exact lease,
+    # fencing and independently recomputes the actual assigned tool result.
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -88,10 +116,7 @@ def make_handler(config):
                     if not isinstance(message, dict):
                         raise ValueError('Expected an object')
                     if self.path == '/nodes/rpc':
-                        if message.get('msg_type') not in {'heartbeat', 'inventory_snapshot', 'mesh_roster_request', 'mesh_roster_response'}:
-                            raise ValueError('Execution RPC is not exposed by the peer listener')
-                        if message.get('target_id') != config['identity']['node_id']:
-                            raise ValueError('Wrong target')
+                        validate_mesh_rpc(message,config)
                     identity(config['local'], config['identity'])
                     result = request(config['local'] + self.path, message)
                     body = json.dumps(result).encode()
