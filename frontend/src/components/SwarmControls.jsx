@@ -1,11 +1,12 @@
 import React, {useState} from 'react'
 import api from '../api'
 import TaskTypePriorities from './TaskTypePriorities'
+import {computerName} from './common/computerName'
 const labels=value=>value.split(',').map(item=>item.trim()).filter(Boolean)
 export default function SwarmControls({hierarchy}) {
  const [name,setName]=useState(''),[members,setMembers]=useState([]),[captain,setCaptain]=useState(''),[flags,setFlags]=useState(''),[preferred,setPreferred]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[groups,setGroups]=useState(null),[drafts,setDrafts]=useState({}),[saved,setSaved]=useState({})
  const nodes=(hierarchy.knights||[]).filter(node=>['APPROVED','CONNECTED'].includes(node.node_state))
- const title=id=>nodes.find(node=>(node.node_id||node.id)===id)?.hostname||id
+ const title=id=>{const node=nodes.find(node=>(node.node_id||node.id)===id);return computerName(node?.display_username,node?.display_computer||node?.hostname,id)}
  const teams=groups||hierarchy.groups||[]
  const action=async work=>{setBusy(true);try{await work()}catch(error){setMessage(error.response?.data?.detail||'Change failed. Reload current state before retrying.')}finally{setBusy(false)}}
  return <section className="panel swarm-controls" aria-label="Swarm teams and access"><h3>Teams and access</h3>
