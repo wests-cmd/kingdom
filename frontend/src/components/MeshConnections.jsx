@@ -1,6 +1,7 @@
 import React, {useState} from 'react'
 import api from '../api'
 import useLiveData from '../hooks/useLiveData'
+import {peerConnectionLabel} from './common/peerConnection'
 
 export default function MeshConnections({hierarchy}) {
   const {data: mesh, error} = useLiveData('/federation/mesh', 15000)
@@ -14,12 +15,13 @@ export default function MeshConnections({hierarchy}) {
     finally { setBusy(false) }
   }
   const names = new Map((hierarchy?.knights || []).map(n => [n.node_id || n.id, n.display_username || n.hostname || n.node_id || n.id]))
+  const peers = new Map((hierarchy?.knights || []).map(n => [n.node_id || n.id, n]))
   return <section className="panel" aria-label="Automatic Knight connections">
     <h3>Automatic Knight connections</h3>
     <p>Join once, then connect to every approved Knight. Choose one computer to keep the approved member list. This shares connections and activity reports; task permissions stay separate.</p>
     {error && <p role="alert">Connection settings are unavailable. This installation may need its backend updated.</p>}
     {mesh && <p>{mesh.enabled ? `Membership authority: ${names.get(mesh.authority_id) || mesh.authority_id}` : 'Automatic group joining has not been set up on this computer.'}</p>}
-    {links && <ul>{Object.entries(links.peers || {}).map(([id, status]) => <li key={id}>{names.get(id) || id}: {({verified:'Connection verified', retrying:'Retrying connection', endpoint_required:'Needs a reachable address', membership_expired:'Temporary membership ended'})[status] || status}</li>)}</ul>}
+    {links && <ul>{Object.entries(links.peers || {}).map(([id, status]) => <li key={id}>{names.get(id) || id}: {peerConnectionLabel(status, peers.get(id))}</li>)}</ul>}
     <details><summary>Set up or join this Kingdom</summary>
       <label>This computer’s reachable HTTPS address<input type="url" value={local} onChange={e => setLocal(e.target.value)} placeholder="https://this-knight.example" /></label>
       <details><summary>Private certificate trust, if needed</summary><label>Trusted public CA certificates<textarea value={ca} onChange={e => setCa(e.target.value)} rows={3} placeholder="Public PEM certificates only" /></label></details>
