@@ -64,7 +64,7 @@ def test_three_backend_automatic_mesh(tmp_path):
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0)); port = sock.getsockname()[1]
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'mesh-test')])
+        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, node['identity']['node_id'])])
         now = datetime.datetime.now(datetime.timezone.utc)
         cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
             .serial_number(x509.random_serial_number()).not_valid_before(now - datetime.timedelta(minutes=1))
@@ -110,6 +110,11 @@ def test_three_backend_automatic_mesh(tmp_path):
             nodes.append(node); start(node)
             listen(node)
         ca_bundle = ''.join(certificates)
+        import ssl
+        context = ssl.create_default_context(cadata=ca_bundle)
+        for node in nodes:
+            with urllib.request.urlopen(node['peer_url'] + '/nodes/identity', context=context, timeout=5) as response:
+                assert json.load(response) == node['identity']
         authority = nodes[0]
         invoke(authority, '/federation/mesh', {'authority_id': authority['identity']['node_id'],
                                              'local_endpoint': authority['peer_url'], 'ca_pem':ca_bundle}, method='PUT')
@@ -142,6 +147,13 @@ def test_three_backend_automatic_mesh(tmp_path):
         (tmp_path / 'mesh-receipt.json').write_text(json.dumps({'result': 'passed', 'nodes': [n['identity']['node_id'] for n in nodes],
             'automatic_pairs': 3, 'directions': 6, 'restart': True, 'revocation': True, 'new_grants': 0,
             'transport':'HTTPS through real restricted peer listeners'}), encoding='utf-8')
+    except Exception:
+        diagnostics = []
+        for node in nodes:
+            try: diagnostics.append({'port':node['port'], 'links':invoke(node,'/federation/connections/status'), 'membership':invoke(node,'/federation/mesh')})
+            except OSError: pass
+        (tmp_path / 'failure-status.json').write_text(json.dumps(diagnostics), encoding='utf-8')
+        raise
     finally:
         for node in nodes:
             stop(node)
