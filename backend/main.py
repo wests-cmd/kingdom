@@ -67,6 +67,8 @@ from backend.cluster.hierarchy_api import router as hierarchy_router
 app.include_router(hierarchy_router)
 from backend.cluster.federation_api import router as federation_router, peer_connections
 app.include_router(federation_router)
+from backend.cluster.mesh_api import router as mesh_router
+app.include_router(mesh_router)
 from backend.system.ui_update_api import router as ui_update_router
 app.include_router(ui_update_router)
 from backend.accessibility import router as accessibility_router

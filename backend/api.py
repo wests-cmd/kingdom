@@ -125,6 +125,7 @@ class NodePairRequest(BaseModel):
     requested_capabilities: list[str] = Field(default_factory=list)
     signature: str | None = None
     is_local: bool = False
+    mesh_endpoint: str | None = Field(default=None, max_length=500)
 
 class NodeApproveRequest(BaseModel):
     granted_capabilities: list[str] = Field(default_factory=list)
@@ -893,6 +894,15 @@ def handle_cluster_rpc(request: RPCMessageRequest):
     sender_id = verified["sender_id"]
     msg_type = verified["msg_type"]
     payload = verified["payload"]
+    if msg_type in {'mesh_roster_request', 'mesh_roster_response'}:
+        from backend.cluster.mesh_api import membership
+        try:
+            mesh = membership()
+            if msg_type == 'mesh_roster_request':
+                return transport.create_signed_message(sender_id, 'mesh_roster_response', mesh.export(sender_id))
+            return mesh.receive(sender_id, payload)
+        except (ValueError, KeyError, TypeError) as error:
+            raise HTTPException(403, 'Membership synchronization rejected') from error
     if payload.get("node_id", sender_id) != sender_id:
         raise HTTPException(status_code=403, detail="RPC payload identity differs from authenticated sender")
 
@@ -1029,6 +1039,7 @@ def process_node_pairing(request: NodePairRequest):
         "knight_public_identity": request.knight_public_identity,
         "requested_capabilities": request.requested_capabilities,
         "signature": request.signature,
+        "mesh_endpoint": request.mesh_endpoint,
         "is_local": request.is_local
     }
     res = pairing_manager.process_pairing_request(req_payload)

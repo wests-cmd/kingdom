@@ -4,6 +4,7 @@ import SwarmGraph from "../components/graphs/SwarmGraph"
 import ComputerIdentity from "../components/ComputerIdentity"
 import OrchestrationBoard from '../components/OrchestrationBoard'
 import ComputerTopology from '../components/ComputerTopology'
+import MeshConnections from '../components/MeshConnections'
 
 export default function Swarm({interfaceMode='easy'}) {
   const [view,setView]=useState(interfaceMode==='easy'?'network':'activity')
@@ -17,6 +18,7 @@ export default function Swarm({interfaceMode='easy'}) {
   return (
     <div style={{minWidth:0,overflowWrap:"anywhere"}}>
       <ComputerIdentity data={hierarchy} error={hierarchyError}/>
+      <MeshConnections hierarchy={hierarchy}/>
       <div className="action-row" aria-label="Swarm views"><button aria-pressed={view==='activity'} onClick={()=>setView('activity')}>Activity</button><button aria-pressed={view==='network'} onClick={()=>setView('network')}>Network map</button></div>
       {view==='network'?<ComputerTopology hierarchy={hierarchy} advanced={interfaceMode==='advanced'}/>:<>
       <OrchestrationBoard/>

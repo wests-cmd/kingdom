@@ -1,16 +1,25 @@
 """Maintain every explicitly approved peer link without granting membership."""
 import asyncio
+import time
 
 
 class PeerConnections:
-    def __init__(self, registry, reconnect, events, interval=15):
+    def __init__(self, registry, reconnect, events, interval=15, refresh=None):
         self.registry, self.reconnect, self.events = registry, reconnect, events
         self.interval = interval
         self.task = None
         self.status = {}
         self.limit = asyncio.Semaphore(4)
+        self.refresh = refresh
 
     async def tick(self):
+        if self.refresh:
+            try:
+                await asyncio.wait_for(self.refresh(), timeout=35)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                pass  # An unavailable authority must not prevent existing links.
         peers = {n.node_id: n for n in self.registry.list_nodes()
                  if not n.is_local and (n.public_identity or {}).get('node_type') == 'commander'
                  and n.node_state in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}}
@@ -22,6 +31,10 @@ class PeerConnections:
                 node = self.registry.get_node(node_id)
                 if not node or node.node_state not in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}:
                     self.status.pop(node_id, None)
+                    return
+                deadline = (node.connection_metadata or {}).get('membership_expires_at')
+                if deadline is not None and deadline <= time.time():
+                    self.status[node_id] = 'membership_expired'
                     return
                 if not (node.connection_metadata or {}).get('kingdom_endpoint'):
                     state = 'endpoint_required'

@@ -124,6 +124,10 @@ class RPCSecureTransport:
             pub_identity = self.identity.get_public_identity()
             pub_key_hex = pub_identity.get("public_key_hex")
         elif sender_node:
+            deadline = (sender_node.connection_metadata or {}).get('membership_expires_at')
+            import math
+            if deadline is not None and (type(deadline) not in (int, float) or not math.isfinite(deadline) or deadline <= now):
+                return {'valid': False, 'error': 'Temporary Knight membership expired'}
             # Enforce Kingdom identity matching: Node must belong to this specific Kingdom
             target_k_id = sender_node.kingdom_id
             if target_k_id and target_k_id != self.identity.node_id:

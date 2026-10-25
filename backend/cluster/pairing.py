@@ -101,7 +101,16 @@ class PairingManager:
         except ValueError:
             return {"success": False, "error": "Invalid signature hex format."}
 
-        msg = f"{code}:{node_id}:{expected_k_id}".encode("utf-8")
+        mesh_endpoint = request_payload.get('mesh_endpoint')
+        if mesh_endpoint is not None:
+            from backend.cluster.peer_endpoints import endpoint
+            try:
+                if endpoint(mesh_endpoint) != mesh_endpoint:
+                    raise ValueError('Use a normalized mesh endpoint')
+            except (ValueError, TypeError):
+                return {'success': False, 'error': 'Invalid mesh endpoint'}
+        signed_text = f"{code}:{node_id}:{expected_k_id}" + (f':{mesh_endpoint}' if mesh_endpoint is not None else '')
+        msg = signed_text.encode("utf-8")
         if not KingdomIdentity.verify_signature(pub_hex, msg, sig_bytes):
             return {"success": False, "error": "Invalid request signature verification."}
 
@@ -137,7 +146,7 @@ class PairingManager:
             "fingerprint": computed_fp,
             "kingdom_id": self.kingdom_identity.node_id,
             "is_local": request_payload.get("is_local", False),
-            "connection_metadata": request_payload.get("connection_metadata", {})
+            "connection_metadata": ({'kingdom_endpoint': mesh_endpoint} if mesh_endpoint else request_payload.get("connection_metadata", {}))
         })
 
         event_bus.publish("cluster.pairing_requested", {

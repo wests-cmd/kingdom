@@ -1,4 +1,4 @@
-"""Operator-installed TLS heartbeat transport; never forwards execution RPCs.
+"""Operator-installed TLS peer transport; never forwards execution RPCs.
 
 The local Kingdom remains authoritative for identity, revocation and replay checks.
 Server has no owner token. Client uses its own token only on local loopback.
@@ -60,15 +60,46 @@ def make_handler(config):
         def log_message(self, *args):
             pass  # Do not log remote report contents or credentials.
 
+        def do_GET(self):
+            if not config.get('mesh_enabled') or self.path != '/nodes/identity':
+                self.send_error(404)
+                return
+            try:
+                identity(config['local'], config['identity'])
+                body = json.dumps(request(config['local'] + '/nodes/identity')).encode()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers(); self.wfile.write(body)
+            except Exception:
+                self.send_error(503, 'Peer unavailable')
+
         def do_POST(self):
             try:
-                if self.path != '/heartbeat' or self.headers.get('Transfer-Encoding'):
+                mesh_path = config.get('mesh_enabled') and self.path in {'/nodes/rpc', '/nodes/pair'}
+                if (self.path != '/heartbeat' and not mesh_path) or self.headers.get('Transfer-Encoding'):
                     self.send_error(404)
                     return
                 size = int(self.headers.get('Content-Length', '0'))
                 if not 0 < size <= LIMIT:
                     raise ValueError('Invalid body size')
                 message = json.loads(self.rfile.read(size))
+                if mesh_path:
+                    if not isinstance(message, dict):
+                        raise ValueError('Expected an object')
+                    if self.path == '/nodes/rpc':
+                        if message.get('msg_type') not in {'heartbeat', 'inventory_snapshot', 'mesh_roster_request', 'mesh_roster_response'}:
+                            raise ValueError('Execution RPC is not exposed by the peer listener')
+                        if message.get('target_id') != config['identity']['node_id']:
+                            raise ValueError('Wrong target')
+                    identity(config['local'], config['identity'])
+                    result = request(config['local'] + self.path, message)
+                    body = json.dumps(result).encode()
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Content-Length', str(len(body)))
+                    self.end_headers(); self.wfile.write(body)
+                    return
                 sender = message.get('sender_id') if isinstance(message, dict) else None
                 if sender not in config['peers']:
                     raise ValueError('Unconfigured peer')

@@ -1,5 +1,5 @@
 """Owner-managed links between independent Kingdoms, with mutual pairing."""
-from urllib.parse import urlsplit
+from backend.cluster.peer_endpoints import endpoint
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, ConfigDict
@@ -11,14 +11,6 @@ from backend.cluster.heartbeat import heartbeat_manager
 from backend.cluster.local_load import local_load_metrics
 
 router=APIRouter(prefix='/federation', dependencies=[Depends(require_owner)])
-
-def endpoint(value):
-    p=urlsplit(value)
-    if p.scheme not in {'https','http'} or not p.hostname or p.username or p.password or p.query or p.fragment or p.path not in {'','/'}:
-        raise ValueError('Use the other Kingdom base URL without credentials or a path')
-    if p.scheme=='http' and p.hostname not in {'127.0.0.1','localhost','::1'}:
-        raise ValueError('Remote Kingdoms require HTTPS; SSH tunnels may use loopback HTTP')
-    return value.rstrip('/')
 
 def check_identity(peer,expected,local):
     if peer.get('node_type')!='commander' or peer.get('node_id')==local.node_id:
@@ -131,7 +123,8 @@ async def reconnect(node_id:str):
     try:
         address=endpoint((node.connection_metadata or {})['kingdom_endpoint'])
         local=KingdomIdentity.get_or_create()
-        async with httpx.AsyncClient(timeout=15,follow_redirects=False) as client:
+        from backend.cluster.mesh_api import mesh_tls
+        async with httpx.AsyncClient(timeout=15,follow_redirects=False,trust_env=False,verify=mesh_tls()) as client:
             response=await client.get(address+'/nodes/identity');response.raise_for_status()
             check_identity(response.json(),node.public_identity,local)
             from backend.cluster.apprentice_inventory import local_inventory
@@ -154,7 +147,11 @@ async def reconnect(node_id:str):
 
 from backend.cluster.peer_connections import PeerConnections
 from backend.events.event_bus import event_bus
-peer_connections = PeerConnections(node_registry, reconnect, event_bus)
+async def refresh_mesh():
+    from backend.cluster.mesh_api import sync_mesh
+    await sync_mesh()
+
+peer_connections = PeerConnections(node_registry, reconnect, event_bus, refresh=refresh_mesh)
 
 
 @router.get('/connections/status')
