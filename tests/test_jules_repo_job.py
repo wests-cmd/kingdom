@@ -36,6 +36,17 @@ class JulesJobTests(unittest.TestCase):
         job.request=lambda *args:(_ for _ in ()).throw(AssertionError('No replay'))
         job.run();self.assertEqual(job.state['phase'],'submission_unknown')
 
+    def test_known_session_restart_observes_without_creating_a_new_session(self):
+        job=self.job();job.state={'phase':'watching','session':'sessions/123'};calls=[]
+        def response(*args):
+            calls.append(args)
+            self.assertEqual(args,('sessions/123',))
+            return {'name':'sessions/123','state':'COMPLETED'}
+        job.request=response
+        job.run()
+        self.assertEqual(len(calls),1)
+        self.assertEqual(job.state['phase'],'awaiting_independent_review')
+
     def test_session_create_has_no_automatic_pr_merge_or_deployment(self):
         job=self.job();calls=[]
         job.request=lambda *args:(calls.append(args) or {'name':'sessions/123'})

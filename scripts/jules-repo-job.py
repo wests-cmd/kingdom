@@ -94,7 +94,7 @@ class Job:
             name = reply['name']
             if not isinstance(name, str) or not re.fullmatch('sessions/[A-Za-z0-9_-]+', name):
                 raise ValueError('Unexpected Jules session identity')
-            self.save(phase='watching', session=name, session_url='https://jules.google.com/session/' + name.split('/')[1])
+            self.save(phase='watching', session=name, session_url='https://jules.google.com/session/' + name.split('/')[1], reason=None, http_status=None)
         except Exception as error:
             self.save(phase='submission_unknown', reason='Submission outcome needs reconciliation; no automatic replay',
                       http_status=error.code if isinstance(error, urllib.error.HTTPError) else None)
@@ -112,7 +112,7 @@ class Job:
         if remote not in known:
             raise ValueError('Unknown Jules lifecycle state')
         phase = 'awaiting_independent_review' if remote == 'COMPLETED' else 'failed' if remote == 'FAILED' else 'watching'
-        self.save(phase=phase, remote_state=remote, accepted=False, automatic_merge=False, automatic_deployment=False)
+        self.save(phase=phase, remote_state=remote, accepted=False, automatic_merge=False, automatic_deployment=False, observation=None)
 
     def publish(self):
         c = self.config
