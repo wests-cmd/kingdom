@@ -40,3 +40,21 @@ References checked October 25, 2026:
 - https://jules.google/docs/api/reference/sources/
 
 This is a bootstrap outbox, not a claim that the full backlog is autonomous.
+
+## Separate protected patch gate
+
+`scripts/jules-independent-gate.py` observes one existing session and fetches
+source-bound patch artifacts through the official API. It applies only scoped
+text changes to a fresh copy of a hashed source archive. Protected receipt tests
+and unchanged backlog/programme tests run in a disposable, network-none container
+with no credentials or host control socket. Candidate code cannot edit these
+protected inputs. A real known-bad candidate must fail the receipt tests before
+the controller is armed.
+
+The gate retains the original deadline and counts prior reviewer corrections.
+It can return bounded test diagnostics to the same remote session. It holds
+unknown feedback POST outcomes instead of replaying them. Passing this test
+subset means `scoped_tests_passed_review_required`, never native backlog
+completion, automatic merge or deployment. Other source, integration, security
+and release checks remain independent requirements. These are owner-installed
+bootstrap services; the native adapter is a separately reviewed candidate.
