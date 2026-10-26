@@ -21,7 +21,9 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self,*args):return None
 
 
-def allowed_path(path):
+def allowed_path(path, reviewed_extra_paths=()):
+    if path=='backend/runtime/work_backlog_runner.py' and path in reviewed_extra_paths:
+        return True
     return bool(re.fullmatch(r'backend/(?:integrations|runtime)/jules(?:_[a-z_]+)?\.py|backend/main\.py|tests/test_jules[a-z_]*\.py|docs/JULES[A-Za-z0-9_.-]*\.md', path))
 
 
@@ -123,7 +125,7 @@ class Gate:
         stats=subprocess.run(['git','apply','--numstat',str(path)],cwd=source,capture_output=True,text=True,timeout=10)
         if stats.returncode:raise ValueError('Patch could not be inspected')
         paths=[line.split('\t')[-1] for line in stats.stdout.splitlines()]
-        if not paths or any(not allowed_path(p) for p in paths):raise ValueError('Patch changes files outside the bounded adapter scope')
+        if not paths or any(not allowed_path(p,self.c.get('reviewed_extra_paths',[])) for p in paths):raise ValueError('Patch changes files outside the bounded adapter scope')
         result=subprocess.run(['git','apply','--check',str(path)],cwd=source,capture_output=True,timeout=10)
         if result.returncode:raise ValueError('Patch does not apply to exact protected source')
         subprocess.run(['git','apply','--whitespace=nowarn',str(path)],cwd=source,check=True,capture_output=True,timeout=10)

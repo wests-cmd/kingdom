@@ -58,3 +58,15 @@ subset means `scoped_tests_passed_review_required`, never native backlog
 completion, automatic merge or deployment. Other source, integration, security
 and release checks remain independent requirements. These are owner-installed
 bootstrap services; the native adapter is a separately reviewed candidate.
+
+Build a gate's base archive using `scripts/archive-verified-source.py`. It reads
+and validates raw blobs at an exact commit, preserving their bytes regardless of
+checkout line-ending settings. A platform-converted archive can be semantically
+similar Python while failing the patch's exact source identity. The archive
+SHA-256, raw commit and protected test hashes belong in the review checkpoint.
+
+The existing backlog runner is outside the patch gate's default scope. A human
+reviewer may explicitly include that one lifecycle file through the protected
+`reviewed_extra_paths` configuration. This does not permit security or general
+runtime rewrites. An expired assignment stays closed; a fresh review requires
+its own explicit scope and must preserve prior repair history.

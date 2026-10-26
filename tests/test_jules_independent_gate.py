@@ -26,6 +26,12 @@ class GateTests(unittest.TestCase):
         gate.api=lambda *args:(_ for _ in ()).throw(AssertionError('No network'))
         gate.run()
 
+    def test_lifecycle_extension_requires_explicit_review_and_cannot_expand_security_scope(self):
+        path='backend/runtime/work_backlog_runner.py'
+        self.assertFalse(module.allowed_path(path))
+        self.assertTrue(module.allowed_path(path,[path]))
+        self.assertFalse(module.allowed_path('backend/security/http_auth.py',['backend/security/http_auth.py']))
+
     def test_unknown_feedback_post_is_not_replayed(self):
         gate=self.gate('repair_sending')
         gate.api=lambda *args:(_ for _ in ()).throw(AssertionError('No replay'))
