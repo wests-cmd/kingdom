@@ -326,3 +326,26 @@ def test_retry_never_resets_binding_with_retained_mission(runtime):
     with pytest.raises(ValueError): service.retry_planning(state['id'], row['key'], saved['revision'])
     assert service.get(state['id'])['sections'][0]['items'][0]['mission_id'] == 'retained-mission'
     assert not engine.tasks.list()
+
+
+def test_external_review_approval_retains_disabled_slot_for_job_registration(runtime):
+    from backend.runtime.missions import MissionPlan
+    engine, backlog, service, state = programme(runtime)
+    row = state['sections'][0]['items'][0]
+    proposed = MissionPlan.model_validate(dict(
+        title='Independent patch review', objective='Review returned code independently',
+        deliverables=['Exact patch external receipt'], steps=[dict(
+            id='suite', title='Independent functional contract', kind='independent_review',
+            acceptance='Exact patch passes independently controlled functional tests',
+            independent_review=dict(project='kingdom', source='sources/github/wests-cmd/kingdom',
+                base_revision='a'*40, contract_id='fixture-functional-contract',
+                contract_sha256='f'*64, minimum_tests=2))]))
+    approve(service, state['id'], row['key'], proposed)
+    saved = next(r for r in service.rows(service.get(state['id'])) if r['key']==row['key'])
+    item = backlog.get('kingdom', row['work_id'])
+    assert saved['planning']=='reviewed'
+    assert saved['dispatch_status']=='awaiting_external_job_registration'
+    assert not item['enabled'] and not item.get('lease')
+    assert item['intent']['mission_id']==saved['mission_id']
+    backlog.tick()
+    assert not backlog.get('kingdom', row['work_id']).get('lease')

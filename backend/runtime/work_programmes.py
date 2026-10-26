@@ -535,7 +535,13 @@ class WorkProgrammes:
             try:
                 self.engine.missions.approve(mission['id'], mission['version'])
                 attached = self.backlog.attach(state['project'], item['id'], mission['id'], mission['version'], row['acceptance_step'], item['revision'])
-                self.backlog.configure(state['project'], item['id'], True, attached['revision'])
+                acceptance = next(s for s in mission['plan']['steps'] if s['id'] == row['acceptance_step'])
+                # External delegation must be registered against a disabled,
+                # unleased item before the native scheduler can acquire it.
+                if acceptance['kind'] != 'independent_review':
+                    self.backlog.configure(state['project'], item['id'], True, attached['revision'])
+                else:
+                    row['dispatch_status'] = 'awaiting_external_job_registration'
             except Exception:
                 # No advancement can acquire the mission lock during binding.
                 self.engine.missions.cancel(mission['id'])
