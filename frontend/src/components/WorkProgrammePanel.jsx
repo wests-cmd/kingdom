@@ -23,6 +23,28 @@ function ChatGPTHandoff({item, list, busy, act}) {
   </div>
 }
 
+function JulesPlacement({list,busy,act}) {
+  const saved=list.jules_placement?.scope
+  const [enabled,setEnabled]=useState(saved?.enabled||false)
+  const [branch,setBranch]=useState(saved?.branch||'main')
+  const [jobs,setJobs]=useState(saved?.max_jobs||1)
+  const [repairs,setRepairs]=useState(saved?.max_repair_budget??0)
+  const [minutes,setMinutes]=useState((saved?.deadline_seconds||600)/60)
+  return <details><summary>Optional Jules coding handoff · {saved?.enabled?'enabled for this list':'off; local default'}</summary>
+    <p>Jules is a cloud coding service. Enabling this scope shares approved assignments with the already connected Jules account. It does not merge or deploy code. Existing credentials, source permissions, level 5 and an independently reviewed test contract are required.</p>
+    <p>Reserved jobs: {list.jules_placement?.used_jobs||0}. Source: {list.source_revision||'Set a reviewed source commit before enabling.'}</p>
+    <label><input type="checkbox" checked={enabled} onChange={e=>setEnabled(e.target.checked)}/> Allow bounded Jules handoffs for this list</label>
+    <label>Repository <input readOnly value="wests-cmd/kingdom"/></label>
+    <label>Branch <input value={branch} maxLength={150} onChange={e=>setBranch(e.target.value)}/></label>
+    <label>Maximum jobs <input type="number" min="1" max="48" value={jobs} onChange={e=>setJobs(Number(e.target.value))}/></label>
+    <label>Repairs per job <input type="number" min="0" max="3" value={repairs} onChange={e=>setRepairs(Number(e.target.value))}/></label>
+    <label>Minutes per job <input type="number" min="1" max="1440" value={minutes} onChange={e=>setMinutes(Number(e.target.value))}/></label>
+    <button disabled={busy||list.project!=='kingdom'||(enabled&&!list.source_revision)} onClick={()=>act(()=>api.post(`/work-programmes/${list.id}/jules-placement`,{
+      expected_revision:list.revision,scope:{enabled,repository:'wests-cmd/kingdom',source:'sources/github/wests-cmd/kingdom',branch,max_jobs:jobs,max_repair_budget:repairs,deadline_seconds:Math.round(minutes*60)}}))}>Save coding handoff scope</button>
+    <p>Saving this scope does not approve a plan. Approve the exact proposed assignment separately. Missing independent contracts remain blocked.</p>
+  </details>
+}
+
 export default function WorkProgrammePanel() {
   const {data, error: readError, refresh} = useLiveData('/work-programmes', 5000)
   const {data: modelProfiles} = useLiveData('/workspace/model-profiles', 30000)
@@ -58,6 +80,7 @@ export default function WorkProgrammePanel() {
       <h3>{list.project} · {list.status}</h3>
       <p>Planner: {list.planner_mode==='deliberative' ? `Two plans, critique, synthesis · ${list.planner_routing||'local'}` : list.planner_mode==='chatgpt' ? 'ChatGPT (external handoff)' : 'Configured chat model'}</p>
       <p>{list.auto_plan ? (list.planner_mode==='chatgpt' ? 'Kingdom prepares the next eligible ChatGPT request automatically and waits for its response.' : 'Kingdom proposes the next eligible plan automatically.') : 'Automatic planning paused.'}</p>
+      <JulesPlacement key={`${list.id}-${JSON.stringify(list.jules_placement?.scope||{})}`} list={list} busy={busy} act={act}/>
       <button disabled={busy} onClick={()=>act(()=>api.post(`/work-programmes/${list.id}/settings`,{enabled:!list.auto_plan,expected_revision:list.revision}))}>{list.auto_plan ? 'Pause planning' : 'Enable automatic planning'}</button>
       <button disabled={busy} onClick={()=>act(()=>api.post(`/work-programmes/${list.id}/plan-next`,{expected_revision:list.revision}))}>{list.planner_mode==='chatgpt' ? 'Prepare next ChatGPT request' : 'Propose next plan'}</button>
       {list.sections.map((section,i)=><section key={i}>
@@ -65,6 +88,7 @@ export default function WorkProgrammePanel() {
         {[...section.items, section.integration].map(item=><details key={item.key}>
           <summary>{item.title} · {item.planning.replaceAll('_',' ')} · {item.work_status.replaceAll('_',' ')}</summary>
           <p>{item.reason}</p>
+          {item.dispatch_status && <p>Coding handoff: {item.dispatch_status.replaceAll('_',' ')}{item.jules_job_id?` · ${item.jules_job_id}`:''}</p>}
           {(item.blocked_reasons || []).map((reason,n)=><p key={n}>{reason}</p>)}
           {item.planning==='awaiting_answer' && <PlannerQuestion item={item} list={list} busy={busy} act={act}/>}
           {item.planning==='awaiting_chatgpt' && <ChatGPTHandoff item={item} list={list} busy={busy} act={act}/>}
