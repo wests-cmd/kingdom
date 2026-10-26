@@ -215,6 +215,8 @@ class JulesService:
         if self._announced.get((kind,ident),-1)>=version:return
         fields=('revision','enabled') if kind=='settings' else ('id','project','backlog_id','phase','accepted','record_version')
         self.engine.events.publish('jules.'+kind+'_changed',{key:state[key] for key in fields if key in state})
+        if kind=='job' and state.get('backlog_woken_revision'):
+            self.engine.events.publish('backlog.updated',{'id':state['backlog_id'],'project':state['project'],'status':'ready','revision':state['backlog_woken_revision']})
         self._announced[kind,ident]=version
 
     def _save_job(self, conn, state):
@@ -734,8 +736,7 @@ class JulesService:
         A receipt is consumed atomically with acceptance; no backlog row is silently
         completed by this method.
         """
-        from backend.runtime.patch_acceptance import reviewer_registry,verify_attestation
-        from backend.runtime.mission_acceptance import validated_acceptance
+        from backend.runtime.patch_acceptance import reviewer_registry,verify_attestation,current_review_contract,expected_binding
         with self._lock,self.db.get_connection() as conn:
             conn.execute('BEGIN IMMEDIATE')
             row=conn.execute('SELECT state_json FROM jules_jobs WHERE id=?',(job_id,)).fetchone()
@@ -749,17 +750,20 @@ class JulesService:
                 backlog=json.loads(row[0]) if row else {};intent=backlog.get('intent',{})
                 candidate=state.get('candidate')
                 if not candidate or not intent.get('mission_id'):raise ValueError('Provider candidate and reviewed backlog mission required')
-                expected=dict(job_id=job_id,project=state['project'],backlog_id=state['backlog_id'],mission_id=intent['mission_id'],mission_version=intent['mission_version'],step_id=intent['acceptance_step'],source=state['source'],base_revision=state['revision'],patch_sha256=candidate['patch_sha256'])
-                native=validated_acceptance(self.engine,intent['mission_id'],intent['mission_version'],intent['acceptance_step'])
-                if native.get('accepted') is not True:raise ValueError('Native mission acceptance missing')
+                review=current_review_contract(self.engine,state,backlog)
+                state['review_contract']=review
+                expected=expected_binding(state,backlog)
                 proof=verify_attestation(verification_evidence.get('attestation'),expected,reviewer_registry(),now=self.clock())
                 if proof['issued_at']<state['created_at']:raise ValueError('Independent run predates this job')
-                mission=self.engine.missions.get(intent['mission_id'])
-                step=next(step for step in mission['plan']['steps'] if step['id']==intent['acceptance_step'])
-                if proof['execution']['argv']!=step['argv']:raise ValueError('Independent command differs from reviewed acceptance step')
+                if proof['execution']['test_count']<review['minimum_tests']:raise ValueError('Reviewed minimum test count not met')
                 conn.execute('CREATE TABLE IF NOT EXISTS jules_accepted_receipts (receipt_id TEXT PRIMARY KEY,job_id TEXT NOT NULL UNIQUE,payload_json TEXT NOT NULL)')
                 conn.execute('INSERT INTO jules_accepted_receipts VALUES(?,?,?)',(proof['receipt_id'],job_id,json.dumps(proof,sort_keys=True)))
-                state.update(phase='completed',accepted=True,verification_type='independent_patch_test',evidence=proof,attestation=verification_evidence['attestation'],reason='Current mission and signed exact returned-patch test execution verified')
+                state.update(phase='completed',accepted=True,accepted_at=self.clock(),verification_type='independent_patch_test',evidence=proof,attestation=verification_evidence['attestation'],reason='Current approved external review contract and exact returned-patch verdict verified')
+                if backlog.get('enabled') and backlog.get('status')=='waiting_external_review':
+                    backlog.update(status='ready',reason='Independent patch review accepted; ready for normal mission advancement',revision=backlog['revision']+1)
+                    conn.execute('UPDATE work_backlog SET state_json=? WHERE id=?',(json.dumps(backlog),backlog['id']))
+                    state['backlog_woken_revision']=backlog['revision']
+
             except (ValueError,KeyError,TypeError,StopIteration,sqlite3.IntegrityError) as error:
                 state.update(phase='review_required',accepted=False,reason='Independent exact-patch acceptance is missing or invalid',repair_diagnostics=type(error).__name__)
             self._save_job(conn,state);conn.commit()

@@ -22,16 +22,26 @@ saved provider session/source can establish the candidate patch digest. A
 different retained candidate requires a separately reviewed revision; it cannot
 silently replace the one being tested.
 
-`POST /integrations/jules/jobs/{id}/verify` accepts an `attestation` envelope.
-It requires both current canonical mission acceptance and an independent runner
-signature bound to the job, project, backlog item, mission/version/step, source,
-base revision and exact patch digest. The signed execution records the pinned
-image, source archive, patched-tree inventory hash, exact command and nonempty
-passing suite. The command must match the reviewed mission's acceptance step.
-Receipt consumption and job acceptance share one database transaction.
+`POST /integrations/jules/jobs/{id}/verify` accepts a version-2 `attestation`
+envelope. A native `independent_review` mission step fixes the project, source,
+base revision, contract ID/hash and minimum test count. It accepts no arbitrary
+argv, generated inputs, filesystem destination, host placement or repair command.
+The approved contract identifies the external controller's actual checks; it is
+not a command to execute in the normal workspace.
 
-The backlog checks delegated patch acceptance separately before completing the
-item. An older native command test cannot complete a pending Jules job.
+The signed verdict binds the job, project, backlog item, mission/version/step,
+source, base revision, patch digest and contract digest. Its execution records
+`verdict_origin=external_controller`, pinned image/source/tree hashes and a
+nonempty passing behavioral suite. A normal `project_test` summary cannot be
+substituted. Consumption, job acceptance and waking an enabled waiting backlog
+item share one transaction. The mission subsequently verifies that same receipt
+through its normal advancement path; no native tool receipt is fabricated.
+
+Waiting review creates neither a shell nor model task. Waiting work is removed
+from ready selection so independent ready work can advance. Acceptance only
+wakes an enabled waiting item, never one the owner paused. Previously accepted
+verdicts are checked at their retained acceptance time; current reviewer
+revocation and mission/contract changes still invalidate them.
 
 ## Independent reviewer
 
@@ -40,7 +50,7 @@ The runtime reads public keys only from
 be root-owned, with no group/world write permission or symlink traversal. The
 registry is absent by default and must be installed by an authorized operator;
 there is no model/agent tool for creating reviewers. Each reviewer entry includes
-`public_key` (base64 raw Ed25519), `enabled`, `projects` and `sources`, under
+`public_key` (base64 raw Ed25519), `enabled`, `projects`, `sources` and allowed contract hashes in `contracts`, under
 `{"version":1,"reviewers":{...}}`. Disabled/out-of-scope keys fail closed.
 
 The inline pytest gate does **not** issue independent signatures. Independent
@@ -52,11 +62,10 @@ historical test evidence only and must not be treated as independent acceptance.
 A production issuer must own a separate trusted verdict process that never
 imports candidate code, cannot be written by it, and tests the candidate across
 an explicit execution/data boundary. The candidate must not choose its test
-contract or success signal. That governed isolated-review contract must also
-match the mission/backlog acceptance protocol; the former hardcoded sandbox
-pytest argv does not match normal native command execution. Until this path is
-implemented and reviewed, the verifier is a tested consumer interface with no
-configured production issuer, not an operational autonomous acceptance system.
+contract or success signal. The native governed `independent_review` contract now separates external verdicts
+from ordinary command execution. The external producer still needs independent
+review and a real job test. Production reviewer trust remains unconfigured; this
+is not yet an operational autonomous acceptance system.
 
 ## Current scope and provenance
 

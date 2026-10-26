@@ -35,7 +35,7 @@ def validate_binding(engine, programme, row, work):
         validate_integration(engine, section, step)
         if set(work['intent']['depends_on']) != {r['work_id'] for r in section['items']}:
             raise ValueError('Integration dependencies differ from the reviewed section')
-    elif step['kind'] not in {'function_check', 'project_test'}:
+    elif step['kind'] not in {'function_check', 'project_test','independent_review'}:
         raise ValueError('Programme work needs reviewed test acceptance')
 
 
@@ -53,6 +53,10 @@ def validate_integration(engine, section, step):
 
 def validate_declared_source(programme, plan):
     for step in plan['steps']:
+        if step['kind']=='independent_review':
+            descriptor=step.get('independent_review') or {}
+            if descriptor.get('base_revision')!=programme.get('source_revision') or descriptor.get('project')!=programme['project']:
+                raise ValueError('External reviews need the exact declared base and programme project')
         if step['kind'] == 'project_test':
             descriptor = step.get('project_test') or {}
             if (not programme.get('source_revision')
@@ -80,7 +84,7 @@ def outline(text):
             sections.append(current)
         value = re.sub(r'^(?:[-*]\s+(?:\[[ xX]\]\s*)?|\d+[.)]\s+)', '', line).strip()
         if not value or len(value) > 1200:
-            raise ValueError('Each outcome needs 1–1200 characters')
+            raise ValueError('Each outcome needs 1â€“1200 characters')
         current['items'].append({'title': value[:200], 'description': value})
         count += 1
     if not 1 <= count <= 48 or not 1 <= len(sections) <= 8 or any(not s['items'] or len(s['items']) > 12 for s in sections):
@@ -356,7 +360,7 @@ class WorkProgrammes:
             plan = MissionPlan.model_validate(data['plan']); validate_plan(plan)
             validate_declared_source(state, plan.model_dump())
             step = next(s for s in plan.steps if s.id == data['acceptance_step'])
-            if step.kind not in ({'project_test'} if integration else {'function_check', 'project_test'}):
+            if step.kind not in ({'project_test'} if integration else {'function_check', 'project_test','independent_review'}):
                 raise ValueError('A separate reviewed test acceptance is required')
             if integration:
                 section = next(s for s in state['sections'] if s['integration']['key'] == selected['key'])

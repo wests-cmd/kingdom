@@ -372,7 +372,7 @@ class JulesAdapterTests(unittest.TestCase):
             self.assertFalse(res['accepted'])
             self.assertEqual(res['phase'],'review_required')
 
-    def test_true_verification_via_validated_acceptance_mission_receipt(self):
+    def test_source_only_command_receipt_cannot_complete_a_patch_job(self):
         self.enable_service()
 
         mission_id = "mission-jules-1"
@@ -544,23 +544,16 @@ class JulesAdapterTests(unittest.TestCase):
         from backend.runtime.patch_acceptance import canonical
         candidate_patch='diff --git a/example.py b/example.py\n'
         self.service.fetch_candidate(job['id'],opener=self.dummy_opener({'activities':[{'createTime':'2026-10-26','artifacts':[{'changeSet':{'source':job['source'],'gitPatch':{'baseCommitId':rev,'unidiffPatch':candidate_patch}}}]}]}))
-        binding=dict(job_id=job['id'],project='kingdom',backlog_id=backlog_item['id'],mission_id=mission_id,mission_version=1,step_id='step-1',source=job['source'],base_revision=rev,patch_sha256=hashlib.sha256(candidate_patch.encode()).hexdigest())
+        binding=dict(job_id=job['id'],project='kingdom',backlog_id=backlog_item['id'],mission_id=mission_id,mission_version=1,step_id='step-1',source=job['source'],base_revision=rev,patch_sha256=hashlib.sha256(candidate_patch.encode()).hexdigest(),contract_sha256='f'*64)
         key=Ed25519PrivateKey.generate()
-        payload=dict(format='kingdom.patch-test.v1',receipt_id='adapter-positive-test',reviewer_id='test-gate',issued_at=1000,expires_at=1200,binding=binding,execution=dict(run_id='test-run',image_sha256='c'*64,source_archive_sha256='d'*64,candidate_tree_sha256='e'*64,argv=['python3','-m','pytest'],test_count=10,failed_count=0,exit_code=0,network_isolated=True,read_only_source=True))
+        payload=dict(format='kingdom.patch-test.v2',receipt_id='adapter-positive-test',reviewer_id='test-gate',issued_at=1000,expires_at=1200,binding=binding,execution=dict(run_id='test-run',image_sha256='c'*64,source_archive_sha256='d'*64,candidate_tree_sha256='e'*64,argv=['python3','-m','pytest'],test_count=10,failed_count=0,exit_code=0,network_isolated=True,read_only_source=True,verdict_origin='external_controller'))
         attestation={'payload':payload,'signature':base64.b64encode(key.sign(canonical(payload))).decode()}
-        reviewer={'test-gate':dict(public_key=base64.b64encode(key.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)).decode(),enabled=True,projects=['kingdom'],sources=[job['source']])}
+        reviewer={'test-gate':dict(public_key=base64.b64encode(key.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)).decode(),enabled=True,projects=['kingdom'],sources=[job['source']],contracts=['f'*64])}
         trusted=patch('backend.runtime.patch_acceptance.reviewer_registry',return_value=reviewer)
         trusted.start();self.addCleanup(trusted.stop)
         verified=self.service.verify_job_completion(job['id'],{'attestation':attestation})
-        self.assertTrue(
-            verified["accepted"],
-            f"Reason: {verified.get('reason')}, Diag: {verified.get('repair_diagnostics')}",
-        )
-        self.assertEqual(verified["phase"], "completed")
-        self.assertEqual(verified["verification_type"], "independent_patch_test")
-
-        tick_res = self.backlog.tick()
-        self.assertEqual(tick_res["status"], "completed")
+        self.assertFalse(verified['accepted'],'A command descriptor cannot substitute for a governed external review contract')
+        self.assertNotEqual(self.backlog.tick()['status'],'completed')
 
     def test_jules_runner_event_publishing_and_execution(self):
         """Test supervised JulesRunner background execution and event publishing."""
@@ -676,6 +669,54 @@ class JulesAdapterTests(unittest.TestCase):
         self.assertTrue(any(event[1].get('phase')=='cancelled' for event in changes))
         self.assertNotIn('Private prompt',str(changes))
         self.assertNotIn('test-key',str(changes))
+
+    def test_governed_external_review_waits_without_dispatch_and_resumes_from_bound_verdict(self):
+        import base64,hashlib
+        from unittest.mock import patch
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        from backend.runtime.patch_acceptance import canonical
+        from backend.runtime.missions import MissionPlan
+        self.enable_service()
+        review=dict(project='kingdom',source='sources/github/wests-cmd/kingdom',base_revision='a'*40,contract_id='fixture-external-contract',contract_sha256='f'*64,minimum_tests=2)
+        mission=self.engine.missions.create(MissionPlan.model_validate(dict(title='External contract',objective='Check exact candidate in an independent verdict process',deliverables=['Bound source and independent tests'],steps=[dict(id='review',title='Independent patch review',kind='independent_review',acceptance='The reviewed external contract passed on the exact returned patch',independent_review=review)])))
+        self.engine.missions.approve(mission['id'],1)
+        item=self.backlog.register(project='kingdom',idempotency_key='external-contract',mission_id=mission['id'],mission_version=1,acceptance_step='review',enabled=False)
+        job=self.service.register_job(project='kingdom',backlog_id=item['id'],idempotency_key='external-job',source=review['source'],repository='wests-cmd/kingdom',revision='a'*40,branch='feature/test',prompt='External review fixture')
+        self.service.submit_job(job['id'],opener=self.dummy_opener({'name':'sessions/external-fixture'}))
+        self.service.poll_job(job['id'],opener=self.dummy_opener({'name':'sessions/external-fixture','state':'COMPLETED'}))
+        candidate='diff --git a/example.py b/example.py\n'
+        self.service.fetch_candidate(job['id'],opener=self.dummy_opener({'activities':[{'createTime':'2026-10-26','artifacts':[{'changeSet':{'source':review['source'],'gitPatch':{'baseCommitId':'a'*40,'unidiffPatch':candidate}}}]}]}))
+        self.backlog.settings(enabled=True,expected_revision=1)
+        self.backlog.configure(project='kingdom',ident=item['id'],enabled=True,expected_revision=item['revision'])
+        self.engine.status=lambda:{'running':True}
+        waiting=self.backlog.tick()
+        self.assertEqual(waiting['status'],'waiting_external_review')
+        with self.db.get_connection() as conn:self.assertEqual(conn.execute('SELECT COUNT(*) FROM tasks').fetchone()[0],0,'External review must not become a native shell or model task')
+        self.assertEqual(self.backlog.tick()['status'],'idle','Waiting external work must not monopolize the ready queue')
+        binding=dict(job_id=job['id'],project='kingdom',backlog_id=item['id'],mission_id=mission['id'],mission_version=1,step_id='review',source=review['source'],base_revision='a'*40,patch_sha256=hashlib.sha256(candidate.encode()).hexdigest(),contract_sha256='f'*64)
+        key=Ed25519PrivateKey.generate()
+        payload=dict(format='kingdom.patch-test.v2',receipt_id='external-fixture-receipt',reviewer_id='fixture-verdict-controller',issued_at=1000,expires_at=1200,binding=binding,execution=dict(run_id='external-fixture-run',image_sha256='c'*64,source_archive_sha256='d'*64,candidate_tree_sha256='e'*64,argv=['trusted-external-controller','fixture-external-contract'],test_count=2,failed_count=0,exit_code=0,network_isolated=True,read_only_source=True,verdict_origin='external_controller'))
+        envelope={'payload':payload,'signature':base64.b64encode(key.sign(canonical(payload))).decode()}
+        keys={'fixture-verdict-controller':dict(public_key=base64.b64encode(key.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)).decode(),enabled=True,projects=['kingdom'],sources=[review['source']],contracts=['f'*64])}
+        with patch('backend.runtime.patch_acceptance.reviewer_registry',return_value=keys):
+            accepted=self.service.verify_job_completion(job['id'],{'attestation':envelope})
+            self.assertTrue(accepted['accepted'],accepted.get('reason'))
+            self.assertEqual(self.backlog.get('kingdom',item['id'])['status'],'ready')
+            complete=self.backlog.tick()
+            self.assertEqual(complete['status'],'completed',complete.get('reason'))
+            self.assertEqual(self.engine.missions.get(mission['id'])['status'],'completed')
+            self.backlog.review()
+            self.assertEqual(self.backlog.get('kingdom',item['id'])['status'],'completed')
+        with self.db.get_connection() as conn:self.assertEqual(conn.execute('SELECT COUNT(*) FROM tasks').fetchone()[0],0)
+
+    def test_external_review_contract_cannot_smuggle_native_commands_or_generated_inputs(self):
+        from backend.runtime.missions import MissionPlan,validate_plan
+        descriptor=dict(project='kingdom',source='sources/github/wests-cmd/kingdom',base_revision='a'*40,contract_id='external-contract',contract_sha256='f'*64)
+        original=dict(id='review',title='Review',kind='independent_review',acceptance='External contract passes',independent_review=descriptor)
+        for field,value in [('argv',['sh','-c','exit 0']),('input_from','generated'),('repair_source','source'),('computer_id','other'),('path','projects/escape')]:
+            with self.subTest(field=field),self.assertRaises(ValueError):
+                validate_plan(MissionPlan.model_validate(dict(title='Contract boundary',objective='No native execution',deliverables=['Verdict'],steps=[{**original,field:value}])))
 
     def test_api_endpoints_integration(self):
         from backend.main import app

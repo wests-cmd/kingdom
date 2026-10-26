@@ -1,18 +1,38 @@
 import base64
 from copy import deepcopy
 import unittest
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from backend.runtime.patch_acceptance import canonical,verify_attestation
 
 
 class PatchAcceptanceTests(unittest.TestCase):
+    @unittest.skipUnless(os.name=='posix','Root ownership boundary is POSIX-specific')
+    def test_registry_rejects_agent_owned_files(self):
+        if os.getuid()==0:self.skipTest('Run as the non-root application user')
+        from backend.runtime import patch_acceptance
+        with TemporaryDirectory() as folder:
+            p=Path(folder)/'reviewers.json';p.write_text('{"version":1,"reviewers":{}}');p.chmod(0o600)
+            with patch.object(patch_acceptance,'REGISTRY',p),self.assertRaises(ValueError):patch_acceptance.reviewer_registry()
+
+    @unittest.skipUnless(os.name=='posix','Root ownership boundary is POSIX-specific')
+    def test_read_only_root_owned_empty_registry_grants_no_authority(self):
+        from backend.runtime import patch_acceptance
+        p=Path(__file__).parent/'fixtures/empty_reviewers.json'
+        if any(parent.stat().st_uid!=0 or parent.stat().st_mode&0o022 for parent in [p,*p.parents]):
+            self.skipTest('Positive fixture requires protected root-owned source mount')
+        with patch.object(patch_acceptance,'REGISTRY',p):self.assertEqual(patch_acceptance.reviewer_registry(),{})
+
     def setUp(self):
         self.key=Ed25519PrivateKey.generate()
-        self.binding=dict(job_id='job',project='kingdom',backlog_id='work',mission_id='mission',mission_version=1,step_id='tests',source='sources/github/wests-cmd/kingdom',base_revision='a'*40,patch_sha256='b'*64)
-        self.payload=dict(format='kingdom.patch-test.v1',receipt_id='receipt-1',reviewer_id='isolated-gate',issued_at=1000,expires_at=1200,binding=self.binding.copy(),execution=dict(run_id='run-1',image_sha256='c'*64,source_archive_sha256='d'*64,candidate_tree_sha256='e'*64,argv=['python','-m','pytest'],test_count=5,failed_count=0,exit_code=0,network_isolated=True,read_only_source=True))
+        self.binding=dict(job_id='job',project='kingdom',backlog_id='work',mission_id='mission',mission_version=1,step_id='tests',source='sources/github/wests-cmd/kingdom',base_revision='a'*40,patch_sha256='b'*64,contract_sha256='f'*64)
+        self.payload=dict(format='kingdom.patch-test.v2',receipt_id='receipt-1',reviewer_id='isolated-gate',issued_at=1000,expires_at=1200,binding=self.binding.copy(),execution=dict(run_id='run-1',image_sha256='c'*64,source_archive_sha256='d'*64,candidate_tree_sha256='e'*64,argv=['python','-m','pytest'],test_count=5,failed_count=0,exit_code=0,network_isolated=True,read_only_source=True,verdict_origin='external_controller'))
         public=base64.b64encode(self.key.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)).decode()
-        self.reviewers={'isolated-gate':dict(public_key=public,enabled=True,projects=['kingdom'],sources=[self.binding['source']])}
+        self.reviewers={'isolated-gate':dict(public_key=public,enabled=True,projects=['kingdom'],sources=[self.binding['source']],contracts=['f'*64])}
     def signed(self,payload=None):
         value=deepcopy(payload or self.payload)
         return {'payload':value,'signature':base64.b64encode(self.key.sign(canonical(value))).decode()}

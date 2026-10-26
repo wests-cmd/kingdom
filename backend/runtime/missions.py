@@ -12,11 +12,21 @@ from backend.runtime.policy import MAX_MISSION_STEPS
 from backend.runtime.project_tests import ProjectTestDescriptor
 
 
+class IndependentReviewDescriptor(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    project: Literal['kingdom','centipede','threadmap']
+    source: str = Field(pattern=r'^sources/github/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')
+    base_revision: str = Field(pattern=r'^[a-f0-9]{40}$')
+    contract_id: str = Field(pattern=r'^[a-z][a-z0-9_-]{0,100}$')
+    contract_sha256: str = Field(pattern=r'^[a-f0-9]{64}$')
+    minimum_tests: int = Field(default=1,ge=1,le=100000)
+
+
 class MissionStep(BaseModel):
     model_config = ConfigDict(extra='forbid')
     id: str = Field(pattern=r'^[a-z][a-z0-9_-]{0,50}$')
     title: str = Field(min_length=1, max_length=300)
-    kind: Literal['model', 'write_file', 'read_file', 'python_check', 'text_check', 'command', 'package', 'desktop_input', 'build', 'function_check', 'project_test']
+    kind: Literal['model', 'write_file', 'read_file', 'python_check', 'text_check', 'command', 'package', 'desktop_input', 'build', 'function_check', 'project_test','independent_review']
     instructions: str = Field(default='', max_length=100000)
     path: str | None = Field(default=None, max_length=300)
     argv: list[str] = Field(default_factory=list, max_length=40)
@@ -29,6 +39,7 @@ class MissionStep(BaseModel):
     case_profile: str | None = Field(default=None,max_length=100)
     case_profile_sha256: str | None = Field(default=None,pattern=r'^[0-9a-f]{64}$')
     project_test: ProjectTestDescriptor | None = None
+    independent_review: IndependentReviewDescriptor | None = None
 
 
 class MissionPlan(BaseModel):
@@ -46,6 +57,13 @@ def validate_plan(plan):
     seen = set()
     by_id = {step.id: step for step in plan.steps}
     for step in plan.steps:
+        if step.kind=='independent_review':
+            if step.independent_review is None or step.argv or step.input_from or step.repair_source or step.computer_id or step.path:
+                raise ValueError('Independent review requires a fixed external contract, without generated commands or execution bindings')
+        elif step.independent_review is not None:
+            raise ValueError('External review descriptors belong only to independent_review steps')
+        if step.input_from and by_id.get(step.input_from) and by_id[step.input_from].kind=='independent_review':
+            raise ValueError('Independent review records are acceptance evidence, not generated tool inputs')
         if step.kind == 'project_test':
             if (step.project_test is None or step.input_from or step.repair_source or not step.argv
                     or any(not x or len(x)>4000 or '\x00' in x for x in step.argv)):
@@ -143,6 +161,7 @@ class MissionService:
         with self.lock:
             state = self.get(ident)
             for record in state['steps'].values():
+                if not record.get('task_id'):continue
                 task = self.engine.tasks.get(record['task_id'])
                 if task and task['status'] in {'queued', 'WAITING_APPROVAL'}: self.engine.cancel_task(task['id'])
             state['status'] = 'cancelled'; self.save(state); return state
@@ -279,6 +298,17 @@ class MissionService:
                 return self.advance_repair(state, budget)
             complete, active = set(), 0
             for key, record in state['steps'].items():
+                step = next(step for step in state['plan']['steps'] if step['id'] == key)
+                if step['kind']=='independent_review':
+                    from backend.runtime.patch_acceptance import external_step_acceptance
+                    try:proof=external_step_acceptance(self.engine,ident,state['version'],key)
+                    except (ValueError,KeyError,TypeError):
+                        state.update(status='needs_review',failure='External review evidence changed or is invalid');self.save(state);return state
+                    if proof is not None:
+                        if record.get('status')!='verified':
+                            self.engine.events.publish('mission.external_review_verified',{'id':ident,'step':key,'receipt_id':proof['receipt_id']})
+                        complete.add(key);record.update(status='verified',external_receipt=proof['receipt_id'])
+                    continue
                 task = self.engine.tasks.get(record['task_id'])
                 if not task: continue  # Crash before task creation: same deterministic key resumes below.
                 status = task['status'].lower()
@@ -303,12 +333,18 @@ class MissionService:
                     state.update(status='needs_review', failure=f'Step {key} failed. Retained task {task["id"]} contains its input and evidence.'); self.save(state); return state
                 else: active += 1
             if len(complete) == len(state['plan']['steps']):
-                state.update(status='completed', completed_at=time.time(), completion_scope='Planned operations verified. Generated text and desktop input do not independently prove external application outcomes.', report=[{'step': step['title'], 'why': step['acceptance'], 'task_id': state['steps'][step['id']]['task_id']} for step in state['plan']['steps']])
+                state.update(status='completed', completed_at=time.time(), completion_scope='Planned operations verified within their retained acceptance contracts.', report=[{'step': step['title'], 'why': step['acceptance'], 'task_id': state['steps'][step['id']].get('task_id'),'external_receipt':state['steps'][step['id']].get('external_receipt')} for step in state['plan']['steps']])
                 self.save(state); self.engine.events.publish('mission.completed', {'id': ident}); return state
             for raw in state['plan']['steps']:
                 step = MissionStep.model_validate(raw)
                 prior = state['steps'].get(step.id)
-                if step.id in complete or (prior and self.engine.tasks.get(prior['task_id'])) or not set(step.depends_on) <= complete:
+                if step.id in complete or (prior and prior.get('task_id') and self.engine.tasks.get(prior['task_id'])) or not set(step.depends_on) <= complete:
+                    continue
+                if step.kind=='independent_review':
+                    if not prior or prior.get('status')!='waiting_external_review':
+                        self.engine.events.publish('mission.waiting_external_review',{'id':ident,'step':step.id})
+                    state['steps'][step.id]={'status':'waiting_external_review'}
+                    state['status']='running'
                     continue
                 if active >= budget['max_parallel']: break
                 if step.computer_id:

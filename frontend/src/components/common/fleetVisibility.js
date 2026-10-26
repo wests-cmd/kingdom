@@ -5,6 +5,7 @@ const states = {
   completed:'Recorded complete', succeeded:'Recorded complete', failed:'Failed',
   cancelled:'Cancelled', recovery_required:'Recovery needs review', blocked:'Blocked',
   ready:'Ready', paused:'Paused', unknown:'Not reported',
+  waiting_external_review:'Waiting for independent patch tests',
 }
 
 export function jobStatus(status) {

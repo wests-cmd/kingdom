@@ -132,9 +132,9 @@ class WorkBacklog:
                 or mission['status'] not in {'approved', 'running', 'completed'}):
             raise ValueError('Exact executable owner-reviewed mission required')
         step = next((step for step in mission['plan']['steps'] if step['id'] == acceptance_step), None)
-        if not step or step['kind'] not in {'function_check', 'project_test'}:
+        if not step or step['kind'] not in {'function_check', 'project_test','independent_review'}:
             raise ValueError('Select a reviewed native function or project test acceptance step')
-        if step['kind'] == 'project_test':
+        if step['kind'] in {'project_test','independent_review'}:
             from backend.runtime.missions import MissionPlan, validate_plan
             validate_plan(MissionPlan.model_validate(mission['plan']))
 
@@ -349,6 +349,8 @@ class WorkBacklog:
                     reason = 'Reviewed command finished; waiting for independently attested returned Jules patch'
                 elif delegated is not None:
                     evidence = {**evidence, 'independent_patch_test': delegated}
+            elif any(record.get('status')=='waiting_external_review' for record in mission.get('steps',{}).values()):
+                status,reason='waiting_external_review','Waiting for an independently tested exact returned patch; other ready work may proceed'
             elif mission['status'] in {'needs_review', 'cancelled'}:
                 status, reason = 'review_required', 'Mission stopped for review; inspect its failed or exhausted steps'
             if status == 'review_required':
