@@ -342,6 +342,13 @@ class WorkBacklog:
                     raise ValueError('Native acceptance did not pass')
                 self._programme_binding(state)
                 status, reason = 'completed', 'Reviewed acceptance verified within its reported scope; broader roadmap remains open'
+                from backend.runtime.patch_acceptance import delegated_acceptance
+                delegated = delegated_acceptance(self.db, state, now=self.clock())
+                if delegated is False:
+                    status, evidence = 'running', None
+                    reason = 'Reviewed command finished; waiting for independently attested returned Jules patch'
+                elif delegated is not None:
+                    evidence = {**evidence, 'independent_patch_test': delegated}
             elif mission['status'] in {'needs_review', 'cancelled'}:
                 status, reason = 'review_required', 'Mission stopped for review; inspect its failed or exhausted steps'
             if status == 'review_required':

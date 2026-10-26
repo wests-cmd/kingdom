@@ -15,6 +15,9 @@ import time
 import urllib.parse
 import urllib.request
 import urllib.error
+import base64
+import uuid
+import xml.etree.ElementTree as ET
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -109,6 +112,7 @@ class Gate:
         return value
 
     def test(self,patch,sha):
+        self.last_test_evidence=None;self.last_test_sha=None
         run=self.root/('review-'+sha[:16]);run.mkdir(mode=0o700)
         source=run/'source';source.mkdir(mode=0o755)
         with tarfile.open(self.root/'base.tar.gz') as archive:
@@ -134,20 +138,55 @@ class Gate:
         if result.returncode:raise ValueError('Patch does not apply to exact protected source')
         subprocess.run(['git','apply','--whitespace=nowarn',str(path)],cwd=source,check=True,capture_output=True,timeout=10)
         if any(p.is_symlink() or not p.resolve().is_relative_to(source) for p in source.rglob('*')):raise ValueError('Patch contains a link or escaped path')
+        results=run/'results';results.mkdir(mode=0o777);results.chmod(0o777)
+        test_argv=['python','-m','pytest','-q','-p','no:cacheprovider','/protected/test_receipts.py','/workspace/tests/test_work_backlog.py',
+                   '/workspace/tests/test_programme_acceptance_fences.py','--basetemp=/tmp/pytest','--junitxml=/results/report.xml']
         name='kingdom-jules-gate-'+sha[:12]
         args=['docker','run','--init','--rm','--pull=never','--name',name,'--label','kingdom.independent-gate='+sha,
             '--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--memory','512m','--cpus','0.5',
             '--pids-limit','128','--user','1000:1000','--tmpfs','/tmp:rw,nosuid,size=128m','-e','PYTHONDONTWRITEBYTECODE=1','-e','PYTHONPATH=/workspace',
-            '-v',str(source)+':/workspace:ro','-v',str(self.root/'protected')+':/protected:ro','-w','/tmp','--entrypoint','python',self.c['image'],
-            '-m','pytest','-q','-p','no:cacheprovider','/protected/test_receipts.py','/workspace/tests/test_work_backlog.py',
-            '/workspace/tests/test_programme_acceptance_fences.py','--basetemp=/tmp/pytest']
+            '-v',str(source)+':/workspace:ro','-v',str(self.root/'protected')+':/protected:ro','-v',str(results)+':/results:rw','-w','/tmp','--entrypoint','python',self.c['image'],*test_argv[1:]]
         try:r=subprocess.run(args,capture_output=True,text=True,timeout=min(240,max(1,self.c['deadline_at']-time.time())))
         finally:
             owned=subprocess.run(['docker','inspect','--format','{{index .Config.Labels "kingdom.independent-gate"}}',name],capture_output=True,text=True,timeout=5)
             if owned.returncode==0 and owned.stdout.strip()==sha:subprocess.run(['docker','stop','--time','5',name],capture_output=True,timeout=10)
         output=(r.stdout+r.stderr)[-18000:];(run/'tests.log').write_text(output)
         if not re.search(r'\d+ (?:passed|failed)',output):raise ValueError('No independent test collection/result')
+        if r.returncode==0:
+            passed=read_passing_junit(results/'report.xml')
+            tree={p.relative_to(source).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in source.rglob('*') if p.is_file()}
+            self.last_test_evidence={'run_id':run.name,'image_sha256':self.c['image'][7:],
+                'source_archive_sha256':hashlib.sha256((self.root/'base.tar.gz').read_bytes()).hexdigest(),
+                'candidate_tree_sha256':hashlib.sha256(json.dumps(tree,sort_keys=True,separators=(',',':')).encode()).hexdigest(),
+                'argv':test_argv,'test_count':passed,'failed_count':0,'exit_code':0,'network_isolated':True,'read_only_source':True}
+            self.last_test_sha=sha
         return r.returncode,output
+
+    def attest(self,sha):
+        """Optional protected-scope signing; the private key never enters a worker."""
+        if sha!=getattr(self,'last_test_sha',None) or not getattr(self,'last_test_evidence',None):
+            raise ValueError('Only the exact immediately passing candidate can be signed')
+        run=self.root/('review-'+sha[:16])
+        if hashlib.sha256((run/'candidate.patch').read_bytes()).hexdigest()!=sha:
+            raise ValueError('Tested patch changed before attestation')
+        tree={p.relative_to(run/'source').as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in (run/'source').rglob('*') if p.is_file()}
+        if hashlib.sha256(json.dumps(tree,sort_keys=True,separators=(',',':')).encode()).hexdigest()!=self.last_test_evidence['candidate_tree_sha256']:
+            raise ValueError('Tested candidate tree changed before attestation')
+        scope=self.c['attestation'];key=Path(scope['key_path'])
+        if os.getuid()!=0 or key.is_symlink() or key.stat().st_uid!=0 or key.stat().st_mode&0o077:
+            raise ValueError('Protected root-only reviewer key required')
+        binding={**scope['binding'],'source':self.c['source'],'base_revision':self.c['revision'],'patch_sha256':sha}
+        now=time.time();expiry=min(now+900,self.c['deadline_at'])
+        if expiry<=now:raise ValueError('Review scope expired before signing')
+        payload={'format':'kingdom.patch-test.v1','receipt_id':'review-'+uuid.uuid4().hex,'reviewer_id':scope['reviewer_id'],
+                 'issued_at':now,'expires_at':expiry,'binding':binding,'execution':self.last_test_evidence}
+        encoded=b'kingdom.independent-patch-test.v1\0'+json.dumps(payload,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False).encode()
+        message=run/'signed-payload.bin';message.write_bytes(encoded);message.chmod(0o600)
+        result=subprocess.run(['openssl','pkeyutl','-sign','-rawin','-inkey',str(key),'-in',str(message)],capture_output=True,timeout=10)
+        if result.returncode or len(result.stdout)!=64:raise ValueError('Independent reviewer signature unavailable')
+        envelope={'payload':payload,'signature':base64.b64encode(result.stdout).decode()}
+        target=run/'attestation.json';target.write_text(json.dumps(envelope,indent=2));target.chmod(0o600)
+        return str(target)
 
     def run(self):
         if self.state['phase'] in {'review_required','scoped_tests_passed_review_required','expired_remote_may_continue'}:return
@@ -167,6 +206,8 @@ class Gate:
                 self.save(phase='testing',candidate_sha256=sha)
                 code,output=self.test(patch,sha)
                 if code==0:
+                    if self.c.get('attestation'):
+                        self.save(attestation_file=self.attest(sha))
                     self.save(phase='scoped_tests_passed_review_required',tests_exit_code=0,reason='Scoped negative receipt fences and baseline tests passed; native integration/release acceptance still required');return
                 self.save(tests_exit_code=code)
                 if self.state['repairs']>=self.c['max_repairs']:
@@ -185,6 +226,23 @@ def prepare_test_directories(source):
     for path in source.rglob('*'):
         if path.is_dir() and not path.is_symlink():
             path.chmod(0o755)
+
+
+def read_passing_junit(path):
+    if path.is_symlink() or not path.is_file() or path.stat().st_size>2*1024*1024:
+        raise ValueError('Bounded regular JUnit evidence required')
+    data=path.read_bytes()
+    if b'<!DOCTYPE' in data.upper() or b'<!ENTITY' in data.upper():raise ValueError('JUnit declarations are not supported')
+    root=ET.fromstring(data)
+    suites=[root] if root.tag=='testsuite' else list(root.findall('testsuite'))
+    cases=list(root.iter('testcase'))
+    if not suites or not cases or next(root.iter('failure'),None) is not None or next(root.iter('error'),None) is not None:
+        raise ValueError('Independent suite did not pass')
+    total=sum(int(s.attrib['tests']) for s in suites)
+    failures=sum(int(s.attrib.get('failures',0))+int(s.attrib.get('errors',0)) for s in suites)
+    skipped=sum(1 for case in cases if case.find('skipped') is not None)
+    if failures or total!=len(cases) or total-skipped<1:raise ValueError('Nonempty consistent independent suite required')
+    return total-skipped
 
 
 if __name__=='__main__':

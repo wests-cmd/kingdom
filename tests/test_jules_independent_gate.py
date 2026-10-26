@@ -9,6 +9,26 @@ module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 
 
 class GateTests(unittest.TestCase):
+    def test_signing_cannot_reuse_unrelated_or_missing_passing_run(self):
+        gate=object.__new__(module.Gate)
+        gate.last_test_sha='a'*64;gate.last_test_evidence={'test_count':10}
+        with self.assertRaises(ValueError):gate.attest('b'*64)
+        gate.last_test_evidence=None
+        with self.assertRaises(ValueError):gate.attest('a'*64)
+
+    def test_junit_requires_actual_nonempty_consistent_passing_cases(self):
+        with TemporaryDirectory() as folder:
+            p=Path(folder)/'report.xml'
+            p.write_text('<testsuites><testsuite tests="2" failures="0" errors="0"><testcase name="a"/><testcase name="b"/></testsuite></testsuites>')
+            self.assertEqual(module.read_passing_junit(p),2)
+            for value in ['<testsuites/>','<testsuite tests="0"/>','<testsuite tests="5"><testcase/></testsuite>',
+                '<testsuite tests="1"><testcase><failure/></testcase></testsuite>',
+                '<testsuite tests="1"><testcase><error/></testcase></testsuite>',
+                '<testsuite tests="1"><testcase><skipped/></testcase></testsuite>',
+                '<!DOCTYPE testsuite><testsuite tests="1"><testcase/></testsuite>']:
+                p.write_text(value)
+                with self.subTest(value=value),self.assertRaises(ValueError):module.read_passing_junit(p)
+
     def test_private_extraction_directories_are_traversable_by_test_user(self):
         with TemporaryDirectory() as folder:
             source=Path(folder)/'source';nested=source/'tests'/'nested'
