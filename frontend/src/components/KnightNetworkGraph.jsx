@@ -9,11 +9,11 @@ export default function KnightNetworkGraph({computers,groups,busy,readOnly,onInt
  const points=Object.fromEntries(Object.entries(layout.points).map(([id,p])=>[id,{...p,...positions[id]}]))
  const point=e=>{const p=svg.current.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(svg.current.getScreenCTM().inverse())}
  const menu=(e,target)=>onMenu(e,target)
- const start=(e,c)=>{if(e.button!==0||busy)return;e.preventDefault();const p=point(e);drag.current={id:c.id,start:p,offset:{x:points[c.id].x-p.x,y:points[c.id].y-p.y},moved:false};svg.current.setPointerCapture(e.pointerId);setMoving(c.id)}
+ const start=(e,c)=>{if(e.button!==0||busy)return;e.preventDefault();const p=point(e);drag.current={id:c.id,start:p,origin:{...points[c.id]},offset:{x:points[c.id].x-p.x,y:points[c.id].y-p.y},moved:false};svg.current.setPointerCapture(e.pointerId);setMoving(c.id)}
  const move=e=>{const d=drag.current;if(!d)return;const p=point(e);d.moved ||= Math.hypot(p.x-d.start.x,p.y-d.start.y)>5;const next={x:Math.max(35,Math.min(W-35,p.x+d.offset.x)),y:Math.max(55,Math.min(H-35,p.y+d.offset.y))};d.last=next;setPositions(old=>({...old,[d.id]:next}))}
  const end=e=>{const d=drag.current;if(!d)return;drag.current=null;setMoving(null);if(svg.current.hasPointerCapture(e.pointerId))svg.current.releasePointerCapture(e.pointerId)
   if(!d.moved){menu(e,computers.find(c=>c.id===d.id));return}
-  if(!readOnly){const intent=releaseIntent(d.id,d.last,points,groups);if(intent)onIntent(intent)}
+  if(!readOnly){const intent=releaseIntent(d.id,d.last,points,groups,d.origin);if(intent)onIntent(intent)}
  }
  const keyboard=(e,target)=>{if(e.key==='Enter'||e.key===' '||e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')){e.preventDefault();const r=e.currentTarget.getBoundingClientRect();menu({preventDefault(){},stopPropagation(){},clientX:r.left,clientY:r.bottom},target)}}
  const local=computers.find(c=>c.id==='local')

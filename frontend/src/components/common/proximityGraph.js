@@ -17,7 +17,7 @@ export function graphLayout(computers,groups) {
 }
 // Only the node intentionally released by the user can propose a membership
 // change. Layout motion must never merge arbitrary neighboring groups.
-export function releaseIntent(id,point,points,groups) {
+export function releaseIntent(id,point,points,groups,startPoint=points[id]) {
  const origin=groups.find(g=>g.members.includes(id))
  const nearest=Object.entries(points).filter(([other])=>other!==id).map(([other,p])=>({id:other,d:Math.hypot(point.x-p.x,point.y-p.y)})).sort((a,b)=>a.d-b.d)[0]
  if(nearest?.d<76){
@@ -28,7 +28,8 @@ export function releaseIntent(id,point,points,groups) {
  }
  const others=origin?.members.filter(other=>other!==id&&points[other]).map(other=>points[other])||[]
  if(others.length){const x=others.reduce((sum,p)=>sum+p.x,0)/others.length,y=others.reduce((sum,p)=>sum+p.y,0)/others.length
-  if(Math.hypot(point.x-x,point.y-y)>220)return {kind:'remove',members:[id]}
+  const initialDistance=startPoint?Math.hypot(startPoint.x-x,startPoint.y-y):0
+  if(Math.hypot(point.x-x,point.y-y)>Math.max(220,initialDistance+100))return {kind:'remove',members:[id]}
  }
  return null
 }
