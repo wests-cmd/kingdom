@@ -21,6 +21,7 @@ import uuid
 from functools import wraps
 
 from cryptography.fernet import Fernet
+from backend.security.user_key_protection import protect_user_key,unprotect_user_key,PREFIX,key_file_lock
 from backend.memory.portable_vault import clean_text, identifier
 
 API = "https://jules.googleapis.com/v1alpha/"
@@ -67,17 +68,25 @@ class JulesService:
 
     def _init_cipher(self):
         self.secrets_root.mkdir(parents=True, exist_ok=True)
-        key_path = self.secrets_root / "jules.key"
-        if not key_path.exists():
-            try:
-                fd = os.open(
-                    key_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600
-                )
-                with os.fdopen(fd, "wb") as handle:
-                    handle.write(Fernet.generate_key())
-            except FileExistsError:
-                pass
-        self.cipher = Fernet(key_path.read_bytes())
+        with key_file_lock(self.secrets_root/'jules-key.lock'):
+            key_path = self.secrets_root / "jules.key"
+            if not key_path.exists():
+                try:
+                    fd = os.open(
+                        key_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600
+                    )
+                    with os.fdopen(fd, "wb") as handle:
+                        handle.write(protect_user_key(Fernet.generate_key()))
+                except FileExistsError:
+                    pass
+            key_data=key_path.read_bytes()
+            raw_key=unprotect_user_key(key_data)
+            self.cipher=Fernet(raw_key)
+            if os.name=='nt' and not key_data.startswith(PREFIX):
+                import tempfile
+                with tempfile.NamedTemporaryFile(dir=self.secrets_root,delete=False) as out:
+                    out.write(protect_user_key(raw_key));out.flush();os.fsync(out.fileno());temporary=Path(out.name)
+                temporary.replace(key_path)
 
     def _init_db(self):
         with self.db.get_connection() as conn:

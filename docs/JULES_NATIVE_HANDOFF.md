@@ -2,7 +2,10 @@
 
 The adapter is off by default. An authenticated owner configures credentials and
 explicit source/repository allowlists through `/integrations/jules`. Credentials
-are encrypted in SQLite with a separate service-owned key. Responses never
+are encrypted in SQLite with a separate service-owned key. On Windows that
+master key is additionally wrapped with current-user DPAPI; POSIX retains mode
+0600. Creation/migration is serialized across processes. DPAPI does not replace
+tool/OS isolation and binds recovery to the original Windows user context. Responses never
 return the credential. A job must reference an existing backlog record and has
 an exact base revision, idempotency key, deadline and bounded repair budget.
 
@@ -37,7 +40,9 @@ substituted. Consumption, job acceptance and waking an enabled waiting backlog
 item share one transaction. The mission subsequently verifies that same receipt
 through its normal advancement path; no native tool receipt is fabricated.
 
-Waiting review creates neither a shell nor model task. Waiting work is removed
+Waiting review creates neither a shell nor model task. Crash reconciliation
+recognizes only the exact typed no-task waiting record or a currently validated
+external receipt; malformed native records are not silently skipped. Waiting work is removed
 from ready selection so independent ready work can advance. Acceptance only
 wakes an enabled waiting item, never one the owner paused. Previously accepted
 verdicts are checked at their retained acceptance time; current reviewer

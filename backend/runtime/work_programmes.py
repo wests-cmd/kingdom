@@ -84,7 +84,7 @@ def outline(text):
             sections.append(current)
         value = re.sub(r'^(?:[-*]\s+(?:\[[ xX]\]\s*)?|\d+[.)]\s+)', '', line).strip()
         if not value or len(value) > 1200:
-            raise ValueError('Each outcome needs 1â€“1200 characters')
+            raise ValueError('Each outcome needs 1–1200 characters')
         current['items'].append({'title': value[:200], 'description': value})
         count += 1
     if not 1 <= count <= 48 or not 1 <= len(sections) <= 8 or any(not s['items'] or len(s['items']) > 12 for s in sections):

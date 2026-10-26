@@ -125,7 +125,10 @@ class JulesAdapterTests(unittest.TestCase):
         self.enable_service()
         key_file = self.secrets_root / "jules.key"
         self.assertTrue(key_file.exists())
-        self.assertEqual(os.stat(key_file).st_mode & 0o777, 0o600)
+        if os.name=='posix':self.assertEqual(os.stat(key_file).st_mode & 0o777,0o600)
+        else:
+            from backend.security.user_key_protection import PREFIX
+            self.assertTrue(key_file.read_bytes().startswith(PREFIX),'Windows master key must be protected for the current user')
 
         # Confirm vault_key is NOT in jules_settings data_json
         with self.db.get_connection() as conn:
@@ -142,6 +145,15 @@ class JulesAdapterTests(unittest.TestCase):
         self.assertTrue(settings["has_credentials"])
         self.assertNotIn("api_key", settings)
         self.assertNotIn("vault_key", settings)
+
+    def test_concurrent_instances_share_one_complete_master_key(self):
+        from concurrent.futures import ThreadPoolExecutor
+        with TemporaryDirectory() as folder:
+            root=Path(folder);database=Database(root/'state.sqlite')
+            def create(_):return JulesService(database,engine=self.engine,secrets_root=root/'secrets')
+            with ThreadPoolExecutor(max_workers=4) as pool:instances=list(pool.map(create,range(8)))
+            encrypted=instances[0].cipher.encrypt(b'only-a-test-value')
+            self.assertTrue(all(instance.cipher.decrypt(encrypted)==b'only-a-test-value' for instance in instances))
 
     def test_default_off_and_owner_authorization_required(self):
         settings = self.service.settings()
@@ -692,6 +704,18 @@ class JulesAdapterTests(unittest.TestCase):
         self.engine.status=lambda:{'running':True}
         waiting=self.backlog.tick()
         self.assertEqual(waiting['status'],'waiting_external_review')
+        # Fault injection: the controller saved its no-task wait but crashed
+        # before releasing the backlog lease. Recovery must not invent a task.
+        for mode in ['startup','owner-reconcile']:
+            interrupted=self.backlog.get('kingdom',item['id'])
+            interrupted.update(lease='external-observation-lease',status='running',revision=interrupted['revision']+1)
+            with self.db.get_connection() as conn:
+                conn.execute('UPDATE work_backlog SET state_json=? WHERE id=?',(json.dumps(interrupted),item['id']));conn.commit()
+            if mode=='startup':
+                with patch.object(self.backlog,'_prior_owner_stopped',return_value=True):
+                    self.assertIn(item['id'],self.backlog.recover_startup()['recovered'])
+            else:self.backlog.reconcile('kingdom',item['id'],interrupted['revision'],interrupted['lease'])
+            self.assertEqual(self.backlog.tick()['status'],'waiting_external_review')
         with self.db.get_connection() as conn:self.assertEqual(conn.execute('SELECT COUNT(*) FROM tasks').fetchone()[0],0,'External review must not become a native shell or model task')
         self.assertEqual(self.backlog.tick()['status'],'idle','Waiting external work must not monopolize the ready queue')
         binding=dict(job_id=job['id'],project='kingdom',backlog_id=item['id'],mission_id=mission['id'],mission_version=1,step_id='review',source=review['source'],base_revision='a'*40,patch_sha256=hashlib.sha256(candidate.encode()).hexdigest(),contract_sha256='f'*64)
