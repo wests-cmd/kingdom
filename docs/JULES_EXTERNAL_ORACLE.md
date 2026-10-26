@@ -98,3 +98,42 @@ Probe execution uses an absolute interpreter path, never the candidate PATH. Wri
 Further independent review tightened private PID/IPC namespaces, denied host devices and supplementary groups, and required an explicitly enabled no-new-privileges value. Diagnostic scanning checks the known fixture-token canary and four enumerated patterns; it is not exhaustive detection of arbitrary API keys or credentials. Broader redaction proof requires additional independently seeded canaries and schema assertions.
 
 Git `revision` and `candidate_patch_sha256` are **declared input provenance**, not ancestry reconstructed by this script. The verdict marks this explicitly. The controller verifies the mounted source tree against the protected expected tree digest. A future signing bridge must independently reconstruct the exact base plus retained provider patch, verify that resulting tree against this tested tree, and retain that preparation proof. Never sign this diagnostic verdict merely because the two declared hashes look valid.
+
+## Separate exact-source supervisor
+
+`jules-external-review.py` now implements the separate bridge; the diagnostic
+script above still cannot sign by itself. The supervisor reconstructs the base
+and patch using `jules-source-preparation.py` and the raw Git exporter. It checks
+commit, tree and blob object identities, preflights source size, and rejects
+external object stores, lazy-fetch configurations, source links and changes
+outside an operator-owned exact file list. Export-ignore/export-subst attributes
+do not change the tested source.
+
+Install all four supervisor scripts and a bare Git mirror under independently
+protected root-owned directories. Use `python3 -I jules-external-review.py
+--config /protected/review/config.json`. The private configuration contains the
+complete V2 job binding, reviewer identity, private signing-key path, mirror
+path, retained patch path, exact allowed paths, installed image digest and a
+deadline of at most one hour. No candidate-provided configuration is accepted.
+
+The supervisor creates a fresh network-isolated, read-only, non-root API
+container with bounded memory, CPU and processes. Its writable state is private
+tmpfs belonging to its non-root UID. Production credentials/state and the signing
+key are never mounted. Host-owned assertions produce the signed verdict; a
+candidate JUnit file, stdout success string, or caller-supplied verdict is never
+an input to the signer. The existing host OpenSSL signs the V2 payload using a
+protected Ed25519 seed. Failed behavioral results are signed as failures and
+cannot satisfy the passing consumer.
+
+Unique container identity is durably recorded before startup. Unknown startup
+outcomes are reconciled by name and unique run label. Restart first cleans up
+retained owned containers under an exclusive supervisor lock; unavailable
+cleanup blocks a replacement. Every completed run retains preparation, startup
+logs and the verdict. Temporary signing-key wrappers are removed. The actual
+signing seed remains a separately protected operator credential.
+
+This initial supervisor contract still covers only the seven documented API
+fences. It is not adequate functional coverage for unrelated backlog items.
+Installing its public reviewer key and contract hash is a separate governed
+operation, not something the candidate or planner can do. The DT1 validation
+used a disposable key, deleted it afterward and left production trust unchanged.
