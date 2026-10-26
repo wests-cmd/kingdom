@@ -49,10 +49,11 @@ def reviewer_registry():
         raise ValueError('Independent reviewer trust is unavailable') from error
 
 
-def verify_attestation(envelope, expected, reviewers, now=None):
+def verify_attestation(envelope, expected, reviewers, now=None, *, outcome='passed'):
     """Pure signature/binding check; consumption must be atomic with job acceptance."""
     now=time.time() if now is None else now
     try:
+        if outcome not in {'passed','failed'}:raise ValueError('Choose a fixed independent verdict outcome')
         if not isinstance(envelope,dict) or set(envelope)!={'payload','signature'}:
             raise ValueError('Signed independent test attestation required')
         payload=envelope['payload']
@@ -85,8 +86,14 @@ def verify_attestation(envelope, expected, reviewers, now=None):
             if not isinstance(execution[field],str) or not re.fullmatch('[a-f0-9]{64}',execution[field]):raise ValueError('Pinned execution inputs required')
         if not isinstance(execution['run_id'],str) or not 1<=len(execution['run_id'])<=120:raise ValueError('Independent run identity required')
         if not isinstance(execution['argv'],list) or not execution['argv'] or len(execution['argv'])>100 or any(not isinstance(v,str) or not v or len(v)>1000 for v in execution['argv']):raise ValueError('Exact independent test command required')
-        if type(execution['test_count']) is not int or execution['test_count']<1 or type(execution['failed_count']) is not int or execution['failed_count']!=0 or type(execution['exit_code']) is not int or execution['exit_code']!=0:
-            raise ValueError('Nonempty passing independent suite required')
+        if outcome=='passed':
+            if type(execution['test_count']) is not int or execution['test_count']<1 or type(execution['failed_count']) is not int or execution['failed_count']!=0 or type(execution['exit_code']) is not int or execution['exit_code']!=0:
+                raise ValueError('Nonempty passing independent suite required')
+        elif (type(execution['test_count']) is not int or execution['test_count']<0
+              or type(execution['failed_count']) is not int or not 0<=execution['failed_count']<=execution['test_count']
+              or type(execution['exit_code']) is not int or not -2147483648<=execution['exit_code']<=4294967295
+              or (execution['failed_count']==0 and execution['exit_code']==0)):
+            raise ValueError('A genuine signed nonpassing execution verdict is required')
         if execution['network_isolated'] is not True or execution['read_only_source'] is not True or execution['verdict_origin']!='external_controller':
             raise ValueError('Independent isolated read-only test execution required')
         key=base64.b64decode(reviewer['public_key'],validate=True)

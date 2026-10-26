@@ -47,6 +47,11 @@ class VerificationRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class FailedVerificationRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    attestation: dict[str, Any]
+
+
 class CancelRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     reason: str = Field(default="Cancelled by owner", max_length=300)
@@ -124,5 +129,12 @@ def verify_job(job_id: str, evidence: VerificationRequest):
 @router.post('/jobs/{job_id}/candidate')
 def fetch_candidate(job_id: str):
     try:return service().fetch_candidate(job_id)
+    except KeyError as error:raise HTTPException(404,'Job not found') from error
+    except ValueError as error:raise HTTPException(409,str(error)) from error
+
+
+@router.post('/jobs/{job_id}/failure')
+def failed_verification(job_id: str, evidence: FailedVerificationRequest):
+    try:return service().verify_job_failure(job_id,evidence.model_dump())
     except KeyError as error:raise HTTPException(404,'Job not found') from error
     except ValueError as error:raise HTTPException(409,str(error)) from error

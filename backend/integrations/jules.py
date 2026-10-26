@@ -31,7 +31,12 @@ TERMINAL_PHASES = {
     "submission_unknown",
     "expired_remote_may_continue",
     "cancelled",
+    "repair_submission_unknown",
 }
+
+
+class CandidatePending(ValueError):
+    """A completed provider snapshot has not published the corrected artifact yet."""
 
 
 def announces(kind='job'):
@@ -48,6 +53,10 @@ def announces(kind='job'):
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args):
         return None
+
+
+class DispatchDeferred(ValueError):
+    """Owner programme binding or prerequisites are not dispatchable yet."""
 
 
 class JulesService:
@@ -366,9 +375,11 @@ class JulesService:
             conn.commit()
         return state
 
-    def request(self, path, body=None, opener=None):
-        if not re.fullmatch(r"sessions(?:/[A-Za-z0-9_-]+(?:/activities\?pageSize=25(?:&pageToken=[A-Za-z0-9%_.~-]+)?)?)?", path):
+    def request(self, path, body=None, opener=None, timeout=30):
+        if not re.fullmatch(r"sessions(?:/[A-Za-z0-9_-]+(?::sendMessage|/activities\?pageSize=25(?:&pageToken=[A-Za-z0-9%_.~-]+)?)?)?", path):
             raise ValueError("Only fixed Jules session operations are allowed")
+        if path.endswith(':sendMessage') and (not isinstance(body,dict) or set(body)!={'prompt'} or not isinstance(body['prompt'],str) or not 1<=len(body['prompt'])<=24000):
+            raise ValueError('A bounded session correction is required')
         secret = self._get_decrypted_secret()
         req = urllib.request.Request(
             API + path,
@@ -379,11 +390,11 @@ class JulesService:
             },
         )
         active_opener = opener or self.opener
-        with active_opener.open(req, timeout=30) as resp:
+        with active_opener.open(req, timeout=timeout) as resp:
             data = resp.read(5242881)
         if len(data) > 5242880:
             raise ValueError("Bounded Jules response size exceeded")
-        return json.loads(data.decode("utf-8"))
+        return {} if not data and path.endswith(':sendMessage') else json.loads(data.decode("utf-8"))
 
     @announces()
     def submit_job(self, job_id, opener=None):
@@ -405,6 +416,9 @@ class JulesService:
                 and self.engine.execution_policy.get()["level"] < 5
             ):
                 return state
+
+            try:self._programme_authority(state)
+            except DispatchDeferred:return state
 
             settings = self.settings()
             if not settings["enabled"]:
@@ -453,6 +467,17 @@ class JulesService:
 
             state = self.get_job(job_id)
             self._announce(state)
+            state=self.get_job(job_id)
+            if state['phase']!='submitting':return state
+            try:self._current_authority(state)
+            except ValueError:
+                with self.db.get_connection() as conn:
+                    conn.execute('BEGIN IMMEDIATE')
+                    current=self.get_job(job_id)
+                    if current['phase']=='submitting':
+                        current.update(phase='queued',reason='Dispatch authorization changed before POST; no provider request sent')
+                        self._save_job(conn,current);conn.commit()
+                    return current
 
             body = {
                 "title": f"Kingdom scoped engineering assignment: {state['backlog_id']}",
@@ -518,6 +543,8 @@ class JulesService:
             state = self.get_job(job_id)
             if state["phase"] != "watching":
                 return state
+            try:self._programme_authority(state)
+            except DispatchDeferred:return state
 
             # Live execution policy / runtime level check prior to polling
             if (
@@ -637,6 +664,15 @@ class JulesService:
                 conn.commit()
             return state
 
+        if state['phase']=='repair_sending':
+            with self.db.get_connection() as conn:
+                conn.execute('BEGIN IMMEDIATE')
+                current=self.get_job(job_id)
+                if current['phase']=='repair_sending':
+                    current.update(phase='repair_submission_unknown',reason='Interrupted correction POST; no automatic replay; remote work may continue')
+                    self._save_job(conn,current);conn.commit()
+                return current
+
         if self.clock() >= state["deadline_at"]:
             with self.db.get_connection() as conn:
                 conn.execute("BEGIN IMMEDIATE")
@@ -650,9 +686,29 @@ class JulesService:
 
         if state["phase"] == "queued":
             state = self.submit_job(job_id, opener=opener)
+        if state['phase']=='repair_queued':
+            return self.repair_job(job_id,opener=opener)
         if state["phase"] == "watching":
             state = self.poll_job(job_id, opener=opener)
+        if (state['phase']=='awaiting_independent_review' and state.get('repair_history')
+                and not state.get('candidate') and self.clock()>=state.get('backoff_until',0)):
+            try:
+                state=self.fetch_candidate(job_id,opener=opener)
+            except CandidatePending:
+                state=self._resume_candidate_observation(job_id)
+            except urllib.error.HTTPError as error:
+                if error.code not in {429,503}:raise
+                state=self._resume_candidate_observation(job_id,backoff=30)
         return state
+
+    def _resume_candidate_observation(self,job_id,backoff=0):
+        with self.db.get_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            current=json.loads(conn.execute('SELECT state_json FROM jules_jobs WHERE id=?',(job_id,)).fetchone()[0])
+            if current['phase']!='awaiting_independent_review' or current.get('candidate'):return current
+            current.update(phase='watching',backoff_until=self.clock()+backoff,
+                reason='Correction acknowledged; waiting for a new provider artifact, without resending the correction')
+            self._save_job(conn,current);conn.commit();return current
 
     def tick(self, opener=None):
         if not self.settings()["enabled"]:
@@ -667,7 +723,8 @@ class JulesService:
 
         active_jobs = [
             j for j in self.list_jobs()
-            if j["phase"] in {"queued", "submitting", "watching"}
+            if j["phase"] in {"queued", "submitting", "watching", "repair_queued", "repair_sending"}
+            or (j['phase']=='awaiting_independent_review' and j.get('repair_history') and not j.get('candidate'))
         ]
         processed = 0
         for job in active_jobs:
@@ -712,12 +769,17 @@ class JulesService:
                             patches.append((activity.get('createTime',''),patch))
                 page=data.get('nextPageToken','')
                 if not page:break
-            if page or not patches:raise ValueError('Complete bounded provider patch unavailable')
+            if page:raise ValueError('Complete bounded provider patch unavailable')
+            if not patches:
+                if state.get('repair_history'):raise CandidatePending('Corrected artifact is not published yet')
+                raise ValueError('Complete bounded provider patch unavailable')
             patch=max(patches,key=lambda value:value[0])[1]
             if patch.get('baseCommitId')!=state['revision']:raise ValueError('Candidate base differs from reviewed job')
             value=patch['unidiffPatch']
             if not isinstance(value,str) or not 1<=len(value.encode())<=2000000:raise ValueError('Candidate patch exceeds scope')
             candidate={'base_revision':state['revision'],'patch_sha256':hashlib.sha256(value.encode()).hexdigest()}
+            if any(entry.get('failed_candidate')==candidate for entry in state.get('repair_history',[])):
+                raise CandidatePending('Provider has not returned a corrected candidate')
             with self.db.get_connection() as conn:
                 conn.execute('BEGIN IMMEDIATE')
                 current=json.loads(conn.execute('SELECT state_json FROM jules_jobs WHERE id=?',(job_id,)).fetchone()[0])
@@ -729,13 +791,172 @@ class JulesService:
                 self._save_job(conn,current);conn.commit()
             return current
 
+    def _failed_review(self,conn,state,envelope):
+        from backend.runtime.patch_acceptance import reviewer_registry,verify_attestation,current_review_contract,expected_binding
+        self._current_authority(state)
+        row=conn.execute('SELECT state_json FROM work_backlog WHERE project=? AND id=?',(state['project'],state['backlog_id'])).fetchone()
+        backlog=json.loads(row[0]) if row else {}
+        if not state.get('candidate'):raise ValueError('Retained provider candidate required')
+        state['review_contract']=current_review_contract(self.engine,state,backlog)
+        proof=verify_attestation(envelope,expected_binding(state,backlog),reviewer_registry(),now=self.clock(),outcome='failed')
+        if proof['issued_at']<state['created_at']:raise ValueError('Independent failure predates this job')
+        return proof
+
+    @announces()
+    def repair_job(self,job_id,opener=None):
+        """Claim one correction durably before its non-idempotent provider POST."""
+        with self._lock:
+            with self.db.get_connection() as conn:
+                conn.execute('BEGIN IMMEDIATE')
+                state=self.get_job(job_id)
+                if state['phase']!='repair_queued':return state
+                try:
+                    proof=self._failed_review(conn,state,state.get('repair_attestation'))
+                    retained=conn.execute('SELECT job_id,payload_json FROM jules_failed_receipts WHERE receipt_id=?',(proof['receipt_id'],)).fetchone()
+                    if not retained or retained[0]!=job_id or json.loads(retained[1])!=proof:raise ValueError('Failed receipt is not retained for this job')
+                    if state['repair_attempts']>=state['max_repair_budget']:raise ValueError('Repair budget exhausted')
+                    patch=conn.execute('SELECT patch FROM jules_candidate_patches WHERE job_id=?',(job_id,)).fetchone()
+                    if not patch or hashlib.sha256(patch[0].encode()).hexdigest()!=state['candidate']['patch_sha256']:raise ValueError('Retained patch changed')
+                except DispatchDeferred:
+                    return state
+                except (ValueError,KeyError,TypeError,StopIteration) as error:
+                    state.update(phase='review_required',reason='Correction authority, budget or trusted verdict is no longer current',repair_diagnostics=type(error).__name__)
+                    self._save_job(conn,state);conn.commit();return state
+                attempt=state['repair_attempts']+1
+                scope={key:state[key] for key in ('project','backlog_id','repository','source','revision','branch','deadline_at','max_repair_budget')}
+                scope.update(attempt=attempt,contract_id=state['review_contract']['contract_id'],contract_sha256=state['review_contract']['contract_sha256'],failed_patch_sha256=state['candidate']['patch_sha256'])
+                message=('Correct the rejected patch in this same retained session. Keep the original assignment and immutable reviewed scope.\n'
+                    +'Assignment: '+state['prompt']+'\nFixed scope: '+json.dumps(scope,sort_keys=True)
+                    +'\nIndependent fixed contract failed: tests={test_count}, failed={failed_count}, exit={exit_code}'.format(**proof['execution'])
+                    +'\nReturn a corrected complete patch against the same base revision. Do not change the test contract, repository, branch, deadline or budget. No merge, deployment, credentials or owner-device access. Independent verification is still required; completion text is not acceptance.')
+                conn.execute('CREATE TABLE IF NOT EXISTS jules_candidate_history(job_id TEXT,patch_sha256 TEXT,patch TEXT NOT NULL,PRIMARY KEY(job_id,patch_sha256))')
+                conn.execute('INSERT OR IGNORE INTO jules_candidate_history VALUES(?,?,?)',(job_id,state['candidate']['patch_sha256'],patch[0]))
+                dispatch=uuid.uuid4().hex
+                history=state.setdefault('repair_history',[])
+                history.append(dict(dispatch_id=dispatch,attempt=attempt,failed_candidate=state['candidate'],verdict=proof,attestation=state['repair_attestation'],message_sha256=hashlib.sha256(message.encode()).hexdigest(),status='sending'))
+                state.update(phase='repair_sending',repair_attempts=attempt,repair_dispatch_id=dispatch,reason='Bounded correction POST claimed for the retained session')
+                self._save_job(conn,state);conn.commit()
+            self._announce(state)
+            current=self.get_job(job_id)
+            if current['phase']!='repair_sending' or current.get('repair_dispatch_id')!=dispatch:return current
+            try:
+                with self.db.get_connection() as conn:
+                    self._failed_review(conn,current,current.get('repair_attestation'))
+            except ValueError:
+                return self._finish_repair(job_id,dispatch,'withdrawn')
+            try:
+                reply=self.request(state['session']+':sendMessage',{'prompt':message},opener=opener,timeout=min(30,state['deadline_at']-self.clock()))
+                if reply!={}:raise ValueError('Unexpected correction acknowledgement')
+            except Exception:
+                return self._finish_repair(job_id,dispatch,'unknown')
+            return self._finish_repair(job_id,dispatch,'acknowledged')
+
+    def _finish_repair(self,job_id,dispatch,outcome):
+        with self.db.get_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            state=self.get_job(job_id)
+            if state.get('repair_dispatch_id')!=dispatch:return state
+            state['repair_history'][-1]['status']=outcome
+            if outcome=='acknowledged':
+                state['previous_candidate']=state.pop('candidate',None)
+            if state['phase']!='cancelled':
+                if outcome=='unknown':
+                    # Revocation must never turn an uncertain POST into a retryable review.
+                    state.update(phase='repair_submission_unknown',reason='Correction outcome uncertain; no automatic replay; remote work may continue')
+                elif self.clock()>=state['deadline_at']:
+                    state.update(phase='expired_remote_may_continue',reason='Correction deadline ended; remote work may continue')
+                else:
+                    try:self._current_authority(state)
+                    except ValueError:
+                        state.update(phase='review_required',reason='Correction authority withdrawn; remote work may continue')
+                    else:
+                        state.update(phase='watching' if outcome=='acknowledged' else 'review_required',
+                            reason='Correction acknowledged; independently review the next returned patch' if outcome=='acknowledged' else 'Correction authority withdrawn before POST')
+            self._save_job(conn,state);conn.commit();return state
+
+    def _programme_authority(self,state):
+        """Programme registration is not dispatch until its final owner binding."""
+        with self.db.get_connection() as conn:
+            if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_programmes'").fetchone():return
+            matches=[]
+            for value, in conn.execute('SELECT state_json FROM work_programmes WHERE project=?',(state['project'],)):
+                programme=json.loads(value)
+                for section in programme['sections']:
+                    for row in [*section['items'],section['integration']]:
+                        if row['work_id']==state['backlog_id']:matches.append((programme,row))
+            if not matches:return  # Manual owner-authored Jules jobs retain their existing semantics.
+            if len(matches)!=1:raise DispatchDeferred('Ambiguous programme ownership')
+            programme,row=matches[0]
+            item=conn.execute('SELECT state_json FROM work_backlog WHERE project=? AND id=?',(state['project'],state['backlog_id'])).fetchone()
+            enabled=conn.execute('SELECT enabled FROM work_backlog_settings WHERE id=1').fetchone()
+            try:
+                item=json.loads(item[0]);dispatch=row['external_dispatch']
+                from backend.runtime.work_programmes import validate_binding,JulesPlacement
+                if (row.get('planning')!='reviewed' or row.get('dispatch_status')!='jules_registered'
+                        or row.get('jules_job_id')!=state['id'] or not item['enabled'] or not enabled or not enabled[0]):
+                    raise ValueError('Programme dispatch is paused or incompletely bound')
+                validate_binding(self.engine,programme,row,item)
+                if programme.get('source_revision')!=state['revision'] or programme.get('jules_placement',{}).get('scope')!={k:dispatch[k] for k in JulesPlacement.model_fields} or dispatch.get('enabled') is not True:
+                    raise ValueError('Programme placement changed')
+                if any(state.get(k)!=dispatch.get(k) for k in ('source','repository','branch','prompt','max_repair_budget')) or state['idem']!=dispatch['idempotency_key'] or state['deadline_at']-state['created_at']!=dispatch['deadline_seconds']:
+                    raise ValueError('Programme assignment differs from its reviewed scope')
+                from backend.runtime.mission_acceptance import validated_acceptance
+                for ident in item['intent']['depends_on']:
+                    value=conn.execute('SELECT state_json FROM work_backlog WHERE project=? AND id=?',(state['project'],ident)).fetchone()
+                    dependency=json.loads(value[0])
+                    if dependency['status']!='completed':raise ValueError('Programme prerequisite is unfinished')
+                    for section in programme['sections']:
+                        for dependency_row in [*section['items'],section['integration']]:
+                            if dependency_row['work_id']==ident:validate_binding(self.engine,programme,dependency_row,dependency)
+                    intent=dependency['intent']
+                    validated_acceptance(self.engine,intent['mission_id'],intent['mission_version'],intent['acceptance_step'])
+            except (ValueError,KeyError,TypeError,StopIteration,OSError) as error:
+                raise DispatchDeferred('Programme binding, owner enablement or current accepted prerequisites are not ready') from error
+
     def _current_authority(self,state):
+        self._programme_authority(state)
         settings=self.settings()
         if not settings['enabled'] or state['source'] not in settings['allowed_sources'] or state['repository'] not in settings['allowed_repositories']:
             raise ValueError('Jules job authority is disabled or revoked')
         if not self.engine or self.engine.execution_policy.get()['level']<5:
             raise ValueError('Cloud dispatch requires current level-5 standing authorization')
         if self.clock()>=state['deadline_at']:raise ValueError('Job review window expired')
+
+    @announces()
+    def verify_job_failure(self, job_id, verification_evidence):
+        """Retain a trusted exact-patch failed verdict, never candidate prose."""
+        from backend.runtime.patch_acceptance import reviewer_registry,verify_attestation,current_review_contract,expected_binding
+        if not isinstance(verification_evidence,dict):raise ValueError('Structured signed failed verdict required')
+        with self._lock,self.db.get_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            state=self.get_job(job_id)
+            if state['phase']=='repair_queued' and state.get('repair_attestation')==verification_evidence.get('attestation'):
+                return state
+            if state['phase'] not in {'awaiting_independent_review','review_required'}:
+                raise ValueError('A retained candidate awaiting independent review is required')
+            try:
+                self._current_authority(state)
+                row=conn.execute('SELECT state_json FROM work_backlog WHERE project=? AND id=?',(state['project'],state['backlog_id'])).fetchone()
+                backlog=json.loads(row[0]) if row else {}
+                if not state.get('candidate'):raise ValueError('Retained provider candidate required')
+                state['review_contract']=current_review_contract(self.engine,state,backlog)
+                proof=verify_attestation(verification_evidence.get('attestation'),expected_binding(state,backlog),reviewer_registry(),now=self.clock(),outcome='failed')
+                if proof['issued_at']<state['created_at']:raise ValueError('Independent failure predates this job')
+                conn.execute('CREATE TABLE IF NOT EXISTS jules_failed_receipts(receipt_id TEXT PRIMARY KEY,job_id TEXT NOT NULL,payload_json TEXT NOT NULL)')
+                if conn.execute('SELECT 1 FROM jules_failed_receipts WHERE receipt_id=?',(proof['receipt_id'],)).fetchone():
+                    raise ValueError('Failed verdict has already been consumed')
+                conn.execute('INSERT INTO jules_failed_receipts VALUES(?,?,?)',(proof['receipt_id'],job_id,json.dumps(proof,sort_keys=True)))
+                exhausted=state['repair_attempts']>=state['max_repair_budget']
+                state.update(phase='review_required' if exhausted else 'repair_queued',accepted=False,
+                    repair_verdict=proof,repair_attestation=verification_evidence['attestation'],
+                    repair_diagnostics='Independent fixed contract failed: tests={test_count}, failed={failed_count}, exit={exit_code}'.format(**proof['execution']),
+                    reason='Approved repair budget exhausted; failed verdict retained' if exhausted else 'Trusted exact-patch failure retained; bounded correction queued for the same session')
+            except DispatchDeferred:
+                return state
+            except (ValueError,KeyError,TypeError,StopIteration,sqlite3.IntegrityError) as error:
+                state.update(phase='review_required',accepted=False,reason='Current trusted exact-patch failed verdict is missing or invalid',repair_diagnostics=type(error).__name__)
+            self._save_job(conn,state);conn.commit()
+            return state
 
     @announces()
     def verify_job_completion(self, job_id, verification_evidence):
