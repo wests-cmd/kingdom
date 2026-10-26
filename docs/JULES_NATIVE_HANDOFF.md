@@ -43,18 +43,20 @@ there is no model/agent tool for creating reviewers. Each reviewer entry include
 `public_key` (base64 raw Ed25519), `enabled`, `projects` and `sources`, under
 `{"version":1,"reviewers":{...}}`. Disabled/out-of-scope keys fail closed.
 
-The protected host gate can optionally sign a passing run when its root-owned
-config contains `attestation` with `reviewer_id`, `key_path` and `binding`.
-`binding` supplies job/project/backlog/mission/version/step; source, base and patch
-hashes come from the gate's pinned inputs. The private Ed25519 PEM stays outside
-the candidate container. It must be root-owned and readable only by root.
-Neither runtime agents nor candidates receive it.
+The inline pytest gate does **not** issue independent signatures. Independent
+review demonstrated that candidate imports can forge their own XML and exit
+status without running assertions. The signer is disabled, including when its
+config requests attestation. An earlier signing/interoperability experiment is
+historical test evidence only and must not be treated as independent acceptance.
 
-The gate runs a fresh network-isolated, read-only-source container, retains JUnit
-and bounded logs, rejects failed/empty/inconsistent XML and hashes the exact
-patched source tree. Its tree digest is SHA-256 of compact sorted JSON mapping
-relative file names to SHA-256 content digests. A passing signature lasts at most
-15 minutes and never outlives the review scope. It does not merge or deploy code.
+A production issuer must own a separate trusted verdict process that never
+imports candidate code, cannot be written by it, and tests the candidate across
+an explicit execution/data boundary. The candidate must not choose its test
+contract or success signal. That governed isolated-review contract must also
+match the mission/backlog acceptance protocol; the former hardcoded sandbox
+pytest argv does not match normal native command execution. Until this path is
+implemented and reviewed, the verifier is a tested consumer interface with no
+configured production issuer, not an operational autonomous acceptance system.
 
 ## Current scope and provenance
 
@@ -71,6 +73,6 @@ artifact fence, a signed positive fixture, owner-only API access, atomic
 submission, cancellation races and existing backlog/programme contracts.
 Fixture-signed test data is a unit-test seam, not a real autonomous job receipt.
 Protected production key installation, a real source-bound signed job,
-automatic failure handback, Boss placement, full release review and fleet rollout
+external verdict issuance/mission execution binding, automatic failure handback, Boss placement, full release review and fleet rollout
 still require their own evidence. Do not enable the whole backlog from these
 module tests alone.

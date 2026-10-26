@@ -623,6 +623,60 @@ class JulesAdapterTests(unittest.TestCase):
         opener=self.dummy_opener({'name':'sessions/too-late'})
         with self.assertRaises(ValueError):self.service.submit_job(job['id'],opener=opener)
 
+    def test_late_poll_or_backoff_cannot_resurrect_cancelled_job(self):
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+        self.enable_service()
+        for mode in ['normal','quota']:
+            item=self.backlog.register(project='kingdom',idempotency_key='poll-'+mode,title='Poll race')
+            job=self.service.register_job(project='kingdom',backlog_id=item['id'],idempotency_key='poll-'+mode,source='sources/github/wests-cmd/kingdom',repository='wests-cmd/kingdom',revision='a'*40,branch='feature/test',prompt='Bounded poll race')
+            self.service.submit_job(job['id'],opener=self.dummy_opener({'name':'sessions/poll-'+mode}))
+            second=JulesService(self.db,engine=self.engine,secrets_root=self.secrets_root,clock=lambda:self.clock_time)
+            entered=threading.Event();release=threading.Event()
+            response=self.dummy_opener({'name':'sessions/poll-'+mode,'state':'IN_PROGRESS'})
+            class BlockingPoll:
+                def open(inner,*args,**kwargs):
+                    entered.set()
+                    if not release.wait(10):raise TimeoutError('Test release missing')
+                    if mode=='quota':raise urllib.error.HTTPError('https://jules.googleapis.com',429,'Quota',{},None)
+                    return response.open(*args,**kwargs)
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future=pool.submit(self.service.poll_job,job['id'],BlockingPoll())
+                try:
+                    self.assertTrue(entered.wait(5));second.cancel_job(job['id'])
+                finally:release.set()
+                result=future.result(timeout=10)
+            self.assertEqual(result['phase'],'cancelled',mode)
+            self.assertEqual(self.service.get_job(job['id'])['phase'],'cancelled',mode)
+
+    def test_delegation_refuses_enabled_leased_or_completed_backlog(self):
+        self.enable_service()
+        original=self.backlog.get('kingdom',self.backlog_item['id'])
+        for field,value in [('enabled',True),('lease','active-lease'),('status','completed')]:
+            changed={**original,field:value}
+            with self.db.get_connection() as conn:
+                conn.execute('UPDATE work_backlog SET state_json=? WHERE id=?',(json.dumps(changed),original['id']));conn.commit()
+            with self.assertRaises(ValueError):
+                self.service.register_job(project='kingdom',backlog_id=original['id'],idempotency_key='invalid-'+field,source='sources/github/wests-cmd/kingdom',repository='wests-cmd/kingdom',revision='a'*40,branch='feature/test',prompt='Must not attach')
+        self.assertEqual(self.service.list_jobs(),[])
+
+    def test_downgrade_withdraws_standing_dispatch_and_events_exclude_secrets(self):
+        self.enable_service()
+        job=self.service.register_job(project='kingdom',backlog_id=self.backlog_item['id'],idempotency_key='policy-events',source='sources/github/wests-cmd/kingdom',repository='wests-cmd/kingdom',revision='a'*40,branch='feature/test',prompt='Private prompt must not enter event')
+        for level in range(5):
+            self.engine.level=level
+            self.assertEqual(self.service.run_job(job['id'])['phase'],'queued')
+            class NoNetwork:
+                def open(inner,*args,**kwargs):raise AssertionError('Policy downgrade must prevent provider calls')
+            self.assertEqual(self.service.submit_job(job['id'],opener=NoNetwork())['phase'],'queued')
+        self.engine.level=5
+        self.service.cancel_job(job['id'])
+        changes=[event for event in self.engine.events.published if event[0].startswith('jules.')]
+        self.assertTrue(any(event[0]=='jules.settings_changed' for event in changes))
+        self.assertTrue(any(event[1].get('phase')=='cancelled' for event in changes))
+        self.assertNotIn('Private prompt',str(changes))
+        self.assertNotIn('test-key',str(changes))
+
     def test_api_endpoints_integration(self):
         from backend.main import app
         from unittest.mock import patch

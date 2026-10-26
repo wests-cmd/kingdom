@@ -15,8 +15,6 @@ import time
 import urllib.parse
 import urllib.request
 import urllib.error
-import base64
-import uuid
 import xml.etree.ElementTree as ET
 
 
@@ -163,30 +161,9 @@ class Gate:
         return r.returncode,output
 
     def attest(self,sha):
-        """Optional protected-scope signing; the private key never enters a worker."""
-        if sha!=getattr(self,'last_test_sha',None) or not getattr(self,'last_test_evidence',None):
-            raise ValueError('Only the exact immediately passing candidate can be signed')
-        run=self.root/('review-'+sha[:16])
-        if hashlib.sha256((run/'candidate.patch').read_bytes()).hexdigest()!=sha:
-            raise ValueError('Tested patch changed before attestation')
-        tree={p.relative_to(run/'source').as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in (run/'source').rglob('*') if p.is_file()}
-        if hashlib.sha256(json.dumps(tree,sort_keys=True,separators=(',',':')).encode()).hexdigest()!=self.last_test_evidence['candidate_tree_sha256']:
-            raise ValueError('Tested candidate tree changed before attestation')
-        scope=self.c['attestation'];key=Path(scope['key_path'])
-        if os.getuid()!=0 or key.is_symlink() or key.stat().st_uid!=0 or key.stat().st_mode&0o077:
-            raise ValueError('Protected root-only reviewer key required')
-        binding={**scope['binding'],'source':self.c['source'],'base_revision':self.c['revision'],'patch_sha256':sha}
-        now=time.time();expiry=min(now+900,self.c['deadline_at'])
-        if expiry<=now:raise ValueError('Review scope expired before signing')
-        payload={'format':'kingdom.patch-test.v1','receipt_id':'review-'+uuid.uuid4().hex,'reviewer_id':scope['reviewer_id'],
-                 'issued_at':now,'expires_at':expiry,'binding':binding,'execution':self.last_test_evidence}
-        encoded=b'kingdom.independent-patch-test.v1\0'+json.dumps(payload,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False).encode()
-        message=run/'signed-payload.bin';message.write_bytes(encoded);message.chmod(0o600)
-        result=subprocess.run(['openssl','pkeyutl','-sign','-rawin','-inkey',str(key),'-in',str(message)],capture_output=True,timeout=10)
-        if result.returncode or len(result.stdout)!=64:raise ValueError('Independent reviewer signature unavailable')
-        envelope={'payload':payload,'signature':base64.b64encode(result.stdout).decode()}
-        target=run/'attestation.json';target.write_text(json.dumps(envelope,indent=2));target.chmod(0o600)
-        return str(target)
+        # Inline candidate imports can forge pytest XML and exit status. Keep
+        # signing unavailable until an external oracle owns the verdict process.
+        raise ValueError('Inline pytest reports are not independently authoritative; external verdict required')
 
     def run(self):
         if self.state['phase'] in {'review_required','scoped_tests_passed_review_required','expired_remote_may_continue'}:return

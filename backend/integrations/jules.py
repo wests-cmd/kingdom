@@ -18,6 +18,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from functools import wraps
 
 from cryptography.fernet import Fernet
 from backend.memory.portable_vault import clean_text, identifier
@@ -30,6 +31,17 @@ TERMINAL_PHASES = {
     "expired_remote_may_continue",
     "cancelled",
 }
+
+
+def announces(kind='job'):
+    def decorate(method):
+        @wraps(method)
+        def wrapped(self,*args,**kwargs):
+            result=method(self,*args,**kwargs)
+            self._announce(result,kind)
+            return result
+        return wrapped
+    return decorate
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -45,6 +57,7 @@ class JulesService:
         self.engine = engine
         self.clock = clock
         self._lock = threading.RLock()
+        self._announced = {}
         self.opener = urllib.request.build_opener(
             NoRedirect(), urllib.request.ProxyHandler({})
         )
@@ -119,6 +132,7 @@ class JulesService:
             "allowed_sources": list(data.get("allowed_sources", [])),
         }
 
+    @announces('settings')
     def configure(
         self,
         enabled=None,
@@ -195,8 +209,17 @@ class JulesService:
             raise ValueError("Jules API credentials not configured")
         return self.cipher.decrypt(row[0]).decode("utf-8")
 
+    def _announce(self,state,kind='job'):
+        if not self.engine or not hasattr(self.engine,'events') or not isinstance(state,dict):return
+        ident=state.get('id','settings');version=state.get('record_version',state.get('revision',0))
+        if self._announced.get((kind,ident),-1)>=version:return
+        fields=('revision','enabled') if kind=='settings' else ('id','project','backlog_id','phase','accepted','record_version')
+        self.engine.events.publish('jules.'+kind+'_changed',{key:state[key] for key in fields if key in state})
+        self._announced[kind,ident]=version
+
     def _save_job(self, conn, state):
         state["updated_at"] = self.clock()
+        state["record_version"] = state.get("record_version",0)+1
         conn.execute(
             "INSERT INTO jules_jobs VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET state_json=excluded.state_json",
             (
@@ -232,6 +255,7 @@ class JulesService:
                 ).fetchall()
             return [json.loads(r[0]) for r in rows]
 
+    @announces()
     def register_job(
         self,
         project,
@@ -289,8 +313,11 @@ class JulesService:
             # Every cloud job must refer to an existing owner backlog record.
             if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_backlog'").fetchone():
                 raise ValueError('Create the reviewed backlog record first')
-            if not conn.execute('SELECT 1 FROM work_backlog WHERE project=? AND id=?',(project,backlog_id)).fetchone():
-                raise ValueError('Backlog item is not registered in this project')
+            backlog_row=conn.execute('SELECT state_json FROM work_backlog WHERE project=? AND id=?',(project,backlog_id)).fetchone()
+            if not backlog_row:raise ValueError('Backlog item is not registered in this project')
+            backlog=json.loads(backlog_row[0])
+            if backlog.get('enabled') or backlog.get('lease') or backlog.get('status')=='completed':
+                raise ValueError('Delegate only a disabled, unleased, unfinished backlog record')
 
             if conn.execute('SELECT 1 FROM jules_jobs WHERE project=? AND backlog_id=?',(project,backlog_id)).fetchone():
                 raise ValueError('Backlog item already has a Jules job; reuse its retained checkpoint')
@@ -347,6 +374,7 @@ class JulesService:
             raise ValueError("Bounded Jules response size exceeded")
         return json.loads(data.decode("utf-8"))
 
+    @announces()
     def submit_job(self, job_id, opener=None):
         with self._lock:
             state = self.get_job(job_id)
@@ -363,7 +391,7 @@ class JulesService:
             if (
                 self.engine
                 and hasattr(self.engine, "execution_policy")
-                and self.engine.execution_policy.get()["level"] == 0
+                and self.engine.execution_policy.get()["level"] < 5
             ):
                 return state
 
@@ -402,7 +430,7 @@ class JulesService:
                 conn.execute("BEGIN IMMEDIATE")
                 rowcount = conn.execute(
                     """UPDATE jules_jobs
-                       SET state_json = json_set(state_json, '$.phase', 'submitting', '$.reason', 'POST request dispatched to Jules API', '$.updated_at', ?)
+                       SET state_json = json_set(state_json, '$.phase', 'submitting', '$.reason', 'POST request dispatched to Jules API', '$.updated_at', ?, '$.record_version', COALESCE(json_extract(state_json, '$.record_version'),0)+1)
                        WHERE id = ? AND json_extract(state_json, '$.phase') = 'queued'""",
                     (now, job_id),
                 ).rowcount
@@ -413,6 +441,7 @@ class JulesService:
                 return self.get_job(job_id)
 
             state = self.get_job(job_id)
+            self._announce(state)
 
             body = {
                 "title": f"Kingdom scoped engineering assignment: {state['backlog_id']}",
@@ -472,6 +501,7 @@ class JulesService:
                     conn.commit()
             return state
 
+    @announces()
     def poll_job(self, job_id, opener=None):
         with self._lock:
             state = self.get_job(job_id)
@@ -482,7 +512,7 @@ class JulesService:
             if (
                 self.engine
                 and hasattr(self.engine, "execution_policy")
-                and self.engine.execution_policy.get()["level"] == 0
+                and self.engine.execution_policy.get()["level"] < 5
             ):
                 return state
 
@@ -553,34 +583,25 @@ class JulesService:
                     phase = "watching"
                     reason = f"Remote session in progress: {remote_state}"
 
-                with self.db.get_connection() as conn:
-                    conn.execute("BEGIN IMMEDIATE")
-                    state.update(
-                        phase=phase,
-                        remote_state=remote_state,
-                        consecutive_errors=0,
-                        backoff_until=0,
-                        reason=reason,
-                    )
-                    self._save_job(conn, state)
-                    conn.commit()
+                state=self._poll_update(job_id,state['session'],dict(phase=phase,remote_state=remote_state,consecutive_errors=0,backoff_until=0,reason=reason))
             except urllib.error.HTTPError as error:
                 if error.code in {429, 503}:
                     err_count = state.get("consecutive_errors", 0) + 1
                     delay = min(300, 15 * (2 ** min(err_count, 4)))
-                    with self.db.get_connection() as conn:
-                        conn.execute("BEGIN IMMEDIATE")
-                        state.update(
-                            consecutive_errors=err_count,
-                            backoff_until=now + delay,
-                            reason=f"Provider quota or transient backoff (HTTP {error.code})",
-                        )
-                        self._save_job(conn, state)
-                        conn.commit()
+                    state=self._poll_update(job_id,state['session'],dict(consecutive_errors=err_count,backoff_until=now+delay,reason=f'Provider quota or transient backoff (HTTP {error.code})'))
                 else:
                     raise
             return state
 
+    def _poll_update(self,job_id,session,changes):
+        with self.db.get_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            current=json.loads(conn.execute('SELECT state_json FROM jules_jobs WHERE id=?',(job_id,)).fetchone()[0])
+            if current['phase']!='watching' or current.get('session')!=session:return current
+            current.update(changes);self._save_job(conn,current);conn.commit()
+            return current
+
+    @announces()
     def run_job(self, job_id, opener=None):
         state = self.get_job(job_id)
         if state["phase"] in TERMINAL_PHASES:
@@ -590,7 +611,7 @@ class JulesService:
         if (
             self.engine
             and hasattr(self.engine, "execution_policy")
-            and self.engine.execution_policy.get()["level"] == 0
+            and self.engine.execution_policy.get()["level"] < 5
         ):
             return state
 
@@ -629,7 +650,7 @@ class JulesService:
         if (
             self.engine
             and hasattr(self.engine, "execution_policy")
-            and self.engine.execution_policy.get()["level"] == 0
+            and self.engine.execution_policy.get()["level"] < 5
         ):
             return {"status": "policy_halted", "processed": 0}
 
@@ -642,10 +663,12 @@ class JulesService:
             try:
                 self.run_job(job["id"], opener=opener)
                 processed += 1
-            except Exception:
-                pass
+            except Exception as error:
+                if self.engine and hasattr(self.engine,'events'):
+                    self.engine.events.publish('jules.job_error',{'id':job['id'],'project':job['project'],'error_type':type(error).__name__})
         return {"status": "ok", "processed": processed}
 
+    @announces()
     def cancel_job(self, job_id, reason="Cancelled by owner"):
         with self._lock,self.db.get_connection() as conn:
             conn.execute('BEGIN IMMEDIATE')
@@ -658,6 +681,7 @@ class JulesService:
             self._save_job(conn,state);conn.commit()
             return state
 
+    @announces()
     def fetch_candidate(self, job_id, opener=None):
         """Retain a provider-returned patch; callers cannot nominate its digest."""
         import urllib.parse
@@ -698,10 +722,11 @@ class JulesService:
         settings=self.settings()
         if not settings['enabled'] or state['source'] not in settings['allowed_sources'] or state['repository'] not in settings['allowed_repositories']:
             raise ValueError('Jules job authority is disabled or revoked')
-        if not self.engine or self.engine.execution_policy.get()['level']==0:
-            raise ValueError('Runtime execution is stopped')
+        if not self.engine or self.engine.execution_policy.get()['level']<5:
+            raise ValueError('Cloud dispatch requires current level-5 standing authorization')
         if self.clock()>=state['deadline_at']:raise ValueError('Job review window expired')
 
+    @announces()
     def verify_job_completion(self, job_id, verification_evidence):
         """Require both current mission acceptance and a protected exact-patch signature.
 

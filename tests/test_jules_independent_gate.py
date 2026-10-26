@@ -9,6 +9,11 @@ module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 
 
 class GateTests(unittest.TestCase):
+    def test_inline_pytest_verdict_cannot_issue_an_independent_signature(self):
+        gate=object.__new__(module.Gate)
+        gate.last_test_sha='a'*64;gate.last_test_evidence={'test_count':76,'exit_code':0}
+        with self.assertRaisesRegex(ValueError,'external verdict required'):gate.attest('a'*64)
+
     def test_signing_cannot_reuse_unrelated_or_missing_passing_run(self):
         gate=object.__new__(module.Gate)
         gate.last_test_sha='a'*64;gate.last_test_evidence={'test_count':10}
