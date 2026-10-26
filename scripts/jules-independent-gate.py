@@ -120,6 +120,10 @@ class Gate:
                 else:
                     if not member.isfile():raise ValueError('Unsupported archive member')
                     p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(archive.extractfile(member).read());p.chmod(0o644)
+        # The protected service uses umask 077. Raw Git archives contain files,
+        # so implicit parent directories otherwise become owner-only and the
+        # non-root test container cannot traverse them.
+        prepare_test_directories(source)
         path=run/'candidate.patch';path.write_text(patch)
         if re.search(r'\b(?:120000|160000)\b|GIT binary patch',patch):raise ValueError('Special modes/binary patches are not allowed')
         stats=subprocess.run(['git','apply','--numstat',str(path)],cwd=source,capture_output=True,text=True,timeout=10)
@@ -174,6 +178,13 @@ class Gate:
             except Exception:
                 self.save(phase='review_required',reason='Gate needs inspection; no unknown network effect is replayed');return
         self.save(phase='expired_remote_may_continue',reason='Original local deadline ended; remote work was not cancelled')
+
+
+def prepare_test_directories(source):
+    source.chmod(0o755)
+    for path in source.rglob('*'):
+        if path.is_dir() and not path.is_symlink():
+            path.chmod(0o755)
 
 
 if __name__=='__main__':

@@ -2,12 +2,23 @@ import importlib.util
 from pathlib import Path
 import time
 import unittest
+from tempfile import TemporaryDirectory
 
 spec=importlib.util.spec_from_file_location('jules_gate',Path(__file__).parents[1]/'scripts/jules-independent-gate.py')
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 
 
 class GateTests(unittest.TestCase):
+    def test_private_extraction_directories_are_traversable_by_test_user(self):
+        with TemporaryDirectory() as folder:
+            source=Path(folder)/'source';nested=source/'tests'/'nested'
+            nested.mkdir(parents=True)
+            for directory in [source,source/'tests',nested]:directory.chmod(0o700)
+            module.prepare_test_directories(source)
+            if __import__('os').name!='nt':
+                for directory in [source,source/'tests',nested]:
+                    self.assertEqual(directory.stat().st_mode & 0o777,0o755)
+
     def gate(self,phase='waiting'):
         gate=object.__new__(module.Gate)
         gate.c={'deadline_at':time.time()+60,'session':'sessions/123','max_repairs':2,'already_rejected':[]}
