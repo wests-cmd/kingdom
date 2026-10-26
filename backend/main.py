@@ -17,6 +17,7 @@ async def lifespan(_app):
     await programme_runner.start()
     await backlog_runner.start()
     await problem_runner.start()
+    await jules_runner.start()
     await peer_connections.start()
     try:
         yield
@@ -24,6 +25,7 @@ async def lifespan(_app):
         from backend.runtime.request_api import background
         await background.stop()
         await peer_connections.stop()
+        await jules_runner.stop()
         await problem_runner.stop()
         await programme_runner.stop()
         await backlog_runner.stop()
@@ -113,6 +115,8 @@ from backend.memory.vault_sync_api import router as vault_sync_router
 app.include_router(vault_sync_router)
 from backend.integrations.payment_api import router as payment_router
 app.include_router(payment_router)
+from backend.integrations.jules_api import router as jules_router
+app.include_router(jules_router)
 from backend.runtime.scheduled_runner import ScheduledRunner
 from backend.runtime.automation_api import scheduled
 scheduled.enqueue_request = lambda body: request_service().create(body)
@@ -130,6 +134,9 @@ from backend.runtime.problem_api import router as problem_router,service as prob
 from backend.runtime.problem_bot import ProblemBotRunner
 app.include_router(problem_router)
 problem_runner=ProblemBotRunner(problem_service,engine.events.publish)
+from backend.integrations.jules_api import service as jules_service
+from backend.integrations.jules_runner import JulesRunner
+jules_runner = JulesRunner(jules_service, engine.events.publish)
 
 
 # Serve built frontend static assets if available
