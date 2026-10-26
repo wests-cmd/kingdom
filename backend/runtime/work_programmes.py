@@ -12,11 +12,24 @@ import time
 from uuid import NAMESPACE_URL, uuid5
 
 import httpx
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.memory.portable_vault import identifier
 from backend.runtime.missions import MissionPlan, validate_plan
 
 _guard = threading.RLock()
+
+
+class JulesPlacement(BaseModel):
+    """Owner-authored placement only; a model proposal cannot supply this scope."""
+    model_config = ConfigDict(extra='forbid', strict=True)
+    enabled: bool = False
+    repository: str | None = Field(default=None, pattern=r'^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')
+    source: str | None = Field(default=None, min_length=1, max_length=200)
+    branch: str | None = Field(default=None, pattern=r'^[A-Za-z0-9_./-]{1,150}$')
+    max_jobs: int = Field(default=1, ge=1, le=48)
+    max_repair_budget: int = Field(default=3, ge=0, le=3)
+    deadline_seconds: int = Field(default=3600, ge=60, le=86400)
 
 
 def validate_binding(engine, programme, row, work):
@@ -98,6 +111,81 @@ class WorkProgrammes:
         with self.db.get_connection() as conn:
             conn.execute('CREATE TABLE IF NOT EXISTS work_programmes(id TEXT PRIMARY KEY, project TEXT NOT NULL, idem TEXT NOT NULL, state_json TEXT NOT NULL, UNIQUE(project,idem))')
             conn.commit()
+
+    def configure_jules_placement(self, ident, scope, expected_revision):
+        scope = JulesPlacement.model_validate(scope).model_dump()
+        with _guard:
+            state = self.get(ident)
+            if state['revision'] != expected_revision:
+                raise ValueError('Programme changed')
+            used = state.get('jules_placement', {}).get('used_jobs', 0)
+            if scope['max_jobs'] < used:
+                raise ValueError('Retained job reservations cannot be reset')
+            if scope['enabled']:
+                self._validate_jules_scope(scope)
+                if not state.get('source_revision'):
+                    raise ValueError('Jules placement requires the exact owner-declared source revision')
+            state['jules_placement'] = {'scope': scope, 'used_jobs': used}
+            self._save(state, expected_revision)
+            return self.snapshot(ident)
+
+    def _validate_jules_scope(self, scope):
+        adapter = getattr(self.engine, 'jules', None)
+        if self.engine.execution_policy.get()['level'] != 5 or adapter is None:
+            raise ValueError('Existing level-5 owner authorization and configured Jules adapter required')
+        settings = adapter.settings()
+        if (not settings['enabled'] or not settings['has_credentials']
+                or scope['repository'] not in settings['allowed_repositories']
+                or scope['source'] not in settings['allowed_sources']
+                or scope['source'] != 'sources/github/' + scope['repository']
+                or not scope['branch'] or '..' in scope['branch']):
+            raise ValueError('Jules placement needs existing credentials and exact approved repository, source and branch')
+        return adapter
+
+    def _external_dispatch_spec(self, state, row):
+        scope = state.get('jules_placement', {}).get('scope', {})
+        acceptance = next(s for s in row['proposal']['steps'] if s['id'] == row['acceptance_step'])
+        if acceptance['kind'] != 'independent_review' or not scope.get('enabled'):
+            return None
+        self._validate_jules_scope(scope)
+        if state['jules_placement']['used_jobs'] >= scope['max_jobs']:
+            raise ValueError('Owner-reviewed Jules placement job budget exhausted')
+        descriptor = acceptance['independent_review']
+        if descriptor['source'] != scope['source'] or len(row['proposal']['steps']) != 1:
+            raise ValueError('External review repository differs from owner placement')
+        prompt = ('Implement only the owner outcome below under this reviewed external acceptance contract. '
+                  'Do not merge, deploy, grant tools or access owner devices. Return a patch for independent verification.\n'
+                  + json.dumps({'owner_outcome': row['description'], 'independent_review': descriptor}, sort_keys=True))
+        if len(prompt) > 12000:
+            raise ValueError('Reviewed Jules assignment exceeds its prompt budget')
+        return {**scope, 'prompt': prompt}
+
+    def _complete_jules_binding(self, state, row):
+        """Resume only local registration/enablement, never a provider submission."""
+        dispatch = row['external_dispatch']
+        if state.get('jules_placement', {}).get('scope') != {k: dispatch[k] for k in JulesPlacement.model_fields}:
+            raise ValueError('Owner placement changed; retained binding requires review')
+        self._validate_jules_scope(dispatch)
+        mission = self.engine.missions.get(row['mission_id'])
+        item = self.backlog.get(state['project'], row['work_id'])
+        if (mission['version'] != row['mission_version'] or mission['approved_version'] != row['mission_version']
+                or any(item['intent'].get(k) != row.get(k) for k in ('mission_id', 'mission_version', 'acceptance_step'))
+                or item.get('lease') or mission['status'] not in {'approved', 'running', 'completed'}):
+            raise ValueError('Retained external mission binding changed; review required')
+        validate_declared_source(state, mission['plan'])
+        job = self.engine.jules.register_job(project=state['project'], backlog_id=row['work_id'],
+            idempotency_key=dispatch['idempotency_key'], source=dispatch['source'],
+            repository=dispatch['repository'], revision=state['source_revision'], branch=dispatch['branch'],
+            prompt=dispatch['prompt'], max_repair_budget=dispatch['max_repair_budget'],
+            deadline_seconds=dispatch['deadline_seconds'])
+        if job['phase'] != 'queued':
+            raise ValueError('External job is already committed or uncertain; no automatic rebinding')
+        row.update(jules_job_id=job['id'], dispatch_status='jules_registered_pending_enable')
+        self._save(state, state['revision'])
+        if not item['enabled']:
+            self.backlog.configure(state['project'], item['id'], True, item['revision'])
+        row.update(planning='reviewed', dispatch_status='jules_registered')
+        self._save(state, state['revision'])
 
     def _save(self, state, expected=None):
         with self.db.get_connection() as conn:
@@ -526,6 +614,7 @@ class WorkProgrammes:
                 validate_integration(self.engine, section, step)
             item = self.backlog.get(state['project'], row['work_id'])
             validate_declared_source(state, row['proposal'])
+            external = self._external_dispatch_spec(state, row)
             mission = self.engine.missions.create(MissionPlan.model_validate(row['proposal']), model_profile=state['model_profile'])
             row['mission_id'] = mission['id']
             row['mission_version'] = mission['version']
@@ -542,9 +631,18 @@ class WorkProgrammes:
                     self.backlog.configure(state['project'], item['id'], True, attached['revision'])
                 else:
                     row['dispatch_status'] = 'awaiting_external_job_registration'
+                    if external is not None:
+                        external['idempotency_key'] = 'programme-' + hashlib.sha256(
+                            f"{ident}:{key}:{mission['id']}:{mission['version']}".encode()).hexdigest()[:60]
+                        row.update(external_dispatch=external, dispatch_status='registering_jules')
+                        state['jules_placement']['used_jobs'] += 1
+                        self._save(state, state['revision'])
+                        self._complete_jules_binding(state, row)
             except Exception:
                 # No advancement can acquire the mission lock during binding.
                 self.engine.missions.cancel(mission['id'])
+                if row.get('jules_job_id'):
+                    self.engine.jules.cancel_job(row['jules_job_id'], reason='Programme binding failed; inspect retained checkpoint')
                 row['planning'] = 'blocked'
                 row['blocked_reasons'] = ['Review binding failed; retained draft/mission needs inspection. No automatic retry.']
                 self._save(state, state['revision'])
@@ -559,6 +657,14 @@ class WorkProgrammes:
             for state in self.list():
                 changed = False
                 for row in self.rows(state):
+                    if row.get('external_dispatch') and row.get('dispatch_status') in {'registering_jules', 'jules_registered_pending_enable'}:
+                        try:
+                            self._complete_jules_binding(state, row)
+                        except (ValueError, KeyError, TypeError, OSError):
+                            row.update(planning='blocked', dispatch_status='external_binding_held',
+                                blocked_reasons=['Retained external binding requires review; no provider submission replayed.'])
+                            changed = True
+                        continue
                     if row['planning'] in {'planning', 'binding'}:
                         row.update(planning='blocked', blocked_reasons=['Planning or binding was interrupted. Inspect the retained checkpoint; no inference or action replayed.'])
                         changed = True

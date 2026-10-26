@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
 from backend.security.http_auth import require_owner
 from backend.runtime.standing_review import FunctionReviewScope
+from backend.runtime.work_programmes import JulesPlacement
 
 router = APIRouter(prefix='/work-programmes', dependencies=[Depends(require_owner)])
 _service = None
@@ -42,6 +43,10 @@ class Settings(Revision):
 
 class StandingReview(Revision):
     scope: FunctionReviewScope
+
+
+class Placement(Revision):
+    scope: JulesPlacement
 
 
 class Answer(Revision):
@@ -89,6 +94,11 @@ async def plan(ident: str, request: Revision):
 @router.post('/{ident}/standing-review')
 def standing_review(ident: str, request: StandingReview):
     return boundary(lambda: service().configure_standing_review(ident,request.scope.model_dump(),request.expected_revision))
+
+
+@router.post('/{ident}/jules-placement')
+def jules_placement(ident: str, request: Placement):
+    return boundary(lambda: service().configure_jules_placement(ident, request.scope.model_dump(), request.expected_revision))
 
 
 @router.post('/{ident}/items/{key}/approve')
