@@ -11,3 +11,12 @@
 .swarm-dialog::backdrop{background:#0009}.swarm-dialog form label,.swarm-dialog fieldset label{display:block;margin:10px 0;overflow-wrap:anywhere}
 .swarm-dialog input:not([type=checkbox]),.swarm-dialog select{box-sizing:border-box;width:100%;max-width:100%}
 .swarm-dialog .other-team{color:var(--text-muted);opacity:.72}.swarm-dialog fieldset{min-width:0;border:1px solid var(--surface-border)}
+.knight-network{min-width:0;background:#0f172a;border:1px solid #334155;border-radius:14px;margin:16px 0;overflow:hidden;color:#e2e8f0}
+.knight-network>header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:14px 18px;gap:12px}
+.knight-network h3,.knight-network header p{margin:0 0 6px}.knight-network header p,.network-legend{font-size:12px;color:#b8c6da}
+.knight-network svg{display:block;width:100%;height:clamp(340px,52vw,600px);touch-action:none;user-select:none}
+.network-node{cursor:grab;outline:none}.network-node.dragging{cursor:grabbing}.network-node:focus-visible>circle:first-of-type{stroke:#fff;stroke-width:5}
+.network-name{fill:#f1f5f9;font-size:15px;font-weight:600;paint-order:stroke;stroke:#0f172a;stroke-width:4px}
+.network-state{fill:#b8c6da;font-size:12px;paint-order:stroke;stroke:#0f172a;stroke-width:3px}
+.network-team-label{font-size:16px;font-weight:700}.network-legend{padding:0 18px 14px;margin:0;line-height:1.6}
+.network-node text{pointer-events:none}

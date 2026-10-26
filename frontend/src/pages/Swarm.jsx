@@ -7,7 +7,7 @@ import ComputerTopology from '../components/ComputerTopology'
 import MeshConnections from '../components/MeshConnections'
 
 export default function Swarm({interfaceMode='easy'}) {
-  const [view,setView]=useState(interfaceMode==='easy'?'network':'activity')
+  const [view,setView]=useState('network')
   const {data: hierarchy, error: hierarchyError,refresh:refreshHierarchy} = useLiveData("/hierarchy",10000)
   const {data,error} = useLiveData("/knights",4000)
   const knights = data?.knights || (Array.isArray(data) ? data : [])

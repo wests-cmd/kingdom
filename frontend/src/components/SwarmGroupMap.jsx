@@ -5,6 +5,7 @@ import {computerName} from './common/computerName'
 import {apprenticeLabel} from './common/presentation'
 import {jobStatus,serviceStatus} from './common/fleetVisibility'
 import './SwarmGroupMap.css'
+import KnightNetworkGraph from './KnightNetworkGraph'
 
 function Modal({title,busy,onClose,children}) {
  const ref=useRef(null)
@@ -59,11 +60,22 @@ export default function SwarmGroupMap({computers,hierarchy,onRefresh}) {
  </button>
  const grouped=new Set(groups.flatMap(g=>g.members))
  const context=menu?.target,team=context?.members?context:null
+ const graphIntent=intent=>{
+  if(busy||hierarchy.groups_read_only)return
+  if(intent.kind==='create')edit(null,intent.members)
+  if(intent.kind==='add'){
+   const group=groups.find(g=>g.id===intent.group);if(!group)return
+   edit(group);setDraft(old=>({...old,members:[...new Set([...group.members,...intent.members])]}))
+  }
+  if(intent.kind==='combine')setDraft({kind:'combine',version,group_ids:intent.groups,name:groups.find(g=>g.id===intent.groups[0])?.name||''})
+  if(intent.kind==='remove')setConfirm({text:`Remove ${title(intent.members[0])} from its group?`,run:()=>mutate({version,operation:'unassign',members:intent.members})})
+ }
  return <section className="swarm-group-map" aria-label="Interactive Kingdom diagram">
   {hierarchy.groups_notice&&<p role={hierarchy.groups_read_only?'status':undefined}>{hierarchy.groups_notice}</p>}
   <div className="action-row"><button type="button" disabled={busy||!version} onClick={()=>edit()}>Make group</button><button type="button" onClick={()=>{setMenu(null);setDraft({kind:'visibility'})}}>Offline list timeout</button><button type="button" onClick={()=>onRefresh?.()}>Refresh map</button></div>
   <p>Drag a Knight onto another to make a group, into a group to add it, or onto Ungrouped to remove it. Right-click or select any card for actions. Disconnected Knights keep their place until the offline-list timeout.</p>
-  <div className="swarm-fit-map" onContextMenu={e=>openMenu(e,null)}>
+  <KnightNetworkGraph computers={computers} groups={groups} busy={busy} readOnly={hierarchy.groups_read_only} onIntent={graphIntent} onMenu={openMenu}/>
+  <details><summary>Group cards and alternate drag controls</summary><div className="swarm-fit-map" onContextMenu={e=>openMenu(e,null)}>
    {groups.map(g=><section key={g.id} className="swarm-team" onContextMenu={e=>openMenu(e,g)} onDragOver={e=>e.preventDefault()} onDrop={e=>drop(e,g)}>
     <header><h3>{g.name}</h3><button type="button" disabled={busy} onClick={e=>openMenu(e,g)} aria-label={`${g.name} group actions`}>⋯</button></header>
     <p>Leader: {title(g.captain)}</p><div className="swarm-card-grid">{computers.filter(c=>g.members.includes(c.id)).map(node)}</div>
@@ -71,7 +83,7 @@ export default function SwarmGroupMap({computers,hierarchy,onRefresh}) {
     {!!g.flags?.length&&<p>Flags: {g.flags.join(', ')}</p>}{!!g.preferred_task_types?.length&&<p>Preferred work: {g.preferred_task_types.join(', ')}</p>}
    </section>)}
    <section className="swarm-team ungrouped" onDragOver={e=>e.preventDefault()} onDrop={e=>drop(e,null)}><h3>Ungrouped Knights</h3><div className="swarm-card-grid">{computers.filter(c=>!grouped.has(c.id)).map(node)}</div>{computers.every(c=>grouped.has(c.id))&&<p>Drop a Knight here to remove it from a group.</p>}</section>
-  </div>
+  </div></details>
   {menu&&<div className="swarm-context card" role="menu" aria-label="Swarm actions" style={{left:menu.x,top:menu.y}}>
    <strong>{team?.name||context?.name||'Kingdom'}</strong>
    <button role="menuitem" onClick={()=>edit()}>Make group</button>
