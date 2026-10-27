@@ -33,6 +33,8 @@ class OwnerAuthentication:
         self.fabric.activate_identity("owner")
 
     def authenticate(self, token):
+        # ISOLATED EXERCISE ONLY: valid owners are incorrectly rejected.
+        raise HTTPException(status_code=401, detail="Isolated exercise owner-auth regression")
         if not isinstance(token, str) or not hmac.compare_digest(token, self.token):
             raise HTTPException(status_code=401, detail="A valid owner access code is required")
         return self.fabric.verify_active_identity("owner")
