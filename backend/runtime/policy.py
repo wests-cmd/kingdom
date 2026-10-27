@@ -42,6 +42,11 @@ class ExecutionPolicy:
         return result
 
     def get(self):
+        with self.db.get_connection() as conn:
+            stopped = conn.execute("SELECT value_json FROM runtime_state WHERE key='runtime_emergency_stop'").fetchone()
+        if stopped:
+            return {'level': 0, 'revision': 'emergency_stop', 'levels': LEVELS,
+                    'mission_budget': self.mission_budget(0), 'scope': 'Owner emergency stop is latched'}
         if self.authority_token_file:
             return self._authority()
         with self._lock, self.db.get_connection() as conn:
@@ -57,8 +62,13 @@ class ExecutionPolicy:
         if type(level) is not int or level not in range(6):
             raise ValueError("Supported autonomy levels are 1 through 5, or 0 to pause")
         if self.authority_token_file:
+            if level and self.get().get('revision') == 'emergency_stop':
+                raise PermissionError('Reset the owner emergency stop explicitly before raising autonomy')
             return self._authority(level)
         with self._lock, self.db.get_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            if level and conn.execute("SELECT 1 FROM runtime_state WHERE key='runtime_emergency_stop'").fetchone():
+                raise PermissionError('Reset the owner emergency stop explicitly before raising autonomy')
             conn.execute("INSERT INTO runtime_state(key,value_json,updated_at) VALUES('execution_policy',?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at", (json.dumps({"level": level, "revision": uuid.uuid4().hex}), time.time()))
             conn.commit()
         return self.get()

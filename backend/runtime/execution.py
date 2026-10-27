@@ -69,7 +69,18 @@ def native_tools():
     return tools
 
 
-def execute_request(task, capabilities):
+def execute_request(task, capabilities, *, execution_guard=None):
+    # The callback is supplied by trusted runtime wiring, never by request data.
+    # Direct/daemon calls still honor their own installation's durable stop.
+    def admit():
+        if execution_guard is not None:
+            execution_guard()
+        else:
+            from backend.storage.db import db
+            from backend.cluster.task_leasing import TaskLeaseManager
+            with db.get_connection() as conn:
+                if TaskLeaseManager.stopped(conn):
+                    raise PermissionError('Owner emergency stop is latched')
     if not isinstance(task, dict) or not task.get("id"):
         raise ValueError("Execution requires a structured task with an identity")
     metadata = task.get("metadata", {})
@@ -85,7 +96,9 @@ def execute_request(task, capabilities):
         if tool == BUILD_TOOL:
             params = {**params, '_task_context': {key: task.get(key) for key in ('id', 'lease_id', 'fencing_token')}}
             params['_task_context']['task_id'] = params['_task_context'].pop('id')
-        output = native_tools().execute(tool, params, list(capabilities), [])
+        tools = native_tools()
+        admit()
+        output = tools.execute(tool, params, list(capabilities), [])
         return {"kind": "native_tool", "tool": tool, "output": output,
                 **(receipt(task, output) if tool in TOOL_CAPABILITIES or tool == FUNCTION_TOOL else {})}
     if "model.inference" not in capabilities:
@@ -105,6 +118,7 @@ def execute_request(task, capabilities):
                 if store.get(ident)['kind'] == 'image':
                     with Image.open(io.BytesIO(store.raw(ident))) as image:
                         image.thumbnail((1600, 1600)); output = io.BytesIO(); image.convert('RGB').save(output, format='PNG'); images.append(output.getvalue())
+    admit()
     model = asyncio.run(ModelService().generate(prompt, metadata.get("model"), metadata.get("model_provider"), metadata.get('model_profile'), images))
     if not isinstance(model.get("text"), str) or not model["text"].strip():
         raise RuntimeError("Configured model returned no text")

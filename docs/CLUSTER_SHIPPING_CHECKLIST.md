@@ -15,6 +15,8 @@ The Computer cluster page shows persisted task assignments, lease presence, resu
 - [ ] Demonstrate competing tasks respect computer capacity/reservations. Record waiting or fallback reasons.
 - [ ] Demonstrate a dependency-aware mission does not advance on failed or unverified prerequisites.
 - [ ] Disconnect a leased worker, recover or explicitly fail the task, and reject the stale worker's late result without duplicate completion.
+  - RPC acceptance coverage: `tests/test_autonomy_acceptance.py::test_stale_worker_result_is_rejected_after_reassignment` uses real task/lease persistence and result handler with identity/transport plumbing patched. It rejects both the old lease and a substituted new lease ID with the stale fence. This is not the physical-disconnect release receipt.
+- [ ] Verify owner emergency stop on installed artifacts, including restart and late-result rejection. Runtime acceptance coverage is in `tests/test_autonomy_acceptance.py`; see `implementation/EMERGENCY_STOP.md`. Passing source tests does not establish fleet deployment.
 - [ ] Revoke a computer during queued work and show that it cannot claim another task.
 - [ ] Verify local fallback remains within approved scope and does not silently change a required remote target.
 - [ ] Exercise malformed/tampered results and confirm they cannot count as verified success or improve routing.

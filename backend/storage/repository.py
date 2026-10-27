@@ -99,7 +99,8 @@ class TaskRepository:
         with self.db.get_connection() as conn:
             updated = conn.execute("""UPDATE tasks SET status=?, started_at=?, attempt=attempt+1,
                 version=version+1, assigned_knight=?, lease_id=?, fencing_token=?, updated_at=?
-                WHERE id=? AND lower(status)='queued' AND version=?""",
+                WHERE id=? AND lower(status)='queued' AND version=?
+                AND NOT EXISTS (SELECT 1 FROM runtime_state WHERE key='runtime_emergency_stop')""",
                 (status, str(time.time()), assigned_knight, lease_id, fencing_token, time.time(), task_id, expected_version))
             if updated.rowcount != 1:
                 return None
