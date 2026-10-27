@@ -27,10 +27,30 @@ def identifier(value):
     return value
 
 
+def _redact_private_keys(text):
+    """Scan bounded PEM headers once, including unfinished private-key blocks."""
+    marker = re.compile(r'-----((?:BEGIN|END)) ([^-\r\n]{0,80}PRIVATE KEY)-----')
+    parts, cursor, opened = [], 0, None
+    for match in marker.finditer(text):
+        if match[1] == 'BEGIN' and opened is None:
+            opened = match.start()
+        elif match[1] == 'END' and opened is not None:
+            parts.extend((text[cursor:opened], '[redacted]'))
+            cursor, opened = match.end(), None
+    if opened is not None:
+        parts.extend((text[cursor:opened], '[redacted]'))
+    else:
+        parts.append(text[cursor:])
+    return ''.join(parts)
+
+
 def clean_text(value):
-    text = re.sub(r'-----BEGIN [^-]*PRIVATE KEY-----.*?-----END [^-]*PRIVATE KEY-----', '[redacted]', str(value), flags=re.S)
+    text = _redact_private_keys(str(value))
     text = re.sub(r'(?i)(?:ghp_|github_pat_|sk-|(?:sk|rk)_(?:test|live)_)[A-Za-z0-9_-]{10,}|bearer\s+\S+', '[redacted]', text)
-    text = re.sub(r'(?i)(https?://)[^\s/@]+:[^\s/@]+@', r'\1[redacted]@', text)
+    # Consume each authority token once; do not retry a username/password split
+    # at every colon when untrusted text has no terminating @.
+    text = re.sub(r'(?i)(https?://)([^\s/@]*)',
+                  lambda m: m[1]+'[redacted]' if ':' in m[2] and m.string[m.end():m.end()+1]=='@' else m[0], text)
     return re.sub(r'(?im)((?:password|api[_ -]?key|secret|token|authorization)\s*[:=]\s*)[^\n,;]+', r'\1[redacted]', text)
 
 
