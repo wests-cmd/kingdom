@@ -60,6 +60,11 @@ def validate_integration(engine, section, step):
             raise ValueError('Integration needs reviewed component missions')
         mission = engine.missions.get(row['mission_id'])
         component = next(s for s in mission['plan']['steps'] if s['id'] == row['acceptance_step'])
+        if component['kind'] == 'independent_review':
+            # Each receipt covers one returned tree. A project_test on the
+            # programme's original checkout cannot establish their composition.
+            raise ValueError('Section integration needs tests bound to the combined returned source; '
+                             'an original-checkout project_test cannot integrate external patches')
         if component['kind'] == 'project_test' and component['argv'] == step['argv']:
             raise ValueError('Integration command must differ from component acceptance commands')
 

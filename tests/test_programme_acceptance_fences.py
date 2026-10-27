@@ -12,6 +12,19 @@ from test_project_test_missions import runtime, plan, execute
 from backend.runtime.work_programmes import WorkProgrammes
 
 
+def test_original_checkout_suite_cannot_integrate_external_returned_patches():
+    from backend.runtime.work_programmes import validate_integration
+    component = {'id': 'external', 'kind': 'independent_review',
+                 'independent_review': {'base_revision': 'a'*40}}
+    engine = SimpleNamespace(missions=SimpleNamespace(get=lambda ident:
+        {'plan': {'steps': [component]}}))
+    section = {'items': [{'mission_id': 'reviewed-component', 'acceptance_step': 'external'}]}
+    original_checkout_suite = {'kind': 'project_test', 'argv': ['python', '-m', 'pytest', 'tests/integration'],
+                               'project_test': {'source_revision': 'a'*40}}
+    with pytest.raises(ValueError, match='combined returned source'):
+        validate_integration(engine, section, original_checkout_suite)
+
+
 def programme(runtime, sections=1):
     engine, backlog, workspace = runtime
     (workspace / 'test_integration.py').write_text(

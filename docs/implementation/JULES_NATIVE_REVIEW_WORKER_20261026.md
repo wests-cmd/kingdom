@@ -127,3 +127,10 @@ proof. A separate native fixture with the actual protected producer, local owner
 API, immutable mirror and installed Docker image must pass before a provider
 demonstration or unattended-use claim. No protected keys, reviewers or worker
 services were installed by this source change.
+
+An individual returned-patch receipt does not prove several patches work
+together. Programme section gates containing `independent_review` components
+reject the ordinary `project_test` path: that path tests the programme's
+original declared checkout, rather than an independently reconstructed combined
+returned tree. Combined-source reconstruction and a corresponding protected
+integration contract are still required before such a section can pass.
