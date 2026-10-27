@@ -8,8 +8,10 @@ PREFIX=b'kingdom.dpapi.v1\0'
 @contextmanager
 def key_file_lock(path):
     """Serialize first creation/migration before another process reads the file."""
-    with os.fdopen(os.open(path,os.O_CREAT|os.O_RDWR,0o600),'r+b') as lock:
-        if os.fstat(lock.fileno()).st_size==0:lock.write(b'0');lock.flush()
+    # Windows permits locking a byte range beyond EOF. Do not initialize a
+    # marker byte before acquiring that range: another initializer may already
+    # hold it, making the buffered write/close fail with PermissionError.
+    with os.fdopen(os.open(path,os.O_CREAT|os.O_RDWR,0o600),'r+b',buffering=0) as lock:
         lock.seek(0)
         if os.name=='nt':
             import msvcrt

@@ -285,7 +285,9 @@ def _execute(config_path):
                 argv=['external-controller', '--contract', binding['contract_sha256']],
                 test_count=counts['total'],failed_count=counts['failed'],
                 exit_code=0 if record['verdict']=='PASSED' else 1,
-                network_isolated=True,read_only_source=True,verdict_origin='external_controller'))
+                network_isolated=True,read_only_source=True,verdict_origin='external_controller',
+                diagnostics=[dict(test_id=case['name'],error_code='transport_failed' if case['status_code'] is None else 'assertion_failed',
+                    status_code=case['status_code']) for case in record['assertion_results'] if not case['passed']]))
         canonical = CONTEXT + json.dumps(payload,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False).encode()
         envelope = dict(payload=payload,signature=sign_payload(key_path,canonical,run))
         output = run/'attestation.json'

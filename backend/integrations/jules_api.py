@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Any
+from typing import Literal
 from backend.security.http_auth import require_owner
 
 router = APIRouter(
@@ -55,6 +56,15 @@ class FailedVerificationRequest(BaseModel):
 class CancelRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     reason: str = Field(default="Cancelled by owner", max_length=300)
+
+
+class ReviewMaterialResponse(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    binding: dict[str,Any]
+    patch: str=Field(min_length=1,max_length=2000000)
+    review_contract: dict[str,Any]
+    deadline_at: float
+    delivery_protocol: Literal['kingdom.idempotent-verdict.v1']
 
 
 @router.get("/settings")
@@ -129,6 +139,13 @@ def verify_job(job_id: str, evidence: VerificationRequest):
 @router.post('/jobs/{job_id}/candidate')
 def fetch_candidate(job_id: str):
     try:return service().fetch_candidate(job_id)
+    except KeyError as error:raise HTTPException(404,'Job not found') from error
+    except ValueError as error:raise HTTPException(409,str(error)) from error
+
+
+@router.get('/jobs/{job_id}/review-material',response_model=ReviewMaterialResponse)
+def review_material(job_id: str):
+    try:return service().review_material(job_id)
     except KeyError as error:raise HTTPException(404,'Job not found') from error
     except ValueError as error:raise HTTPException(409,str(error)) from error
 

@@ -81,7 +81,16 @@ def verify_attestation(envelope, expected, reviewers, now=None, *, outcome='pass
             raise ValueError('Reviewer is unavailable, revoked or out of scope')
         execution=payload['execution']
         required={'run_id','image_sha256','source_archive_sha256','candidate_tree_sha256','argv','test_count','failed_count','exit_code','network_isolated','read_only_source','verdict_origin'}
-        if not isinstance(execution,dict) or set(execution)!=required:raise ValueError('Complete independent execution evidence required')
+        if not isinstance(execution,dict) or set(execution) not in (required,required|{'diagnostics'}):raise ValueError('Complete independent execution evidence required')
+        diagnostics=execution.get('diagnostics',[])
+        if not isinstance(diagnostics,list) or len(diagnostics)>32:raise ValueError('Bounded typed diagnostics required')
+        for diagnostic in diagnostics:
+            if not isinstance(diagnostic,dict) or set(diagnostic)!={'test_id','error_code','status_code'}:
+                raise ValueError('Typed external diagnostic fields required')
+            if (not isinstance(diagnostic['test_id'],str) or not re.fullmatch('[A-Za-z0-9_.-]{1,100}',diagnostic['test_id'])
+                    or diagnostic['error_code'] not in {'assertion_failed','transport_failed','startup_failed'}
+                    or (diagnostic['status_code'] is not None and (type(diagnostic['status_code']) is not int or not 100<=diagnostic['status_code']<=599))):
+                raise ValueError('Invalid external diagnostic')
         for field in ['image_sha256','source_archive_sha256','candidate_tree_sha256']:
             if not isinstance(execution[field],str) or not re.fullmatch('[a-f0-9]{64}',execution[field]):raise ValueError('Pinned execution inputs required')
         if not isinstance(execution['run_id'],str) or not 1<=len(execution['run_id'])<=120:raise ValueError('Independent run identity required')
