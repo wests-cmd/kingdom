@@ -189,6 +189,51 @@ class NodeRegistry:
         event_bus.publish("cluster.node_registered", node, source="node_registry")
         return node
 
+    def retain_mesh_authority(self, identity, address, kingdom_id, *, allow_insert):
+        """Commit a pinned join without UPSERT/reapproval of a concurrent row.
+
+        Called after network I/O. SQLite serializes the authoritative identity /
+        state read and insert; no process-local lock is held across an await.
+        Existing rows are checked and never rewritten, including their grants.
+        """
+        import httpx
+        from backend.cluster.identity import compute_fingerprint
+        from backend.cluster.peer_endpoints import endpoint
+        node_id = identity['node_id']
+        if (identity.get('node_type') != 'commander' or node_id == kingdom_id
+                or compute_fingerprint(bytes.fromhex(identity['public_key_hex'])) != identity['fingerprint']):
+            raise ValueError('Invalid pinned mesh authority identity')
+        normalized = str(httpx.URL(endpoint(address))).rstrip('/')
+        inserted = False
+        with self.repo.db.get_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('SELECT * FROM knights WHERE id=?', (node_id,)).fetchone()
+            if row:
+                current = self.repo._row_to_dict(row)
+                public = current.get('public_identity') or {}
+                saved = str(httpx.URL(endpoint(current['connection_metadata'].get('kingdom_endpoint')))).rstrip('/')
+                if (current['node_state'] not in {'APPROVED','CONNECTED','DISCONNECTED','RECONNECTING'}
+                        or any(public.get(key) != identity.get(key) for key in
+                               ('node_id','node_type','public_key_hex','fingerprint'))
+                        or current['fingerprint'] != identity['fingerprint'] or saved != normalized):
+                    raise ValueError('Current authority approval, identity or endpoint changed')
+            elif not allow_insert:
+                raise ValueError('Previously approved authority was removed; owner review required')
+            else:
+                now = time.time()
+                conn.execute('''INSERT INTO knights
+                    (id,role,status,node_state,capabilities_json,granted_capabilities_json,
+                     health,is_local,last_heartbeat,public_identity_json,fingerprint,kingdom_id,
+                     connection_metadata_json,hardware_profile_json,created_at,updated_at)
+                    VALUES (?,?,?,'APPROVED','[]','[]','healthy',0,0,?,?,?,?,?,?,?)''',
+                    (node_id,'knight','idle',json.dumps(identity),identity['fingerprint'],kingdom_id,
+                     json.dumps({'kingdom_endpoint':normalized}),json.dumps({}),now,now))
+                inserted = True
+            conn.commit()
+        if inserted:
+            event_bus.publish('cluster.node_registered', self.repo.get(node_id), source='node_registry')
+        return self.repo.get(node_id)
+
     def update_node_status(self, node_id: str, new_status: Union[NodeState, str], reason: str = "") -> Optional[Dict[str, Any]]:
         state_val = new_status if isinstance(new_status, NodeState) else NodeState(new_status)
         return self.update_node_state(node_id, state_val, reason)

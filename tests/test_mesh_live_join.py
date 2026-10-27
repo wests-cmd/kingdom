@@ -120,7 +120,10 @@ def test_three_backend_automatic_mesh(tmp_path):
                                              'local_endpoint': authority['peer_url'], 'ca_pem':ca_bundle}, method='PUT')
         for node in nodes[1:]:
             invitation = invoke(authority, '/nodes/invitation', {})
+            pin = invoke(node, '/federation/mesh/destinations', {
+                'authority_endpoint': authority['peer_url'], 'invitation': invitation})
             result = invoke(node, '/federation/mesh/join', {'invitation': invitation,
+                'destination_approval_id': pin['approval_id'],
                 'authority_endpoint': authority['peer_url'], 'local_endpoint': node['peer_url'], 'ca_pem':ca_bundle})
             assert result['status'] == 'pending_owner_approval'
             invoke(authority, '/nodes/' + node['identity']['node_id'] + '/approve', {'granted_capabilities': []})
