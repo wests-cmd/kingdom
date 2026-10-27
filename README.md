@@ -11,6 +11,11 @@ AI answer is not proof that a task completed.
 (release listing checked October 27, 2026). Source branches and locally patched
 installations can differ; see [project status](docs/PROJECT_STATUS.md).
 
+**Security update status:** source now pins a patched desktop dependency set,
+but the existing v1.2.4 download files have not been replaced. A new reviewed,
+versioned release is required to deliver that change. See the
+[source-versus-installed security note](docs/PROJECT_STATUS.md#desktop-dependency-security-update).
+
 <img src="frontend/public/branding/kingdom-icon.png" alt="Kingdom crowned K" width="72">
 
 ### Install the desktop app

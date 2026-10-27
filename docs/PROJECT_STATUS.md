@@ -8,6 +8,24 @@ This documentation checkout starts at main revision `d6c036b`. The current sourc
 
 Use the [documentation index](README.md), [architecture](ARCHITECTURE.md), [development](DEVELOPMENT.md) and [operations](OPERATIONS.md) as the current navigation. Detailed guides and dated audits remain in place; historical conclusions apply to their own source and environment.
 
+## Desktop dependency security update
+
+Source pins Electron 44.9.3 and refreshes the existing lockfile's patched undici
+and fast-uri resolutions. The previous desktop lock failed native packaging's
+high-severity dependency audit; the updated lock reports zero advisories in the
+October 27 audit. Audit enforcement remains enabled.
+
+Electron's [upstream certificate advisory](https://github.com/electron/electron/security/advisories/GHSA-jr5w-w6x2-84p9)
+requires a patched runtime for its TLS mitigation; undici's
+[upstream response-handling advisory](https://github.com/nodejs/undici/security/advisories/GHSA-xjj6-f33q-929c)
+also requires its fixed dependency version. These are dependency-specific fixes,
+not a blanket security certification.
+
+The existing published v1.2.4 installers are unchanged and must not be described
+as containing later source patches. Delivering the updated runtime requires a
+new versioned release, native verification and an installed update. No installer,
+tag or published asset is overwritten by this source change.
+
 ## Verified foundations and release scope
 
 - Separate Knight computer and Apprentice software-agent identities, host labels and editable coordination diagrams. Coordination lines do not themselves change execution placement or grants.
