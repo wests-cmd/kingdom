@@ -1,6 +1,8 @@
 import os
 import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 from backend.runtime.project_tests import report, validate_metadata
 from backend.runtime.computer_tools import receipt
@@ -13,6 +15,14 @@ class ProjectTestReports(unittest.TestCase):
         os.chdir(self.directory.name)
         self.addCleanup(self.directory.cleanup)
         self.addCleanup(os.chdir, self.old)
+        # Runtime modules can be imported before this fixture changes cwd.
+        # Keep their shared installation DB alive at an absolute fixture path;
+        # the real direct-execution emergency guard must remain enabled.
+        from backend.storage.db import Database, db
+        self.database = Database(Path(self.directory.name) / 'runtime' / 'kingdom.db')
+        database_path = patch.object(db, 'db_path', self.database.db_path)
+        database_path.start()
+        self.addCleanup(database_path.stop)
         self.task = {'id': 'test-job', 'prompt': 'Run exact suite', 'status': 'completed', 'metadata': {
             'tool': 'process.run@1.0.0', 'capability': 'process.execute', 'max_attempts': 1,
             'project_test': {'project': 'threadmap', 'source_revision': 'a' * 40,
@@ -118,6 +128,10 @@ class ProjectTestReports(unittest.TestCase):
         self.task['result'] = {'plan': {'task_id': self.task['id'],
             'subtasks': [{'prompt': self.task['prompt'], 'knight': 'coder'}]}, 'results': [item]}
         self.assertTrue(report(self.task)['tests_passed'])
+        from backend.cluster.task_leasing import TaskLeaseManager
+        TaskLeaseManager(database=self.database).emergency_stop('owner', 'Fixture emergency stop')
+        with self.assertRaisesRegex(PermissionError, 'emergency stop'):
+            asyncio.run(swarm._run('coder', self.task['prompt'], self.task))
         self.task['prompt'] = 'Different child prompt'
         self.assertEqual(report(self.task)['state'], 'evidence_invalid')
         self.task['result']['plan']['subtasks'][0]['prompt'] = self.task['prompt']
