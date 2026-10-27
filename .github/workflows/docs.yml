@@ -1,0 +1,30 @@
+name: Documentation navigation
+
+on:
+  pull_request:
+    paths:
+      - 'README.md'
+      - 'docs/**'
+      - 'scripts/check_docs.py'
+      - '.github/workflows/docs.yml'
+  push:
+    branches: ['main']
+    paths:
+      - 'README.md'
+      - 'docs/**'
+      - 'scripts/check_docs.py'
+      - '.github/workflows/docs.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  documentation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/check_docs.py
