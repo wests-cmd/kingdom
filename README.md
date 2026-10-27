@@ -1,125 +1,138 @@
 # Kingdom
 
-Kingdom is an adaptive AI harness for completing tasks across models, agents, tools and clusters of computers. One computer can work alone; approved computers can cooperate as a cluster. The core loop is to plan bounded work, place it on suitable resources, execute through permitted tools, verify outcomes, retain useful knowledge and improve the next assignment. Integrations should work without requiring Hermes, a particular model, or the original owner's machine setup.
+## Overview
 
-Adaptation includes task routing, reusable skills and retrieval from reviewed evidence. Model tuning is a separate optional lifecycle with evaluations and rollback. Neither stored chat nor a larger model is proof of learning or completed work. Current distributed execution has a narrower verified scope than this product direction: see [the core architecture and delivery gates](docs/ADAPTIVE_CLUSTER_CORE.md).
+Kingdom is a standalone web and desktop command center for models, Apprentices,
+governed tasks, shared knowledge and approved Knight computers. Its direction is
+plan → place → execute → verify → remember → adapt. A connected computer or an
+AI answer is not proof that a task completed.
 
-Kingdom includes an **Agent workbench** for saved tool conversations and installed CLI connections. **Tasks → Two model chats** provides lightweight parallel chat with selected model computers.
-
-**Earlier optional source-service preview:** [Download the adaptive cluster preview](https://github.com/wests-cmd/kingdom/releases/tag/adaptive-cluster-2026-10-17.2). It includes the built browser interface, guided AI worker connections, bounded local vault caches and coding execution requirements. This separate preview requires Python 3.12; read `START-HERE.md` in its ZIP. Native stable installers remain listed below. See [vault and reconnecting-device setup](docs/VAULT_AND_DEVICE_LAYOUT.md).
-
-[Harness capabilities and roadmap](docs/HARNESS_ROADMAP.md) · [Portable SKILL.md](docs/PORTABLE_SKILLS.md) · [Model computers](docs/MODEL_OFFLOADING.md)
+**Published native release: [v1.2.4](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.4)**
+(release listing checked October 27, 2026). Source branches and locally patched
+installations can differ; see [project status](docs/PROJECT_STATUS.md).
 
 <img src="frontend/public/branding/kingdom-icon.png" alt="Kingdom crowned K" width="72">
 
-A desktop command center for local workers, governed tasks and persistent knowledge. Start with the installer for your computer; **Python and Node.js are included, so you do not need to install them separately.**
+### Install the desktop app
 
-**Current stable release: [Kingdom v1TAS · v1.2.2](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.2)**
+Choose one matching installer; native packages include their runtime.
 
-Windows desktop users can now check, download and apply updates from **Settings → Desktop updates** without manually uninstalling Kingdom. Profiles, tasks, settings and model connections stay in their existing data folder. Full desktop updates restart the app; compatible interface-only updates keep the backend running.
+| Computer | Published v1.2.4 download |
+| --- | --- |
+| Windows Intel/AMD 64-bit | [Kingdom-Setup-1.2.4.exe](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/Kingdom-Setup-1.2.4.exe) |
+| macOS Intel | [Kingdom-1.2.4.dmg](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/Kingdom-1.2.4.dmg) |
+| Linux Intel/AMD 64-bit | [Kingdom-1.2.4.AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/Kingdom-1.2.4.AppImage) |
+| Debian/Ubuntu amd64 | [kingdom-desktop_1.2.4_amd64.deb](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/kingdom-desktop_1.2.4_amd64.deb) |
 
-[Join the Kingdom Discord](https://discord.gg/4b8f9YS2Wp) · [All releases](https://github.com/wests-cmd/kingdom/releases) · [Report a problem](https://github.com/wests-cmd/kingdom/issues)
+Check [SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/SHA256SUMS)
+and the [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/release-manifest.json).
+Windows/macOS packages are unsigned; macOS is not notarized. Native ARM64,
+Android and iOS release installers are not supplied by this release. Operating
+system protections remain in force. The [browser app](docs/FREE_WEB_APP.md) is a
+separate option that needs a running reachable server.
 
-The mission workspace adds five active autonomy levels, larger tasks and inspected attachments, custom installed model connections, reviewed computer tools, Captain groups, bounded source repairs and compatible UI-only updates. [Read the mission guide](docs/MISSION_WORKSPACE.md) and [exact capabilities and limits](docs/releases/v1.2.2.md).
+Open the app, complete setup, choose a profile, start Runtime, then submit
+**Tasks → Analyze text** and inspect its actual result. AI generation needs a
+configured provider. An optional opening passcode starts disabled; remote access
+still needs its own authentication. [Mission guide](docs/MISSION_WORKSPACE.md).
 
-## Release status and remaining work
+## Project map
 
-**v1.2.2 stable** supersedes the earlier optional preview for native downloads. See the [release notes](docs/releases/v1.2.2.md) for the distributed-work changes and limits. Windows and macOS packages remain unsigned; the Mac build is not notarized. Publishing a release does not update every connected computer automatically.
-
-See the [verified status and remaining work](docs/PROJECT_STATUS.md) for what is implemented, what is still partial, and the eight remaining acceptance areas. General autonomous coding and automatic updates of every connected computer are not claimed complete.
-
-## Download Kingdom
-
-Choose **one** installer that matches your computer. These are the published v1.2.2 files.
-
-| Your computer | Download | What to do next |
+| Piece | Authoritative files | Role |
 | --- | --- | --- |
-| **Windows — Intel/AMD 64-bit** | **[Download Windows installer](https://github.com/wests-cmd/kingdom/releases/download/v1.2.2/Kingdom-Setup-1.2.2.exe)** | Run `Kingdom-Setup-1.2.2.exe`, then open the Kingdom desktop shortcut. |
-| **macOS — Intel** | **[Download Mac DMG](https://github.com/wests-cmd/kingdom/releases/download/v1.2.2/Kingdom-1.2.2.dmg)** | Open the DMG, drag Kingdom into Applications, then launch it. |
-| **Linux — Intel/AMD 64-bit** | **[Download AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.2.2/Kingdom-1.2.2.AppImage)** | Allow the downloaded file to run as a program in its file properties, then open it. |
-| **Ubuntu / Debian — amd64** | **[Download DEB package](https://github.com/wests-cmd/kingdom/releases/download/v1.2.2/kingdom-desktop_1.2.2_amd64.deb)** | Open it with your distribution's package installer, then launch Kingdom. |
+| Web interface | [frontend](frontend), [Vite configuration](frontend/vite.config.js) | React UI; development port 5173; built assets served by the backend |
+| API and runtime | [backend/main.py](backend/main.py), [backend/api.py](backend/api.py), [runtime](backend/runtime) | FastAPI, scheduling, policy, tasks and SQLite evidence |
+| Connected computers | [backend/cluster](backend/cluster) | Signed peer communication, approvals, capabilities and leases |
+| Desktop shell | [desktop](desktop) | Electron wrapper around the bundled loopback backend |
+| Companion clients | [apps/mobile](apps/mobile) | Separate web/native companion source and pairing flows |
+| Packaging and checks | [scripts](scripts), [.github/workflows](.github/workflows), [tests](tests) | Builds, validation, release and regression evidence |
 
-**Before installing:** Windows and macOS builds are unsigned; the Mac build is not notarized. Your operating system may show a trust prompt. Native Apple Silicon, Windows ARM64, Linux ARM64, Android and iOS installers are **not supplied**. Mac DMG testing covers Intel Macs; Apple Silicon compatibility is not certified.
+See [architecture](docs/ARCHITECTURE.md) for request flow and boundaries. Runtime
+layout and existing imports stay intact; documentation navigation is the common
+entry point rather than a second application tree.
 
-**Check your download:** [SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.2.2/SHA256SUMS) and [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.2.2/release-manifest.json) list the exact files and hashes. The [release page](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.2) also contains native startup evidence and screenshots. Choose an installer above rather than GitHub's “Source code” archive or a standalone backend file.
+## Run locally
 
-Kingdom opens directly to the main panel on its own computer. An optional passcode is **off by default**. To use one, open **Settings → Opening Kingdom** and choose and confirm your own passcode. Other devices still need a connection code.
-
-## Your first five minutes
-
-1. Open Kingdom and follow the setup wizard. It inspects your computer and offers Developer, Research, Full Swarm, Server and Custom profiles.
-2. Choose the workers you need. Desktop mode opens the command center and signs in to its own bundled backend automatically. Server mode runs without the desktop window.
-3. Open **Runtime** and start the runtime when you are ready to process work.
-4. In **Tasks**, choose **Analyze text**, enter a short piece of text and submit it. Check the completed result. Python syntax checks are also available without a cloud account.
-5. Open **Settings** to choose a palette or custom color, light/dark/device mode, spacing, display size, motion and castle background strength. Choose high contrast, larger controls, strong keyboard focus or an interface size up to 200%. Preferences save locally and to this Kingdom owner.
-
-AI text generation needs a configured model provider. Joining Discord, selecting a profile or importing a skill map does not configure a model or grant new permissions. A generated answer is not proof that an external action occurred. Broker connections, live market data and trade execution are unavailable.
-
-### Already have Kingdom?
-
-On Windows v1.2.1 or later, open **Settings → Desktop updates**, check for a release, download it, then choose **Update and restart**. For an older desktop version, run the new installer over the existing installation once; do not uninstall first. Profiles, tasks, settings and model connections remain in the existing per-user data folder. Native updates need a brief restart and download the full installer. macOS/Linux use their matching installer/package. Compatible UI-only updates keep the backend running. Keep a backup of your data.
-
-## Connect a phone or another device
-
-Open **Devices & Knowledge** or **Nodes & Cluster → Connect a phone / device**. Enter a trusted HTTPS Kingdom address that both devices can reach, create a single-use code, and scan the QR or open `/#/connect` and enter the code. Approve the request in **Pending Approvals**. Codes expire after five minutes.
-
-`localhost` on a phone refers to the phone, not your PC. Desktop loopback alone cannot connect another device. The browser companion is a limited pairing/status connection; it does not receive owner or task-execution authority. [Read the device connection guide](docs/device-connections.md).
-
-## Kingdom Discord
-
-**[Join Kingdom's server](https://discord.gg/4b8f9YS2Wp)** for the community. For installation problems, include your Kingdom version, operating system and exact error, with credentials and private data removed. Track reproducible bugs in [GitHub Issues](https://github.com/wests-cmd/kingdom/issues).
-
-The server's **Kingdom Centipede Skill Bot** provides documentation lookup with `/commands`, `/ask`, `/search`, `/sources`, `/projectinfo`, `/compare` and `/exportknowledge`. `/aiask` produces a local AI draft for review. Administrators can teach private notes using `/teach` in **bot-knowledge**; ordinary chat is not automatically learned. Private notes do not feed public answers, and teaching does not retrain a model or execute desktop tasks.
-
-The desktop's **optional runtime slash-command adapter** is a separate integration and starts disabled. When an operator configures it, `/help` lists its commands and `/kingdom` requests an owner-confirmed linking code. Joining the community server never grants desktop permissions. Server administrator status does not grant Kingdom authority. Never post an owner access code, bot token, private linking code or API key in a public channel.
-
-[Bot setup and permissions](docs/DISCORD_SKILLMAPS.md) · [Community FAQ and live bot test checklist](docs/COMMUNITY_GUIDE.md)
-
-## What Kingdom can do
-
-- Manage installed local workers and persist tasks, memory and activity in SQLite.
-- Review and explicitly approve a runtime restart in **Recovery**, with expiring single-use plans and recorded outcomes.
-- Preserve workflow checkpoint snapshots and consumed budgets across process restarts; loading a checkpoint does not execute or authorize a workflow.
-- Apply human approvals and deny-by-default capability permissions; enforce task autonomy through **Governance**.
-- Import JSON/YAML skill maps with preview, owner confirmation, canonical export and SHA-256. Maps are preferences, not executable code or permission grants.
-- Run explicitly enabled, bounded, read-only Open Food Facts and Open-Meteo checks through authorized workers. Public API directory entries are discovery metadata, not verified adapters.
-
-[Runtime controls and limitations](docs/runtime-controls.md) · [Portable maps and providers](docs/DISCORD_SKILLMAPS.md) · [Appearance and artwork](docs/BRANDING.md)
-
-The [AgentScope additions list](docs/AGENTSCOPE_ADDITIONS.md) and [implementation progress](docs/AGENTSCOPE_PROGRESS.md) track remaining work. This release implements part of that list; full assistive-technology certification, signed live updates and complete workflow resume remain open.
-
-## Developers and server operators
-
-Desktop users can skip this section. Source development uses Python 3.12 and Node.js 24 in CI.
+Source development uses Python 3.12 and Node.js 24, matching CI. From the repo root:
 
 ```bash
-git clone https://github.com/wests-cmd/kingdom.git
-cd kingdom
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
-uvicorn backend.main:app --host 127.0.0.1 --port 8000
+python -m pip install -r requirements-dev.txt
+npm --prefix frontend ci
+npm --prefix frontend run build
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-In another terminal:
+Open `http://127.0.0.1:8000/`. In PowerShell, use `python` and activate with
+`venv\Scripts\Activate.ps1` instead. Build the frontend **before** starting the
+backend so its static routes find `frontend/dist`. The working directory owns
+the source-run `data/` directory. [Development guide](docs/DEVELOPMENT.md) covers
+the optional separate Vite server and desktop packaging prerequisites.
+
+## Configuration
+
+The backend reads process environment; copying [.env.example](.env.example)
+does not establish that a launcher loads it. Source administrative requests use
+`data/owner-token` or `KINGDOM_OWNER_TOKEN`. Keep these private and outside tasks,
+maps, source control and public chats. `ALLOWED_ORIGINS` controls browser origins;
+frontend development can use `VITE_API_URL` for an explicitly selected backend.
+Provider selection, existing grants and autonomy are separate controls.
+[Operations and configuration](docs/OPERATIONS.md).
+
+## Verification
+
+Documentation navigation: `python scripts/check_docs.py` (Python 3 standard library). CI checks the same local targets and required README sections; it does not check external URLs or prove runtime completion.
+
+With development dependencies installed and web assets built:
 
 ```bash
-npm --prefix frontend ci
-npm --prefix frontend run dev
+python -m pytest
+node --test frontend/tests/*.test.js apps/mobile/mobile-client.test.js
+python scripts/validate_version.py
 ```
 
-For Windows PowerShell, activate the environment with `venv\Scripts\Activate.ps1`. For a production frontend build, use `npm --prefix frontend run build`. The repository also supplies `scripts/install.sh`. Docker operators should follow the [commander and worker enrollment guide](docs/docker-cluster.md); workers require separate pairing invitations and explicit owner approval.
+These commands do not prove physical-device connectivity or installed updates.
+Use the [cluster shipping checklist](docs/CLUSTER_SHIPPING_CHECKLIST.md) and
+[release process](docs/RELEASE_PROCESS.md) for those separate gates.
 
-Server administrative APIs require the private `data/owner-token` or `KINGDOM_OWNER_TOKEN`. Keep credentials in the credential broker/process environment; do not put them in tasks or maps. Configure only the network access you need. `.env.example` is a template, and `configs/install_profiles.json` supplies the install profile catalog. Optional Discord deployment requires the signed public callback described in [its setup guide](docs/DISCORD_SKILLMAPS.md); a private Tailscale address cannot receive Discord callbacks.
+## Operations and updates
+
+Windows v1.2.1+ exposes **Settings → Desktop updates**. macOS/Linux use their
+matching package. Back up data before updates; verify the exact installed source
+and rollback path. Publishing a release does not update every Knight.
+[Operations](docs/OPERATIONS.md), [containers](docs/docker-cluster.md),
+[vault/device layout](docs/VAULT_AND_DEVICE_LAYOUT.md).
+
+## Integrations
+
+[Centipede OS](https://github.com/wests-cmd/Centipede-os) is a separate application
+and OS-image project. Configure its connection explicitly; installing either
+product does not install, trust or authorize the other. Models, CLI harnesses,
+Discord adapters, public APIs and portable skill maps are optional integrations.
+Maps and community membership grant no execution authority.
+[Integration boundaries](docs/ARCHITECTURE.md#integrations).
+
+For another device, use a reachable trusted HTTPS server, create a single-use
+pairing code and approve it. `localhost` on a phone refers to the phone.
+[Device connections](docs/device-connections.md).
+
+## Status and roadmap
+
+The published release supports bounded governed work, programmes, scoped peer
+reports and analysis tools. General autonomous repository coding, automatic
+installation on every Knight, universal self-repair and broad hardware support
+remain separate acceptance work. [Current status](docs/PROJECT_STATUS.md),
+[architecture direction](docs/ADAPTIVE_CLUSTER_CORE.md), [roadmap](docs/HARNESS_ROADMAP.md).
+
+## Documentation
+
+Start at the [documentation index](docs/README.md): setup, development,
+operations, integration, verification and historical reports have separate homes.
+Use [GitHub Issues](https://github.com/wests-cmd/kingdom/issues) for reproducible
+bugs and [Kingdom Discord](https://discord.gg/4b8f9YS2Wp) for community help.
+Never post credentials or private linking codes. [Community guide](docs/COMMUNITY_GUIDE.md).
 
 ## License
 
-Kingdom uses the custom [CYA License v2.0](LICENSE). Read the [license](LICENSE) and [commercial-use policy](COMMERCIAL_USE.md) before commercial use.
-# Automation supervision
-
-Open **Automations** to inspect explicitly connected workers, retained progress,
-their handover plan and check results. At autonomy level 3, an owner-approved
-adapter can supervise the existing worker after its checks pass. Failed handovers
-retain the original runner and retry within a fixed budget. Lower autonomy levels
-pause adopted work. See [handover setup and recovery](docs/automation-handover.md).
-
+Read the [CYA License v2.0](LICENSE) and [commercial-use policy](COMMERCIAL_USE.md).
