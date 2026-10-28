@@ -67,10 +67,14 @@ def overview():
     peers = hierarchy['knights']
     now = time.time()
     inventory = hierarchy['inventory']
+    # Pairing and CONNECTED membership are not live observations. Reuse the
+    # hierarchy's validated signed-inventory/heartbeat freshness assessment.
+    connected = len({report['kingdom_id'] for report in inventory['reports'] if report['state'] == 'current'})
     return {'observed_at': now, 'commander': hierarchy['commander'], 'knights': peers,
             'inventory': inventory,
             'apprentices': hierarchy['apprentices'], 'jobs': jobs,
-            'counts': {'knights': 1 + len(peers), 'paired_knights': len(peers), 'local_apprentices': len(hierarchy['apprentices']),
+            'counts': {'knights': 1 + connected, 'paired_knights': len(peers), 'unavailable_peers': len(peers) - connected,
+                       'local_apprentices': len(hierarchy['apprentices']),
                        'current_apprentices': inventory['total_current'], 'remote_apprentices': inventory['remote_count'],
-                       'connected_peers': sum(n.get('node_state') == 'CONNECTED' and now - n.get('last_heartbeat', 0) < 45 for n in peers)},
+                       'connected_peers': connected},
             'background': background.status(), 'coverage': inventory['notice']}
