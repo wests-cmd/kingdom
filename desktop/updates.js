@@ -60,7 +60,8 @@ function handoffScript(pid, installer, executable, digest, latest, receipt) {
   const quote = text => "'" + text.replace(/'/g, "''") + "'";
   if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error('Invalid process identity');
   version(latest);
-  return `$ErrorActionPreference='Stop'\nImport-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Utility')\nImport-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Management')\ntry {\n` +
+  return `$ErrorActionPreference='Stop'\nImport-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Utility')\nImport-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Management')\n` +
+    `function Save-Receipt($record) { $receiptTemporary=${quote(receipt)}+'.'+$PID+'.tmp'; $record | ConvertTo-Json | Set-Content -LiteralPath $receiptTemporary -Encoding UTF8; Move-Item -LiteralPath $receiptTemporary -Destination ${quote(receipt)} -Force }\ntry {\n` +
     `if (Get-Process -Id ${pid} -ErrorAction SilentlyContinue) { Wait-Process -Id ${pid} -Timeout 90 }\n` +
     `if ((Get-FileHash -LiteralPath ${quote(installer)} -Algorithm SHA256).Hash.ToLowerInvariant() -ne ${quote(digest)}) { throw 'Installer checksum changed' }\n` +
     `$result=Start-Process -FilePath ${quote(installer)} -ArgumentList @('/S',${quote('/D=' + path.dirname(executable))}) -WindowStyle Hidden -Wait -PassThru\n` +
@@ -69,9 +70,9 @@ function handoffScript(pid, installer, executable, digest, latest, receipt) {
     `$deadline=(Get-Date).AddSeconds(90)\n` +
     `do { $installed=if(Test-Path -LiteralPath ${quote(executable)}){(Get-Item -LiteralPath ${quote(executable)}).VersionInfo.ProductVersion}else{''}; if($installed -eq ${quote(latest)} -or $installed -eq ${quote(latest + '.0')}){break}; Start-Sleep -Seconds 1 } while((Get-Date) -lt $deadline)\n` +
     `if($installed -ne ${quote(latest)} -and $installed -ne ${quote(latest + '.0')}){throw 'Installed version could not be verified'}\n` +
-    `@{success=$true;version=${quote(latest)}} | ConvertTo-Json | Set-Content -LiteralPath ${quote(receipt)} -Encoding UTF8\n` +
+    `Save-Receipt @{success=$true;version=${quote(latest)}}\n` +
     `Remove-Item -LiteralPath ${quote(installer)} -ErrorAction SilentlyContinue\n` +
-    `} catch { @{success=$false;version=${quote(latest)};diagnostic=$_.Exception.Message;message='The upgrade could not finish. Your data is retained. Retry the update.'} | ConvertTo-Json | Set-Content -LiteralPath ${quote(receipt)} -Encoding UTF8 } finally { if(-not (Get-Process -Id ${pid} -ErrorAction SilentlyContinue) -and (Test-Path -LiteralPath ${quote(executable)})){ $reopened=Start-Process -FilePath ${quote(executable)} -PassThru; $record=Get-Content -LiteralPath ${quote(receipt)} -Raw | ConvertFrom-Json; $record | Add-Member -NotePropertyName reopenedPID -NotePropertyValue $reopened.Id -Force; $record | ConvertTo-Json | Set-Content -LiteralPath ${quote(receipt)} -Encoding UTF8 } }\n`;
+    `} catch { Save-Receipt @{success=$false;version=${quote(latest)};diagnostic=$_.Exception.Message;message='The upgrade could not finish. Your data is retained. Retry the update.'} } finally { if(-not (Get-Process -Id ${pid} -ErrorAction SilentlyContinue) -and (Test-Path -LiteralPath ${quote(executable)})){ $reopened=Start-Process -FilePath ${quote(executable)} -PassThru; $record=Get-Content -LiteralPath ${quote(receipt)} -Raw | ConvertFrom-Json; $record | Add-Member -NotePropertyName reopenedPID -NotePropertyValue $reopened.Id -Force; Save-Receipt $record } }\n`;
 }
 // PowerShell exits without executing an encoded command when Windows starts it
 // with Node's DETACHED_PROCESS flag. A short-lived bootstrap uses Windows'

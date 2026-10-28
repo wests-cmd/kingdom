@@ -8,18 +8,33 @@ import re
 import tempfile
 from threading import RLock
 import zipfile
+import sys
+
+
+def native_build_identity():
+    if not getattr(sys, 'frozen', False):
+        return None
+    try:
+        revision = json.loads((Path(sys._MEIPASS)/'kingdom-release.json').read_text())['revision']
+        return revision if isinstance(revision, str) and re.fullmatch('[a-f0-9]{40}', revision) else None
+    except (OSError, ValueError, KeyError, AttributeError):
+        return None
 
 
 class UIComponents:
     lock = RLock()
-    def __init__(self, backend_version, root='data/ui-components'):
+    def __init__(self, backend_version, root='data/ui-components', backend_identity=None):
         self.version, self.root = backend_version, Path(root)
+        self.backend_identity = backend_identity
         self.root.mkdir(parents=True, exist_ok=True)
 
     def status(self):
         pointer = self.root/'active.json'
         state = json.loads(pointer.read_text()) if pointer.exists() else {'active': None, 'previous': None}
-        return {**state, 'backend_version': self.version, 'backend_restart_required': False,
+        if self.backend_identity and state.get('active') and state.get('backend_identity') != self.backend_identity:
+            state = {'active': None, 'previous': None, 'inactive_component': state['active'],
+                     'inactive_reason': 'Saved interface belongs to a different or unrecorded native build. Using the bundled interface.'}
+        return {**state, 'backend_version': self.version, 'backend_build': self.backend_identity, 'backend_restart_required': False,
                 'notice': 'UI-only updates activate on page refresh. Backend and native application changes require a restart and the matching installer.'}
 
     def directory(self, ident):
@@ -39,7 +54,7 @@ class UIComponents:
 
     def _point(self, active, previous):
         with tempfile.NamedTemporaryFile(dir=self.root,delete=False) as handle:
-            handle.write(json.dumps({'active':active,'previous':previous}).encode()); temporary=Path(handle.name)
+            handle.write(json.dumps({'active':active,'previous':previous,'backend_identity':self.backend_identity}).encode()); temporary=Path(handle.name)
         temporary.replace(self.root/'active.json')
 
     def install(self, data, expected):
@@ -58,6 +73,8 @@ class UIComponents:
             manifest=json.loads(archive.read('ui-manifest.json'))
             if manifest.get('format')!='kingdom.ui.v1' or self.version not in manifest.get('compatible_backends',[]):
                 raise ValueError('Backend upgrade and restart required for this UI package')
+            if self.backend_identity and self.backend_identity not in manifest.get('compatible_backend_builds', []):
+                raise ValueError('This UI package is not verified for the exact installed native build')
             files=manifest.get('files',{})
             if not files or set(files)!={item.filename for item in entries}-{'ui-manifest.json'} or 'index.html' not in files:
                 raise ValueError('UI package inventory mismatch')

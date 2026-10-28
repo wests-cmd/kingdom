@@ -2,6 +2,7 @@
 import secrets
 import time
 import math
+import json
 from threading import RLock
 from typing import Optional
 from pydantic import BaseModel, Field
@@ -57,6 +58,8 @@ class TaskLeaseManager:
             raise ValueError("Lease lifetime must be positive")
         with self._lock, self.db.get_connection() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            if self.stopped(conn):
+                raise PermissionError('Owner emergency stop is latched')
             if self._node_busy(conn, assigned_node_id, task_id):
                 raise ValueError("Node already has an active task lease")
             seq = conn.execute("SELECT coalesce(max(fencing_token), 0)+1 FROM leases WHERE task_id=?", (task_id,)).fetchone()[0]
@@ -83,6 +86,8 @@ class TaskLeaseManager:
             raise ValueError("Lease lifetime must be positive")
         with self._lock, self.db.get_connection() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            if self.stopped(conn):
+                return None
             if self._node_busy(conn, assigned_node_id, task_id):
                 return None
             seq = conn.execute("SELECT coalesce(max(fencing_token),0)+1 FROM leases WHERE task_id=?", (task_id,)).fetchone()[0]
@@ -140,5 +145,43 @@ class TaskLeaseManager:
             conn.commit()
         if task_id in self.leases:
             self.leases[task_id].revoked = True
+
+    @staticmethod
+    def stopped(conn):
+        return conn.execute("SELECT 1 FROM runtime_state WHERE key='runtime_emergency_stop'").fetchone() is not None
+
+    def emergency_status(self):
+        with self.db.get_connection() as conn:
+            row = conn.execute("SELECT value_json FROM runtime_state WHERE key='runtime_emergency_stop'").fetchone()
+        return json.loads(row[0]) if row else None
+
+    def emergency_stop(self, operator, reason):
+        """Durably fence all leases and task completions in one transaction."""
+        record = {'operator': operator, 'reason': reason, 'stopped_at': time.time(),
+                  'stop_id': secrets.token_hex(16)}
+        with self._lock, self.db.get_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            conn.execute("INSERT INTO runtime_state(key,value_json,updated_at) VALUES('runtime_emergency_stop',?,?) "
+                         "ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at",
+                         (json.dumps(record), record['stopped_at']))
+            revoked = conn.execute('UPDATE leases SET revoked=1 WHERE revoked=0').rowcount
+            held = conn.execute("UPDATE tasks SET status='RECOVERY_REQUIRED',cancellation_requested=1,"
+                "error='Owner emergency stop; independent recovery review required',version=version+1,updated_at=? "
+                "WHERE lower(status) IN ('leased','running','verifying')", (record['stopped_at'],)).rowcount
+            conn.commit()
+        for lease in self.leases.values(): lease.revoked = True
+        return {**record, 'revoked_leases': revoked, 'held_tasks': held}
+
+    def reset_emergency_stop(self, stop_id):
+        """Compare the owner's current stop identity; never resume old tasks."""
+        with self._lock, self.db.get_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute("SELECT value_json FROM runtime_state WHERE key='runtime_emergency_stop'").fetchone()
+            if not row or json.loads(row[0])['stop_id'] != stop_id:
+                raise ValueError('Emergency stop changed; review the current stop before resetting')
+            conn.execute("INSERT INTO runtime_state(key,value_json,updated_at) VALUES('runtime_emergency_stop_last_reset',?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at", (row[0], time.time()))
+            conn.execute("DELETE FROM runtime_state WHERE key='runtime_emergency_stop'")
+            conn.commit()
 
 task_lease_manager = TaskLeaseManager()

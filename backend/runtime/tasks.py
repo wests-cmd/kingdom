@@ -60,6 +60,7 @@ class TaskManager:
         self._tasks.clear()
         self._queue.clear()
 
+    @synchronized
     def load_persisted_tasks(self) -> None:
         try:
             db_tasks = self.repo.list_all(limit=None)

@@ -101,3 +101,90 @@ def test_planner_errors_are_generic_and_next_cycle_still_runs():
         assert 'secret' not in str(notices)
         assert len(calls) >= 2
     asyncio.run(exercise())
+
+
+def test_transient_planning_recovers_after_durable_backoff_without_approval(runtime, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from backend.runtime.work_programmes import WorkProgrammes
+    engine, backlog, _ = runtime
+    clock = [1000.0]
+    monkeypatch.setattr('backend.runtime.work_programmes.time', SimpleNamespace(time=lambda: clock[0]))
+    engine.models = SimpleNamespace(plan_chat=AsyncMock(side_effect=[
+        TimeoutError('private endpoint token'), {'text': '{"question":"Which test suite?"}'}]))
+    service = WorkProgrammes(backlog.db, engine, backlog)
+    state = service.create('kingdom', 'recover-planner', '- Verify recovery', planner_mode='configured_chat')
+    service.configure(state['id'], True, state['revision'])
+    asyncio.run(service.tick())
+    row = service.get(state['id'])['sections'][0]['items'][0]
+    assert row['planning_failure']['category'] == 'model_unavailable'
+    assert row['planning_failure']['retryable'] is True
+    assert row['planning_failure']['retry_at'] == 1060.0
+    assert 'private' not in str(row)
+    # A new service instance must honour the persisted deadline.
+    service = WorkProgrammes(backlog.db, engine, backlog)
+    asyncio.run(service.tick())
+    assert engine.models.plan_chat.await_count == 1
+    clock[0] = 1060.0
+    asyncio.run(service.tick())
+    row = service.get(state['id'])['sections'][0]['items'][0]
+    assert row['planning'] == 'awaiting_answer' and row['planning_attempts'] == 2
+    assert len(row['planning_failure_history']) == 1
+    assert engine.missions.list() == [] and engine.tasks.list() == []
+
+
+def test_transient_retry_budget_and_disabled_auto_plan_are_enforced(runtime, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from backend.runtime.work_programmes import WorkProgrammes
+    engine, backlog, _ = runtime
+    clock = [1000.0]
+    monkeypatch.setattr('backend.runtime.work_programmes.time', SimpleNamespace(time=lambda: clock[0]))
+    engine.models = SimpleNamespace(plan_chat=AsyncMock(side_effect=TimeoutError('secret')))
+    service = WorkProgrammes(backlog.db, engine, backlog)
+    state = service.create('kingdom', 'retry-budget', '- Verify recovery', planner_mode='configured_chat')
+    service.configure(state['id'], True, state['revision'])
+    for _ in range(3):
+        asyncio.run(service.tick()); clock[0] += 1000
+    asyncio.run(service.tick())
+    row = service.get(state['id'])['sections'][0]['items'][0]
+    assert row['planning_attempts'] == 3 and row['planning_failure']['retryable'] is False
+    assert engine.models.plan_chat.await_count == 3
+    assert engine.missions.list() == [] and engine.tasks.list() == []
+    other = service.create('kingdom', 'paused-retry', '- Verify recovery', planner_mode='configured_chat')
+    asyncio.run(service.plan_next(other['id'], other['revision']))
+    clock[0] += 1000
+    asyncio.run(service.tick())
+    assert engine.models.plan_chat.await_count == 4
+
+
+def test_invalid_contract_is_not_a_transient_failure(runtime):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from backend.runtime.work_programmes import WorkProgrammes
+    engine, backlog, _ = runtime
+    engine.models = SimpleNamespace(plan_chat=AsyncMock(return_value={'text': 'Ready'}))
+    service = WorkProgrammes(backlog.db, engine, backlog)
+    state = service.create('kingdom', 'invalid-contract-no-retry', '- Verify recovery', planner_mode='configured_chat')
+    service.configure(state['id'], True, state['revision'])
+    asyncio.run(service.tick()); asyncio.run(service.tick())
+    row = service.get(state['id'])['sections'][0]['items'][0]
+    assert row['planning_failure']['retryable'] is False
+    assert engine.models.plan_chat.await_count == 1
+
+
+def test_provider_authentication_denial_does_not_retry_or_expose_response(runtime):
+    import httpx
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from backend.runtime.work_programmes import WorkProgrammes
+    engine, backlog, _ = runtime
+    error=httpx.HTTPStatusError('private token', request=httpx.Request('POST','https://example.test'),response=httpx.Response(403))
+    engine.models=SimpleNamespace(plan_chat=AsyncMock(side_effect=error))
+    service=WorkProgrammes(backlog.db,engine,backlog)
+    state=service.create('kingdom','auth-no-retry','- Verify recovery',planner_mode='configured_chat')
+    service.configure(state['id'],True,state['revision'])
+    asyncio.run(service.tick());asyncio.run(service.tick())
+    row=service.get(state['id'])['sections'][0]['items'][0]
+    assert row['planning_failure']['retryable'] is False
+    assert 'private' not in str(row) and engine.models.plan_chat.await_count==1

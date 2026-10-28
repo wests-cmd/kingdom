@@ -166,6 +166,47 @@ class RuntimeEngine:
         self.events.publish("runtime.autonomy_changed", {"previous": previous, "level": level, "actor": "owner"})
         return result
 
+    def emergency_stop(self, operator: str, reason: str) -> dict[str, Any]:
+        """Owner stop: fence durable work before returning; never replay effects."""
+        if operator != 'owner':
+            raise PermissionError('Authenticated owner required for emergency stop')
+        if not isinstance(reason, str) or not 1 <= len(reason.strip()) <= 500:
+            raise ValueError('Supply a bounded emergency stop reason')
+        from backend.cluster.task_leasing import task_lease_manager
+        from backend.memory.portable_vault import clean_text
+        leases = getattr(self, 'lease_manager', task_lease_manager)
+        if leases.db.db_path.resolve() != self.tasks.repo.db.db_path.resolve():
+            raise ValueError('Emergency stop requires the authoritative task/lease database')
+        with self.dispatch_lock:
+            result = leases.emergency_stop(operator, clean_text(reason.strip()))
+            self.tasks.load_persisted_tasks()
+            self.execution_policy.set(0)
+            self.events.publish('runtime.emergency_stopped', result)
+            return {'status': 'emergency_stopped', 'autonomy_level': 0, **result}
+
+    def assert_execution_allowed(self, task_id, version):
+        """Last-mile admission for deferred local operations, not task metadata."""
+        from backend.cluster.task_leasing import TaskLeaseManager
+        with self.dispatch_lock, self.tasks.repo.db.get_connection() as conn:
+            if TaskLeaseManager.stopped(conn):
+                raise PermissionError('Owner emergency stop is latched')
+            task = conn.execute('SELECT status,cancellation_requested,version FROM tasks WHERE id=?', (task_id,)).fetchone()
+            if (not task or task['cancellation_requested'] or task['status'].lower() not in {'running', 'leased'}
+                    or type(version) is not int or task['version'] != version):
+                raise PermissionError('Execution task is stopped, stale, or no longer running')
+
+    def reset_emergency_stop(self, operator: str, stop_id: str) -> dict[str, Any]:
+        if operator != 'owner':
+            raise PermissionError('Authenticated owner required for emergency reset')
+        from backend.cluster.task_leasing import task_lease_manager
+        leases = getattr(self, 'lease_manager', task_lease_manager)
+        with self.dispatch_lock:
+            self.execution_policy.set(0)
+            leases.reset_emergency_stop(stop_id)
+            result = {'status': 'emergency_reset', 'autonomy_level': 0, 'stop_id': stop_id}
+            self.events.publish('runtime.emergency_reset', result)
+            return result
+
     def get_mode(self) -> str:
         return STATE["mode"]
 
@@ -207,7 +248,9 @@ class RuntimeEngine:
             from backend.cluster.node_registry import node_registry
             from backend.cluster.task_leasing import task_lease_manager
             leases = getattr(self, 'lease_manager', task_lease_manager)
-            target = offload_candidate(node_registry, 'compute', outcomes=self.tasks.repo.list_all(), tool=meta['tool'], busy_nodes=leases.busy_node_ids())
+            decision_report = {}
+            target = offload_candidate(node_registry, 'compute', outcomes=self.tasks.repo.list_all(), tool=meta['tool'], busy_nodes=leases.busy_node_ids(), decision_report=decision_report)
+            meta = {**meta, 'decision_selector': decision_report}
             if target:
                 meta = {**meta, 'execution_target': 'remote', 'assigned_knight': target, 'capability': 'compute', 'offload_reason': 'Approved computer selected using fresh capacity and controller-verified outcomes for this tool'}
             else:
@@ -273,6 +316,10 @@ class RuntimeEngine:
             self.memory.record_task(completed)
             self.events.publish("task.completed", completed)
         except Exception as exc:
+            current = self.tasks.repo.get(task['id'])
+            if current and current.get('cancellation_requested') and current['status'] == 'RECOVERY_REQUIRED':
+                self.events.publish('task.recovery_required', current)
+                return  # Never requeue stopped work after its old execution returns.
             recovered = self.tasks.retry_or_fail(task["id"], str(exc))
             if recovered["status"] == "failed":
                 self.memory.record_task(recovered)
@@ -284,6 +331,9 @@ class RuntimeEngine:
 
     def authorize_task(self, task, *, execution_node=None, execution_capability=None):
         """Same exact owner approval boundary for local execution and remote dispatch."""
+        from backend.runtime.standing_review import task_allowed
+        if not task_allowed(self,task):
+            return {'authorized':False,'reason':'Standing review consent or exact mission task binding changed','approval_id':None}
         actor = task["metadata"].get("actor", "system")
         capability = task["metadata"].get("capability", "node.execute")
         approval_id = task["metadata"].get("approval_id")

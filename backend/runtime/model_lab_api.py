@@ -37,6 +37,12 @@ def jobs():
             'notice': 'Optional local preparation. Models are not downloaded automatically; no model is trained or promoted without verified artifact and evaluation evidence.'}
 
 
+@router.get('/decision-selectors/status')
+def decision_selector_status():
+    from backend.models.decision_selectors import status
+    return invoke(status)
+
+
 @router.post('', status_code=201)
 def create(request: PreparationRequest):
     return invoke(service().create, request)

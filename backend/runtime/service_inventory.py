@@ -9,6 +9,7 @@ class ServiceSummary(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     state: Literal['running', 'stopped', 'unknown']
     startup: Literal['enabled', 'disabled', 'manual', 'unknown'] = 'unknown'
+    restart_policy: Literal['no', 'always', 'unless-stopped', 'on-failure', 'unknown'] = 'unknown'
 
 
 class ServiceReport(BaseModel):
@@ -20,6 +21,7 @@ class ServiceReport(BaseModel):
     services: list[ServiceSummary] = Field(max_length=128)
     observed_at: float | None = Field(default=None, ge=0)
     truncated: bool = False
+    observation_source: Literal['local', 'host_report'] = 'local'
 
 
 def validate_services(value):

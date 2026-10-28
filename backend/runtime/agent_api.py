@@ -29,6 +29,9 @@ class CreateSession(BaseModel):
     embedding_profile: str | None = Field(default=None,max_length=64)
     use_owner_memory: bool = False
     required_tools: list[str] = Field(default_factory=list,max_length=4)
+    tool_sequence:list[str]=Field(default_factory=list,max_length=8)
+    tool_protocol:str=Field(default='native',pattern='^(native|structured)$')
+    tool_paths:list[str]=Field(default_factory=list,max_length=8)
     desktop_window_title: str | None = Field(default=None,min_length=1,max_length=500)
     desktop_expected_text: str | None = Field(default=None,min_length=1,max_length=2000)
 

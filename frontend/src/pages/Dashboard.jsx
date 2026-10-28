@@ -6,6 +6,7 @@ import Tasks from "./Tasks"
 import useLiveData from "../hooks/useLiveData"
 import ComputerIdentity from "../components/ComputerIdentity"
 import OrchestrationBoard from '../components/OrchestrationBoard'
+import { startPolling } from '../common/polling'
 
 export default function Dashboard() {
   const {data: hierarchy, error: hierarchyError} = useLiveData("/hierarchy", 10000)
@@ -18,7 +19,7 @@ export default function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState(null)
 
   const fetchDashboardData = () => {
-    Promise.all([
+    return Promise.all([
       api.get("/status"),
       api.get("/knights"),
       api.get("/tasks"),
@@ -36,9 +37,7 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
-    fetchDashboardData()
-    const interval = setInterval(fetchDashboardData, 3000)
-    return () => clearInterval(interval)
+    return startPolling(fetchDashboardData, 3000)
   }, [])
 
   const handleStart = () => api.post("/start").then(fetchDashboardData)

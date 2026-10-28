@@ -1,5 +1,5 @@
 """Owner-managed links between independent Kingdoms, with mutual pairing."""
-from urllib.parse import urlsplit
+from backend.cluster.peer_endpoints import endpoint
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, ConfigDict
@@ -11,14 +11,6 @@ from backend.cluster.heartbeat import heartbeat_manager
 from backend.cluster.local_load import local_load_metrics
 
 router=APIRouter(prefix='/federation', dependencies=[Depends(require_owner)])
-
-def endpoint(value):
-    p=urlsplit(value)
-    if p.scheme not in {'https','http'} or not p.hostname or p.username or p.password or p.query or p.fragment or p.path not in {'','/'}:
-        raise ValueError('Use the other Kingdom base URL without credentials or a path')
-    if p.scheme=='http' and p.hostname not in {'127.0.0.1','localhost','::1'}:
-        raise ValueError('Remote Kingdoms require HTTPS; SSH tunnels may use loopback HTTP')
-    return value.rstrip('/')
 
 def check_identity(peer,expected,local):
     if peer.get('node_type')!='commander' or peer.get('node_id')==local.node_id:
@@ -131,7 +123,8 @@ async def reconnect(node_id:str):
     try:
         address=endpoint((node.connection_metadata or {})['kingdom_endpoint'])
         local=KingdomIdentity.get_or_create()
-        async with httpx.AsyncClient(timeout=15,follow_redirects=False) as client:
+        from backend.cluster.mesh_api import mesh_tls
+        async with httpx.AsyncClient(timeout=15,follow_redirects=False,trust_env=False,verify=mesh_tls()) as client:
             response=await client.get(address+'/nodes/identity');response.raise_for_status()
             check_identity(response.json(),node.public_identity,local)
             from backend.cluster.apprentice_inventory import local_inventory
@@ -142,8 +135,49 @@ async def reconnect(node_id:str):
                 raise ValueError('Other Kingdom has not approved this identity')
         if result.get('inventory_proof'):
             from backend.api import handle_cluster_rpc, RPCMessageRequest
+            proof = result['inventory_proof']
+            if proof.get('sender_id') != node_id or proof.get('msg_type') != 'inventory_snapshot':
+                raise ValueError('Peer returned an unexpected inventory proof')
             handle_cluster_rpc(RPCMessageRequest.model_validate(result['inventory_proof']))
-        else: heartbeat_manager.ping(node_id)
+        else: raise ValueError('Peer did not return a signed inventory proof')
         return {'peer':node_id,'connected':True,'mutual_identity_accepted':True}
     except (ValueError,KeyError) as e:raise HTTPException(409,str(e)) from e
     except httpx.HTTPError as e:raise HTTPException(502,'Peer connection failed; identity and grants retained for retry') from e
+
+
+from backend.cluster.peer_connections import PeerConnections
+from backend.events.event_bus import event_bus
+async def refresh_mesh():
+    from backend.cluster.mesh_api import sync_mesh
+    await sync_mesh()
+
+_analysis_worker=None
+async def consume_peer_analysis(node_id):
+    global _analysis_worker
+    if _analysis_worker is None:
+        from backend.api import engine
+        from backend.storage.db import db
+        from backend.cluster.peer_analysis import PeerAnalysis
+        def permitted():
+            coder=engine.swarm.registry.get('coder')
+            return (engine.status()['running'] and engine.execution_policy.get()['level'] in {1,3,4,5} and coder is not None
+                    and 'compute' in engine.security.nodes.get_node_capabilities('coder')
+                    and 'compute' in coder.zero_trust.nodes.get_node_capabilities('coder'))
+        async def exchange(peer_id,message):
+            peer=node_registry.get_node(peer_id)
+            if not peer:raise ValueError('Peer is no longer approved')
+            address=endpoint((peer.connection_metadata or {})['kingdom_endpoint'])
+            from backend.cluster.mesh_api import mesh_tls
+            async with httpx.AsyncClient(timeout=8,follow_redirects=False,trust_env=False,verify=mesh_tls()) as client:
+                response=await client.post(address+'/nodes/rpc',json=message)
+                response.raise_for_status();return response.json()
+        _analysis_worker=PeerAnalysis(db,node_registry,KingdomIdentity.get_or_create(),permitted,exchange,event_bus.publish)
+    return await _analysis_worker.tick(node_id)
+
+peer_connections = PeerConnections(node_registry, reconnect, event_bus, refresh=refresh_mesh,work=consume_peer_analysis)
+
+
+@router.get('/connections/status')
+def connection_status():
+    return {'automatic_reconnect': True, 'peers': dict(peer_connections.status),
+            'membership': 'explicit_owner_approval', 'interval_seconds': peer_connections.interval}

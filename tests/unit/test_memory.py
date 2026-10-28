@@ -1,6 +1,9 @@
 import unittest
 from backend.memory.persistence import MemoryStore
 
+import tempfile
+from backend.memory.service import MemoryService
+
 class TestMemoryStore(unittest.TestCase):
 
     def setUp(self):
@@ -13,6 +16,48 @@ class TestMemoryStore(unittest.TestCase):
         results = self.store.search_memory("codebase architecture")
         self.assertTrue(len(results) >= 1)
         self.assertIn("Unique secret codebase", results[0]["content"])
+
+class TestMemoryServiceCachedSearch(unittest.TestCase):
+
+    def test_memory_service_search_uses_word_cache(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            service = MemoryService(data_dir=tmp_dir)
+            entry1 = service.add("Analysis of autonomous swarm intelligence and task routing")
+            entry2 = service.add("Security audit of zero trust prompt firewall rules")
+
+            # First search populates word cache
+            res1 = service.search("swarm intelligence", limit=5)
+            self.assertEqual(len(res1), 1)
+            self.assertEqual(res1[0]["id"], entry1["id"])
+            self.assertIn(entry1["id"], service._word_cache)
+            self.assertIn(entry2["id"], service._word_cache)
+
+            # Second search uses cached word sets
+            res2 = service.search("zero trust security", limit=5)
+            self.assertEqual(len(res2), 1)
+            self.assertEqual(res2[0]["id"], entry2["id"])
+
+    def test_search_returns_detached_copies_and_prevents_stale_cache(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            service = MemoryService(data_dir=tmp_dir)
+            service.add("alpha")
+
+            # Search returns detached object
+            search_res = service.search("alpha")
+            self.assertEqual(len(search_res), 1)
+            self.assertEqual(search_res[0]["content"], "alpha")
+
+            # Modifying returned search object does not mutate internal service state
+            search_res[0]["content"] = "beta"
+
+            # Subsequent search for alpha still matches internal state
+            subsequent_alpha = service.search("alpha")
+            self.assertEqual(len(subsequent_alpha), 1)
+            self.assertEqual(subsequent_alpha[0]["content"], "alpha")
+
+            # Search for beta yields no matches
+            subsequent_beta = service.search("beta")
+            self.assertEqual(len(subsequent_beta), 0)
 
 if __name__ == "__main__":
     unittest.main()

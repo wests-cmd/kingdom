@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from backend.security.http_auth import require_owner
 from backend.cluster.node_registry import node_registry
 from backend.cluster.hierarchy import CommandHierarchy
@@ -19,17 +19,70 @@ class GroupRequest(BaseModel):
 
 
 @router.get('')
-def status(): return hierarchy.export(engine.swarm.registry.status())
+async def status():
+    result=hierarchy.export(engine.swarm.registry.status())
+    from backend.cluster.shared_groups import configured,validate_snapshot
+    shared=configured()
+    if shared.authority():
+        try:
+            snapshot=await shared.exchange()
+            result.update(groups_read_only=False,groups_notice='Shared organizational groups; permissions remain separate.')
+        except Exception:
+            snapshot=shared.mesh._get('shared_groups')
+            try:
+                validate_snapshot(snapshot)
+                if snapshot['authority_id']!=shared.authority():raise ValueError('Different authority')
+            except (ValueError,TypeError,KeyError):snapshot={'groups':[],'version':'','authority_id':shared.authority()}
+            result.update(groups_read_only=True,groups_notice='Shared group authority unavailable. The last verified layout is read-only; refresh after it reconnects.')
+        view=shared.view(snapshot)
+        result.update(groups=view['groups'],groups_version=view['version'],group_authority=view['authority_id'],groups_shared=True)
+    return result
+
+
+from backend.cluster.group_requests import GroupEditRequest
+
+
+@router.post('/groups/edit')
+async def edit_groups(request:GroupEditRequest):
+    from backend.cluster.shared_groups import configured
+    shared=configured()
+    if shared.authority():
+        data=request.model_dump()
+        data['members']=[shared.mesh.identity.node_id if m=='local' else m for m in data['members']]
+        if data['captain']=='local':data['captain']=shared.mesh.identity.node_id
+        try:return shared.view(await shared.exchange(data))
+        except (ValueError,PermissionError,KeyError) as error:raise HTTPException(409,str(error)) from error
+        except Exception as error:
+            import httpx
+            if isinstance(error,httpx.HTTPError):raise HTTPException(503,'Shared group authority unavailable; no local substitute was saved') from error
+            raise
+    data=request.model_dump();version=data.pop('version');operation=data.pop('operation')
+    try:return hierarchy.edit_groups(version,operation,**data)
+    except ValueError as error:raise HTTPException(409,str(error)) from error
+
+
+class VisibilityRequest(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    offline_hours: int=Field(ge=12,le=240,strict=True)
+
+
+@router.put('/visibility')
+def visibility(request:VisibilityRequest):
+    return hierarchy.set_visibility(request.offline_hours)
 
 
 @router.post('/groups')
 def create(request: GroupRequest):
+    from backend.cluster.mesh_api import membership
+    if membership().config():raise HTTPException(409,'Use the shared diagram group editor for this Kingdom')
     try: return hierarchy.create_group(request.name, request.captain, request.members, request.flags, request.preferred_task_types)
     except ValueError as error: raise HTTPException(400, str(error)) from error
 
 
 @router.delete('/groups/{ident}')
 def delete_group(ident: str):
+    from backend.cluster.mesh_api import membership
+    if membership().config():raise HTTPException(409,'Use the shared diagram group editor for this Kingdom')
     try: return hierarchy.delete_group(ident)
     except ValueError as error: raise HTTPException(404, str(error)) from error
 

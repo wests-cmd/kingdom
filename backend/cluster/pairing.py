@@ -7,6 +7,17 @@ from backend.cluster.identity import KingdomIdentity, compute_fingerprint
 from backend.cluster.node_registry import node_registry, NodeState
 from backend.events.event_bus import event_bus
 
+INVITATION_CONTEXT = b'kingdom.pairing-invitation.v1\0'
+INVITATION_FIELDS = ('code', 'kingdom_id', 'kingdom_public_key_hex',
+                     'kingdom_fingerprint', 'created_at', 'expires_at')
+
+
+def invitation_message(invitation):
+    """Immutable identity/window fields; transport/QR/display data grants nothing."""
+    return INVITATION_CONTEXT + json.dumps({key: invitation[key] for key in INVITATION_FIELDS},
+        sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+
+
 class PairingManager:
     def __init__(self, kingdom_identity: Optional[KingdomIdentity] = None, registry=None):
         self.kingdom_identity = kingdom_identity or KingdomIdentity.get_or_create()
@@ -29,6 +40,7 @@ class PairingManager:
             "expires_at": expires_at,
             "used": False
         }
+        invitation['invitation_signature'] = self.kingdom_identity.sign_message(invitation_message(invitation)).hex()
         self._invitations[formatted_code] = invitation
 
         # QR Code payload JSON
@@ -101,7 +113,16 @@ class PairingManager:
         except ValueError:
             return {"success": False, "error": "Invalid signature hex format."}
 
-        msg = f"{code}:{node_id}:{expected_k_id}".encode("utf-8")
+        mesh_endpoint = request_payload.get('mesh_endpoint')
+        if mesh_endpoint is not None:
+            from backend.cluster.peer_endpoints import endpoint
+            try:
+                if endpoint(mesh_endpoint) != mesh_endpoint:
+                    raise ValueError('Use a normalized mesh endpoint')
+            except (ValueError, TypeError):
+                return {'success': False, 'error': 'Invalid mesh endpoint'}
+        signed_text = f"{code}:{node_id}:{expected_k_id}" + (f':{mesh_endpoint}' if mesh_endpoint is not None else '')
+        msg = signed_text.encode("utf-8")
         if not KingdomIdentity.verify_signature(pub_hex, msg, sig_bytes):
             return {"success": False, "error": "Invalid request signature verification."}
 
@@ -137,7 +158,7 @@ class PairingManager:
             "fingerprint": computed_fp,
             "kingdom_id": self.kingdom_identity.node_id,
             "is_local": request_payload.get("is_local", False),
-            "connection_metadata": request_payload.get("connection_metadata", {})
+            "connection_metadata": ({'kingdom_endpoint': mesh_endpoint} if mesh_endpoint else request_payload.get("connection_metadata", {}))
         })
 
         event_bus.publish("cluster.pairing_requested", {

@@ -16,8 +16,133 @@ def reply(content=None, calls=None):
         **({'tool_calls': calls} if calls else {})}, 'finish_reason': 'tool_calls' if calls else 'stop'}]}
 
 
+@pytest.mark.asyncio
+async def test_ordered_tools_offer_one_stage_and_advance_only_after_receipts(setup):
+    service,engine,db=setup([
+        reply(calls=[call('workspace_read',{'path':'source.py'})]),
+        reply(calls=[call('workspace_write',{'path':'test_source.py','content':'test'})]),
+        reply(calls=[call('workspace_read',{'path':'test_source.py'})]),reply('Written and read back; tests not run')])
+    state=service.create('Write a regression test','local',tool_sequence=['workspace_read','workspace_write','workspace_read'])
+    for index,name in enumerate(['workspace_read','workspace_write','workspace_read']):
+        state=await service.advance(state['id'])
+        assert [t['function']['name'] for t in engine.requests[-1][1]['tools']]==[name]
+        assert state['tool_sequence_index']==index and state['status']=='waiting_tools'
+        engine.finish(state['pending'][0]['task_id'],{'content':'retained test evidence'})
+        state=await service.advance(state['id'])
+        assert state['tool_sequence_index']==index+1
+        service=AgentSessionService(engine,db)
+    state=await service.advance(state['id'])
+    assert state['status']=='completed' and engine.requests[-1][1]['tools']==[]
+    assert len(engine.records)==3
+
+
+@pytest.mark.asyncio
+async def test_ordered_tool_cannot_skip_a_read_or_finish_without_evidence(setup):
+    for response in (reply('Done'),reply(calls=[call('workspace_write',{'path':'x','content':'bad'})])):
+        service,engine,_=setup([response])
+        state=await service.advance(service.create('Read first','local',tool_sequence=['workspace_read','workspace_write'])['id'])
+        assert state['status']=='needs_review' and not engine.records
+
+
+def test_ordered_tools_do_not_grant_process_permission(setup):
+    service,engine,_=setup([])
+    with pytest.raises(ValueError):service.create('Run','local',tool_sequence=['process_run'])
+    with pytest.raises(ValueError):service.create('Run','local',tool_sequence=['unknown'])
+
+
+@pytest.mark.asyncio
+async def test_structured_arguments_use_controller_stage_and_normal_governed_tasks(setup):
+    service,engine,_=setup([reply(json.dumps({'path':'source.py'})),reply('Read completed')])
+    state=service.create('Read source','local',tool_sequence=['workspace_read'],tool_protocol='structured')
+    state=await service.advance(state['id'])
+    body=engine.requests[-1][1]
+    assert body['tools']==[] and body['tool_choice']=='none' and body['response_format']['type']=='json_schema'
+    task=engine.records[state['pending'][0]['task_id']]
+    assert task['metadata']['tool']=='workspace.read@1.0.0' and task['metadata']['actor']=='owner'
+    engine.finish(task['id'],{'text':'actual content'})
+    await service.advance(state['id']);state=await service.advance(state['id'])
+    assert state['status']=='completed' and len(engine.records)==1
+    assert engine.requests[-1][1]['tool_choice']=='none'
+    assert all(m['role']!='tool' for m in engine.requests[-1][1]['messages'])
+
+
+@pytest.mark.asyncio
+async def test_structured_argument_injection_and_path_escape_cannot_dispatch(setup):
+    for content in ('{"tool":"process_run","argv":["shell"]}', '{"path":"../../owner-token"}', 'I already did it'):
+        service,engine,_=setup([reply(content)])
+        state=await service.advance(service.create('Read','local',tool_sequence=['workspace_read'],tool_protocol='structured')['id'])
+        assert state['status']=='needs_review' and not engine.records
+
+
 def call(name, args, ident='call1'):
     return {'id': ident, 'type': 'function', 'function': {'name': name, 'arguments': json.dumps(args)}}
+
+
+@pytest.mark.asyncio
+async def test_bound_read_write_read_uses_model_only_for_content(setup):
+    service,engine,_=setup([reply('{"content":"replacement"}'),reply('Saved; independent tests pending')])
+    state=service.create('Repair','local',tool_sequence=['workspace_read','workspace_write','workspace_read'],
+                         tool_protocol='structured',tool_paths=['test.py']*3)
+    for index in range(3):
+        state=await service.advance(state['id'])
+        assert state['status']=='waiting_tools'
+        assert len(engine.requests)==(0 if index==0 else 1)
+        task=engine.records[state['pending'][0]['task_id']]
+        assert 'test.py' in json.dumps(task)
+        engine.finish(task['id'],{'content':'verified file result'})
+        state=await service.advance(state['id'])
+        assert state['tool_sequence_index']==index+1
+    state=await service.advance(state['id'])
+    assert state['status']=='completed' and len(engine.requests)==1
+    schema=engine.requests[0][1]['response_format']['json_schema']['schema']
+    assert 'path' not in schema['properties'] and schema['required']==['content']
+
+
+@pytest.mark.asyncio
+async def test_bound_path_cannot_be_overridden_by_model(setup):
+    service,engine,_=setup([reply('{"path":"other.py","content":"bad"}')])
+    state=service.create('Repair','local',tool_sequence=['workspace_write'],tool_protocol='structured',tool_paths=['test.py'])
+    state=await service.advance(state['id'])
+    assert state['status']=='needs_review' and not engine.records
+
+
+@pytest.mark.asyncio
+async def test_bound_completion_requires_all_declared_tool_evidence(setup):
+    service,engine,_=setup([reply('Done')])
+    state=service.create('Read and write','local',tool_sequence=['workspace_read'],
+                         tool_protocol='structured',tool_paths=['test.py'],required_tools=['workspace_write'])
+    state['tool_sequence_index']=1
+    service._save(state)
+    state=await service.advance(state['id'])
+    assert state['status']=='needs_review' and len(engine.requests)==1
+
+
+@pytest.mark.parametrize('paths,sequence,protocol',[
+    (['../secret'],['workspace_read'],'structured'),
+    (['C:/secret'],['workspace_read'],'structured'),
+    (['a\\b'],['workspace_read'],'structured'),
+    (['test.py'],['process_run'],'structured'),
+    (['test.py'],['workspace_read'],'native'),
+    (['test.py'],['workspace_read','workspace_write'],'structured'),
+])
+def test_bound_paths_reject_unsafe_or_mismatched_plans(setup,paths,sequence,protocol):
+    service,_,_=setup([])
+    with pytest.raises(ValueError):
+        service.create('Repair','local',allow_process=True,tool_sequence=sequence,tool_protocol=protocol,tool_paths=paths)
+
+
+@pytest.mark.asyncio
+async def test_pending_tool_transport_hint_clears_only_after_verified_execution(setup):
+    service, engine, _ = setup([
+        reply(calls=[call('workspace_read', {'path': 'README.md'})]), reply('Read complete')])
+    state = service.create('Read the project file', 'local', required_tools=['workspace_read'])
+    state = await service.advance(state['id'])
+    assert engine.requests[-1][1]['tool_evidence_pending'] is True
+    engine.finish(state['pending'][0]['task_id'], {'content': 'actual test fixture file'})
+    await service.advance(state['id'])
+    state = await service.advance(state['id'])
+    assert engine.requests[-1][1]['tool_evidence_pending'] is False
+    assert state['status'] == 'completed'
 
 
 @pytest.mark.asyncio
@@ -313,3 +438,16 @@ async def test_run_completes_plain_reply_within_budget(setup):
     service,engine,db=setup([reply('Done')])
     state=service.create('Answer','local')
     assert (await service.run(state['id'],1,5))['status']=='completed'
+
+
+@pytest.mark.asyncio
+async def test_provider_http_failure_has_safe_status_and_no_request_body_leak(setup):
+    import httpx
+    service,engine,_=setup([])
+    async def fail(*args):
+        request=httpx.Request('POST','https://provider.invalid/private?api_key=never-save')
+        raise httpx.HTTPStatusError('secret-body-never-save',request=request,response=httpx.Response(429,request=request))
+    engine.models.chat=fail
+    state=await service.advance(service.create('Work','local')['id'])
+    assert state['error_code']=='model_unavailable' and state['provider_status']==429
+    assert 'never-save' not in json.dumps(state) and not engine.records

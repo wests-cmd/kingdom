@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "label_source": "synthetic resource policy",
+  "not_proven": [
+    "real-job speedup",
+    "semantic task quality",
+    "end-to-end autonomy"
+  ],
+  "models": {
+    "model": {
+      "sha256": "ec6fbf049e575e0ff5166c6059cd1962f53dbe0cfe776b1a3f22bb75ea1a203f",
+      "hash_encoding": "canonical-json-v1",
+      "bytes": 636,
+      "pairs": 5942,
+      "seed": 907,
+      "labels": "synthetic resource policy",
+      "held_out_seed": 1937,
+      "held_out_pairs": 1979,
+      "policy_pair_accuracy": 0.9914098029307731,
+      "multi_fact_pairs": 2000,
+      "multi_fact_policy_accuracy": 0.982
+    },
+    "knight": {
+      "sha256": "2983751fb2b2db8f8eeaec37fc674f92fea8eb8e1c11eb6fb0970f2ecdf39084",
+      "hash_encoding": "canonical-json-v1",
+      "bytes": 639,
+      "pairs": 5567,
+      "seed": 907,
+      "labels": "synthetic resource policy",
+      "held_out_seed": 1937,
+      "held_out_pairs": 1815,
+      "policy_pair_accuracy": 0.9977961432506887,
+      "multi_fact_pairs": 2000,
+      "multi_fact_policy_accuracy": 0.989
+    }
+  },
+  "seconds": 1.724958377002622,
+  "peak_rss_kib": 21868
+}

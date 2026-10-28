@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "kind": "knight",
+  "features": [
+    "fit",
+    "local",
+    "idle",
+    "memory_headroom",
+    "success",
+    "latency",
+    "load"
+  ],
+  "weights": [
+    12.3239313049505,
+    -0.058648384893226754,
+    12.787288579726255,
+    8.607237483747708,
+    12.65046989992798,
+    -4.773858923828219,
+    -12.890253500951156
+  ],
+  "mode": "shadow",
+  "training": {
+    "pairs": 5567,
+    "seed": 907,
+    "labels": "synthetic resource policy",
+    "held_out_seed": 1937,
+    "held_out_pairs": 1815,
+    "policy_pair_accuracy": 0.9977961432506887,
+    "multi_fact_pairs": 2000,
+    "multi_fact_policy_accuracy": 0.989
+  }
+}

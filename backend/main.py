@@ -16,11 +16,17 @@ async def lifespan(_app):
     await schedule_runner.start()
     await programme_runner.start()
     await backlog_runner.start()
+    await problem_runner.start()
+    await jules_runner.start()
+    await peer_connections.start()
     try:
         yield
     finally:
         from backend.runtime.request_api import background
         await background.stop()
+        await peer_connections.stop()
+        await jules_runner.stop()
+        await problem_runner.stop()
         await programme_runner.stop()
         await backlog_runner.stop()
         await schedule_runner.stop()
@@ -61,8 +67,10 @@ from backend.runtime.mission_api import router as mission_router
 app.include_router(mission_router)
 from backend.cluster.hierarchy_api import router as hierarchy_router
 app.include_router(hierarchy_router)
-from backend.cluster.federation_api import router as federation_router
+from backend.cluster.federation_api import router as federation_router, peer_connections
 app.include_router(federation_router)
+from backend.cluster.mesh_api import router as mesh_router
+app.include_router(mesh_router)
 from backend.system.ui_update_api import router as ui_update_router
 app.include_router(ui_update_router)
 from backend.accessibility import router as accessibility_router
@@ -107,6 +115,8 @@ from backend.memory.vault_sync_api import router as vault_sync_router
 app.include_router(vault_sync_router)
 from backend.integrations.payment_api import router as payment_router
 app.include_router(payment_router)
+from backend.integrations.jules_api import router as jules_router
+app.include_router(jules_router)
 from backend.runtime.scheduled_runner import ScheduledRunner
 from backend.runtime.automation_api import scheduled
 scheduled.enqueue_request = lambda body: request_service().create(body)
@@ -120,6 +130,13 @@ from backend.runtime.work_programme_api import router as programme_router, servi
 from backend.runtime.work_programme_runner import WorkProgrammeRunner
 app.include_router(programme_router)
 programme_runner = WorkProgrammeRunner(programme_service, engine.events.publish)
+from backend.runtime.problem_api import router as problem_router,service as problem_service
+from backend.runtime.problem_bot import ProblemBotRunner
+app.include_router(problem_router)
+problem_runner=ProblemBotRunner(problem_service,engine.events.publish)
+from backend.integrations.jules_api import service as jules_service
+from backend.integrations.jules_runner import JulesRunner
+jules_runner = JulesRunner(jules_service, engine.events.publish)
 
 
 # Serve built frontend static assets if available

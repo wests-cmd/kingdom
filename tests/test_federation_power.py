@@ -26,7 +26,7 @@ def signed_rpc(monkeypatch, tmp_path):
     sender = KingdomIdentity('KG-power-sender')
     monkeypatch.setattr(api.KingdomIdentity, 'get_or_create', lambda: receiver)
     peer = SimpleNamespace(kingdom_id=receiver.node_id, node_state='CONNECTED',
-                           public_identity=sender.get_public_identity())
+                           public_identity=sender.get_public_identity(), connection_metadata={})
     monkeypatch.setattr(node_registry, 'get_node', lambda node_id: peer if node_id == sender.node_id else None)
     ping = Mock(return_value={'success': True})
     monkeypatch.setattr(api.heartbeat_manager, 'ping', ping)
@@ -96,4 +96,16 @@ def test_tampering_power_after_signing_fails_authentication(signed_rpc):
         receive(message)
     assert error.value.status_code == 403
     assert error.value.detail == 'Invalid cryptographic signature.'
+    ping.assert_not_called()
+
+
+@pytest.mark.parametrize('deadline', [1, float('nan'), float('inf')])
+def test_expired_or_invalid_temporary_membership_rejects_signed_rpc(signed_rpc, deadline):
+    from backend.cluster.transport import node_registry
+    sign, receive, ping, sender_id = signed_rpc
+    node_registry.get_node(sender_id).connection_metadata['membership_expires_at'] = deadline
+    with pytest.raises(HTTPException) as error:
+        receive(sign({'cpu_percent': 1}))
+    assert error.value.status_code == 403
+    assert error.value.detail == 'Temporary Knight membership expired'
     ping.assert_not_called()

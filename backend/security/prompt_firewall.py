@@ -1,5 +1,12 @@
 from backend.security.injection_detector import InjectionDetector
 
+
+class PromptFirewallException(Exception):
+    """Raised when a prompt violates security policies or contains prompt injection patterns."""
+
+    pass
+
+
 class PromptFirewall:
 
     def __init__(self):
@@ -10,7 +17,7 @@ class PromptFirewall:
         result = self.detector.analyze(prompt)
 
         if result["blocked"]:
-            raise Exception(
+            raise PromptFirewallException(
                 f"Prompt blocked: {result['reason']}"
             )
 

@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from backend.security.http_auth import owner_auth, require_owner
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from backend.runtime.engine import RuntimeEngine
 from backend.security.capabilities import ALL_CAPABILITIES, DEFAULT_KNIGHT_CAPABILITIES, PRIVILEGED_CAPABILITIES
@@ -77,6 +77,16 @@ class ModeRequest(BaseModel):
 class AutonomyRequest(BaseModel):
     level: int = Field(ge=0, le=5, strict=True)
 
+
+class EmergencyStopRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    reason: str = Field(min_length=1, max_length=500, pattern=r'\S')
+
+
+class EmergencyResetRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    stop_id: str = Field(pattern=r'^[a-f0-9]{32}$')
+
 class ModelRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=500_000)
     model: str | None = None
@@ -125,6 +135,7 @@ class NodePairRequest(BaseModel):
     requested_capabilities: list[str] = Field(default_factory=list)
     signature: str | None = None
     is_local: bool = False
+    mesh_endpoint: str | None = Field(default=None, max_length=500)
 
 class NodeApproveRequest(BaseModel):
     granted_capabilities: list[str] = Field(default_factory=list)
@@ -445,6 +456,25 @@ async def start():
 async def stop():
     return await engine.stop()
 
+
+@router.post('/runtime/emergency-stop')
+def emergency_stop(request: EmergencyStopRequest):
+    return engine.emergency_stop('owner', request.reason)
+
+
+@router.get('/runtime/emergency-stop')
+def emergency_status():
+    state = engine.lease_manager.emergency_status()
+    return {'latched': state is not None, 'stop': state}
+
+
+@router.post('/runtime/emergency-stop/reset')
+def emergency_reset(request: EmergencyResetRequest):
+    try:
+        return engine.reset_emergency_stop('owner', request.stop_id)
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+
 @router.get("/mode")
 def mode():
     return {"mode": engine.get_mode()}
@@ -455,7 +485,10 @@ def get_execution_policy():
 
 @router.put("/runtime/policy")
 def update_execution_policy(request: AutonomyRequest):
-    return engine.set_autonomy(request.level)
+    try:
+        return engine.set_autonomy(request.level)
+    except PermissionError as error:
+        raise HTTPException(409, str(error)) from error
 
 @router.put("/mode")
 def set_mode(request: ModeRequest):
@@ -893,6 +926,21 @@ def handle_cluster_rpc(request: RPCMessageRequest):
     sender_id = verified["sender_id"]
     msg_type = verified["msg_type"]
     payload = verified["payload"]
+    if msg_type=='mesh_group_request':
+        from backend.cluster.shared_groups import configured
+        try:result=configured().receive(sender_id,payload)
+        except PermissionError as error:raise HTTPException(403,str(error)) from error
+        except (ValueError,KeyError,TypeError) as error:raise HTTPException(409,'Shared group edit was rejected; refresh the current layout') from error
+        return transport.create_signed_message(sender_id,'mesh_group_result',result)
+    if msg_type in {'mesh_roster_request', 'mesh_roster_response'}:
+        from backend.cluster.mesh_api import membership
+        try:
+            mesh = membership()
+            if msg_type == 'mesh_roster_request':
+                return transport.create_signed_message(sender_id, 'mesh_roster_response', mesh.export(sender_id))
+            return mesh.receive(sender_id, payload)
+        except (ValueError, KeyError, TypeError) as error:
+            raise HTTPException(403, 'Membership synchronization rejected') from error
     if payload.get("node_id", sender_id) != sender_id:
         raise HTTPException(status_code=403, detail="RPC payload identity differs from authenticated sender")
 
@@ -944,6 +992,8 @@ def handle_cluster_rpc(request: RPCMessageRequest):
         return {'status': 'ok', 'task_id': updated['id']}
 
     elif msg_type == "task_poll":
+        if payload.get('require_running') is True and not engine.status()['running']:
+            return {'status':'ok','tasks':[]}
         supported_tools = payload.get("supported_tools")
         if supported_tools is not None:
             analysis_tools = {"text.analyze@1.0.0", "code.python.analyze@1.0.0"}
@@ -972,46 +1022,47 @@ def handle_cluster_rpc(request: RPCMessageRequest):
         return {"status": "ok", "tasks": assigned_tasks}
 
     elif msg_type == "task_result":
-        task_id = payload.get("task_id")
-        executed_by = payload.get("executed_by") or sender_id
-        if executed_by != sender_id:
-            raise HTTPException(status_code=403, detail="Result identity differs from authenticated sender")
-        fencing_token = payload.get("fencing_token", 1)
-        output = payload.get("output")
-        task = engine.tasks.get(task_id)
-        if not task or task["status"].lower() != "leased" or payload.get("lease_id") != task.get("lease_id"):
-            raise HTTPException(status_code=403, detail="Result must refer to the exact active task lease")
-        if not capability_authorizer.is_capability_granted(sender_id, task.get("metadata", {}).get("capability", "compute")):
-            raise HTTPException(status_code=403, detail="Worker no longer holds the task capability")
+        with engine.dispatch_lock:
+            task_id = payload.get("task_id")
+            executed_by = payload.get("executed_by") or sender_id
+            if executed_by != sender_id:
+                raise HTTPException(status_code=403, detail="Result identity differs from authenticated sender")
+            fencing_token = payload.get("fencing_token", 1)
+            output = payload.get("output")
+            task = engine.tasks.get(task_id)
+            if not task or task["status"].lower() != "leased" or payload.get("lease_id") != task.get("lease_id"):
+                raise HTTPException(status_code=403, detail="Result must refer to the exact active task lease")
+            if not capability_authorizer.is_capability_granted(sender_id, task.get("metadata", {}).get("capability", "compute")):
+                raise HTTPException(status_code=403, detail="Worker no longer holds the task capability")
 
-        node = node_registry.get_node(executed_by)
-        if not node:
-            raise HTTPException(status_code=403, detail=f"Executing node '{executed_by}' is not registered.")
+            node = node_registry.get_node(executed_by)
+            if not node:
+                raise HTTPException(status_code=403, detail=f"Executing node '{executed_by}' is not registered.")
 
-        state_val = node.node_state
-        if state_val in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value, NodeState.PENDING_APPROVAL.value]:
-            raise HTTPException(status_code=403, detail=f"Executing node '{executed_by}' is in restricted state: {state_val}.")
+            state_val = node.node_state
+            if state_val in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value, NodeState.PENDING_APPROVAL.value]:
+                raise HTTPException(status_code=403, detail=f"Executing node '{executed_by}' is in restricted state: {state_val}.")
 
-        try:
-            task_lease_manager.validate_lease_execution(task_id, executed_by, fencing_token)
-        except Exception as exc:
-            raise HTTPException(status_code=403, detail=f"Task lease fencing error: {str(exc)}")
+            try:
+                task_lease_manager.validate_lease_execution(task_id, executed_by, fencing_token)
+            except Exception as exc:
+                raise HTTPException(status_code=403, detail=f"Task lease fencing error: {str(exc)}")
 
-        if payload.get("status") == "failed":
-            failed = engine.tasks.fail(task_id, "Remote operation failed: " + str(payload.get("error", "No verified outcome"))[:500])
+            if payload.get("status") == "failed":
+                failed = engine.tasks.fail(task_id, "Remote operation failed: " + str(payload.get("error", "No verified outcome"))[:500])
+                task_lease_manager.revoke_lease(task_id)
+                engine.events.publish("task.failed", failed)
+                return {"status": "ok", "failed": failed}
+            from backend.runtime.execution import verify_request_result
+            try:
+                verification = verify_request_result(task, output, allow_local_model=False)
+            except Exception as exc:
+                raise HTTPException(status_code=422, detail="Independent result verification failed") from exc
+            completed = engine.tasks.complete(task_id, result={"output": output, "executed_by": sender_id, "verification": verification})
             task_lease_manager.revoke_lease(task_id)
-            engine.events.publish("task.failed", failed)
-            return {"status": "ok", "failed": failed}
-        from backend.runtime.execution import verify_request_result
-        try:
-            verification = verify_request_result(task, output, allow_local_model=False)
-        except Exception as exc:
-            raise HTTPException(status_code=422, detail="Independent result verification failed") from exc
-        completed = engine.tasks.complete(task_id, result={"output": output, "executed_by": sender_id, "verification": verification})
-        task_lease_manager.revoke_lease(task_id)
-        engine.memory.record_task(completed)
-        engine.events.publish("task.completed", {"task_id": task_id, "executed_by": executed_by})
-        return {"status": "ok", "completed": completed}
+            engine.memory.record_task(completed)
+            engine.events.publish("task.completed", {"task_id": task_id, "executed_by": executed_by})
+            return {"status": "ok", "completed": completed}
 
     else:
         return {"status": "ok", "message": f"RPC msg_type '{msg_type}' processed."}
@@ -1029,6 +1080,7 @@ def process_node_pairing(request: NodePairRequest):
         "knight_public_identity": request.knight_public_identity,
         "requested_capabilities": request.requested_capabilities,
         "signature": request.signature,
+        "mesh_endpoint": request.mesh_endpoint,
         "is_local": request.is_local
     }
     res = pairing_manager.process_pairing_request(req_payload)

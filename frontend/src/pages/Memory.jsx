@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react"
 import api from "../api"
 import useLiveData from "../hooks/useLiveData"
+import { TEN_MINUTES } from '../common/periodicRefresh'
 import KnowledgeSources from "../components/KnowledgeSources"
 import PortableVaultPanel from "../components/PortableVaultPanel"
 
@@ -10,7 +11,7 @@ export default function Memory() {
   const [newContent, setNewContent] = useState("")
   const [saveError,setSaveError] = useState("")
   const [saving,setSaving] = useState(false)
-  const {data,error,refresh} = useLiveData(query.trim() ? `/memory/search?query=${encodeURIComponent(query)}` : "/memory")
+  const {data,error,refresh} = useLiveData(query.trim() ? `/memory/search?query=${encodeURIComponent(query)}` : "/memory", TEN_MINUTES)
   const memories = data || []
   const handleAdd = async event => {
     event.preventDefault(); if (!newContent.trim()) return
@@ -48,19 +49,20 @@ export default function Memory() {
         />
       </div>
 
-      <div style={{ marginBottom: "20px" }}>
-        <h4>Memory Records ({memories.length})</h4>
+      <details style={{ marginBottom: "20px" }}>
+        <summary>Memory Records ({memories.length})</summary>
         {data === null ? <p>Loading memory…</p> : memories.length === 0 ? <p style={{ color: "var(--text-muted)" }}>No memory records found.</p> : (
           <ul style={{ listStyle: "none", padding: 0 }}>
             {memories.map(m => (
               <li key={m.id} style={{ background: "var(--input-bg)", padding: "8px 12px", borderRadius: "4px", marginBottom: "6px" }}>
-                <div><strong>{m.content}</strong></div>
+                <details><summary>{String(m.content || '').slice(0, 100)}{String(m.content || '').length > 100 ? '…' : ''}</summary><p style={{whiteSpace:'pre-wrap'}}>{m.content}</p>
                 <div style={{ fontSize: "0.8em", color: "var(--text-muted)" }}>Source: {m.metadata?.source || (m.metadata?.task_id ? "task" : "Unspecified")} | Trust: {m.metadata?.trust || "Unspecified"}</div>
+                </details>
               </li>
             ))}
           </ul>
         )}
-      </div>
+      </details>
 
 
     </div>

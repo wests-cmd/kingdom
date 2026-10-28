@@ -23,10 +23,10 @@ export default function OrchestrationBoard() {
    <div><strong>{data ? data.counts.current_apprentices : '—'}</strong><span>Reported Apprentices</span><small>{data?.counts.local_apprentices ?? '—'} local + {data?.counts.remote_apprentices ?? '—'} current remote</small>{data?.inventory && !data.inventory.complete && <small>Partial total — some peer reports are missing or stale</small>}</div>
    <div><strong>{data ? running.length : '—'}</strong><span>Requests running</span><small>{data?.background.active_request_ids.length ?? 0} in the background slot</small></div>
   </div>
-  {data?.inventory && <details className="inventory-details"><summary>Counts by paired Kingdom</summary>
+  {data?.inventory && <details className="inventory-details"><summary>Reports from paired Knights</summary>
    <p className="muted">{data.inventory.notice}</p>
    {data.inventory.reports.map(report=><section key={report.kingdom_id}><strong>{report.kingdom_id}</strong><p>Inventory: {report.state}</p>{data.inventory.remote_apprentices.filter(worker=>worker.kingdom_id===report.kingdom_id).map(worker=><p key={worker.scoped_id}>{worker.display_name} · {worker.role} · {worker.status} · {worker.host}</p>)}</section>)}
-   {!data.inventory.reports.length && <p>No paired Kingdom inventories to include.</p>}
+   {!data.inventory.reports.length && <p>No paired Knight inventories to include.</p>}
   </details>}
   <ol className="orchestration-flow" aria-label="Task completion flow">{['Request','Plan & route','Knight → Apprentice','Tools & tests','Review → result'].map(step=><li key={step}>{step}</li>)}</ol>
   <p className="muted">Work continues when this browser closes while the Kingdom server stays running. A completed response does not prove a tested repair.</p>

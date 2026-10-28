@@ -4,6 +4,8 @@ import socket
 import time
 
 ERRORS = {
+    'model_output_incomplete': ('The model returned an empty or truncated response. No new operation was dispatched.', 'Review the response token budget and reasoning settings, then continue the retained job within its retry limit.'),
+    'context_budget_exceeded': ('The current question exceeds this model connection context budget. The saved question was not truncated.', 'Shorten the question or select a model connection with a larger context budget.'),
     'desktop_observation_expired': ('The screen observation expired before input. No input was dispatched.', 'Take a fresh screen observation and re-plan against the current controls.'),
     'invalid_tool_arguments': ('The model supplied invalid tool arguments. No operation was dispatched.', 'Review the tool schema and send a scoped correction.'),
     'invalid_tool_call': ('The model requested an unavailable tool or an invalid call identity.', 'Review the available tools and correct the model request.'),

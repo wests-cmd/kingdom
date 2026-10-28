@@ -9,6 +9,11 @@ def validated_acceptance(engine, mission_id, version, step_id):
                 or mission['status'] not in {'running', 'completed'}):
             raise ValueError('Stale or unapproved mission')
         step = next(s for s in mission['plan']['steps'] if s['id'] == step_id)
+        if step['kind']=='independent_review':
+            from backend.runtime.patch_acceptance import external_step_acceptance
+            result=external_step_acceptance(engine,mission_id,version,step_id)
+            if result is None or mission['steps'].get(step_id,{}).get('status')!='verified':raise ValueError('Independent external step has not completed')
+            return {**result,'accepted':True,'mission_id':mission_id,'mission_version':version,'step_id':step_id,'scope':'Exact returned patch; external reviewed behavioral contract only'}
         if step['kind'] == 'function_check':
             from backend.runtime.bounded_function_tests import validated_acceptance as bounded
             return bounded(engine, mission_id, version, step_id)

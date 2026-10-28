@@ -41,6 +41,9 @@ test('handoff waits for shutdown, rechecks bytes, preserves data and verifies in
  assert.match(script,/Wait-Process -Id 42/);assert.match(script,/Owner''s Folder/);
  assert.match(script,/Get-FileHash/);assert.match(script,/ProductVersion/);assert.match(script,/finally/);
  assert.doesNotMatch(script,/Uninstall|Remove-Item.*-Recurse/);
+ assert.match(script,/Set-Content -LiteralPath \$receiptTemporary/);
+ assert.match(script,/Move-Item -LiteralPath \$receiptTemporary -Destination/);
+ assert.doesNotMatch(script,/Set-Content -LiteralPath 'C:\\\\updates\\\\result.json'/);
  assert.throws(()=>handoffScript('42;bad','x','y','z','1.2.1','r'));
 });
 

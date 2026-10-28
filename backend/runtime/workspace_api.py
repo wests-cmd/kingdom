@@ -41,12 +41,15 @@ def task_artifact(task_id: str):
 
 
 class ProfileRequest(BaseModel):
+    hosting: Literal['auto', 'local', 'cloud'] = 'auto'
     provider: Literal['ollama', 'openai_compatible']
     endpoint: str = Field(max_length=500)
     model: str = Field(min_length=1, max_length=200)
     variant: Literal['standard', 'fine_tuned', 'abliterated', 'custom'] = 'standard'
     vision: bool = False
     supports_tools: bool = False
+    tool_choice_mode: Literal['auto', 'required_pending'] = 'auto'
+    auto_select: StrictBool = True
     disabled: bool = False
     context_characters: int = Field(default=24000, ge=4000, le=400000)
     pool_group: str = Field(default='', max_length=64)

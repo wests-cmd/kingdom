@@ -132,9 +132,9 @@ class WorkBacklog:
                 or mission['status'] not in {'approved', 'running', 'completed'}):
             raise ValueError('Exact executable owner-reviewed mission required')
         step = next((step for step in mission['plan']['steps'] if step['id'] == acceptance_step), None)
-        if not step or step['kind'] not in {'function_check', 'project_test'}:
+        if not step or step['kind'] not in {'function_check', 'project_test','independent_review'}:
             raise ValueError('Select a reviewed native function or project test acceptance step')
-        if step['kind'] == 'project_test':
+        if step['kind'] in {'project_test','independent_review'}:
             from backend.runtime.missions import MissionPlan, validate_plan
             validate_plan(MissionPlan.model_validate(mission['plan']))
 
@@ -342,6 +342,15 @@ class WorkBacklog:
                     raise ValueError('Native acceptance did not pass')
                 self._programme_binding(state)
                 status, reason = 'completed', 'Reviewed acceptance verified within its reported scope; broader roadmap remains open'
+                from backend.runtime.patch_acceptance import delegated_acceptance
+                delegated = delegated_acceptance(self.db, state, now=self.clock())
+                if delegated is False:
+                    status, evidence = 'running', None
+                    reason = 'Reviewed command finished; waiting for independently attested returned Jules patch'
+                elif delegated is not None:
+                    evidence = {**evidence, 'independent_patch_test': delegated}
+            elif any(record.get('status')=='waiting_external_review' for record in mission.get('steps',{}).values()):
+                status,reason='waiting_external_review','Waiting for an independently tested exact returned patch; other ready work may proceed'
             elif mission['status'] in {'needs_review', 'cancelled'}:
                 status, reason = 'review_required', 'Mission stopped for review; inspect its failed or exhausted steps'
             if status == 'review_required':
@@ -404,6 +413,7 @@ class WorkBacklog:
                         raise ValueError('No completed pure checkpoint or repair transition present')
                     task_ids = []
                     for step, record in mission['steps'].items():
+                        if self._external_observation(mission,step,record):continue
                         task = self.engine.tasks.get(record['task_id'])
                         self._completed_pure_receipt(task, intent['mission_id'], intent['mission_version'], step)
                         task_ids.append(task['id'])
@@ -430,7 +440,19 @@ class WorkBacklog:
                     self._publish(current)
                     retained.append(state['id'])
         return {'recovered': recovered, 'review_required': retained,
-                'scope': 'Stopped controller and completed pure receipts only; no lease expiry or side-effect replay'}
+                'scope': 'Stopped controller with completed pure receipts or typed no-task external-review observations; no lease expiry or side-effect replay'}
+
+    def _external_observation(self,mission,step_id,record):
+        step=next(s for s in mission['plan']['steps'] if s['id']==step_id)
+        if step['kind']!='independent_review':return False
+        from backend.runtime.missions import MissionPlan,validate_plan
+        validate_plan(MissionPlan.model_validate(mission['plan']))
+        if record=={'status':'waiting_external_review'}:return True
+        if set(record)=={'status','external_receipt'} and record['status']=='verified':
+            from backend.runtime.patch_acceptance import external_step_acceptance
+            proof=external_step_acceptance(self.engine,mission['id'],mission['version'],step_id)
+            if proof and proof['receipt_id']==record['external_receipt']:return True
+        raise ValueError('External review record has unknown execution effects')
 
     @staticmethod
     def _completed_pure_receipt(task, mission_id, version, step_id):
@@ -458,7 +480,10 @@ class WorkBacklog:
         if state['revision'] != expected_revision or not lease or state['lease'] != lease:
             raise ValueError('Identify the exact outstanding lease')
         mission = self.engine.missions.get(state['intent']['mission_id'])
-        for record in mission['steps'].values():
+        self._reviewed(mission,state['intent']['mission_version'],state['intent']['acceptance_step'])
+        for step_id,record in mission['steps'].items():
+            if self._external_observation(mission,step_id,record):continue
+            if not record.get('task_id'):raise ValueError('Native mission task identity is missing')
             task = self.engine.tasks.get(record['task_id'])
             if task and task['status'].lower() in {'running', 'leased', 'executing'}:
                 raise ValueError('Prior governed task has not stopped')

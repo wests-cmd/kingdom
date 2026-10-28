@@ -71,7 +71,14 @@ class BaseKnight:
 
         from backend.runtime.execution import execute_request, verify_request_result
         try:
-            outcome = execute_request(task, self.zero_trust.nodes.get_node_capabilities(self.name))
+            guard = getattr(self.zero_trust.owner_policy, 'assert_execution_allowed', None)
+            if callable(guard):
+                from functools import partial
+                # Local subtask identities append a prompt hash to their durable
+                # UUID parent; version comes from the controller's claimed task.
+                guard = partial(guard, task['id'].partition(':')[0], task.get('version'))
+            outcome = execute_request(task, self.zero_trust.nodes.get_node_capabilities(self.name),
+                                      **({'execution_guard': guard} if callable(guard) else {}))
             verification = verify_request_result(task, outcome)
             return {"knight": self.name, "status": "completed", "executed_at": time.time(),
                     "outcome": outcome, "verification": verification}

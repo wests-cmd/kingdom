@@ -74,3 +74,18 @@ def test_release_ui_catalog_packages_current_backend(tmp_path):
     (dist / 'index.html').write_text('<main>Release compatibility check</main>')
     # Use the actual shipped catalog, not a synthetic version list.
     assert build(dist, tmp_path / 'ui.zip', STATE['version'], compatibility)
+
+
+def test_actual_web_app_root_files_do_not_break_component_activation(tmp_path):
+    from scripts.build_ui_component import build
+    dist=tmp_path/'dist';dist.mkdir()
+    (dist/'index.html').write_text('<html>Component</html>')
+    (dist/'kingdom-sw.js').write_text('/* native service worker */')
+    (dist/'kingdom.webmanifest').write_text('{}')
+    output=tmp_path/'ui.zip';revision='a'*40
+    digest=build(dist,output,'1.2.4',compatible_backend_builds=[revision])
+    service=UIComponents('1.2.4',tmp_path/'installed',backend_identity=revision)
+    assert service.install(output.read_bytes(),digest)['active']==digest
+    with zipfile.ZipFile(output) as archive:
+        assert 'kingdom-sw.js' not in archive.namelist()
+        assert 'kingdom.webmanifest' not in archive.namelist()

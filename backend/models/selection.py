@@ -9,7 +9,7 @@ class ModelSelectionError(ValueError):
 from backend.models.profiles import model_tls_context
 
 
-async def available(profile):
+async def availability(profile):
     """Check installation without inference; do not infer capabilities from names."""
     headers = {'Authorization': 'Bearer ' + profile['api_key']} if profile.get('api_key') else {}
     path = '/api/tags' if profile['provider'] == 'ollama' else '/models'
@@ -19,13 +19,27 @@ async def available(profile):
             response.raise_for_status()
             payload = response.json()
         names = {item.get('name') or item.get('model') for item in payload.get('models', [])} if profile['provider'] == 'ollama' else {item.get('id') for item in payload.get('data', [])}
-        return profile['model'] in names
-    except (httpx.HTTPError, ValueError, TypeError, AttributeError):
-        return False
+        return {'available': profile['model'] in names, 'retryable': False}
+    except httpx.HTTPStatusError as error:
+        return {'available':False,'retryable':error.response.status_code in {402,408,429,500,502,503,504}}
+    except httpx.TransportError as error:
+        import ssl
+        cause=error
+        for _ in range(6):
+            if isinstance(cause,ssl.SSLCertVerificationError):
+                return {'available':False,'retryable':False}
+            cause=getattr(cause,'__cause__',None)
+        return {'available':False,'retryable':True}
+    except (ValueError, TypeError, AttributeError):
+        return {'available':False,'retryable':False}
+
+
+async def available(profile):
+    return (await availability(profile))['available']
 
 
 async def eligible_profiles(profiles, *, characters=0, images=False, tools=False):
-    candidates = [p for p in profiles if not p.get('disabled', False)
+    candidates = [p for p in profiles if not p.get('disabled', False) and p.get('auto_select', True)
                   and (not images or p.get('vision') is True)
                   and (not tools or p.get('supports_tools') is True)
                   and characters <= p.get('context_characters', 24000)]

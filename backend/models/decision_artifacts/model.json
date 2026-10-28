@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "kind": "model",
+  "features": [
+    "fit",
+    "local",
+    "idle",
+    "memory_headroom",
+    "success",
+    "latency",
+    "load"
+  ],
+  "weights": [
+    19.282130590513365,
+    9.928863566868205,
+    5.701188960460025,
+    5.6508928082611565,
+    14.571704785473091,
+    -5.685870154166869,
+    -5.725921281871369
+  ],
+  "mode": "shadow",
+  "training": {
+    "pairs": 5942,
+    "seed": 907,
+    "labels": "synthetic resource policy",
+    "held_out_seed": 1937,
+    "held_out_pairs": 1979,
+    "policy_pair_accuracy": 0.9914098029307731,
+    "multi_fact_pairs": 2000,
+    "multi_fact_policy_accuracy": 0.982
+  }
+}

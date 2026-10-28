@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react"
 import InstallKingdom from './components/InstallKingdom'
+import PeriodicRefresh from './components/PeriodicRefresh'
 import Sidebar from "./components/common/Sidebar"
 import Dashboard from "./pages/Dashboard"
 import Swarm from "./pages/Swarm"
@@ -138,11 +139,12 @@ function OwnerApp() {
       <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} interfaceMode={interfaceMode} collapsed={sidebarCollapsed} toggle={toggleSidebar}/>
 
       <div className="main-container">
+        <PeriodicRefresh />
         <details><summary>Install Kingdom as a free web app</summary><InstallKingdom /></details>
         <header className="topbar">
           <div className="page-title">{currentPage === 'SkillMaps' ? 'Skill maps & Discord' : currentPage}</div>
           <div className="status-indicator">
-            Kingdom:{" "}
+            Local app:{" "}
             <span className={isConnected ? "badge-online" : "badge-offline"}>
               {isConnected ? "Connected" : "Disconnected"}
             </span>
