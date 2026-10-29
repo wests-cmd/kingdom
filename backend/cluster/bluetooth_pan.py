@@ -40,7 +40,8 @@ def bluez_snapshot(objects):
 
 def observe():
     result = {'platform': platform.system(), 'observed_at': time.time(), 'adapters': [],
-              'pan_links': [], 'available': False, 'reason': 'Linux BlueZ observation is unavailable'}
+              'pan_links': [], 'available': False, 'adapter_state': 'unknown',
+              'reason': 'Linux BlueZ observation is unavailable'}
     if result['platform'] != 'Linux':
         result['reason'] = 'This PAN observer requires Linux BlueZ; no radio state is assumed'
         return result
@@ -49,8 +50,12 @@ def observe():
                              'org.freedesktop.DBus.ObjectManager', 'GetManagedObjects'])
         objects = raw['data'][0]
         adapters, links = bluez_snapshot(objects)
+        adapter_state = 'absent' if not adapters else 'on' if any(a['powered'] for a in adapters) else 'off'
         result.update(adapters=adapters, pan_links=links, available=bool(links),
+                      adapter_state=adapter_state,
                       reason=('Connected paired BlueZ PAN link observed' if links else
+                              'No Bluetooth adapter exposed by BlueZ' if adapter_state == 'absent' else
+                              'Bluetooth adapters are powered off' if adapter_state == 'off' else
                               'No connected paired PAN link; normal owner pairing/PAN setup is required'))
     except (OSError, ValueError, KeyError, TypeError, IndexError, subprocess.SubprocessError):
         result['reason'] = 'BlueZ is unavailable or permission denied; no pairing or privileges were changed'

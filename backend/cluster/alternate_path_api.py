@@ -66,6 +66,7 @@ class BluetoothStatus(BaseModel):
     adapters: list[BluetoothAdapter]
     pan_links: list[PANLink]
     available: bool
+    adapter_state: Literal['unknown', 'absent', 'off', 'on']
     reason: str
 
 
