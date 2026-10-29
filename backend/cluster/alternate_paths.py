@@ -38,6 +38,7 @@ class AlternatePaths:
     def __init__(self, database, registry, identity, events):
         self.db, self.registry, self.identity, self.events = database, registry, identity, events
         self.slots = asyncio.Semaphore(2)
+        self.probe_timeout = 5  # Total OS/network exchange budget, not an inactivity timeout.
         with self.db.get_connection() as conn:
             conn.execute('CREATE TABLE IF NOT EXISTS alternate_paths(peer TEXT PRIMARY KEY,state_json TEXT NOT NULL)')
             conn.execute('CREATE TABLE IF NOT EXISTS path_probes(id TEXT PRIMARY KEY,peer TEXT NOT NULL,digest TEXT NOT NULL,state_json TEXT NOT NULL)')
@@ -149,45 +150,46 @@ class AlternatePaths:
                      'transport_hint': path['transport_hint'], 'transport_evidence': path['transport_evidence']}
             started, sent = time.monotonic(), False
             try:
-                pan = None
-                from backend.cluster.mesh_api import mesh_tls
-                tls = await asyncio.to_thread(mesh_tls)
-                if path['transport_hint'] == 'bluetooth_pan':
-                    from backend.cluster.bluetooth_pan import route_observation
-                    pan = await asyncio.to_thread(route_observation, path['endpoint'])
-                    state['transport_evidence'] = pan['evidence']
-                    state['route_observation'] = pan
-                # Use the same verified transport on LAN and PAN. Source binding
-                # changes placement, never certificate verification or retry scope.
-                options = {'transport': httpx.AsyncHTTPTransport(verify=tls, retries=0, trust_env=False,
-                               local_address=pan['local_address'] if pan is not None else None)}
-                async with httpx.AsyncClient(timeout=5, follow_redirects=False, trust_env=False, verify=tls, **options) as client:
-                    advertised = await self._json(client, 'GET', path['endpoint'] + '/nodes/identity')
-                    check_identity(advertised, node.public_identity, self.identity)
-                    # Revalidate locally after network delay; remote policy also remains authoritative.
-                    current = await asyncio.to_thread(self.peer, peer)
-                    if current.fingerprint != config['fingerprint'] or await asyncio.to_thread(self.get, peer) != config:
-                        raise ValueError('Peer or owner path configuration changed')
-                    if pan is not None:
-                        current_route = await asyncio.to_thread(route_observation, path['endpoint'])
-                        if any(current_route[k] != pan[k] for k in ('interface', 'device_address', 'local_address')):
-                            raise ValueError('Bluetooth PAN route changed before transmission')
-                    transport = RPCSecureTransport(self.identity)
-                    message = transport.create_signed_message(peer, 'heartbeat', {'node_id': self.identity.node_id})
-                    sent = True
-                    result = await self._json(client, 'POST', path['endpoint'] + '/nodes/rpc', message)
-                    verified = await asyncio.to_thread(transport.verify_and_unwrap_message, result.get('inventory_proof'), expected_target_id=self.identity.node_id)
-                    if (not verified.get('valid') or verified.get('sender_id') != peer
-                            or verified.get('msg_type') != 'inventory_snapshot'
-                            or verified.get('payload', {}).get('node_id') != peer
-                            or verified.get('payload', {}).get('request_id') != message['msg_id']
-                            or result.get('status') != 'ok' or result.get('ping', {}).get('success') is not True):
-                        raise ValueError('No current pinned signed control receipt')
-                    await asyncio.to_thread(self.peer, peer)  # A receipt cannot restore revoked authority.
-                    state.update(status='verified_control_exchange', request_id=message['msg_id'],
-                                 response_id=verified['msg_id'], elapsed_ms=round((time.monotonic()-started)*1000, 2),
-                                 observed_at=time.time(),
-                                 scope='Signed control exchange; route observations are not packet capture, task execution or artifact transfer proof')
+                async with asyncio.timeout(self.probe_timeout):
+                    pan = None
+                    from backend.cluster.mesh_api import mesh_tls
+                    tls = await asyncio.to_thread(mesh_tls)
+                    if path['transport_hint'] == 'bluetooth_pan':
+                        from backend.cluster.bluetooth_pan import route_observation
+                        pan = await asyncio.to_thread(route_observation, path['endpoint'])
+                        state['transport_evidence'] = pan['evidence']
+                        state['route_observation'] = pan
+                    # Use the same verified transport on LAN and PAN. Source binding
+                    # changes placement, never certificate verification or retry scope.
+                    options = {'transport': httpx.AsyncHTTPTransport(verify=tls, retries=0, trust_env=False,
+                                   local_address=pan['local_address'] if pan is not None else None)}
+                    async with httpx.AsyncClient(timeout=5, follow_redirects=False, trust_env=False, verify=tls, **options) as client:
+                        advertised = await self._json(client, 'GET', path['endpoint'] + '/nodes/identity')
+                        check_identity(advertised, node.public_identity, self.identity)
+                        # Revalidate locally after network delay; remote policy also remains authoritative.
+                        current = await asyncio.to_thread(self.peer, peer)
+                        if current.fingerprint != config['fingerprint'] or await asyncio.to_thread(self.get, peer) != config:
+                            raise ValueError('Peer or owner path configuration changed')
+                        if pan is not None:
+                            current_route = await asyncio.to_thread(route_observation, path['endpoint'])
+                            if any(current_route[k] != pan[k] for k in ('interface', 'device_address', 'local_address')):
+                                raise ValueError('Bluetooth PAN route changed before transmission')
+                        transport = RPCSecureTransport(self.identity)
+                        message = transport.create_signed_message(peer, 'heartbeat', {'node_id': self.identity.node_id})
+                        sent = True
+                        result = await self._json(client, 'POST', path['endpoint'] + '/nodes/rpc', message)
+                        verified = await asyncio.to_thread(transport.verify_and_unwrap_message, result.get('inventory_proof'), expected_target_id=self.identity.node_id)
+                        if (not verified.get('valid') or verified.get('sender_id') != peer
+                                or verified.get('msg_type') != 'inventory_snapshot'
+                                or verified.get('payload', {}).get('node_id') != peer
+                                or verified.get('payload', {}).get('request_id') != message['msg_id']
+                                or result.get('status') != 'ok' or result.get('ping', {}).get('success') is not True):
+                            raise ValueError('No current pinned signed control receipt')
+                        await asyncio.to_thread(self.peer, peer)  # A receipt cannot restore revoked authority.
+                        state.update(status='verified_control_exchange', request_id=message['msg_id'],
+                                     response_id=verified['msg_id'], elapsed_ms=round((time.monotonic()-started)*1000, 2),
+                                     observed_at=time.time(),
+                                     scope='Signed control exchange; route observations are not packet capture, task execution or artifact transfer proof')
             except (httpx.HTTPError, ValueError, TypeError, KeyError, OSError):
                 state.update(status='outcome_unknown' if sent else 'not_sent',
                              reason='No verified outcome; this key is retained and will not be retransmitted')

@@ -8,6 +8,7 @@ import threading
 import ssl
 import datetime
 import ipaddress
+import time
 from types import SimpleNamespace
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -42,7 +43,7 @@ def setup(tmp_path, monkeypatch):
 
 
 @contextmanager
-def peer_server(remote, *, barrier=None, lose_reply=False, wrong_request=False, redirect=False, wait_reply=None, tls=None):
+def peer_server(remote, *, barrier=None, lose_reply=False, wrong_request=False, redirect=False, wait_reply=None, tls=None, drip=None):
     state = {'posts': 0, 'gets': 0, 'verified': 0}
 
     class Handler(BaseHTTPRequestHandler):
@@ -51,11 +52,15 @@ def peer_server(remote, *, barrier=None, lose_reply=False, wrong_request=False, 
 
         def answer(self, value, status=200):
             body = json.dumps(value).encode()
+            slow = (drip == 'identity' and self.command == 'GET') or (drip == 'receipt' and self.command == 'POST')
+            prefix = b' ' * 20 if slow else b''
             self.send_response(status)
             self.send_header('Content-Type', 'application/json')
-            self.send_header('Content-Length', str(len(body)))
+            self.send_header('Content-Length', str(len(body)+len(prefix)))
             self.end_headers()
             try:
+                for byte in prefix:
+                    self.wfile.write(bytes([byte])); self.wfile.flush(); time.sleep(.06)
                 self.wfile.write(body)
             except (BrokenPipeError, ConnectionResetError):
                 pass
@@ -194,6 +199,34 @@ def test_bluetooth_hint_cannot_relabel_loopback_as_real_radio(setup):
         result = asyncio.run(service.probe(remote.node_id, 'no-fake-radio', 'pan'))
         assert result['status'] == 'not_sent'
         assert server[1]['gets'] == server[1]['posts'] == 0
+
+
+@pytest.mark.parametrize('stage,status', [('identity','not_sent'),('receipt','outcome_unknown')])
+def test_total_deadline_releases_both_dripping_slots_without_resending(setup,stage,status):
+    database, registry, local, remote, events, service = setup
+    service.probe_timeout = .25
+    with peer_server(remote,drip=stage) as slow, peer_server(remote) as healthy:
+        config(service,remote,[slow[0],healthy[0]])
+        async def run():
+            started = time.monotonic()
+            first = asyncio.create_task(service.probe(remote.node_id,'drip-a','wifi'))
+            second = asyncio.create_task(service.probe(remote.node_id,'drip-b','wifi'))
+            # Both existing slots are occupied by valid but indefinitely drip-fed
+            # responses. A healthy independent request must get a released slot.
+            await asyncio.sleep(.08)
+            good = asyncio.create_task(service.probe(remote.node_id,'healthy','pan'))
+            results = await asyncio.gather(first,second,good)
+            return results,time.monotonic()-started
+        results,elapsed = asyncio.run(run())
+        assert elapsed < 1.0, elapsed
+        assert [r['status'] for r in results[:2]] == [status,status]
+        assert results[2]['status'] == 'verified_control_exchange'
+        assert slow[1]['posts'] == (0 if stage == 'identity' else 2)
+        fresh = AlternatePaths(database,registry,local,events)
+        cached = asyncio.run(fresh.probe(remote.node_id,'drip-a','wifi'))
+        assert cached['status'] == status
+        assert slow[1]['gets'] == 2
+        assert slow[1]['posts'] == (0 if stage == 'identity' else 2)
 
 
 def test_expired_membership_never_probes_any_path(setup):

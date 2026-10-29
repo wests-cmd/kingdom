@@ -39,6 +39,13 @@ requires a signed inventory response bound to that exact request ID. Receiving
 nodes now include that request ID in the signed heartbeat response. Older peers
 without the binding remain unverified; no weaker fallback is accepted.
 
+Each active exchange has a five-second total deadline around OS observations,
+TLS and both HTTP streams, in addition to HTTP inactivity limits. A peer cannot
+retain a slot indefinitely by slowly dripping bytes. Expiry before sending RPC
+records `not_sent`; expiry after sending retains `outcome_unknown`. The durable
+probe key is not retransmitted in either case. Queue waiting and local SQLite
+receipt persistence are separate from this OS/network deadline.
+
 RPC signatures, current peer state, durable replay protection and existing
 remote heartbeat policy remain authoritative. A heartbeat cannot execute work.
 This endpoint accepts no task, management operation, tool payload or new grants.
