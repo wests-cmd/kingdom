@@ -1,12 +1,13 @@
 """Opt-in IP paths for signed control probes; radio setup stays outside Kingdom.
 
-No task, management or artifact RPC is retried or routed by this module. A PAN
-label is owner-supplied, not proof that the OS selected a Bluetooth interface.
+No task, management or artifact RPC is retried or routed by this module. PAN
+probes require a current paired BlueZ link and matching OS route/source address.
 """
 import asyncio
 import hashlib
 import ipaddress
 import json
+import math
 import time
 from urllib.parse import urlsplit
 
@@ -49,6 +50,10 @@ class AlternatePaths:
                 or node.fingerprint != node.public_identity.get('fingerprint')
                 or node.node_id == self.identity.node_id):
             raise ValueError('Use an existing approved pinned peer identity')
+        deadline = (node.connection_metadata or {}).get('membership_expires_at')
+        if deadline is not None and (type(deadline) not in (int, float)
+                                     or not math.isfinite(deadline) or deadline <= time.time()):
+            raise ValueError('Temporary peer membership expired or is invalid')
         return node
 
     def get(self, ident):
@@ -144,13 +149,25 @@ class AlternatePaths:
                      'transport_hint': path['transport_hint'], 'transport_evidence': path['transport_evidence']}
             started, sent = time.monotonic(), False
             try:
-                async with httpx.AsyncClient(timeout=5, follow_redirects=False, trust_env=False) as client:
+                pan = None
+                options = {}
+                if path['transport_hint'] == 'bluetooth_pan':
+                    from backend.cluster.bluetooth_pan import route_observation
+                    pan = await asyncio.to_thread(route_observation, path['endpoint'])
+                    options['transport'] = httpx.AsyncHTTPTransport(local_address=pan['local_address'], retries=0, trust_env=False)
+                    state['transport_evidence'] = pan['evidence']
+                    state['route_observation'] = pan
+                async with httpx.AsyncClient(timeout=5, follow_redirects=False, trust_env=False, **options) as client:
                     advertised = await self._json(client, 'GET', path['endpoint'] + '/nodes/identity')
                     check_identity(advertised, node.public_identity, self.identity)
                     # Revalidate locally after network delay; remote policy also remains authoritative.
                     current = await asyncio.to_thread(self.peer, peer)
                     if current.fingerprint != config['fingerprint'] or await asyncio.to_thread(self.get, peer) != config:
                         raise ValueError('Peer or owner path configuration changed')
+                    if pan is not None:
+                        current_route = await asyncio.to_thread(route_observation, path['endpoint'])
+                        if any(current_route[k] != pan[k] for k in ('interface', 'device_address', 'local_address')):
+                            raise ValueError('Bluetooth PAN route changed before transmission')
                     transport = RPCSecureTransport(self.identity)
                     message = transport.create_signed_message(peer, 'heartbeat', {'node_id': self.identity.node_id})
                     sent = True
@@ -166,7 +183,7 @@ class AlternatePaths:
                     state.update(status='verified_control_exchange', request_id=message['msg_id'],
                                  response_id=verified['msg_id'], elapsed_ms=round((time.monotonic()-started)*1000, 2),
                                  observed_at=time.time(),
-                                 scope='Signed control exchange; no task, artifact transfer or Bluetooth hardware attested')
+                                 scope='Signed control exchange; route observations are not packet capture, task execution or artifact transfer proof')
             except (httpx.HTTPError, ValueError, TypeError, KeyError, OSError):
                 state.update(status='outcome_unknown' if sent else 'not_sent',
                              reason='No verified outcome; this key is retained and will not be retransmitted')

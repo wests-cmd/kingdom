@@ -101,7 +101,7 @@ def peer_server(remote, *, barrier=None, lose_reply=False, wrong_request=False, 
 def config(service, remote, urls):
     return service.configure(remote.node_id, [
         {'name': 'wifi', 'endpoint': urls[0], 'transport_hint': 'lan'},
-        *([{'name': 'pan', 'endpoint': urls[1], 'transport_hint': 'bluetooth_pan'}] if len(urls) > 1 else [])], 0)
+        *([{'name': 'pan', 'endpoint': urls[1], 'transport_hint': 'lan'}] if len(urls) > 1 else [])], 0)
 
 
 def test_two_actual_ip_paths_exchange_signed_control_in_parallel_and_dedup_restart(setup):
@@ -122,6 +122,27 @@ def test_two_actual_ip_paths_exchange_signed_control_in_parallel_and_dedup_resta
         assert a[1]['verified'] == b[1]['verified'] == 1
         assert 'kingdom_endpoint' not in registry.get_node(remote.node_id).connection_metadata
         assert registry.get_node(remote.node_id).granted_capabilities == []
+
+
+def test_bluetooth_hint_cannot_relabel_loopback_as_real_radio(setup):
+    _, _, _, remote, _, service = setup
+    with peer_server(remote) as server:
+        service.configure(remote.node_id, [{'name': 'pan', 'endpoint': server[0], 'transport_hint': 'bluetooth_pan'}], 0)
+        result = asyncio.run(service.probe(remote.node_id, 'no-fake-radio', 'pan'))
+        assert result['status'] == 'not_sent'
+        assert server[1]['gets'] == server[1]['posts'] == 0
+
+
+def test_expired_membership_never_probes_any_path(setup):
+    _, registry, _, remote, _, service = setup
+    with peer_server(remote) as server:
+        config(service, remote, [server[0]])
+        node = registry.get_node(remote.node_id)
+        node.connection_metadata['membership_expires_at'] = 1
+        registry.repo.save(node.to_dict())
+        with pytest.raises(ValueError):
+            asyncio.run(service.probe(remote.node_id, 'expired', 'wifi'))
+        assert server[1]['gets'] == server[1]['posts'] == 0
 
 
 def test_lost_response_holds_key_across_restart_without_second_effect(setup):

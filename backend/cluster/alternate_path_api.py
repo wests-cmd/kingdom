@@ -48,6 +48,33 @@ class Batch(BaseModel):
     probes: list[Probe] = Field(min_length=1, max_length=8)
 
 
+class BluetoothAdapter(BaseModel):
+    path: str
+    address: str | None
+    powered: bool
+
+
+class PANLink(BaseModel):
+    interface: str
+    device_address: str | None
+    adapter: str | None
+
+
+class BluetoothStatus(BaseModel):
+    platform: str
+    observed_at: float
+    adapters: list[BluetoothAdapter]
+    pan_links: list[PANLink]
+    available: bool
+    reason: str
+
+
+@router.get('/bluetooth/status', response_model=BluetoothStatus)
+async def bluetooth_status():
+    from backend.cluster.bluetooth_pan import observe
+    return await asyncio.to_thread(observe)
+
+
 @router.get('/{peer}')
 def get(peer: str):
     try:
