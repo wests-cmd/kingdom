@@ -54,11 +54,13 @@ not a replay of the original request. Keys cannot migrate to another path or
 configuration. The ledger stops accepting new keys at 10,000 records instead of
 deleting deduplication history. Owner maintenance/retention tooling is future work.
 
-Profile transport hints are always labelled
-`owner_configured_not_radio_observed`. A successful exchange records elapsed
-time and request/response IDs. It does not measure radio throughput, prove PAN
-interface selection, mark a task complete or renew tool authority. Previously
-verified probes are historical evidence, not continuous health observations.
+Configured transport hints are labelled `owner_configured_not_radio_observed`.
+The October 28 extension requires a real paired BlueZ PAN link, matching OS route
+and bound source IP before probing a `bluetooth_pan` path. Its receipt labels
+that evidence `bluez_network1_and_os_route_observed`; this is not packet capture
+or radio-throughput proof. A successful exchange records elapsed time and signed
+request/response IDs. It cannot mark a task complete or renew tool authority.
+Previously verified probes are historical evidence, not continuous health.
 
 ## Tested scope and remaining work
 
@@ -69,8 +71,9 @@ configuration, substituted request receipts, redirect rejection, owner-only
 routes and exclusion of execution payloads. These are network protocol tests,
 not a physical Bluetooth demonstration or a task-throughput benchmark.
 
-Still required: approved hardware/profile inventory; owner pairing/PAN setup;
-two-Knight on-radio verification with Wi-Fi active; interface/route observations;
+The owner-only Bluetooth status endpoint and OS route checks are implemented in
+the October 28 extension. Still required: owner pairing/PAN setup;
+two-Knight on-radio verification with Wi-Fi active;
 Swarm path visibility; explicit policy for small chat/data requests; bounded file
 chunks; and end-to-end execution receipt deduplication before routing tasks or
 retrying side effects across paths. There is no bandwidth aggregation, automatic

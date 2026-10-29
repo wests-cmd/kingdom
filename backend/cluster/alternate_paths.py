@@ -150,14 +150,18 @@ class AlternatePaths:
             started, sent = time.monotonic(), False
             try:
                 pan = None
-                options = {}
+                from backend.cluster.mesh_api import mesh_tls
+                tls = await asyncio.to_thread(mesh_tls)
                 if path['transport_hint'] == 'bluetooth_pan':
                     from backend.cluster.bluetooth_pan import route_observation
                     pan = await asyncio.to_thread(route_observation, path['endpoint'])
-                    options['transport'] = httpx.AsyncHTTPTransport(local_address=pan['local_address'], retries=0, trust_env=False)
                     state['transport_evidence'] = pan['evidence']
                     state['route_observation'] = pan
-                async with httpx.AsyncClient(timeout=5, follow_redirects=False, trust_env=False, **options) as client:
+                # Use the same verified transport on LAN and PAN. Source binding
+                # changes placement, never certificate verification or retry scope.
+                options = {'transport': httpx.AsyncHTTPTransport(verify=tls, retries=0, trust_env=False,
+                               local_address=pan['local_address'] if pan is not None else None)}
+                async with httpx.AsyncClient(timeout=5, follow_redirects=False, trust_env=False, verify=tls, **options) as client:
                     advertised = await self._json(client, 'GET', path['endpoint'] + '/nodes/identity')
                     check_identity(advertised, node.public_identity, self.identity)
                     # Revalidate locally after network delay; remote policy also remains authoritative.

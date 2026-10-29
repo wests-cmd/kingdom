@@ -42,8 +42,9 @@ the Linux BlueZ observer does not claim Windows PAN support.
 2. Establish an opt-in OS Bluetooth PAN. Keep Wi-Fi active. Verify status exposes
    the paired Network1 interface and route to the intended peer.
 3. Configure the already-approved peer's HTTPS PAN endpoint using normal valid
-   certificate trust. The existing branch does not yet consume the newer mesh
-   private-CA helper; integration must retain verified TLS rather than disable it.
+   certificate trust. Both LAN and PAN reuse the current owner-configured mesh
+   CA through `mesh_tls()`, or standard trust when no mesh CA is configured.
+   CA settings are reread per explicit probe; neither path disables verification.
 4. Run separate signed control probes over LAN and PAN concurrently. Retain the
    signed request/reply IDs and OS route observations. Disable PAN, confirm it
    refuses a Wi-Fi fallback labeled Bluetooth, then restore and use a new key.
@@ -54,3 +55,9 @@ the Linux BlueZ observer does not claim Windows PAN support.
 Tests cover real dual HTTP servers, Ed25519 replies, durable restart dedup,
 revocation/expiry, owner boundary and BlueZ/route parsing. No physical Bluetooth
 transfer or production installation is claimed by these source tests.
+
+Integration onto main also tests two real concurrent HTTPS servers with a
+temporary private CA and actual Ed25519 control replies. The approved CA passes;
+an unrelated CA fails before HTTP requests reach the peer. A revoked identity
+cannot retrieve a cached successful probe. These tests exercise real TLS and
+signed transport, not physical radio transmission.

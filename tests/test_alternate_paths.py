@@ -5,6 +5,10 @@ These tests do not simulate or claim physical Bluetooth hardware.
 import asyncio
 import json
 import threading
+import ssl
+import datetime
+import ipaddress
+from types import SimpleNamespace
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -38,7 +42,7 @@ def setup(tmp_path, monkeypatch):
 
 
 @contextmanager
-def peer_server(remote, *, barrier=None, lose_reply=False, wrong_request=False, redirect=False, wait_reply=None):
+def peer_server(remote, *, barrier=None, lose_reply=False, wrong_request=False, redirect=False, wait_reply=None, tls=None):
     state = {'posts': 0, 'gets': 0, 'verified': 0}
 
     class Handler(BaseHTTPRequestHandler):
@@ -90,10 +94,12 @@ def peer_server(remote, *, barrier=None, lose_reply=False, wrong_request=False, 
             self.answer({'status': 'ok', 'ping': {'success': True}, 'inventory_proof': proof})
 
     server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    if tls:
+        server.socket = tls.wrap_socket(server.socket, server_side=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        yield f'http://127.0.0.1:{server.server_port}', state
+        yield f'{"https" if tls else "http"}://127.0.0.1:{server.server_port}', state
     finally:
         server.shutdown(); server.server_close(); thread.join(3)
 
@@ -122,6 +128,63 @@ def test_two_actual_ip_paths_exchange_signed_control_in_parallel_and_dedup_resta
         assert a[1]['verified'] == b[1]['verified'] == 1
         assert 'kingdom_endpoint' not in registry.get_node(remote.node_id).connection_metadata
         assert registry.get_node(remote.node_id).granted_capabilities == []
+
+
+def private_ca(tmp_path, name):
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+    now = datetime.datetime.now(datetime.timezone.utc)
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
+    ca = (x509.CertificateBuilder().subject_name(subject).issuer_name(subject).public_key(key.public_key())
+          .serial_number(x509.random_serial_number()).not_valid_before(now-datetime.timedelta(minutes=1))
+          .not_valid_after(now+datetime.timedelta(days=1)).add_extension(x509.BasicConstraints(ca=True,path_length=None),critical=True)
+          .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()),critical=False)
+          .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(key.public_key()),critical=False)
+          .add_extension(x509.KeyUsage(digital_signature=True,content_commitment=False,key_encipherment=False,
+                                      data_encipherment=False,key_agreement=False,key_cert_sign=True,crl_sign=True,
+                                      encipher_only=None,decipher_only=None),critical=True)
+          .sign(key,hashes.SHA256()))
+    server_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    cert = (x509.CertificateBuilder().subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME,'localhost')]))
+            .issuer_name(subject).public_key(server_key.public_key()).serial_number(x509.random_serial_number())
+            .not_valid_before(now-datetime.timedelta(minutes=1)).not_valid_after(now+datetime.timedelta(days=1))
+            .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(key.public_key()),critical=False)
+            .add_extension(x509.SubjectKeyIdentifier.from_public_key(server_key.public_key()),critical=False)
+            .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address('127.0.0.1'))]),critical=False)
+            .sign(key,hashes.SHA256()))
+    certfile, keyfile = tmp_path/(name+'.pem'), tmp_path/(name+'.key')
+    certfile.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    keyfile.write_bytes(server_key.private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.PKCS8,serialization.NoEncryption()))
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);context.load_cert_chain(certfile,keyfile)
+    return ca.public_bytes(serialization.Encoding.PEM).decode(), context
+
+
+def test_parallel_signed_https_paths_reuse_current_mesh_ca_and_reject_wrong_ca(setup,tmp_path,monkeypatch):
+    _, registry, _, remote, _, service = setup
+    from backend.cluster import mesh_api
+    ca, server_context = private_ca(tmp_path,'approved')
+    other_ca, _ = private_ca(tmp_path,'unrelated')
+    configured = {'ca_pem': ca}
+    monkeypatch.setattr(mesh_api,'membership',lambda:SimpleNamespace(config=lambda:dict(configured)))
+    barrier = threading.Barrier(2)
+    with peer_server(remote,barrier=barrier,tls=server_context) as first, peer_server(remote,barrier=barrier,tls=server_context) as second:
+        config(service,remote,[first[0],second[0]])
+        async def parallel():
+            return await asyncio.gather(service.probe(remote.node_id,'tls-a','wifi'),service.probe(remote.node_id,'tls-b','pan'))
+        results=asyncio.run(parallel())
+        assert all(r['status']=='verified_control_exchange' for r in results)
+        assert first[1]['verified']==second[1]['verified']==1
+        configured['ca_pem']=other_ca
+        rejected=asyncio.run(service.probe(remote.node_id,'wrong-ca','wifi'))
+        assert rejected['status']=='not_sent'
+        assert first[1]['gets']==first[1]['posts']==1
+        node=registry.get_node(remote.node_id).to_dict();node['node_state']='REVOKED';registry.repo.save(node)
+        with pytest.raises(ValueError):
+            asyncio.run(service.probe(remote.node_id,'tls-a','wifi'))
+        assert first[1]['posts']==1
 
 
 def test_bluetooth_hint_cannot_relabel_loopback_as_real_radio(setup):
