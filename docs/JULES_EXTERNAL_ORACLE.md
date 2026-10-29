@@ -137,3 +137,52 @@ fences. It is not adequate functional coverage for unrelated backlog items.
 Installing its public reviewer key and contract hash is a separate governed
 operation, not something the candidate or planner can do. The DT1 validation
 used a disposable key, deleted it afterward and left production trust unchanged.
+
+## Separate positive backlog contract
+
+`backlog-advancement-v1` adds four fixed behavioral scenarios through
+`jules-backlog-oracle.py`. Select it explicitly in the protected supervisor and
+native-review-worker configuration. Its digest includes the positive oracle as
+well as the shared supervisor, source preparation, negative oracle and raw
+exporter. The worker carries the selected contract into the supervisor; it does
+not substitute the default negative-fence contract. Any controller change needs
+a newly reviewed digest, including changes to shared code.
+
+Only `backend/runtime/work_backlog.py` may change under this contract. The fixed
+assertions cover:
+
+1. A completed dependency allows its successor to finish; restarting the API
+   child preserves completion and does not create duplicate mission tasks.
+2. A failed fixed suite enters review and does not block unrelated ready work.
+3. Higher-priority waiting work does not starve lower-priority independent work.
+4. The owner's one-at-a-time admission limit holds until its policy changes.
+
+The fourth scenario starts at autonomy level4. The controller retrieves the
+specific waiting task's approval and checks its capability, operation, task ID
+and complete fixed process argument list before approving it in the disposable
+fixture. Changing autonomy later is not treated as an implicit approval or a
+request to requeue a held task. Controller regression tests reject altered
+approval scope before any approval request is sent.
+
+The candidate API runs in the same network-isolated, non-root, read-only source
+sandbox, with private bounded tmpfs. A fixed supervisor permits at most three
+API-child starts. The restart scenario tests a process restart, not host reboot
+or power-loss recovery. Candidate tests, plugins and reported test counts are
+not imported into the controller. Four counts mean four host assertions, not
+four candidate-provided passing tests. Truncated or unsuccessful API responses
+are failures; subsequent cases are marked unexecuted after a failed scenario.
+
+On October29,2026, an unsigned isolated red/green experiment compared source
+`89fde01120fd6bb0919e2d7772cbf754caf0beb5` with the scheduler change in
+`f144d33149ccdae6b8217e308c31e224d960b779`, using pinned image
+`sha256:9c8208775c47e6eebd3f364f61981eebeaffb592663c9749dc8b866128293111`.
+The baseline passed two cases, failed waiting-work fairness and did not execute
+the final case. The candidate passed all four cases. The retained experiment
+scope was `backlog-positive-unsigned-cffe5c4e75a5`; production was unchanged.
+
+This evidence establishes only these bounded scheduler scenarios. It does not
+establish general patch correctness, an autonomous engineering cycle, Bluetooth
+delivery, section-wide patch composition, release readiness or fleet deployment.
+The experiment installed no signer key, reviewer trust or production contract
+catalogue. Installing an independently reviewed contract remains a separate
+governed operation; a planner cannot enable its own reviewer.

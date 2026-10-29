@@ -800,6 +800,14 @@ class WorkProgrammes:
                             changed = True
                         continue
                     if row['planning'] in {'planning', 'binding'}:
+                        for stage in row.get('planning_stages', {}).values():
+                            if isinstance(stage, dict) and stage.get('phase') == 'running':
+                                recovered_at = time.time()
+                                started_at = stage.get('started_at', recovered_at)
+                                stage.update(phase='interrupted', error_category='process_interrupted',
+                                             completed_at=max(started_at, recovered_at),
+                                             elapsed_seconds=max(0, recovered_at - started_at),
+                                             elapsed_basis='recovery_wall_clock')
                         row.update(planning='blocked', blocked_reasons=['Planning or binding was interrupted. Inspect the retained checkpoint; no inference or action replayed.'])
                         changed = True
                 if changed:

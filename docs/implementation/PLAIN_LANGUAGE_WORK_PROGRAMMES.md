@@ -92,6 +92,26 @@ checks. The integration gate stays unfinished until a separately reviewed suite
 tests the section together. Adoption supplies neither missing tools/models nor
 independent test contracts, grants, release permission or evidence of completion.
 
+## Planning checkpoints
+
+Deliberative planning checkpoints each selected model **before** capacity waiting
+or network I/O. Each stage exposes `phase`, `profile`, `hosting`, `started_at` and
+`deadline_seconds`; this identifies the proposal attempt and does not establish
+that model inference or a task is executing. A completed stage adds
+`completed_at`, monotonic `elapsed_seconds` and the retained proposal text.
+Failed attempts contain a fixed `error_category` and timing, never the provider's
+exception text, response body, credentials or generated partial output. Fallback
+attempt metadata is bounded by the existing three-connection shortlist.
+
+Shutdown cancellation marks a stage interrupted. Startup recovery also changes
+any retained running stage to interrupted while preserving its start time and
+the programme attempt count; no inference, approval or execution is replayed.
+Recovery duration uses wall-clock time and is labelled
+`elapsed_basis: recovery_wall_clock`, since a process restart loses its monotonic
+clock origin. The three-attempt programme budget and model timeout ceiling are
+unchanged. These checkpoints diagnose waiting; they do not improve model speed
+or establish that a model can produce an executable plan.
+
 ## Verification
 
 Tests use real SQLite state, MissionService, TaskManager, governed process tasks
