@@ -43,8 +43,17 @@ def protected(path, private=False):
     return path
 
 
-def contract_digest():
+def contract_files(contract_id='api-negative-fences'):
     names = ['jules-external-review.py', 'jules-source-preparation.py', 'jules-external-oracle.py','archive-verified-source.py']
+    if contract_id == 'backlog-advancement-v1':
+        names.append('jules-backlog-oracle.py')
+    elif contract_id != 'api-negative-fences':
+        raise ValueError('Only fixed installed external contracts are supported')
+    return names
+
+
+def contract_digest(contract_id='api-negative-fences'):
+    names = contract_files(contract_id)
     files = {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest() for name in names}
     return hashlib.sha256(json.dumps(files, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
@@ -165,14 +174,15 @@ def execute(config_path):
 
 
 def _execute(config_path):
-    for name in ['jules-external-review.py','jules-source-preparation.py','jules-external-oracle.py','archive-verified-source.py']:
-        protected(Path(__file__).with_name(name))
     config_path = protected(config_path, private=True)
     if config_path.stat().st_size > 65536:
         raise ValueError('Bounded supervisor configuration required')
     config = json.loads(config_path.read_text(encoding='utf-8'))
+    contract_id = config.get('contract_id', 'api-negative-fences')
+    for name in contract_files(contract_id):
+        protected(Path(__file__).with_name(name))
     binding = config['binding']
-    if set(binding) != BINDING or binding['contract_sha256'] != contract_digest():
+    if set(binding) != BINDING or binding['contract_sha256'] != contract_digest(contract_id):
         raise ValueError('Exact governed supervisor contract required')
     if binding['project'] != 'kingdom' or binding['source'] != 'sources/github/wests-cmd/kingdom':
         raise ValueError('Only the owner-approved Kingdom scope is supported')
@@ -199,6 +209,10 @@ def _execute(config_path):
     run = root / run_id
     prep = load('jules-source-preparation')
     oracle_module = load('jules-external-oracle')
+    if contract_id == 'backlog-advancement-v1':
+        oracle_module = load('jules-backlog-oracle')
+        if config['allowed_paths'] != oracle_module.ALLOWED_PATHS:
+            raise ValueError('Positive backlog contract permits only the scheduler implementation')
     proof = prep.prepare(repository, binding['base_revision'], patch_path.read_bytes(),
                          binding['patch_sha256'], run, config['allowed_paths'])
     # Candidate source never receives real credentials. Authentication uses a
@@ -219,8 +233,9 @@ def _execute(config_path):
                '--tmpfs','/data:rw,nosuid,nodev,size=128m,uid=1000,gid=1000,mode=0700',
                '-e','PYTHONPATH=/workspace','-e','KINGDOM_MODEL_PROVIDER=disabled',
                '-v',str(run/'source')+':/workspace:ro','-w','/data',
-               '--entrypoint','python',image,'-m','uvicorn','backend.main:app',
-               '--host','127.0.0.1','--port','8012','--no-access-log']
+               '--entrypoint','python',image]
+    command += (oracle_module.command() if contract_id == 'backlog-advancement-v1' else
+                ['-m','uvicorn','backend.main:app','--host','127.0.0.1','--port','8012','--no-access-log'])
     container_id = None
     durable_json(run/'container-intent.json',dict(name=name,run_id=run_id,image=image))
     if time.time()>=deadline:
@@ -256,7 +271,8 @@ def _execute(config_path):
             test_auth_token=token,output_dir=str(run/'verdict'))
         filename = run/'oracle-config.json'
         durable_json(filename,oracle_config)
-        oracle=oracle_module.ExternalOracle(filename)
+        oracle_class = oracle_module.BacklogOracle if contract_id == 'backlog-advancement-v1' else oracle_module.ExternalOracle
+        oracle=oracle_class(filename)
         oracle.inspect_candidate_container()
         ready=False
         warmup_deadline=min(deadline,time.time()+90)

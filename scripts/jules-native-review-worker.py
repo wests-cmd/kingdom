@@ -102,7 +102,7 @@ class Worker:
         self.execute = execute or module.execute
         self.recover = recover or module.recover_candidates
         self.lock_factory = lock_factory or self._tick_lock
-        actual_digest = contract_digest() if contract_digest is not None else module.contract_digest()
+        actual_digest = contract_digest() if contract_digest is not None else module.contract_digest(c['contract_id'])
         if actual_digest != c['contract_sha256']:
             raise ValueError('Installed trusted producer differs from the reviewed contract')
         self.transport = transport or self._request
@@ -259,6 +259,7 @@ class Worker:
             handle.write(material['patch'].encode()); handle.flush(); os.fsync(handle.fileno())
         config = {key: self.config[key] for key in ('reviewer_id', 'signing_key', 'repository_directory', 'image', 'allowed_paths')}
         config.update(binding=material['binding'], patch_file=str(patch),
+            contract_id=self.config['contract_id'],
             deadline_at=min(material['deadline_at'], self.config['deadline_at'], self.clock() + 3600))
         path = folder / 'run-config.json'
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

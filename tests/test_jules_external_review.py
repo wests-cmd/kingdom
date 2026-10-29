@@ -67,6 +67,19 @@ class ExternalReviewTests(unittest.TestCase):
             return value+b'\n# changed raw source exporter\n' if path.name=='archive-verified-source.py' else value
         with patch.object(Path,'read_bytes',changed):self.assertNotEqual(original,module.contract_digest())
 
+    def test_positive_contract_binds_its_fixed_oracle_without_changing_negative_scope(self):
+        positive=module.contract_digest('backlog-advancement-v1')
+        negative=module.contract_digest('api-negative-fences')
+        self.assertNotEqual(positive,negative)
+        read=Path.read_bytes
+        def changed(path):
+            value=read(path)
+            return value+b'\n# changed positive oracle\n' if path.name=='jules-backlog-oracle.py' else value
+        with patch.object(Path,'read_bytes',changed):
+            self.assertNotEqual(positive,module.contract_digest('backlog-advancement-v1'))
+            self.assertEqual(negative,module.contract_digest('api-negative-fences'))
+        with self.assertRaises(ValueError):module.contract_digest('arbitrary-candidate-contract')
+
     def test_diagnostic_timeout_or_write_failure_never_skips_cleanup(self):
         for failure in ('timeout','write'):
             with self.subTest(failure=failure),TemporaryDirectory() as directory:

@@ -273,7 +273,7 @@ class ExternalOracle:
         if not isinstance(user,str) or not re.fullmatch('[1-9][0-9]*(?::[0-9]+)?',user):
             raise ValueError(f"Container must run as non-root user, got '{user}'")
 
-        expected_command=['-m','uvicorn','backend.main:app','--host','127.0.0.1','--port',str(self.config.get('api_port',8012)),'--no-access-log']
+        expected_command=self.expected_command()
         if config_obj.get('Entrypoint')!=['python'] or config_obj.get('Cmd')!=expected_command or config_obj.get('WorkingDir')!='/data':
             raise ValueError('Candidate must run the reviewed API entrypoint and workspace')
         environment=dict(value.split('=',1) for value in config_obj.get('Env',[]) if '=' in value)
@@ -314,6 +314,9 @@ class ExternalOracle:
         expected_label_val = self.config.get('expected_label_val', self.config['revision'])
         if expected_label_key and labels.get(expected_label_key) != expected_label_val:
             raise ValueError(f"Container missing required label {expected_label_key}={expected_label_val}")
+
+    def expected_command(self):
+        return ['-m','uvicorn','backend.main:app','--host','127.0.0.1','--port',str(self.config.get('api_port',8012)),'--no-access-log']
 
     def docker_exec_transport(self, method, path, headers, body):
         port = self.config.get('api_port', 8012)

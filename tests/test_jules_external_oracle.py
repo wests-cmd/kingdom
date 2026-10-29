@@ -8,6 +8,7 @@ if os.name!='posix':
  import pytest
  pytest.skip('Protected external Docker controller is POSIX-only',allow_module_level=True)
 s=importlib.util.spec_from_file_location('oracle',Path(__file__).parents[1]/'scripts/jules-external-oracle.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+s=importlib.util.spec_from_file_location('backlog_oracle',Path(__file__).parents[1]/'scripts/jules-backlog-oracle.py');backlog=importlib.util.module_from_spec(s);s.loader.exec_module(backlog)
 class OracleTests(unittest.TestCase):
  def setUp(self):
   self.temp=TemporaryDirectory();self.root=Path(self.temp.name);self.source=self.root/'source';self.source.mkdir();(self.source/'example.py').write_text('value=1\n')
@@ -95,4 +96,61 @@ class OracleTests(unittest.TestCase):
   with patch.object(m.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout=json.dumps(result))) as run:
    oracle.docker_exec_transport('GET','/health/live',{},None)
    argv=run.call_args.args[0];self.assertEqual(argv[2],'d'*64);self.assertEqual(argv[3],'/usr/local/bin/python3');self.assertIn('-I',argv);self.assertIn('-S',argv)
+
+ def admission_transport(self, alteration=None):
+  """Scripted API boundary tests controller checks, never scheduler behavior."""
+  calls=[];state={'approved':False,'level':4,'missions':[]}
+  approval={'id':'approval-first','capability':'process.execute','operation':'Execute task task-first',
+            'parameters':{'task_id':'task-first','metadata':{'tool_parameters':{'argv':
+             ['/usr/local/bin/python3','-I','-c',backlog.suite_code(delay=18)]}}}}
+  if alteration:alteration(approval)
+  def transport(method,path,headers,body):
+   calls.append((method,path));payload=json.loads(body) if body else None
+   if method=='PUT' and path=='/runtime/policy':
+    state['level']=payload['level'];value={'mission_budget':{'max_parallel':1}}
+   elif method=='POST' and path=='/missions':
+    ident='mission-'+str(len(state['missions'])+1);state['missions'].append(ident);value={'id':ident,'version':1}
+   elif method=='POST' and path.startswith('/missions/') and path.endswith('/approve'):value={}
+   elif method=='POST' and path=='/work-backlog/items':value={'id':'work-'+str(len(state['missions']))}
+   elif method=='GET' and path=='/tasks':
+    status='completed' if state['level']==5 else ('running' if state['approved'] else 'waiting_approval')
+    value=[{'id':'task-first','status':status,'metadata':{'mission_id':state['missions'][0],'approval_id':'approval-first'}}]
+    if state['level']==5:value.append({'id':'task-second','status':'completed','metadata':{'mission_id':state['missions'][1]}})
+   elif method=='GET' and path=='/security/approvals':value=[approval]
+   elif method=='POST' and path=='/security/approvals/approval-first/approve':state['approved']=True;value={}
+   elif method=='GET' and path=='/work-backlog':
+    value={'items':[{'id':'work-'+str(i+1),'status':'completed' if state['level']==5 else 'ready','evidence':{'tests_run':1}}
+                    for i in range(len(state['missions']))]}
+   else:raise AssertionError('Unexpected fixture request')
+   return {'status':200,'body':base64.b64encode(json.dumps(value).encode()).decode(),'truncated':False}
+  return transport,calls
+
+ def test_positive_admission_approves_only_the_exact_fixed_task_before_policy_change(self):
+  transport,calls=self.admission_transport()
+  oracle=backlog.BacklogOracle(self.path,transport_fn=transport)
+  with patch.object(backlog.time,'sleep'):
+   oracle.admission()
+  approved=calls.index(('POST','/security/approvals/approval-first/approve'))
+  self.assertLess(approved,calls.index(('POST','/missions/mission-2/approve')))
+  self.assertEqual(calls.count(('POST','/security/approvals/approval-first/approve')),1)
+  self.assertEqual(calls.count(('PUT','/runtime/policy')),2)
+
+ def test_positive_admission_rejects_changed_approval_scope_without_approving(self):
+  variants=[lambda a:a.update(capability='shell.unrestricted'),
+            lambda a:a.update(operation='Execute task another-task'),
+            lambda a:a['parameters'].update(task_id='another-task'),
+            lambda a:a['parameters']['metadata']['tool_parameters'].update(argv=['sh','-c','different-command'])]
+  for change in variants:
+   with self.subTest(change=change):
+    transport,calls=self.admission_transport(change)
+    oracle=backlog.BacklogOracle(self.path,transport_fn=transport)
+    with self.assertRaises(AssertionError):oracle.admission()
+    self.assertFalse(any(method=='POST' and path.startswith('/security/approvals/') for method,path in calls))
+    oracle.lock_file.close()
+
+ def test_positive_probes_reject_truncation_and_non_success_instead_of_reading_candidate_claims(self):
+  for status,truncated in [(500,False),(200,True),(403,False)]:
+   oracle=backlog.BacklogOracle(self.path,transport_fn=lambda *args:{'status':status,'truncated':truncated,'body':base64.b64encode(b'{"verdict":"PASSED"}').decode()})
+   with self.subTest(status=status,truncated=truncated),self.assertRaises(ValueError):oracle.request('GET','/tasks')
+   oracle.lock_file.close()
 if __name__=='__main__':unittest.main()
