@@ -48,6 +48,7 @@ function JulesPlacement({list,busy,act}) {
 export default function WorkProgrammePanel() {
   const {data, error: readError, refresh} = useLiveData('/work-programmes', 5000)
   const {data: modelProfiles} = useLiveData('/workspace/model-profiles', 30000)
+  const {data: bossReviews, error: bossError} = useLiveData('/boss-reviews', 10000)
   const [text, setText] = useState(''), [project, setProject] = useState('kingdom')
   const [profile, setProfile] = useState('auto'), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [key, setKey] = useState(() => `list-${crypto.randomUUID()}`)
@@ -81,6 +82,18 @@ export default function WorkProgrammePanel() {
       <p>Planner: {list.planner_mode==='deliberative' ? `Two plans, critique, synthesis · ${list.planner_routing||'local'}` : list.planner_mode==='chatgpt' ? 'ChatGPT (external handoff)' : 'Configured chat model'}</p>
       <p>{list.auto_plan ? (list.planner_mode==='chatgpt' ? 'Kingdom prepares the next eligible ChatGPT request automatically and waits for its response.' : 'Kingdom proposes the next eligible plan automatically.') : 'Automatic planning paused.'}</p>
       <JulesPlacement key={`${list.id}-${JSON.stringify(list.jules_placement?.scope||{})}`} list={list} busy={busy} act={act}/>
+      <details><summary>Boss review and responsibility</summary>
+        {bossError ? <p role="alert">Boss review is unavailable. No independent verification is established.</p> : (() => {
+          const review = (bossReviews || []).find(r => r.id === list.id)
+          return review ? <>
+            <p><strong>{review.status.replaceAll('_',' ')}</strong> · reviewed {new Date(review.reviewed_at*1000).toLocaleString()}</p>
+            <p>Reviewer: {review.controller_kind}. Independent reviewer: {review.independent_reviewer || 'Not yet assigned or verified'}.</p>
+            <p>{review.scope}</p>
+            {review.blockers.map((reason,i)=><p key={i}>{reason}</p>)}
+            {review.rows.map(row=><p key={row.key}>{row.title}: {row.status.replaceAll('_',' ')}. Planning model: {row.planning_model_profile}; execution model: {row.execution_model_profile || 'No model selected'}. Requested computers: {row.requested_computers.join(', ') || 'Controller/default placement'}; steps: {row.tools.join(', ') || 'No reviewed tools'}. {row.assignment_scope}</p>)}
+          </> : <p>Waiting for the Kingdom-owned Boss review cycle. This is not verified completion.</p>
+        })()}
+      </details>
       <button disabled={busy} onClick={()=>act(()=>api.post(`/work-programmes/${list.id}/settings`,{enabled:!list.auto_plan,expected_revision:list.revision}))}>{list.auto_plan ? 'Pause planning' : 'Enable automatic planning'}</button>
       <button disabled={busy} onClick={()=>act(()=>api.post(`/work-programmes/${list.id}/plan-next`,{expected_revision:list.revision}))}>{list.planner_mode==='chatgpt' ? 'Prepare next ChatGPT request' : 'Propose next plan'}</button>
       {list.sections.map((section,i)=><section key={i}>
