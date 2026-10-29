@@ -30,6 +30,8 @@ class WorkBacklog:
             conn.execute('INSERT OR IGNORE INTO work_backlog_settings VALUES(1,0,1)')
             conn.execute('CREATE TABLE IF NOT EXISTS work_type_priorities(id INTEGER PRIMARY KEY,revision INTEGER,data_json TEXT)')
             conn.execute("INSERT OR IGNORE INTO work_type_priorities VALUES(1,1,'{}')")
+            conn.execute('CREATE TABLE IF NOT EXISTS work_backlog_cursor(id INTEGER PRIMARY KEY,last_kind TEXT,last_running_id TEXT)')
+            conn.execute('INSERT OR IGNORE INTO work_backlog_cursor VALUES(1,NULL,NULL)')
             conn.commit()
 
     def type_priorities(self):
@@ -303,7 +305,8 @@ class WorkBacklog:
         """At most one existing mission advancement; no lease timeout or retry."""
         # Read-only observations remain useful while execution is paused/L3.
         self.review()
-        if not self.snapshot()['enabled'] or self.engine.execution_policy.get()['level'] < 4 or not self.engine.status().get('running'):
+        policy = self.engine.execution_policy.get()
+        if not self.snapshot()['enabled'] or policy['level'] < 4 or not self.engine.status().get('running'):
             return {'status': 'stopped', 'reason': 'Runtime must be running with autonomy level 4 or 5'}
         with self.db.get_connection() as conn:
             conn.execute('BEGIN IMMEDIATE')
@@ -317,12 +320,29 @@ class WorkBacklog:
             if any(state['lease'] for state in states):
                 return {'status': 'recovery_required', 'reason': 'An outstanding durable lease requires reconciliation'}
             by_id = {state['id']: state for state in states}
-            state = next((state for state in states if state['enabled'] and state['status'] in {'ready', 'running'}
-                          and all(by_id[dep]['status'] == 'completed' for dep in state['intent']['depends_on'])), None)
+            eligible = [state for state in states if state['enabled'] and state['status'] in {'ready', 'running'}
+                        and all(by_id[dep]['status'] == 'completed' for dep in state['intent']['depends_on'])]
+            ready = [state for state in eligible if state['status'] == 'ready']
+            running = [state for state in eligible if state['status'] == 'running']
+            # Bound admission, without pausing or discarding already running work.
+            admission_cap = policy.get('mission_budget', {}).get('max_parallel', 1)
+            if type(admission_cap) is not int or admission_cap < 1:
+                admission_cap = 1
+            if sum(state['status'] == 'running' for state in states) >= admission_cap:
+                ready = []
+            cursor = conn.execute('SELECT last_kind,last_running_id FROM work_backlog_cursor WHERE id=1').fetchone()
+            kind = 'running' if running and (not ready or cursor[0] == 'ready') else 'ready'
+            state = ready[0] if kind == 'ready' and ready else None
+            if kind == 'running':
+                ids = [item['id'] for item in running]
+                index = (ids.index(cursor[1]) + 1) % len(ids) if cursor[1] in ids else 0
+                state = running[index]
             if state is None:
                 return {'status': 'idle', 'reason': 'No enabled work has completed dependencies'}
             lease = uuid.uuid4().hex
             state.update(lease=lease, lease_owner=self._owner_proof(), status='running', reason='Advancing the same reviewed mission', next_step='Wait for retained task evidence')
+            conn.execute('UPDATE work_backlog_cursor SET last_kind=?,last_running_id=? WHERE id=1',
+                         (kind, state['id'] if kind == 'running' else cursor[1]))
             self._save(conn, state); conn.commit()
         self._publish(state)
         mission = {}
