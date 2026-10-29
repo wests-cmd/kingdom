@@ -46,6 +46,52 @@ identical error notices. It starts with the API service and cancels read-only
 planning at shutdown. The execution backlog remains the only selector for tracked
 missions, including when no browser is open.
 
+## Adopt an existing saved backlog
+
+Creating a new programme from text creates new work rows. Existing backlog notes
+can instead be adopted through the owner-only `POST /work-programmes/adopt`
+endpoint, so their work IDs, descriptions, priorities, task types and dependency
+order remain intact. This is a handoff into planning, not permission to run notes.
+
+The request requires an explicit project, idempotency key, section title, exact
+owner-declared source commit and one to twelve note IDs with their current
+revisions. For example:
+
+```json
+{
+  "project": "kingdom",
+  "idempotency_key": "queue-repair-v1",
+  "title": "Queue repair",
+  "source_revision": "0123456789abcdef0123456789abcdef01234567",
+  "items": [
+    {"work_id": "existing-note-id", "expected_revision": 1}
+  ]
+}
+```
+
+Use the actual current source and note IDs; these example identifiers are not a
+reviewed execution target. Planner defaults are deliberative and local; the
+existing configured-chat, ChatGPT handoff and cloud/mixed routing choices remain
+available through their normal configuration fields. `auto_plan` starts false.
+
+All selected notes must belong to that project, be disabled and unplanned, have
+no mission binding, lease, completed evidence or programme owner, and match the
+submitted revisions. Include the entire dependency set within the twelve notes;
+external dependencies and cycles are rejected. No dependency is removed or
+invented to make adoption succeed. Large backlogs need small, closed sections.
+
+One transaction records ownership and adds a separate section integration gate
+depending on every selected note. A failed transaction leaves no gate or partial
+ownership. Two concurrent requests cannot take the same note. Repeating the
+identical request returns the existing programme even after adoption changes
+note revisions; changing its input under the same key is rejected.
+
+Enable automatic proposal generation separately when its configured model is
+ready. Model proposals still need the existing review, capability and acceptance
+checks. The integration gate stays unfinished until a separately reviewed suite
+tests the section together. Adoption supplies neither missing tools/models nor
+independent test contracts, grants, release permission or evidence of completion.
+
 ## Verification
 
 Tests use real SQLite state, MissionService, TaskManager, governed process tasks

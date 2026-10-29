@@ -32,6 +32,24 @@ class NewProgramme(BaseModel):
     planner_routing: Literal['local', 'cloud', 'mixed'] = 'local'
 
 
+class ExistingNote(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    work_id: str = Field(pattern=r'^[A-Za-z0-9_-]{1,80}$')
+    expected_revision: int = Field(ge=1)
+
+
+class AdoptProgramme(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    project: str = Field(pattern=r'^[A-Za-z0-9_-]{1,80}$')
+    idempotency_key: str = Field(pattern=r'^[A-Za-z0-9_-]{1,80}$')
+    title: str = Field(min_length=1, max_length=200)
+    source_revision: str = Field(pattern=r'^[a-fA-F0-9]{40}$')
+    items: list[ExistingNote] = Field(min_length=1, max_length=12)
+    model_profile: str = Field(default='auto', min_length=1, max_length=100)
+    planner_mode: Literal['configured_chat', 'chatgpt', 'deliberative'] = 'deliberative'
+    planner_routing: Literal['local', 'cloud', 'mixed'] = 'local'
+
+
 class Revision(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     expected_revision: int = Field(ge=1)
@@ -74,6 +92,11 @@ def listing():
 @router.post('', status_code=201)
 def create(request: NewProgramme):
     return boundary(lambda: service().create(**request.model_dump()))
+
+
+@router.post('/adopt', status_code=201)
+def adopt(request: AdoptProgramme):
+    return boundary(lambda: service().adopt(**request.model_dump()))
 
 
 @router.post('/{ident}/settings')

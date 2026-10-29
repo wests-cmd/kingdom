@@ -16,7 +16,7 @@ def test_all_programme_routes_require_owner_and_validation_hides_private_input(m
     app.dependency_overrides[require_owner] = denied
     monkeypatch.setattr(api, 'service', lambda: calls.append('must not initialize'))
     client = TestClient(app)
-    for path, method in [('/work-programmes','get'),('/work-programmes','post'),
+    for path, method in [('/work-programmes','get'),('/work-programmes','post'),('/work-programmes/adopt','post'),
             ('/work-programmes/a/settings','post'),('/work-programmes/a/plan-next','post'),
             ('/work-programmes/a/standing-review','post'),
             ('/work-programmes/a/items/s1-t1/approve','post'),
@@ -26,6 +26,31 @@ def test_all_programme_routes_require_owner_and_validation_hides_private_input(m
         response = getattr(client, method)(path, **({'json':{}} if method=='post' else {}))
         assert response.status_code == 403
     assert calls == []
+
+
+def test_owner_adopts_existing_notes_over_http_without_enabling_work(runtime, monkeypatch):
+    from backend.runtime.work_programmes import WorkProgrammes
+    engine, backlog, _ = runtime
+    note = backlog.register('kingdom', 'http-original', title='Inspect recovery')
+    service = WorkProgrammes(backlog.db, engine, backlog)
+    app = FastAPI()
+    app.include_router(api.router)
+    app.dependency_overrides[require_owner] = lambda: True
+    monkeypatch.setattr(api, 'service', lambda: service)
+    client = TestClient(app)
+    body = {'project': 'kingdom', 'idempotency_key': 'http-adopt', 'title': 'Recovery',
+            'source_revision': 'a'*40, 'items': [{'work_id': note['id'], 'expected_revision': note['revision']}]}
+    for changes in ({'enabled': True}, {'grants': ['process.execute']}, {'approve': True},
+                    {'items': [{'work_id': note['id'], 'expected_revision': True}]}, {'items': []}):
+        assert client.post('/work-programmes/adopt', json={**body, **changes}).status_code == 422
+    response = client.post('/work-programmes/adopt', json=body)
+    assert response.status_code == 201
+    saved = response.json()
+    assert saved['sections'][0]['items'][0]['work_id'] == note['id']
+    assert saved['auto_plan'] is False
+    assert client.post('/work-programmes/adopt', json=body).json()['id'] == saved['id']
+    assert client.post('/work-programmes/adopt', json={**body, 'title': 'Changed'}).status_code == 409
+    assert engine.tasks.list() == [] and engine.missions.list() == []
 
 
 def test_strict_request_has_no_implicit_execution_or_extra_grants():
