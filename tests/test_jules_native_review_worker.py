@@ -8,6 +8,7 @@ import hashlib
 import importlib.util
 import json
 import os
+from types import SimpleNamespace
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -64,6 +65,7 @@ class Fixture:
         config = json.loads(path.read_text())
         assert 'owner_token' not in config and 'api_port' not in config
         assert config['binding'] == self.binding
+        assert config['contract_id'] == self.config['contract_id']
         assert config['deadline_at'] == 1600
         run = path.parent/('external-'+'d'*32); run.mkdir()
         if self.cleanup:
@@ -95,6 +97,22 @@ def test_delivers_exact_fixed_contract_verdict_and_never_runs_twice(tmp_path, fa
     f.worker().tick()
     assert f.executions == 1
     assert len([c for c in f.calls if c[0] == 'POST']) == 1
+
+
+def test_installed_producer_hash_uses_the_selected_positive_contract(tmp_path, monkeypatch):
+    f = Fixture(tmp_path)
+    f.config['contract_id'] = 'backlog-advancement-v1'
+    f.config['allowed_paths'] = ['backend/runtime/work_backlog.py']
+    f.path.write_text(json.dumps(f.config))
+    selected = []
+    def digest(contract_id):
+        selected.append(contract_id)
+        return 'b'*64
+    monkeypatch.setattr(module, 'producer', lambda: SimpleNamespace(contract_digest=digest))
+    module.Worker(f.path, transport=f.transport, execute=f.execute,
+        recover=f.recover, lock_factory=lambda: nullcontext(True),
+        protect=lambda path, private=False: Path(path), clock=lambda: f.now)
+    assert selected == ['backlog-advancement-v1']
 
 
 @pytest.mark.parametrize('lost', ['consumed', 'unconsumed'])
