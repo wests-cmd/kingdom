@@ -1,6 +1,7 @@
 """Bounded two-plan deliberation over existing owner-configured connections."""
 import asyncio
 import json
+import time
 from urllib.parse import urlsplit
 
 import httpx
@@ -45,6 +46,8 @@ async def routed_stage(models, prompt, mode, stage, record, unavailable=None, pr
     eligible.sort(key=lambda p: (slots[p['id']]['active'] >= slots[p['id']]['max_parallel'],
                                  hosting(p) != prefer, p['id'] != preferred_profile, p['id']))
     failures = []
+    attempt_history = []
+    last_failure = {}
     shortlist = eligible[:3]
     if mode != 'local' and shortlist and all(hosting(p) == prefer for p in shortlist):
         alternate = next((p for p in eligible if hosting(p) != prefer), None)
@@ -52,26 +55,57 @@ async def routed_stage(models, prompt, mode, stage, record, unavailable=None, pr
             shortlist = shortlist[:2] + [alternate]
     for profile in shortlist:
         kind = hosting(profile)
+        budget = max(15, min(600, float(profile.get('timeout_seconds', 60))))
+        started_at, started = time.time(), time.monotonic()
+        progress = {'profile': profile['id'], 'hosting': kind, 'phase': 'running',
+                    'started_at': started_at, 'deadline_seconds': budget,
+                    'attempt_history': list(attempt_history),
+                    'fallbacks': list(failures), 'readiness_failures': probe_failures[:16]}
+        # Persist before capacity admission or network I/O; this is a proposal
+        # attempt, not evidence that inference or task execution has begun.
+        await record(stage, progress)
         try:
             # Only proposal generation is retried, never a tool or execution action.
             # Honour the configured CPU model budget; a blanket 60-second cutoff
             # made slow, healthy local workers indistinguishable from outages.
-            budget = max(15, min(600, float(profile.get('timeout_seconds', 60))))
             response = await asyncio.wait_for(models.plan_chat(prompt, profile=profile['id'], hosting=kind), budget)
             if not isinstance(response.get('text'), str) or not 1 <= len(response['text']) <= 8000:
                 raise ValueError('Planner stage response exceeded its budget')
-            await record(stage, {'profile': profile['id'], 'hosting': kind, 'text': response['text'],
-                                 'fallbacks': failures, 'readiness_failures':probe_failures[:16]})
-            return response['text']
-        except httpx.HTTPStatusError as error:
-            if error.response.status_code not in {402, 408, 429, 500, 502, 503, 504}:
+        except asyncio.CancelledError:
+            await record(stage, {**progress, 'phase': 'interrupted', 'error_category': 'cancelled',
+                                 'completed_at': max(started_at, time.time()),
+                                 'elapsed_seconds': max(0, time.monotonic() - started)})
+            raise
+        except Exception as error:
+            retryable = isinstance(error, (httpx.TransportError, TimeoutError))
+            category = ('timeout' if isinstance(error, (TimeoutError, httpx.TimeoutException)) else
+                        'transport_error' if isinstance(error, httpx.TransportError) else
+                        'invalid_response' if isinstance(error, (ValueError, TypeError, KeyError)) else 'planning_error')
+            reason = 'unavailable or busy'
+            if isinstance(error, httpx.HTTPStatusError):
+                status = error.response.status_code
+                retryable = status in {402, 408, 429, 500, 502, 503, 504}
+                category = {402: 'quota_exhausted', 408: 'timeout', 429: 'rate_limited'}.get(
+                    status, 'service_unavailable' if retryable else 'request_rejected')
+                reason = 'quota or service unavailable'
+            last_failure = {**progress, 'phase': 'failed', 'failed': True, 'error_category': category,
+                            'completed_at': max(started_at, time.time()),
+                            'elapsed_seconds': max(0, time.monotonic() - started)}
+            await record(stage, last_failure)
+            if not retryable:
                 raise
-            failures.append({'profile': profile['id'], 'reason': 'quota or service unavailable'})
+            failures.append({'profile': profile['id'], 'reason': reason})
+            attempt_history.append({key: value for key, value in last_failure.items()
+                                    if key not in {'attempt_history', 'fallbacks', 'readiness_failures'}})
             unavailable.add(profile['id'])
-        except (httpx.TransportError, TimeoutError):
-            failures.append({'profile': profile['id'], 'reason': 'unavailable or busy'})
-            unavailable.add(profile['id'])
-    await record(stage, {'failed': True, 'fallbacks': failures,
+            continue
+        await record(stage, {**progress, 'phase': 'completed',
+                             'completed_at': max(started_at, time.time()),
+                             'elapsed_seconds': max(0, time.monotonic() - started),
+                             'text': response['text']})
+        return response['text']
+    await record(stage, {**last_failure, 'phase': 'failed', 'failed': True, 'fallbacks': failures,
+                         'attempt_history': attempt_history,
                          'readiness_failures':probe_failures[:16],
                          'reason': 'No eligible configured model completed this stage'})
     if failures or transient_probe_failure:
