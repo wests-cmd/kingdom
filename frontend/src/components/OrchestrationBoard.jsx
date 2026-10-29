@@ -19,7 +19,7 @@ export default function OrchestrationBoard() {
   <div className="section-heading"><div><h2>Kingdom at work</h2><p className="muted">What is running, who is doing it, and what needs attention.</p></div><span className="sync-note">{updated ? `Updated ${updated.toLocaleTimeString()}` : 'Connecting…'}</span></div>
   {(error || actionError) && <p role="alert" className="notice error">{actionError || error} Last visible data may be out of date.</p>}
   <div className="orchestration-counts">
-   <div><strong>{data ? data.counts.knights : '—'}</strong><span>Knight computers</span><small>This controller + {data?.counts.paired_knights ?? '—'} paired</small></div>
+   <div><strong>{data ? data.counts.knights : '—'}</strong><span>Connected Knight computers</span><small>This controller + {data?.counts.connected_peers ?? '—'} current peers</small><small>{data?.counts.paired_knights ?? '—'} paired peers shown · {data?.counts.unavailable_peers ?? '—'} offline or without a current report</small></div>
    <div><strong>{data ? data.counts.current_apprentices : '—'}</strong><span>Reported Apprentices</span><small>{data?.counts.local_apprentices ?? '—'} local + {data?.counts.remote_apprentices ?? '—'} current remote</small>{data?.inventory && !data.inventory.complete && <small>Partial total — some peer reports are missing or stale</small>}</div>
    <div><strong>{data ? running.length : '—'}</strong><span>Requests running</span><small>{data?.background.active_request_ids.length ?? 0} in the background slot</small></div>
   </div>
