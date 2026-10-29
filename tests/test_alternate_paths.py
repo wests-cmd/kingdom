@@ -53,7 +53,7 @@ def peer_server(remote, *, barrier=None, lose_reply=False, wrong_request=False, 
         def answer(self, value, status=200):
             body = json.dumps(value).encode()
             slow = (drip == 'identity' and self.command == 'GET') or (drip == 'receipt' and self.command == 'POST')
-            prefix = b' ' * 20 if slow else b''
+            prefix = b' ' * 50 if slow else b''
             self.send_response(status)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Content-Length', str(len(body)+len(prefix)))
@@ -62,7 +62,9 @@ def peer_server(remote, *, barrier=None, lose_reply=False, wrong_request=False, 
                 for byte in prefix:
                     self.wfile.write(bytes([byte])); self.wfile.flush(); time.sleep(.06)
                 self.wfile.write(body)
-            except (BrokenPipeError, ConnectionResetError):
+            except ConnectionError:
+                # Closing a timed-out drip also raises ConnectionAbortedError
+                # on Windows; this is the expected client cancellation.
                 pass
 
         def do_GET(self):
@@ -204,21 +206,33 @@ def test_bluetooth_hint_cannot_relabel_loopback_as_real_radio(setup):
 @pytest.mark.parametrize('stage,status', [('identity','not_sent'),('receipt','outcome_unknown')])
 def test_total_deadline_releases_both_dripping_slots_without_resending(setup,stage,status):
     database, registry, local, remote, events, service = setup
-    service.probe_timeout = .25
+    # Leave enough time for both loopback requests to start on busy Windows CI.
+    # Drips last three seconds, so a one-second total deadline must still win
+    # even though each byte arrives well within the HTTP inactivity timeout.
+    service.probe_timeout = 1
     with peer_server(remote,drip=stage) as slow, peer_server(remote) as healthy:
         config(service,remote,[slow[0],healthy[0]])
         async def run():
             started = time.monotonic()
             first = asyncio.create_task(service.probe(remote.node_id,'drip-a','wifi'))
             second = asyncio.create_task(service.probe(remote.node_id,'drip-b','wifi'))
-            # Both existing slots are occupied by valid but indefinitely drip-fed
-            # responses. A healthy independent request must get a released slot.
-            await asyncio.sleep(.08)
+            async def both_slow_requests_started():
+                counter = 'gets' if stage == 'identity' else 'posts'
+                while slow[1][counter] < 2:
+                    await asyncio.sleep(.01)
+            await asyncio.wait_for(both_slow_requests_started(), 2)
+            assert not first.done() and not second.done()
+            # Reaching the server proves both requests captured the short
+            # deadline. The healthy request gets the normal budget rather than
+            # testing Windows TLS/signature/SQLite scheduling against one second.
+            service.probe_timeout = 5
             good = asyncio.create_task(service.probe(remote.node_id,'healthy','pan'))
-            results = await asyncio.gather(first,second,good)
-            return results,time.monotonic()-started
+            timed_out = await asyncio.wait_for(asyncio.gather(first,second), 2)
+            slow_elapsed = time.monotonic()-started
+            verified = await asyncio.wait_for(good, 6)
+            return [*timed_out,verified],slow_elapsed
         results,elapsed = asyncio.run(run())
-        assert elapsed < 1.0, elapsed
+        assert elapsed < 2.5, elapsed
         assert [r['status'] for r in results[:2]] == [status,status]
         assert results[2]['status'] == 'verified_control_exchange'
         assert slow[1]['posts'] == (0 if stage == 'identity' else 2)
