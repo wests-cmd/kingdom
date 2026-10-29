@@ -217,6 +217,113 @@ class WorkProgrammes:
         with self.db.get_connection() as conn:
             return [json.loads(r[0]) for r in conn.execute('SELECT state_json FROM work_programmes ORDER BY rowid DESC')]
 
+    def adopt(self, project, idempotency_key, items, *, title, source_revision,
+              model_profile='auto', planner_mode='deliberative', planner_routing='local'):
+        """Atomically own existing unplanned notes without authorizing their work."""
+        identifier(project); identifier(idempotency_key)
+        if (not isinstance(title, str) or not 1 <= len(title.strip()) <= 200
+                or not isinstance(source_revision, str) or not re.fullmatch(r'[0-9a-fA-F]{40}', source_revision)
+                or not isinstance(model_profile, str) or not 1 <= len(model_profile) <= 100
+                or planner_mode not in {'configured_chat', 'chatgpt', 'deliberative'}
+                or planner_routing not in {'local', 'cloud', 'mixed'}):
+            raise ValueError('Bounded section, exact source and configured planner required')
+        if not isinstance(items, list) or not 1 <= len(items) <= 12:
+            raise ValueError('Adopt one to twelve existing notes')
+        for item in items:
+            if (not isinstance(item, dict) or set(item) != {'work_id', 'expected_revision'}
+                    or type(item['expected_revision']) is not int or item['expected_revision'] < 1):
+                raise ValueError('Each note needs its exact current revision')
+            identifier(item['work_id'])
+        wanted = {item['work_id'] for item in items}
+        if len(wanted) != len(items):
+            raise ValueError('Select each note only once')
+        title, source_revision = title.strip(), source_revision.lower()
+        digest = hashlib.sha256(json.dumps({'kind': 'adopt-existing-v1', 'items': items,
+            'title': title, 'source_revision': source_revision, 'model_profile': model_profile,
+            'planner_mode': planner_mode, 'planner_routing': planner_routing},
+            sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        ident = uuid5(NAMESPACE_URL, 'kingdom-programme:' + project + ':' + idempotency_key).hex
+        changed = []
+        with _guard, self.db.get_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            previous = conn.execute('SELECT state_json FROM work_programmes WHERE id=?', (ident,)).fetchone()
+            if previous:
+                state = json.loads(previous[0])
+                if state['input_sha256'] != digest or state.get('origin') != 'adopt-existing-v1':
+                    raise ValueError('Idempotency key belongs to another programme input')
+            else:
+                owners = set()
+                for saved in conn.execute('SELECT state_json FROM work_programmes'):
+                    owners.update(row['work_id'] for row in self.rows(json.loads(saved[0])))
+                notes = []
+                for item in items:
+                    saved = conn.execute('SELECT state_json FROM work_backlog WHERE project=? AND id=?',
+                                         (project, item['work_id'])).fetchone()
+                    if not saved:
+                        raise ValueError('Every selected note must exist in this project')
+                    note = json.loads(saved[0])
+                    intent = note['intent']
+                    if (note['revision'] != item['expected_revision'] or note['status'] != 'needs_planning'
+                            or note['enabled'] is not False or note.get('lease') is not None
+                            or note.get('evidence') is not None or note.get('programme_id')
+                            or note['id'] in owners or any(intent.get(key) is not None
+                                for key in ('mission_id', 'mission_version', 'acceptance_step'))):
+                        raise ValueError('Only unchanged disabled unowned unplanned notes can be adopted')
+                    dependencies = intent['depends_on']
+                    if not isinstance(dependencies, list) or not set(dependencies) <= wanted:
+                        raise ValueError('Select the complete same-project dependency set')
+                    notes.append(note)
+                # The selected set is small and closed. Verify its existing graph
+                # without inventing edges or reordering the owner's input.
+                resolved = set()
+                while len(resolved) < len(notes):
+                    ready = {n['id'] for n in notes if set(n['intent']['depends_on']) <= resolved}
+                    if not ready - resolved:
+                        raise ValueError('Selected dependencies contain a cycle')
+                    resolved.update(ready)
+                source_text = '# ' + title + '\n' + '\n'.join('- ' + (n['description'] or n['title']) for n in notes)
+                if len(source_text) > 24000:
+                    raise ValueError('Adopted outcome text exceeds the programme budget')
+                now = time.time()
+                rows = [{'key': f's1-t{number + 1}', 'work_id': note['id'], 'title': note['title'],
+                         'description': note['description'] or note['title'], 'planning': 'unplanned',
+                         'mission_id': None} for number, note in enumerate(notes)]
+                gate_id = uuid5(NAMESPACE_URL, 'kingdom-programme-gate:' + ident + ':s1').hex
+                gate_title = 'Check this section together: ' + title[:165]
+                gate_description = ('Run separately reviewed integration tests across the outcomes in this section. '
+                    'A model opinion, syntax check or repeated component check cannot pass this gate.')
+                gate = {'id': gate_id, 'project': project, 'programme_id': ident,
+                    'intent': {'mission_id': None, 'mission_version': None, 'acceptance_step': None,
+                        'depends_on': sorted(wanted), 'title': gate_title, 'description': gate_description, 'priority': 90},
+                    'title': gate_title, 'description': gate_description, 'priority': 90, 'enabled': False,
+                    'revision': 1, 'status': 'needs_planning', 'lease': None, 'created_at': now, 'evidence': None,
+                    'reason': 'Section integration requires its separate reviewed executable mission',
+                    'next_step': 'Complete component acceptance before proposing the section suite'}
+                state = {'id': ident, 'project': project, 'idempotency_key': idempotency_key,
+                    'origin': 'adopt-existing-v1', 'input_sha256': digest, 'source_text': source_text,
+                    'model_profile': model_profile, 'source_revision': source_revision,
+                    'planner_mode': planner_mode, 'planner_routing': planner_routing,
+                    'revision': 1, 'auto_plan': False, 'initialized': True, 'created_at': now, 'updated_at': now,
+                    'sections': [{'title': title, 'items': rows, 'integration': {
+                        'key': 's1-integration', 'work_id': gate_id, 'title': gate_title,
+                        'description': gate_description, 'planning': 'unplanned', 'mission_id': None}}]}
+                # The gate, programme and ownership changes commit together. No
+                # nested registration transaction or model/event call occurs here.
+                conn.execute('INSERT INTO work_backlog VALUES(?,?,?,?)',
+                    (gate_id, project, f'programme-{ident}-s1-integration', json.dumps(gate)))
+                for note in notes:
+                    note['programme_id'] = ident
+                    self.backlog._save(conn, note)
+                conn.execute('INSERT INTO work_programmes VALUES(?,?,?,?)',
+                    (ident, project, idempotency_key, json.dumps(state)))
+                changed = [*notes, gate]
+            conn.commit()
+        for note in changed:
+            self.backlog._publish(note)
+        if changed:
+            self.engine.events.publish('programme.updated', {'id': ident, 'revision': state['revision']})
+        return self.snapshot(ident)
+
     def create(self, project, idempotency_key, text, model_profile='auto', source_revision=None, planner_mode='deliberative', planner_routing='local'):
         identifier(project); identifier(idempotency_key)
         if source_revision is not None:
