@@ -14,7 +14,9 @@ export default function useLiveData(path, interval = 5000) {
   const load = async () => { try { const response = await api.get(path); if (active) {setData(response.data);setError('');setUpdated(new Date())} } catch {if (active) setError('Could not load this information. Check the Kingdom connection.')} }
   let pending = false
   const singleLoad = async () => { if (pending) return; pending = true; try {await load()} finally {pending = false} }
-  const stop = startPolling(singleLoad, interval)
+  // null observes once on open and on the shared refresh event, without adding
+  // another timer (hardware status uses the app's existing ten-minute refresh).
+  const stop = interval === null ? (void singleLoad(), () => {}) : startPolling(singleLoad, interval)
   window.addEventListener(REFRESH_EVENT, singleLoad)
   return () => {active = false;stop();window.removeEventListener(REFRESH_EVENT, singleLoad)}
  }, [path, interval])

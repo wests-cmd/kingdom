@@ -5,6 +5,7 @@ import ComputerIdentity from "../components/ComputerIdentity"
 import OrchestrationBoard from '../components/OrchestrationBoard'
 import ComputerTopology from '../components/ComputerTopology'
 import MeshConnections from '../components/MeshConnections'
+import BluetoothStatus from '../components/BluetoothStatus'
 
 export default function Swarm({interfaceMode='easy'}) {
   const [view,setView]=useState('network')
@@ -20,7 +21,7 @@ export default function Swarm({interfaceMode='easy'}) {
       <ComputerIdentity data={hierarchy} error={hierarchyError}/>
       <MeshConnections hierarchy={hierarchy}/>
       <div className="action-row" aria-label="Swarm views"><button aria-pressed={view==='activity'} onClick={()=>setView('activity')}>Activity</button><button aria-pressed={view==='network'} onClick={()=>setView('network')}>Network map</button></div>
-      {view==='network'?<ComputerTopology hierarchy={hierarchy} advanced={interfaceMode==='advanced'} onRefresh={refreshHierarchy}/>:<>
+      {view==='network'?<><ComputerTopology hierarchy={hierarchy} advanced={interfaceMode==='advanced'} onRefresh={refreshHierarchy}/><BluetoothStatus/></>:<>
       <OrchestrationBoard/>
       <h2>Knight Apprentices</h2>
       {error && <p role="alert">{error}</p>}
