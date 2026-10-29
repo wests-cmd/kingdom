@@ -84,3 +84,10 @@ Native failed-verdict tests use fixture signatures and a fixture trust registry
 around the real native job ledger. They test current receipt/patch binding,
 revocation, expiry and cancellation; those signatures do not demonstrate that a
 real external environment ran the fixture patch.
+
+If an external receipt later expires or its reviewer is revoked, Boss records
+the current acceptance as unavailable and holds. It preserves the original
+patch-bound repair note and does not reserve another mission-only note or spend
+another repair slot. Recovery-checkpoint tests reproduce this distinction with
+real signed fixtures and retained `review_required` state. Missing trust is not
+evidence of a newly failed candidate and never authorizes repair execution.

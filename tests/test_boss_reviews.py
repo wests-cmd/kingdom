@@ -265,6 +265,46 @@ def test_new_verdict_for_same_failed_patch_updates_review_without_rewriting_rese
     assert engine.tasks.list() == []
 
 
+@pytest.mark.parametrize('fault', ['receipt_expired', 'reviewer_revoked'])
+@pytest.mark.parametrize('held_checkpoint', [False, True])
+def test_lost_external_receipt_trust_preserves_existing_note_and_budget(runtime, monkeypatch, fault, held_checkpoint):
+    import json
+    engine, backlog, programmes, state, boss, _, payload, registry, _ = external_failure(runtime, monkeypatch)
+    if held_checkpoint:
+        # Seed a retained recovery/review checkpoint at the storage boundary.
+        # Observe reconciliation through Boss, not through its private helpers.
+        work_id = state['sections'][0]['items'][0]['work_id']
+        with backlog.db.get_connection() as conn:
+            row = json.loads(conn.execute('SELECT state_json FROM work_backlog WHERE id=?', (work_id,)).fetchone()[0])
+            row.update(status='review_required', reason='Retained advancement held for recovery review')
+            conn.execute('UPDATE work_backlog SET state_json=? WHERE id=?', (json.dumps(row), work_id))
+            conn.commit()
+    first = boss.review(state['id'])
+    note, = [r for r in backlog.list('kingdom') if r['intent'].get('task_type') == 'repair']
+    if fault == 'receipt_expired':
+        monkeypatch.setattr(engine.jules, 'clock', lambda: payload['expires_at'] + 1)
+    else:
+        registry[payload['reviewer_id']]['enabled'] = False
+    restarted = BossReviews(backlog.db, programmes, backlog, engine)
+    for _ in range(2):
+        result = restarted.review(state['id'])
+        assert result['rows'][0]['failed_acceptance']['state'] == 'acceptance_unavailable'
+        assert result['repair_bindings'] == first['repair_bindings']
+        assert result['release_allowed'] is False
+        assert [r for r in backlog.list('kingdom') if r['intent'].get('task_type') == 'repair'] == [note]
+    assert engine.tasks.list() == []
+
+
+def test_untrusted_external_failure_cannot_reserve_a_repair_slot(runtime, monkeypatch):
+    engine, backlog, _, state, boss, _, payload, registry, _ = external_failure(runtime, monkeypatch)
+    registry[payload['reviewer_id']]['enabled'] = False
+    result = boss.review(state['id'])
+    assert result['rows'][0]['failed_acceptance']['state'] == 'acceptance_unavailable'
+    assert result['repair_bindings'] == {}
+    assert not [r for r in backlog.list('kingdom') if r['intent'].get('task_type') == 'repair']
+    assert not result['release_allowed'] and engine.tasks.list() == []
+
+
 @pytest.mark.parametrize('fault', ['patch_changed', 'receipt_not_consumed', 'reviewer_revoked', 'receipt_expired', 'mission_cancelled'])
 def test_native_failure_feedback_rechecks_current_exact_patch_receipt_and_authority(runtime, monkeypatch, fault):
     engine, backlog, _, _, _, job, payload, registry, _ = external_failure(runtime, monkeypatch)

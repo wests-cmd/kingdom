@@ -60,10 +60,12 @@ class BossReviews:
 
     def review(self, ident):
         programme = self.programmes.snapshot(ident)
-        rows, failures = [], []
+        rows, failures, external_acceptance = [], [], set()
         for row in self.programmes.rows(programme):
             mission = self.engine.missions.get(row['mission_id']) if row.get('mission_id') else None
             steps = mission['plan']['steps'] if mission else []
+            if any(s['id'] == row.get('acceptance_step') and s['kind'] == 'independent_review' for s in steps):
+                external_acceptance.add(row['key'])
             entry = {
                 'key': row['key'], 'work_id': row['work_id'], 'title': row['title'],
                 'status': row['work_status'], 'reason': row.get('reason'),
@@ -95,6 +97,12 @@ class BossReviews:
         # Reserve each failed exact mission once before creating its planning note.
         # The note itself uses a deterministic key, so a restart cannot duplicate it.
         for row in failures:
+            if (row['key'] in external_acceptance
+                    and (row['failed_acceptance'] or {}).get('state') != 'external_test_failed'):
+                # Missing/expired/revoked evidence is a hold, not a newly proven
+                # failed candidate. Keep prior exact notes without spending a
+                # second mission-only repair slot when current trust is lost.
+                continue
             binding = self._repair_binding(row)
             if binding not in seen and len(seen) < 3:
                 seen[binding] = len(seen) + 1
