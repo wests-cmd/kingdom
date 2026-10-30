@@ -41,6 +41,11 @@ settings revision. These limits do not reset exhausted planning/execution budget
 The account's own eligibility, quotas and provider availability still apply.
 There is no automatic paid API-key fallback.
 
+A retained helper proposal requires explicit review. It cannot inherit standing
+authorization for a local four-stage deliberation merely because the failed
+local attempt left stage records behind. Those records remain diagnostic
+evidence and do not attest the helper's replacement proposal.
+
 **Pause backlog help** stops new automatic help sends. **Cancel this question**
 fences its worker. Cancellation before the final provider-send check prevents
 delivery; cancellation after transmission cannot retract information already

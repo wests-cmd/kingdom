@@ -58,6 +58,26 @@ def test_no_standing_scope_leaves_owner_review_required(runtime,monkeypatch):
     assert engine.missions.list()==[]
 
 
+def test_retained_help_cannot_inherit_standing_local_deliberation(runtime,monkeypatch):
+    engine,_,service,state,proposal=setup(runtime,monkeypatch)
+    service.configure_standing_review(state['id'],scope(),state['revision'])
+    state=service.get(state['id'])
+    row=state['sections'][0]['items'][0]
+    # A failed local synthesis can leave all four stage records in place.
+    # A later helper proposal is different evidence, even within the same scope.
+    row.update(planning='blocked',planning_attempts=3)
+    service._save(state,state['revision'])
+    request=asyncio.run(service.planning_help_request(state['id'],row['key']))
+    state=service.apply_help_response(state['id'],row['key'],
+        json.dumps({'plan':proposal,'acceptance_step':'check'}),request['context_revision'],'retained-help')
+    asyncio.run(service.tick())
+    current=service.get(state['id'])['sections'][0]['items'][0]
+    assert current['planning']=='needs_review'
+    assert current.get('standing_review_denial')
+    assert current['planning_attempts']==3
+    assert engine.missions.list()==[] and engine.tasks.list()==[]
+
+
 @pytest.mark.parametrize('change',['outside_path','command','unknown_cases','cloud'])
 def test_standing_review_rejects_scope_expansion(runtime,monkeypatch,change):
     engine,_,service,state,_=setup(runtime,monkeypatch)
