@@ -10,7 +10,7 @@ class HeartbeatManager:
     def __init__(self, timeout_seconds: float = DEFAULT_TIMEOUT_THRESHOLD_SECONDS):
         self.timeout_seconds = timeout_seconds
 
-    def ping(self, node_id: str, health: str = "healthy", load_metrics: Optional[Dict[str, Any]] = None, apprentice_inventory=None) -> Dict[str, Any]:
+    def ping(self, node_id: str, health: str = "healthy", load_metrics: Optional[Dict[str, Any]] = None, apprentice_inventory=None, native_analysis_return=None) -> Dict[str, Any]:
         node = node_registry.get_node(node_id)
         if not node:
             return {"success": False, "error": f"Node {node_id} not found in cluster registry."}
@@ -20,6 +20,11 @@ class HeartbeatManager:
             return {"success": False, "error": f"Node {node_id} is in invalid state {state_val}."}
 
         now = time.time()
+        if native_analysis_return is not None:
+            if type(native_analysis_return) is not bool:
+                raise ValueError('Native analysis return support must be an explicit boolean')
+            node.connection_metadata = {**(getattr(node, 'connection_metadata', None) or {}),
+                                        'native_analysis_return': native_analysis_return}
         if apprentice_inventory is not None:
             if state_val not in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}:
                 return {'success': False, 'error': 'Apprentice inventories require an approved peer'}

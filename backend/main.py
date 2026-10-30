@@ -15,6 +15,8 @@ async def lifespan(_app):
         await engine.start(persist=False)
     await schedule_runner.start()
     await programme_runner.start()
+    await consultation_runner.start()
+    await boss_runner.start()
     await backlog_runner.start()
     await problem_runner.start()
     await jules_runner.start()
@@ -27,6 +29,8 @@ async def lifespan(_app):
         await peer_connections.stop()
         await jules_runner.stop()
         await problem_runner.stop()
+        await boss_runner.stop()
+        await consultation_runner.stop()
         await programme_runner.stop()
         await backlog_runner.stop()
         await schedule_runner.stop()
@@ -132,6 +136,12 @@ from backend.runtime.work_programme_api import router as programme_router, servi
 from backend.runtime.work_programme_runner import WorkProgrammeRunner
 app.include_router(programme_router)
 programme_runner = WorkProgrammeRunner(programme_service, engine.events.publish)
+from backend.models.chatgpt_plan_api import router as chatgpt_plan_router
+from backend.runtime.consultation_api import router as assistance_router, service as assistance_service
+from backend.runtime.consultation_runner import ConsultationRunner
+app.include_router(chatgpt_plan_router)
+app.include_router(assistance_router)
+consultation_runner = ConsultationRunner(assistance_service, engine.events.publish)
 from backend.runtime.problem_api import router as problem_router,service as problem_service
 from backend.runtime.problem_bot import ProblemBotRunner
 app.include_router(problem_router)
@@ -139,6 +149,9 @@ problem_runner=ProblemBotRunner(problem_service,engine.events.publish)
 from backend.integrations.jules_api import service as jules_service
 from backend.integrations.jules_runner import JulesRunner
 jules_runner = JulesRunner(jules_service, engine.events.publish)
+from backend.runtime.boss_review_api import router as boss_router, service as boss_service
+app.include_router(boss_router)
+boss_runner = WorkProgrammeRunner(boss_service, engine.events.publish, name='boss')
 
 
 # Serve built frontend static assets if available

@@ -802,6 +802,39 @@ class JulesService:
         if proof['issued_at']<state['created_at']:raise ValueError('Independent failure predates this job')
         return proof
 
+    def failure_feedback(self, job_id):
+        """Read a current consumed failed verdict, without dispatch or authority.
+
+        Keep commands, provider prose and signing material out of planning notes.
+        Reuse the same current scope/signature gate as native repair dispatch.
+        """
+        with self._lock, self.db.get_connection() as conn:
+            state = self.get_job(job_id)
+            if not state.get('repair_attestation'):
+                return None
+            if state['phase'] not in {'review_required', 'repair_queued', 'repair_sending',
+                                      'repair_submission_unknown', 'watching', 'awaiting_independent_review'}:
+                raise ValueError('A current failed candidate is not awaiting review or repair')
+            candidate = state.get('candidate') or {}
+            if candidate.get('base_revision') != state['revision'] or state.get('accepted') is not False:
+                raise ValueError('Current failed source binding is unavailable')
+            proof = self._failed_review(conn, state, state['repair_attestation'])
+            if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='jules_failed_receipts'").fetchone():
+                raise ValueError('Consumed independent failure is unavailable')
+            retained = conn.execute('SELECT job_id,payload_json FROM jules_failed_receipts WHERE receipt_id=?',
+                                    (proof['receipt_id'],)).fetchone()
+            if not retained or retained[0] != job_id or json.loads(retained[1]) != proof or state.get('repair_verdict') != proof:
+                raise ValueError('Independent failure was not consumed for this exact job')
+            patch = conn.execute('SELECT patch FROM jules_candidate_patches WHERE job_id=?', (job_id,)).fetchone()
+            if not patch or hashlib.sha256(patch[0].encode()).hexdigest() != candidate.get('patch_sha256'):
+                raise ValueError('Retained failed patch is unavailable or changed')
+            return {'state': 'external_test_failed', 'tests_passed': False,
+                    'job_id': job_id, 'job_phase': state['phase'], 'receipt_id': proof['receipt_id'],
+                    'reviewer_id': proof['reviewer_id'], 'binding': proof['binding'],
+                    'execution': {key: proof['execution'].get(key, [] if key == 'diagnostics' else None)
+                                  for key in ('test_count', 'failed_count', 'exit_code', 'diagnostics')},
+                    'scope': 'Current consumed independently signed failed exact-patch verdict; no repair execution or publication authority'}
+
     def review_material(self,job_id):
         """Owner-only export of the retained provider artifact and current binding.
 

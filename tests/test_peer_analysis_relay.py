@@ -117,7 +117,11 @@ def test_poll_skips_unsupported_job_before_leasing_and_selects_later_analysis(mo
     from backend.runtime.tasks import TaskManager
     from backend.storage.repository import TaskRepository
     from backend.storage.db import Database
-    manager=TaskManager(TaskRepository(Database(tmp_path/'queue.db')))
+    database=Database(tmp_path/'queue.db')
+    manager=TaskManager(TaskRepository(database))
+    from backend.cluster.task_leasing import TaskLeaseManager
+    leases=TaskLeaseManager(database=database)
+    monkeypatch.setattr(api,'task_lease_manager',leases)
     unsupported=manager.create('Not for this worker',{'tool':'process.run@1.0.0',
         'execution_target':'remote','assigned_knight':'worker','capability':'compute'})
     supported=manager.create('Source',{'tool':'code.python.analyze@1.0.0',
@@ -128,7 +132,7 @@ def test_poll_skips_unsupported_job_before_leasing_and_selects_later_analysis(mo
     claimed=[]
     def dispatch(ident,*args):
         claimed.append(ident)
-        return manager.transition_task(ident,'leased',{'lease_id':'exact-lease','fencing_token':1})
+        return manager.claim_remote_atomically(ident,'worker','compute',leases)
     monkeypatch.setattr(api.engine,'dispatch_remote_task',dispatch)
     monkeypatch.setattr(api.RPCSecureTransport,'verify_and_unwrap_message',lambda *a,**kw:{
         'valid':True,'sender_id':'worker','msg_type':'task_poll','payload':{

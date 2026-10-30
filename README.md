@@ -85,6 +85,11 @@ frontend development can use `VITE_API_URL` for an explicitly selected backend.
 Provider selection, existing grants and autonomy are separate controls.
 [Operations and configuration](docs/OPERATIONS.md).
 
+Source also includes opt-in [planning help and retained lessons](docs/PLANNING_HELP.md):
+verified local reuse, optional owner-connected ChatGPT advice, and selected local
+training exports. It starts disabled and does not establish an installed fleet
+update or a complete autonomous coding-and-release loop.
+
 ## Verification
 
 Documentation navigation: `python scripts/check_docs.py` (Python 3 standard library). CI checks the same local targets and required README sections; it does not check external URLs or prove runtime completion.

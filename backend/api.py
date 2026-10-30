@@ -968,14 +968,15 @@ def handle_cluster_rpc(request: RPCMessageRequest):
             if 'power' in metrics:
                 from backend.cluster.power_policy import validate_power
                 measured['power']=validate_power(metrics['power'])
-            res = heartbeat_manager.ping(sender_id, load_metrics=measured, apprentice_inventory=payload.get('apprentice_inventory'))
+            res = heartbeat_manager.ping(sender_id, load_metrics=measured, apprentice_inventory=payload.get('apprentice_inventory'),
+                                         native_analysis_return=payload.get('native_analysis_return') is True)
         except ValueError as error: raise HTTPException(400, str(error)) from error
         if not res.get('success'): raise HTTPException(403, res.get('error', 'Peer report denied'))
         result = {"status": "ok", "ping": res}
         if msg_type == 'heartbeat':
             from backend.cluster.apprentice_inventory import local_inventory
             from backend.cluster.local_load import local_load_metrics
-            result['inventory_proof'] = transport.create_signed_message(sender_id, 'inventory_snapshot', {'node_id': k_identity.node_id, 'request_id': msg_dict['msg_id'], 'apprentice_inventory': local_inventory(), 'load_metrics': local_load_metrics()})
+            result['inventory_proof'] = transport.create_signed_message(sender_id, 'inventory_snapshot', {'node_id': k_identity.node_id, 'request_id': msg_dict['msg_id'], 'apprentice_inventory': local_inventory(), 'load_metrics': local_load_metrics(), 'native_analysis_return': True})
         return result
 
     elif msg_type == 'group_task_assign':
@@ -990,6 +991,17 @@ def handle_cluster_rpc(request: RPCMessageRequest):
         updated = engine.tasks.transition_task(task['id'], 'queued', {'assigned_knight': payload['target_node'],
             'metadata': {**task['metadata'], 'execution_target': 'remote'}})
         return {'status': 'ok', 'task_id': updated['id']}
+
+    elif msg_type == 'native_analysis_execute':
+        from backend.cluster.federation_api import configured_analysis_worker
+        from backend.cluster.peer_analysis_return import AnalysisReturn
+        try:
+            result = AnalysisReturn(configured_analysis_worker()).receive(sender_id, payload)
+        except PermissionError as error:
+            raise HTTPException(403, 'Native analysis is held by current authority, capacity or lease') from error
+        except (ValueError, KeyError, TypeError) as error:
+            raise HTTPException(400, 'Invalid bounded native analysis offer') from error
+        return transport.create_signed_message(sender_id, 'task_result', {**result, 'request_id': msg_dict['msg_id']})
 
     elif msg_type == "task_poll":
         if payload.get('require_running') is True and not engine.status()['running']:
@@ -1019,7 +1031,10 @@ def handle_cluster_rpc(request: RPCMessageRequest):
                 if claimed:
                     assigned_tasks.append(claimed)
                     break
-        return {"status": "ok", "tasks": assigned_tasks}
+        result = {"status": "ok", "tasks": assigned_tasks}
+        if assigned_tasks and supported_tools is not None:
+            result['analysis_lease'] = task_lease_manager.leases[assigned_tasks[0]['id']].model_dump()
+        return result
 
     elif msg_type == "task_result":
         with engine.dispatch_lock:

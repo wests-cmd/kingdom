@@ -176,13 +176,42 @@ def test_parallel_signed_https_paths_reuse_current_mesh_ca_and_reject_wrong_ca(s
     other_ca, _ = private_ca(tmp_path,'unrelated')
     configured = {'ca_pem': ca}
     monkeypatch.setattr(mesh_api,'membership',lambda:SimpleNamespace(config=lambda:dict(configured)))
+    # Keep diagnostic output bounded and free of URLs, response bodies or keys.
+    # Distinguish certificate rejection, I/O failure and total-budget cancellation
+    # before changing either the production deadline or this concurrency fixture.
+    io_failures = []
+    exchange = service._json
+
+    async def observed_exchange(client, method, url, payload=None):
+        started = time.monotonic()
+        try:
+            return await exchange(client, method, url, payload)
+        except BaseException as error:
+            chain, seen = [], set()
+            current = error
+            while current is not None and id(current) not in seen and len(chain) < 4:
+                seen.add(id(current))
+                entry = {'type': type(current).__name__[:64]}
+                if isinstance(current, ssl.SSLCertVerificationError):
+                    entry['verify_code'] = current.verify_code
+                chain.append(entry)
+                current = current.__cause__ or current.__context__
+            io_failures.append({'method': method, 'exceptions': chain,
+                                'elapsed_ms': round((time.monotonic()-started)*1000)})
+            raise
+
+    monkeypatch.setattr(service, '_json', observed_exchange)
     barrier = threading.Barrier(2)
     with peer_server(remote,barrier=barrier,tls=server_context) as first, peer_server(remote,barrier=barrier,tls=server_context) as second:
         config(service,remote,[first[0],second[0]])
         async def parallel():
             return await asyncio.gather(service.probe(remote.node_id,'tls-a','wifi'),service.probe(remote.node_id,'tls-b','pan'))
+        started = time.monotonic()
         results=asyncio.run(parallel())
-        assert all(r['status']=='verified_control_exchange' for r in results)
+        assert all(r['status']=='verified_control_exchange' for r in results), {
+            'statuses': [r['status'] for r in results], 'io_failures': io_failures,
+            'server_counts': [first[1], second[1]], 'barrier_broken': barrier.broken,
+            'elapsed_ms': round((time.monotonic()-started)*1000)}
         assert first[1]['verified']==second[1]['verified']==1
         configured['ca_pem']=other_ca
         rejected=asyncio.run(service.probe(remote.node_id,'wrong-ca','wifi'))
