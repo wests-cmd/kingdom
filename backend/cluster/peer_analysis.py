@@ -62,6 +62,20 @@ class PeerAnalysis:
             if not tasks:return {'status':'idle'}
             task=tasks[0];validate(task,self.identity.node_id)
             if not self.allowed(peer_id):return {'status':'held'}
+            if reply.get('analysis_lease') is not None:
+                # Updated peers share one durable execution claim whether work
+                # arrives by worker polling or controller-initiated exchange.
+                from backend.cluster.peer_analysis_return import AnalysisReturn
+                payload = await asyncio.to_thread(AnalysisReturn(self).receive, peer_id,
+                    {'task': task, 'lease': reply['analysis_lease']})
+                result = await send('task_result', payload)
+                completed = result.get('completed', {})
+                if payload['status'] == 'completed' and (
+                        completed.get('id') != task['id'] or completed.get('status') != 'completed'
+                        or (completed.get('result') or {}).get('executed_by') != self.identity.node_id
+                        or (completed.get('result') or {}).get('verification', {}).get('state') != 'VERIFIED'):
+                    raise ValueError('Controller did not independently verify the result')
+                return {'status': 'verified' if payload['status'] == 'completed' else 'failed', 'task_id': task['id']}
             key=hashlib.sha256(json.dumps([peer_id,task['id'],task['lease_id'],task['fencing_token']]).encode()).hexdigest()
             digest=hashlib.sha256(json.dumps(task,sort_keys=True).encode()).hexdigest()
             with self.db.get_connection() as conn:

@@ -57,7 +57,7 @@ def test_signed_power_survives_to_heartbeat_manager(signed_rpc, msg_type, power)
     metrics = {'cpu_percent': 27.5, 'memory_percent': 41, 'power': power}
     assert receive(sign(metrics, msg_type))['status'] == 'ok'
     ping.assert_called_once_with(sender_id, load_metrics=metrics,
-                                apprentice_inventory={'version': 1, 'apprentices': []})
+                                apprentice_inventory={'version': 1, 'apprentices': []}, native_analysis_return=False)
 
 
 @pytest.mark.parametrize('power', [None, [], {},
