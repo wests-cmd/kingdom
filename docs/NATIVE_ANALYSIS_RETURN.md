@@ -44,6 +44,17 @@ Concurrent or interrupted worker execution stays held, with no automatic replay
 of an unresolved claim. Lease expiry/reassignment remains the controller's
 existing recovery responsibility.
 
+Admission, queue selection, the exact lease snapshot and independent acceptance
+run in background threads so storage contention or analysis verification does
+not stop unrelated heartbeats. Cancelling a dispatcher cannot kill a thread in
+the middle of a lease claim or acceptance commit. Its per-worker lock remains
+held until that already-started operation returns; cancellation then propagates.
+A cancelled preparation never sends its offer. An acceptance already in progress
+may still commit its independently valid result; retries observe durable task
+state rather than executing it again. Shutdown may therefore wait for the
+in-progress synchronous operation to drain instead of claiming an immediate
+thread abort.
+
 The worker retains at most 1,000 task claim/high-water records. A full ledger
 holds new work for retention review rather than dropping replay evidence.
 An old worker version did not maintain the new in-flight claim: drain legacy
@@ -63,6 +74,9 @@ retry still completes. Negative cases cover grant revocation, expired/revoked
 leases, changed task inputs, restricted tools, signature tampering and worker
 interruption. Identity routing and local load are test plumbing; these tests do
 not prove physical DT1/Laptop 2 deployment or Bluetooth transport.
+Responsiveness regressions also hold a real SQLite exclusive lock and delay the
+acceptance seam while an independent asynchronous ticker continues. Cancellation
+tests cover both stages without detached claims or duplicate execution.
 
 Installed source, both signed feature reports and one independently verified
 physical task are separate rollout gates. No routes, tunnels, grants, pairing or

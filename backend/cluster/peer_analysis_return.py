@@ -4,6 +4,7 @@ No reverse worker connection, shell, model, enrollment or new grant is required.
 An interrupted worker claim is held, never silently executed a second time.
 """
 import hashlib
+import asyncio
 import json
 import math
 import time
@@ -87,15 +88,13 @@ class AnalysisReturn:
         return payload
 
 
-async def dispatch_one(worker, peer_id, engine, leases, accept_result):
-    """One authorized analysis offer; retry only the exact still-active lease."""
-    if not worker.allowed(peer_id) or not engine.status()['running'] or engine.execution_policy.get()['level'] == 0:
-        return {'status': 'held'}
-    if (worker.registry.get_node(peer_id).connection_metadata or {}).get('native_analysis_return') is not True:
-        return {'status': 'idle'}  # Older peers retain their existing worker-poll path.
-    if worker.lock.locked():
-        return {'status': 'held'}
-    async with worker.lock:
+def _prepare_offer(worker, peer_id, engine, leases):
+    """Synchronous admission/claim snapshot; runs outside the heartbeat loop."""
+    with engine.dispatch_lock:
+        if not worker.allowed(peer_id) or not engine.status()['running'] or engine.execution_policy.get()['level'] == 0:
+            return {'status': 'held'}
+        if (worker.registry.get_node(peer_id).connection_metadata or {}).get('native_analysis_return') is not True:
+            return {'status': 'idle'}  # Older peers retain their existing worker-poll path.
         selected = None
         # Recover a lost response before selecting another task for this worker.
         for task in engine.tasks.list('leased') + engine.tasks.list('queued'):
@@ -124,6 +123,43 @@ async def dispatch_one(worker, peer_id, engine, leases, accept_result):
         transport = RPCSecureTransport(worker.identity)
         message = transport.create_signed_message(peer_id, 'native_analysis_execute', {
             'task': selected, 'lease': leases.leases[selected['id']].model_dump()})
+        return {'task': selected, 'message': message}
+
+
+async def _critical_thread(operation, *args):
+    """Do not release the worker lock while cancelled synchronous work still runs.
+
+    Thread cancellation cannot interrupt a SQLite claim or acceptance commit.
+    Drain that already-started bounded operation, consume its outcome, and then
+    propagate cancellation. In particular, a prepared offer is never sent after
+    its awaiting dispatcher was cancelled.
+    """
+    pending = asyncio.create_task(asyncio.to_thread(operation, *args))
+    try:
+        return await asyncio.shield(pending)
+    except asyncio.CancelledError:
+        while not pending.done():
+            try:
+                await asyncio.shield(pending)
+            except asyncio.CancelledError:
+                continue
+            except Exception:
+                break
+        if pending.done() and not pending.cancelled():
+            # Retrieve failures without changing the caller's cancellation.
+            pending.exception()
+        raise
+
+
+async def dispatch_one(worker, peer_id, engine, leases, accept_result):
+    """One authorized analysis offer; retry only the exact still-active lease."""
+    if worker.lock.locked():
+        return {'status': 'held'}
+    async with worker.lock:
+        prepared = await _critical_thread(_prepare_offer, worker, peer_id, engine, leases)
+        if 'status' in prepared:
+            return prepared
+        selected, message = prepared['task'], prepared['message']
         reply = await worker.exchange(peer_id, message)
         result = reply.get('payload', {}) if isinstance(reply, dict) else {}
         if (not isinstance(reply, dict) or reply.get('sender_id') != peer_id
@@ -135,7 +171,7 @@ async def dispatch_one(worker, peer_id, engine, leases, accept_result):
             raise ValueError('Peer did not return a correlated signed analysis result')
         # The normal RPC handler verifies the signature, active lease and current
         # grant, then independently recomputes analysis. Never accept its claim here.
-        accepted = accept_result(reply)
+        accepted = await _critical_thread(accept_result, reply)
         completed = accepted.get('completed')
         if completed:
             return {'status': 'verified', 'task_id': completed['id']}

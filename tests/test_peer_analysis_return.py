@@ -1,5 +1,7 @@
 """Same-connection native analysis; real computation, leases and signed RPCs."""
 import asyncio
+import threading
+import time
 from types import SimpleNamespace
 from copy import deepcopy
 import pytest
@@ -12,6 +14,135 @@ from backend.cluster.task_leasing import TaskLeaseManager
 from backend.storage.db import Database
 from backend.storage.repository import TaskRepository
 from backend.runtime.tasks import TaskManager
+
+
+def responsive_pair(offered):
+    native_worker, _, offer = offered
+    database = Database(native_worker.db.db_path.parent/'controller.db')
+    tasks, leases = TaskManager(TaskRepository(database)), TaskLeaseManager(database=database)
+    node = NodeInfo('worker', fingerprint=native_worker.identity.fingerprint,
+        public_identity=native_worker.identity.get_public_identity(), granted_capabilities=['compute'],
+        connection_metadata={'native_analysis_return': True})
+    calls = []
+
+    async def exchange(peer, message):
+        calls.append(message)
+        result = AnalysisReturn(native_worker).receive('controller', message['payload'])
+        return RPCSecureTransport(native_worker.identity).create_signed_message('controller', 'task_result',
+            {**result, 'request_id': message['msg_id']})
+
+    from backend.cluster.transport import RPCSecureTransport
+    controller = PeerAnalysis(database, SimpleNamespace(get_node=lambda _: node),
+        KingdomIdentity('controller'), lambda: True, exchange, lambda *a: None)
+    engine = SimpleNamespace(tasks=tasks, status=lambda: {'running': True}, dispatch_lock=threading.RLock(),
+        execution_policy=SimpleNamespace(get=lambda: {'level': 5}),
+        dispatch_remote_task=lambda ident, peer, cap, manager: tasks.claim_remote_atomically(ident, peer, cap, manager))
+
+    def accept(proof):
+        from backend.runtime.execution import verify_request_result
+        payload = proof['payload']
+        selected = tasks.get(payload['task_id'])
+        leases.validate_lease_execution(selected['id'], 'worker', payload['fencing_token'])
+        verified = verify_request_result(selected, payload['output'], allow_local_model=False)
+        completed = tasks.complete(selected['id'], {'output': payload['output'], 'verification': verified, 'executed_by': 'worker'})
+        leases.revoke_lease(selected['id'])
+        return {'completed': completed}
+
+    return database, controller, engine, leases, accept, calls, offer
+
+
+@pytest.mark.parametrize('delay', ['sqlite', 'acceptance'])
+def test_slow_sqlite_and_acceptance_leave_heartbeat_loop_responsive(offered, delay):
+    database, controller, engine, leases, accept, _, _ = responsive_pair(offered)
+    locked = threading.Event()
+    threads = []
+    if delay == 'sqlite':
+        def busy_database():
+            with database.get_connection() as conn:
+                conn.execute('BEGIN EXCLUSIVE')
+                locked.set()
+                time.sleep(.35)
+        thread = threading.Thread(target=busy_database)
+        thread.start(); threads.append(thread)
+        assert locked.wait(2)
+    else:
+        original = accept
+        def accept(proof):
+            time.sleep(.35)
+            return original(proof)
+
+    async def observe():
+        beats = 0
+        pending = asyncio.create_task(dispatch_one(controller, 'worker', engine, leases, accept))
+        while not pending.done():
+            await asyncio.sleep(.01)
+            beats += 1
+        result = await pending
+        return result, beats
+    try:
+        result, beats = asyncio.run(observe())
+        assert result['status'] == 'verified'
+        assert beats >= 8, 'Slow storage/verification blocked unrelated heartbeat ticks'
+    finally:
+        for thread in threads: thread.join(2)
+
+
+def test_cancelling_blocked_selection_retains_lease_without_sending_or_detaching_claim(offered):
+    database, controller, engine, leases, accept, calls, offer = responsive_pair(offered)
+    locked = threading.Event()
+    def busy_database():
+        with database.get_connection() as conn:
+            conn.execute('BEGIN EXCLUSIVE')
+            locked.set()
+            time.sleep(.35)
+    thread = threading.Thread(target=busy_database)
+    thread.start()
+    assert locked.wait(2)
+
+    async def cancel_then_retry():
+        pending = asyncio.create_task(dispatch_one(controller, 'worker', engine, leases, accept))
+        await asyncio.sleep(.05)
+        pending.cancel()
+        await asyncio.sleep(.02)
+        assert controller.lock.locked(), 'Cancelled dispatcher released a still-running claim'
+        assert (await dispatch_one(controller, 'worker', engine, leases, accept))['status'] == 'held'
+        assert calls == []
+        with pytest.raises(asyncio.CancelledError):
+            await pending
+        assert calls == []
+        retained = engine.tasks.get(offer['task']['id'])
+        assert retained['status'] == 'leased' and retained['lease_id'] == offer['task']['lease_id']
+        return await dispatch_one(controller, 'worker', engine, leases, accept)
+    try:
+        assert asyncio.run(cancel_then_retry())['status'] == 'verified'
+        assert len(calls) == 1
+    finally:
+        thread.join(2)
+
+
+def test_cancelling_acceptance_waits_for_commit_and_does_not_reexecute(offered, monkeypatch):
+    _, controller, engine, leases, accept, calls, offer = responsive_pair(offered)
+    started = threading.Event()
+    def slow_accept(proof):
+        started.set()
+        time.sleep(.25)
+        return accept(proof)
+
+    async def cancel_after_acceptance_starts():
+        pending = asyncio.create_task(dispatch_one(controller, 'worker', engine, leases, slow_accept))
+        while not started.is_set():
+            await asyncio.sleep(.005)
+        pending.cancel()
+        await asyncio.sleep(.02)
+        assert controller.lock.locked()
+        assert (await dispatch_one(controller, 'worker', engine, leases, accept))['status'] == 'held'
+        with pytest.raises(asyncio.CancelledError):
+            await pending
+        assert engine.tasks.get(offer['task']['id'])['status'] == 'completed'
+        monkeypatch.setattr('backend.runtime.execution.execute_request', lambda *a: pytest.fail('Duplicate execution'))
+        assert (await dispatch_one(controller, 'worker', engine, leases, accept))['status'] == 'idle'
+    asyncio.run(cancel_after_acceptance_starts())
+    assert len(calls) == 1
 
 
 @pytest.fixture
