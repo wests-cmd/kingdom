@@ -16,6 +16,7 @@ async def lifespan(_app):
     await schedule_runner.start()
     await programme_runner.start()
     await consultation_runner.start()
+    await boss_runner.start()
     await backlog_runner.start()
     await problem_runner.start()
     await jules_runner.start()
@@ -28,6 +29,7 @@ async def lifespan(_app):
         await peer_connections.stop()
         await jules_runner.stop()
         await problem_runner.stop()
+        await boss_runner.stop()
         await consultation_runner.stop()
         await programme_runner.stop()
         await backlog_runner.stop()
@@ -147,6 +149,9 @@ problem_runner=ProblemBotRunner(problem_service,engine.events.publish)
 from backend.integrations.jules_api import service as jules_service
 from backend.integrations.jules_runner import JulesRunner
 jules_runner = JulesRunner(jules_service, engine.events.publish)
+from backend.runtime.boss_review_api import router as boss_router, service as boss_service
+app.include_router(boss_router)
+boss_runner = WorkProgrammeRunner(boss_service, engine.events.publish, name='boss')
 
 
 # Serve built frontend static assets if available
