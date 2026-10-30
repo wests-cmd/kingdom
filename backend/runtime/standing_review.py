@@ -49,6 +49,8 @@ def review_function_plan(programme,row,profile):
     from backend.runtime.bounded_function_tests import PROFILE,profile_hash
     from backend.runtime.computer_tools import workspace_path
     from backend.runtime.missions import MissionPlan,validate_plan
+    if row.get('consultation_id'):
+        raise StandingReviewError('Retained help requires explicit review; prior local stages do not attest this proposal')
     saved=programme.get('standing_review',{})
     scope=validate_scope(saved['scope'])
     if not scope['enabled'] or programme.get('planner_mode')!='deliberative' or programme.get('planner_routing')!='local':
