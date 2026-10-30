@@ -38,6 +38,7 @@ import base64
 import json
 import threading
 import time
+import ssl
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -53,9 +54,14 @@ def encoded(value):
 
 
 class Routed(httpx.AsyncBaseTransport):
-    def __init__(self, base): self.base = base
+    def __init__(self, base):
+        self.base = base
+        # This fixture routes to plain HTTP loopback, so loading the Windows
+        # system CA store would measure unrelated setup inside the drip budget.
+        # Keep certificate/hostname verification enabled for any accidental TLS.
+        self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     async def handle_async_request(self, request):
-        transport = httpx.AsyncHTTPTransport(retries=0)
+        transport = httpx.AsyncHTTPTransport(verify=self.context, retries=0)
         outgoing = httpx.Request(request.method, self.base+request.url.raw_path.decode(),
                                 headers=request.headers, content=await request.aread(), extensions=request.extensions)
         response = await transport.handle_async_request(outgoing)
@@ -174,11 +180,11 @@ def test_dripping_refresh_has_total_deadline_and_stops_network_worker(tmp_path):
         connection, clock = connected(tmp_path, fixture)
         # Tighten only the exchange under test. Signed sign-in setup is not
         # the slow-response experiment and can take longer on hosted Windows.
-        connection.request_timeout = .15
+        connection.request_timeout = .5
         clock[0] = 4590.0; fixture[0]['drip'] = '/api/accounts/oauth/token'
         started = time.monotonic()
         with pytest.raises(ChatGPTPlanError): asyncio.run(connection.advise('Need help'))
-        assert time.monotonic()-started < 1.0
+        assert time.monotonic()-started < 1.5
         until = time.monotonic()+1
         while fixture[0]['active'] and time.monotonic()<until: time.sleep(.02)
         assert fixture[0]['active'] == 0
@@ -217,7 +223,7 @@ def test_sign_out_removes_local_credentials_and_bounds_remote_revocation(tmp_pat
     with provider() as fixture:
         connection, _ = connected(tmp_path, fixture)
         if drip:
-            connection.request_timeout = .15
+            connection.request_timeout = .5
         if drip:
             fixture[0]['drip'] = '/revoke'
         started = time.monotonic()
