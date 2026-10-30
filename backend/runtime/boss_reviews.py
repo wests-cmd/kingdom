@@ -25,6 +25,36 @@ class BossReviews:
             row = conn.execute('SELECT state_json FROM boss_reviews WHERE id=?', (ident,)).fetchone()
         return json.loads(row[0]) if row else None
 
+    def _reconcile_repair_note(self, project, key, note):
+        """Retain note provenance while its separately reviewed mission evolves.
+
+        Registration compares the entire initial intent. A legitimate later
+        attachment changes its mission fields, so registering it again would
+        reject the very repair workflow this note is intended to initiate.
+        The ledger's original project/key and immutable note content still have
+        to match; this read never changes a binding, status, enablement or grant.
+        """
+        with self.db.get_connection() as conn:
+            retained = conn.execute('SELECT id,state_json FROM work_backlog WHERE project=? AND idem=?',
+                                    (project, key)).fetchone()
+        if retained is None:
+            return self.backlog.register(project, key, title=note['title'],
+                description=note['description'], priority=95, task_type='repair')
+        saved = json.loads(retained[1])
+        expected = {'depends_on': [], 'title': note['title'], 'description': note['description'],
+                    'priority': 95, 'task_type': 'repair'}
+        binding_keys = {'mission_id', 'mission_version', 'acceptance_step'}
+        intent = saved.get('intent', {})
+        if (saved.get('id') != retained[0] or saved.get('project') != project
+                or set(intent) != set(expected) | binding_keys
+                or any(intent.get(k) != v for k, v in expected.items())
+                or any(saved.get(k) != expected[k] for k in ('title', 'description', 'priority'))):
+            raise ValueError('Reserved repair note provenance changed; review required')
+        bound = [intent[k] is not None for k in binding_keys]
+        if any(bound) and not all(bound):
+            raise ValueError('Reserved repair note has an incomplete mission binding')
+        return saved
+
     @staticmethod
     def _repair_binding(row):
         binding = f"{row['key']}:{row['mission_id']}:{row['mission_version']}"
@@ -147,9 +177,7 @@ class BossReviews:
             if note is None:
                 continue
             key = 'boss-repair-' + hashlib.sha256((ident + binding).encode()).hexdigest()[:48]
-            self.backlog.register(programme['project'], key,
-                title=note['title'], description=note['description'],
-                priority=95, task_type='repair')
+            self._reconcile_repair_note(programme['project'], key, note)
         return state
 
     async def tick(self):

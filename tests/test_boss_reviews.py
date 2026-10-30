@@ -124,6 +124,78 @@ def test_crash_after_reservation_reconciles_disabled_note_without_reexecution(ru
     assert len(engine.tasks.list()) == 1
 
 
+@pytest.mark.parametrize('adopted', [False, True])
+def test_review_preserves_repair_note_after_reviewed_mission_attachment(runtime, adopted):
+    engine, backlog, programmes, programme, boss = setup(runtime)
+    bind(programmes, programme)
+    task = advance(engine, backlog)
+    Path(task['result']['results'][0]['outcome']['artifact']).unlink()
+    first = boss.review(programme['id'])
+    note, = [r for r in backlog.list('kingdom') if r['intent'].get('task_type') == 'repair']
+    if adopted:
+        repair = programmes.adopt('kingdom', 'adopt-boss-repair',
+            [{'work_id': note['id'], 'expected_revision': note['revision']}],
+            title='Reviewed repair', source_revision='a'*40)
+        repair = bind(programmes, repair)
+        assert repair['sections'][0]['items'][0]['work_id'] == note['id']
+    else:
+        mission = engine.missions.create(plan())
+        engine.missions.approve(mission['id'], mission['version'])
+        backlog.attach('kingdom', note['id'], mission['id'], mission['version'], 'suite', note['revision'])
+    attached = backlog.get('kingdom', note['id'])
+    assert attached['intent']['mission_id'] is not None
+    restored = BossReviews(backlog.db, programmes, backlog, engine)
+    for _ in range(2):
+        result = restored.review(programme['id'])
+        assert result['repair_bindings'] == first['repair_bindings']
+        assert result['repair_notes'] == first['repair_notes']
+        assert result['release_allowed'] is False
+        assert backlog.get('kingdom', note['id']) == attached
+    assert len([r for r in backlog.list('kingdom') if r['intent'].get('task_type') == 'repair']) == 1
+    assert len(engine.tasks.list()) == 1  # Review does not dispatch the attached repair.
+    if not attached['enabled']:
+        backlog.configure('kingdom', note['id'], True, attached['revision'])
+    advance(engine, backlog)
+    completed = backlog.get('kingdom', note['id'])
+    assert completed['status'] == 'completed'
+    restored.review(programme['id'])
+    assert backlog.get('kingdom', note['id']) == completed
+    assert len(engine.tasks.list()) == 2  # Finished repair is not reset or repeated.
+
+
+@pytest.mark.parametrize('fault', ['description', 'intent_description', 'task_type', 'id', 'project',
+                                 'depends_on', 'partial_binding'])
+def test_repair_note_reconciliation_holds_changed_original_provenance(runtime, fault):
+    import json
+    engine, backlog, programmes, programme, boss = setup(runtime)
+    bind(programmes, programme)
+    task = advance(engine, backlog)
+    Path(task['result']['results'][0]['outcome']['artifact']).unlink()
+    first = boss.review(programme['id'])
+    note, = [r for r in backlog.list('kingdom') if r['intent'].get('task_type') == 'repair']
+    # Simulate corrupted retained storage. Observe rejection through Boss's
+    # public review seam, never rewrite or repair the damaged row implicitly.
+    if fault in {'description', 'id', 'project'}:
+        note[fault] = 'changed'
+    elif fault == 'intent_description':
+        note['intent']['description'] = 'Another task'
+    elif fault == 'partial_binding':
+        note['intent']['mission_id'] = 'partial'
+    else:
+        note['intent'][fault] = [programme['sections'][0]['items'][0]['work_id']] if fault == 'depends_on' else 'generic'
+    with backlog.db.get_connection() as conn:
+        conn.execute('UPDATE work_backlog SET state_json=? WHERE id=?',
+                     (json.dumps(note), next(r['id'] for r in backlog.list('kingdom')
+                                            if r['intent'].get('task_type') == 'repair')))
+        conn.commit()
+    with pytest.raises(ValueError, match='Reserved repair note'):
+        boss.review(programme['id'])
+    assert boss.list()[0]['repair_bindings'] == first['repair_bindings']
+    with backlog.db.get_connection() as conn:
+        assert conn.execute('SELECT COUNT(*) FROM work_backlog').fetchone()[0] == 3
+    assert len(engine.tasks.list()) == 1
+
+
 def test_owner_boundary_blocks_initialization_and_lists_retained_review(runtime, monkeypatch):
     from fastapi import FastAPI, HTTPException
     from fastapi.testclient import TestClient

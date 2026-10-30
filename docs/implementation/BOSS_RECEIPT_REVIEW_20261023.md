@@ -45,6 +45,15 @@ does not rewrite that historical note or spend another note slot. Distinct
 external candidate patches have distinct bindings within the same three-note
 ceiling. Reserved notes remain disabled and require a separately reviewed plan.
 
+An owner can adopt a repair note into a new programme or attach a separately
+reviewed mission through the existing backlog controls. Later Boss cycles
+reconcile its original project, idempotency key, title, description, priority,
+task type and dependency provenance instead of registering its initial unbound
+intent again. They preserve the note's identity and subsequent mission binding,
+status, enablement and programme ownership without dispatching or duplicating
+it. Changed original provenance or a partial mission binding holds review;
+Boss never retargets a note or resets it to unplanned work.
+
 The owner-only API has strict typed response schemas. Its receipt-review contract
 requires `release_allowed: false`; a contradictory controller result fails
 response validation rather than being presented as publication authority.
