@@ -8,6 +8,7 @@ The [repository README](../README.md) is the install/start entry point.
 - [Operations and configuration](OPERATIONS.md): local state, ports, authentication, recovery and updates.
 - [Mission workspace](MISSION_WORKSPACE.md): tasks, attachments and reviewed work.
 - [Runtime controls](runtime-controls.md), [model connections](MODEL_OFFLOADING.md), [knowledge](KNOWLEDGE.md).
+- [Planning help and retained lessons](PLANNING_HELP.md): optional ChatGPT advice, local reuse, cancellation and verified training exports.
 - [Device pairing](device-connections.md), [vault/device layout](VAULT_AND_DEVICE_LAYOUT.md), [container enrollment](docker-cluster.md).
 - [Automation supervision](automation-handover.md): inspect an explicitly connected runner and bounded handover evidence.
 

@@ -2,6 +2,7 @@ import React,{useState} from 'react'
 import api from '../api'
 import useLiveData from '../hooks/useLiveData'
 import {modelComputer} from './ComputerIdentity'
+import ChatGPTHelp from './ChatGPTHelp'
 export default function ModelProfiles(){
  const {data:hierarchy}=useLiveData('/hierarchy',10000)
  const {data,error,refresh}=useLiveData('/workspace/model-profiles',10000)
@@ -12,7 +13,7 @@ export default function ModelProfiles(){
   try{const {id,...body}=form;await api.put(`/workspace/model-profiles/${encodeURIComponent(id)}`,{...body,api_key:body.api_key||null});setForm(old=>({...old,api_key:''}));setMessage('Model connection saved. Test it before use.');refresh()}
   catch(e){setMessage(e.response?.data?.detail||'Could not save model connection.')}finally{setBusy(false)}}
  const test=async id=>{setBusy(true);try{const {data}=await api.post(`/workspace/model-profiles/${encodeURIComponent(id)}/test`);setMessage(`Connected to ${data.model}: ${data.response}`)}catch(e){setMessage(e.response?.data?.detail||'Model test failed.')}finally{setBusy(false)}}
- return <section className="panel" style={{minWidth:0,overflowWrap:"anywhere"}}><h2>Your model connections</h2><p>{data?.notice}</p><p>Add a connection for each computer. Give trusted computers the same pool name to send simultaneous chats to available computers. Each computer runs its own complete model. Remote addresses need HTTPS, or a local port forwarded over SSH.</p>{error&&<p role="alert">{error}</p>}
+ return <section className="panel" style={{minWidth:0,overflowWrap:"anywhere"}}><ChatGPTHelp/><h2>Your model connections</h2><p>{data?.notice}</p><p>Add a connection for each computer. Give trusted computers the same pool name to send simultaneous chats to available computers. Each computer runs its own complete model. Remote addresses need HTTPS, or a local port forwarded over SSH.</p>{error&&<p role="alert">{error}</p>}
   {(data?.capacity||[]).map(item=><p key={item.profile}>{item.profile}: {item.active}/{item.max_parallel} inference slots in use{item.pool?` · pool ${item.pool}`:''}</p>)}
   {(data?.profiles||[]).map(profile=><div className="record-detail" key={profile.id}><h3>{profile.id}</h3><p>{modelComputer(profile,hierarchy)}</p><p>Model server: {profile.endpoint}</p><p>{profile.model} · {profile.variant.replaceAll('_',' ')} · {profile.vision?'Vision enabled':'Text model'} · {profile.has_credentials?'Credential stored':'No credential stored'}</p><button disabled={busy} onClick={()=>test(profile.id)}>Test connection</button><button onClick={()=>setForm({...profile,api_key:''})}>Edit connection</button></div>)}
   <form onSubmit={save} className="appearance-fields">
