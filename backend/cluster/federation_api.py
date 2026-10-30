@@ -128,7 +128,7 @@ async def reconnect(node_id:str):
             response=await client.get(address+'/nodes/identity');response.raise_for_status()
             check_identity(response.json(),node.public_identity,local)
             from backend.cluster.apprentice_inventory import local_inventory
-            message=RPCSecureTransport(local).create_signed_message(node_id,'heartbeat',{'node_id':local.node_id,'apprentice_inventory':local_inventory(),'load_metrics':local_load_metrics()})
+            message=RPCSecureTransport(local).create_signed_message(node_id,'heartbeat',{'node_id':local.node_id,'apprentice_inventory':local_inventory(),'load_metrics':local_load_metrics(),'native_analysis_return':True})
             response=await client.post(address+'/nodes/rpc',json=message);response.raise_for_status()
             result=response.json()
             if result.get('status')!='ok' or result.get('ping',{}).get('success') is not True:
@@ -152,7 +152,7 @@ async def refresh_mesh():
     await sync_mesh()
 
 _analysis_worker=None
-async def consume_peer_analysis(node_id):
+def configured_analysis_worker():
     global _analysis_worker
     if _analysis_worker is None:
         from backend.api import engine
@@ -172,7 +172,18 @@ async def consume_peer_analysis(node_id):
                 response=await client.post(address+'/nodes/rpc',json=message)
                 response.raise_for_status();return response.json()
         _analysis_worker=PeerAnalysis(db,node_registry,KingdomIdentity.get_or_create(),permitted,exchange,event_bus.publish)
-    return await _analysis_worker.tick(node_id)
+    return _analysis_worker
+
+
+async def consume_peer_analysis(node_id):
+    worker = configured_analysis_worker()
+    from backend.api import engine, task_lease_manager, handle_cluster_rpc, RPCMessageRequest
+    from backend.cluster.peer_analysis_return import dispatch_one
+    result = await dispatch_one(worker, node_id, engine, task_lease_manager,
+                                lambda proof: handle_cluster_rpc(RPCMessageRequest.model_validate(proof)))
+    if result['status'] != 'idle':
+        return result
+    return await worker.tick(node_id)
 
 peer_connections = PeerConnections(node_registry, reconnect, event_bus, refresh=refresh_mesh,work=consume_peer_analysis)
 
