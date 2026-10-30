@@ -51,6 +51,25 @@ def responsive_pair(offered):
     return database, controller, engine, leases, accept, calls, offer
 
 
+def test_only_explicit_feature_reports_change_persisted_support(tmp_path, monkeypatch):
+    from backend.cluster import heartbeat
+    from backend.cluster.node_registry import NodeRegistry
+    from backend.storage.repository import KnightRepository
+    repository = KnightRepository(Database(tmp_path/'feature.db'))
+    registry = NodeRegistry(repository=repository)
+    metadata = {'kingdom_endpoint': 'https://127.0.0.1:11440', 'native_analysis_return': True}
+    repository.save(NodeInfo('worker', node_state_val='CONNECTED', connection_metadata=metadata).to_dict())
+    monkeypatch.setattr(heartbeat, 'node_registry', registry)
+    manager = heartbeat.HeartbeatManager()
+    assert manager.ping('worker')['success']
+    assert repository.get('worker')['connection_metadata'] == metadata
+    assert manager.ping('worker', native_analysis_return=False)['success']
+    assert repository.get('worker')['connection_metadata'] == {**metadata, 'native_analysis_return': False}
+    with pytest.raises(ValueError):
+        manager.ping('worker', native_analysis_return='true')
+    assert repository.get('worker')['connection_metadata']['native_analysis_return'] is False
+
+
 @pytest.mark.parametrize('delay', ['sqlite', 'acceptance'])
 def test_slow_sqlite_and_acceptance_leave_heartbeat_loop_responsive(offered, delay):
     database, controller, engine, leases, accept, _, _ = responsive_pair(offered)
