@@ -20,8 +20,11 @@ class HeartbeatManager:
             return {"success": False, "error": f"Node {node_id} is in invalid state {state_val}."}
 
         now = time.time()
-        node.connection_metadata = {**(node.connection_metadata or {}),
-                                    'native_analysis_return': native_analysis_return is True}
+        if native_analysis_return is not None:
+            if type(native_analysis_return) is not bool:
+                raise ValueError('Native analysis return support must be an explicit boolean')
+            node.connection_metadata = {**(getattr(node, 'connection_metadata', None) or {}),
+                                        'native_analysis_return': native_analysis_return}
         if apprentice_inventory is not None:
             if state_val not in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}:
                 return {'success': False, 'error': 'Apprentice inventories require an approved peer'}
