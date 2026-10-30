@@ -171,7 +171,10 @@ def test_invalid_identity_signature_never_connects_account(tmp_path):
 
 def test_dripping_refresh_has_total_deadline_and_stops_network_worker(tmp_path):
     with provider() as fixture:
-        connection, clock = connected(tmp_path, fixture, request_timeout=.15)
+        connection, clock = connected(tmp_path, fixture)
+        # Tighten only the exchange under test. Signed sign-in setup is not
+        # the slow-response experiment and can take longer on hosted Windows.
+        connection.request_timeout = .15
         clock[0] = 4590.0; fixture[0]['drip'] = '/api/accounts/oauth/token'
         started = time.monotonic()
         with pytest.raises(ChatGPTPlanError): asyncio.run(connection.advise('Need help'))
@@ -212,7 +215,9 @@ def test_connection_change_during_refresh_prevents_question_delivery(tmp_path):
 @pytest.mark.parametrize('drip', [False, True])
 def test_sign_out_removes_local_credentials_and_bounds_remote_revocation(tmp_path, drip):
     with provider() as fixture:
-        connection, _ = connected(tmp_path, fixture, request_timeout=.15 if drip else 2)
+        connection, _ = connected(tmp_path, fixture)
+        if drip:
+            connection.request_timeout = .15
         if drip:
             fixture[0]['drip'] = '/revoke'
         started = time.monotonic()
