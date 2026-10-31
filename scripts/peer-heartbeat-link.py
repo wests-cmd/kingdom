@@ -4,6 +4,7 @@ The local Kingdom remains authoritative for identity, revocation and replay chec
 Server has no owner token. Client uses its own token only on local loopback.
 """
 import argparse
+import math
 import json
 import ssl
 import time
@@ -32,6 +33,29 @@ def validate_mesh_rpc(message, config):
                 or (payload['edit'] is not None and not isinstance(payload['edit'],dict))):
             raise ValueError('Invalid organizational group request')
         return
+    if kind=='native_analysis_execute' and config.get('analysis_enabled') is True:
+        payload=message.get('payload')
+        if not isinstance(payload,dict) or set(payload)!={'task','lease'}:raise ValueError('Expected exact analysis offer')
+        task,lease=payload['task'],payload['lease']
+        if not isinstance(task,dict) or not isinstance(lease,dict):raise ValueError('Expected typed task and lease')
+        meta=task.get('metadata',{})
+        if not isinstance(meta,dict):raise ValueError('Expected task metadata')
+        params=meta.get('tool_parameters',{'text':task.get('prompt')})
+        if (meta.get('tool') not in ANALYSIS_TOOLS or meta.get('execution_target')!='remote'
+                or meta.get('capability','compute')!='compute' or task.get('status')!='leased'
+                or not isinstance(task.get('id'),str) or not task['id']
+                or (task.get('assigned_knight') or meta.get('assigned_knight'))!=config['identity']['node_id']
+                or not isinstance(params,dict) or set(params)!={'text'} or not isinstance(params['text'],str)
+                or len(params['text'].encode())>LIMIT):raise ValueError('Only bounded literal analysis is exposed')
+        if (not isinstance(task.get('lease_id'),str) or not task['lease_id']
+                or type(task.get('fencing_token')) is not int or task['fencing_token']<1
+                or lease.get('lease_id')!=task['lease_id'] or lease.get('task_id')!=task['id']
+                or lease.get('assigned_node_id')!=config['identity']['node_id']
+                or type(lease.get('fencing_token')) is not int or lease['fencing_token']!=task['fencing_token']
+                or lease.get('capability_scope')!='compute' or lease.get('revoked') is not False
+                or any(type(lease.get(k)) not in (int,float) or not math.isfinite(lease[k]) for k in ('issued_at','expires_at'))
+                or not 0<lease['expires_at']-lease['issued_at']<=300):raise ValueError('Analysis lease does not match offer')
+        return  # Backend alone verifies signatures, current grants, expiry and replay.
     if config.get('analysis_enabled') is not True or kind not in {'task_poll','task_result'}:
         raise ValueError('Execution RPC is not exposed by the peer listener')
     payload=message.get('payload')
