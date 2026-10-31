@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Any
 from typing import Literal
+from backend.integrations.jules_backlog import JulesBacklogQueue, QueueRequest
 from backend.security.http_auth import require_owner
 
 router = APIRouter(
@@ -155,3 +156,24 @@ def failed_verification(job_id: str, evidence: FailedVerificationRequest):
     try:return service().verify_job_failure(job_id,evidence.model_dump())
     except KeyError as error:raise HTTPException(404,'Job not found') from error
     except ValueError as error:raise HTTPException(409,str(error)) from error
+
+
+class QueueSettingsRequest(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    enabled: bool
+    expected_binding: str=Field(pattern=r'^[a-f0-9]{64}$')
+
+@router.get('/backlog-queues')
+def backlog_queues():
+    return JulesBacklogQueue(service()).list()
+
+@router.post('/backlog-queues',status_code=201)
+def create_backlog_queue(request: QueueRequest):
+    try:return JulesBacklogQueue(service()).create(**request.model_dump())
+    except ValueError as error:raise HTTPException(409,'Backlog scope changed, expired or unavailable; inspect existing note and grants') from error
+
+@router.post('/backlog-queues/{ident}/settings')
+def configure_backlog_queue(ident: str,request: QueueSettingsRequest):
+    try:return JulesBacklogQueue(service()).configure(ident,**request.model_dump())
+    except KeyError as error:raise HTTPException(404,'Backlog queue not found') from error
+    except ValueError as error:raise HTTPException(409,'Queue scope changed or authorization unavailable') from error
