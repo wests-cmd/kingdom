@@ -90,3 +90,8 @@ Protected production key installation, a real source-bound signed job,
 external verdict issuance/mission execution binding, automatic failure handback, Boss placement, full release review and fleet rollout
 still require their own evidence. Do not enable the whole backlog from these
 module tests alone.
+
+
+## Durable backlog admission
+
+[Owner-scoped coding batches](JULES_BACKLOG_QUEUE.md) let the native runner select the next eligible approved note, preserving dependency, acceptance and uncertain-effect holds. This is separate from a claim of full autonomous backlog completion.

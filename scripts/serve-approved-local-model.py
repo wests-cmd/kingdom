@@ -89,6 +89,16 @@ def handler(config, forward):
         def do_POST(self):
             if not self.authorized():return
             if self.path not in {'/api/chat','/api/generate'}:
+                # Closing a socket with an unread POST body can reset it on
+                # Windows before the peer receives the rejection. Drain only
+                # a bounded authenticated body; never forward the denied route.
+                try:
+                    length=int(self.headers.get('Content-Length','0'))
+                    if not self.headers.get('Transfer-Encoding') and 0 < length <= 65536:
+                        self.connection.settimeout(1)
+                        self.rfile.read(length)
+                except (ValueError, OSError):
+                    pass
                 self.answer(404, {'error':'route_not_allowed'});return
             try:
                 length = int(self.headers.get('Content-Length','0'))
