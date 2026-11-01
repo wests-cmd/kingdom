@@ -1,11 +1,17 @@
 """Exercise real PDF text extraction through the governed attachment intake."""
 import io
-
+from packaging.version import Version
+import pypdf
 from pypdf import PdfWriter
 from pypdf.generic import DictionaryObject, NameObject, DecodedStreamObject
 
 from backend.runtime.attachments import AttachmentStore
 from backend.storage.db import Database
+
+
+def test_pdf_dependency_patched_version():
+    """Verify pypdf is at least 6.21.4 to ensure known OSV advisories are resolved."""
+    assert Version(pypdf.__version__) >= Version("6.21.4")
 
 
 def test_pdf_text_and_provenance_survive_parser_dependency_upgrade(tmp_path):
