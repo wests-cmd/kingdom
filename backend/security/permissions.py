@@ -43,6 +43,61 @@ ROLE_CAPABILITIES = {
         "memory.read",
         "node.execute"
     ],
+    # Five standardized swarm permission profiles:
+    # 1. Observe: Read-only telemetry
+    "observe": [
+        "memory.read",
+        "ai_map.read"
+    ],
+    # 2. Assist: Normal low-risk approved tasks
+    "assist": [
+        "memory.read",
+        "ai_map.read",
+        "model.inference",
+        "filesystem.read"
+    ],
+    # 3. Develop: Coding, testing and sandbox execution
+    "develop": [
+        "memory.read",
+        "memory.write",
+        "ai_map.read",
+        "ai_map.write",
+        "model.inference",
+        "filesystem.read",
+        "filesystem.write",
+        "process.execute"
+    ],
+    # 4. Admin: Explicitly delegated administrative operations
+    "admin_delegated": [
+        "memory.read",
+        "memory.write",
+        "ai_map.read",
+        "ai_map.write",
+        "model.inference",
+        "filesystem.read",
+        "filesystem.write",
+        "filesystem.delete",
+        "process.execute",
+        "network.access",
+        "node.register",
+        "node.execute",
+        "system.admin"
+    ],
+    # 5. Experimental: Extended authority within designated isolated host (Laptop 2)
+    "experimental": [
+        "memory.read",
+        "memory.write",
+        "ai_map.read",
+        "ai_map.write",
+        "model.inference",
+        "filesystem.read",
+        "filesystem.write",
+        "filesystem.delete",
+        "process.execute",
+        "network.access",
+        "docker.execute",
+        "node.execute"
+    ],
     "guest": []
 }
 
@@ -65,6 +120,16 @@ class PermissionManager:
 
         granted = set(actor.get("capabilities", []))
         role = actor.get("role", "guest")
+
+        # Strict isolation check for Experimental role:
+        # Experimental privileges are strictly scoped to designated experimental hosts (e.g. Laptop 2)
+        # and must never be extended to general Knights or nodes like DT1.
+        if role == "experimental":
+            node_id = str(actor.get("node_id") or actor.get("host") or "").lower()
+            if not ("laptop2" in node_id or "laptop-2" in node_id or actor.get("is_experimental_host") is True):
+                # Deny experimental escalation if node is not an authorized experimental host
+                role = "observe"
+
         granted.update(self.get_role_capabilities(role))
 
         if "*" in granted or "system.admin" in granted:
