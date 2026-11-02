@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react"
 import api from "../api"
+import GapRegister from "../components/GapRegister"
 
 export default function Settings() {
   const [security, setSecurity] = useState(null)
@@ -54,6 +55,8 @@ export default function Settings() {
           ))}
         </div>
       )}
+
+      <GapRegister />
     </div>
   )
 }
