@@ -10,6 +10,8 @@ Owner rejection is a negative decision, not independent test acceptance. A candi
 - `expected_record_version`: the current job record version.
 - `reason`: `outcome_not_implemented`, `outside_assignment_scope`, or `owner_rejected`.
 
+The bounded typed response contains only `id`, `phase=rejected`, `accepted=false`, `record_version`, unchanged `deadline_at`, and typed `rejection` binding/terminal-observation evidence. It excludes prompts, remote conversation contents, unrelated persisted fields and future job metadata. OpenAPI exposes `RejectionResponse`.
+
 Extra authority fields are rejected. The service verifies the retained provider patch bytes against the expected digest, then independently reads the existing bound provider session. The response must explicitly match session and source and report `COMPLETED`. Missing source, unknown/active states, provider failure or changed job bindings cannot release the slot.
 
 This endpoint performs only a GET through the existing enabled provider adapter and unchanged repository/source allowlists. It never sends a message, assumes remote cancellation, creates another session, installs a grant, or extends the job deadline. An explicit owner can reject and reconcile an exact completed candidate after its old execution/review window ends, including at autonomy zero; that is local negative control plus a read-only terminal observation, not renewed execution authority.

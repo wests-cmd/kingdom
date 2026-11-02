@@ -28,6 +28,34 @@ class RejectionRequest(BaseModel):
     expected_record_version: int=Field(ge=1)
     reason: Literal['outcome_not_implemented','outside_assignment_scope','owner_rejected']
 
+class ProviderTerminalObservation(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    session: str=Field(pattern=r'^sessions/[A-Za-z0-9_-]{1,150}$')
+    source: str=Field(pattern=r'^sources/github/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')
+    state: Literal['COMPLETED']
+    observed_at: float=Field(ge=0,allow_inf_nan=False)
+    response_sha256: str=Field(pattern=r'^[a-f0-9]{64}$')
+
+class CandidateRejectionEvidence(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    format: Literal['kingdom.owner-candidate-rejection.v1']
+    binding: CandidateBinding
+    expected_record_version: int=Field(ge=1)
+    reason: Literal['outcome_not_implemented','outside_assignment_scope','owner_rejected']
+    operator: Literal['owner']
+    provider_observation: ProviderTerminalObservation
+    scope: Literal['Owner rejected the candidate; no test acceptance or remote cancellation claim']
+
+class RejectionResponse(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    id: str=Field(pattern=r'^jules-[a-f0-9]{12}$')
+    phase: Literal['rejected']
+    accepted: Literal[False]
+    record_version: int=Field(ge=1)
+    deadline_at: float=Field(ge=0,allow_inf_nan=False)
+    rejection: CandidateRejectionEvidence
+
+
 def binding(job):
     candidate=job.get('candidate') or {}
     return CandidateBinding.model_validate(dict(job_id=job['id'],project=job['project'],backlog_id=job['backlog_id'],

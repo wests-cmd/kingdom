@@ -144,6 +144,11 @@ def test_owner_http_endpoint_is_strict_and_never_publishes_provider_text(candida
     response=client.post(path,json=request,headers=headers)
     assert response.status_code==200,response.text
     assert response.json()['phase']=='rejected' and response.json()['accepted'] is False
+    assert set(response.json())=={'id','phase','accepted','record_version','deadline_at','rejection'}
+    assert 'prompt' not in response.json() and 'session_url' not in response.json()
+    assert response.json()['rejection']['binding']==request['expected_job_binding']
+    schema=client.get('/openapi.json').json()
+    assert schema['paths'][path.replace(job['id'],'{job_id}')]['post']['responses']['200']['content']['application/json']['schema']['$ref'].endswith('/RejectionResponse')
     assert 'private_provider_field' not in response.text and 'private-test-key' not in response.text
 
 
