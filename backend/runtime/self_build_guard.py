@@ -5,11 +5,62 @@ Wire it into existing Kingdom request/work-programme workers after authorization
 """
 from __future__ import annotations
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import PurePosixPath
 from typing import Iterable
 
 BLOCKED = frozenset({'.git', '.env', 'owner-token', 'id_rsa', 'id_ed25519', 'secrets.json'})
 ALLOWED_ROOTS = frozenset({'backend', 'frontend', 'tests', 'docs', 'scripts', 'apps', 'desktop'})
+
+
+class BuildState(str, Enum):
+    QUEUED = "queued"
+    BUILDING = "building"
+    TESTING = "testing"
+    REVIEWING = "reviewing"
+    READY = "ready"
+    QUARANTINED = "quarantined"
+
+
+@dataclass
+class BuildJob:
+    job_id: str
+    base_commit: str
+    state: BuildState = BuildState.QUEUED
+    attempts: int = 0
+    tests_passed: bool = False
+    review_passed: bool = False
+    approved: bool = False
+
+
+def record_test_result(job: BuildJob, passed: bool):
+    if job.state != BuildState.TESTING:
+        raise ValueError("Job is not testing")
+
+    job.tests_passed = passed
+
+    if passed:
+        job.state = BuildState.REVIEWING
+    else:
+        job.attempts += 1
+        job.state = (
+            BuildState.QUARANTINED
+            if job.attempts >= 3
+            else BuildState.BUILDING
+        )
+
+
+def finish_review(job: BuildJob, passed: bool):
+    if job.state != BuildState.REVIEWING:
+        raise ValueError("Job is not under review")
+
+    job.review_passed = passed
+    job.state = (
+        BuildState.READY
+        if passed and job.tests_passed and job.approved
+        else BuildState.QUARANTINED
+    )
+
 
 @dataclass(frozen=True)
 class BuildProposal:
