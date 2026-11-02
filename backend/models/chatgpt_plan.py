@@ -31,6 +31,7 @@ API = 'https://api.openai.com/v1'
 SCOPES = 'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct'
 REQUIRED_SCOPES = {'resource.invoke', 'chatgpt.tokens.use.direct'}
 MAX_JSON = 256 * 1024
+MAX_MODEL_CATALOG_JSON = 1024 * 1024
 MAX_ADVICE = 64 * 1024
 MAX_STREAM = 256 * 1024
 MAX_PROMPT = 16000
@@ -148,7 +149,7 @@ class ChatGPTPlanConnection:
                 'usage_url': 'https://chatgpt.com/settings/usage',
                 'scope': 'Planning and error advice only; replies grant no execution or release authority.'}
 
-    def _json_request(self, method, url, *, data=None, headers=None, empty_response=False):
+    def _json_request(self, method, url, *, data=None, headers=None, empty_response=False, max_bytes=MAX_JSON):
         # Called from synchronous owner/callback routes or advise's worker thread.
         # Async I/O inside the worker enforces a total deadline even when a
         # provider keeps dripping bytes within the HTTP inactivity timeout.
@@ -160,7 +161,7 @@ class ChatGPTPlanConnection:
                         body = bytearray()
                         async for part in response.aiter_bytes():
                             body.extend(part)
-                            if len(body) > MAX_JSON:
+                            if len(body) > max_bytes:
                                 raise ChatGPTPlanError('provider_response_invalid')
                         if response.status_code != 200:
                             code = 'authorization_rejected' if response.status_code in (400, 401, 403) else 'provider_unavailable'
@@ -473,7 +474,10 @@ class ChatGPTPlanConnection:
 
     def models(self):
         public, secret = self._access()
-        value = self._json_request('GET', API+'/models', headers={'Authorization': 'Bearer '+secret['access_token']})
+        # The documented catalog includes model metadata and can exceed the
+        # smaller identity/token response budget. Its total deadline is unchanged.
+        value = self._json_request('GET', API+'/models', headers={'Authorization': 'Bearer '+secret['access_token']},
+                                   max_bytes=MAX_MODEL_CATALOG_JSON)
         rows = value.get('models')
         if not isinstance(rows, list) or len(rows) > 1000:
             raise ChatGPTPlanError('model_catalog_invalid')
