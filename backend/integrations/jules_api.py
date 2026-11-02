@@ -189,3 +189,15 @@ def reject_candidate(job_id: str,request: RejectionRequest):
     except KeyError as error:raise HTTPException(404,'Job not found') from error
     except ValueError as error:raise HTTPException(409,'Candidate, provider terminal state or expected binding changed; reload without retrying effects') from error
     except (OSError,urllib.error.URLError) as error:raise HTTPException(502,'Provider terminal observation unavailable; no rejection committed') from error
+
+
+from backend.integrations.jules_session_rejection import SessionRejectionRequest, SessionRejectionResponse
+
+@router.post('/jobs/{job_id}/reject-terminal-session',response_model=SessionRejectionResponse)
+def reject_terminal_session(job_id: str,request: SessionRejectionRequest):
+    try:
+        result=service().reject_terminal_session(job_id,**request.model_dump())
+        return SessionRejectionResponse.model_validate({key:result[key] for key in SessionRejectionResponse.model_fields})
+    except KeyError as error:raise HTTPException(404,'Job not found') from error
+    except ValueError as error:raise HTTPException(409,'Terminal session observation or assignment changed; no closure committed') from error
+    except (OSError,urllib.error.URLError) as error:raise HTTPException(502,'Provider observation unavailable; no closure committed') from error
