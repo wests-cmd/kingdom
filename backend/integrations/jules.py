@@ -779,6 +779,7 @@ class JulesService:
         from backend.integrations.jules_session_rejection import reject_terminal_session
         return reject_terminal_session(self,job_id,**kwargs)
 
+    @announces()
     def reject_candidate(self,job_id,*,expected_job_binding,expected_record_version,reason,opener=None):
         from backend.integrations.jules_rejection import reject_candidate
         return reject_candidate(self,job_id,expected_job_binding=expected_job_binding,
