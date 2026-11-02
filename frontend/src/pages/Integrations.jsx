@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import AdapterDiscovery from '../components/AdapterDiscovery';
 
 export default function Integrations() {
   const [integrations, setIntegrations] = useState([
@@ -25,6 +26,12 @@ export default function Integrations() {
         <button className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-medium text-sm transition-colors">
           + Connect Integration
         </button>
+      </div>
+
+      <AdapterDiscovery />
+
+      <div className="border-t border-gray-800 pt-6">
+        <h2 className="text-xl font-semibold text-white mb-4">Installed Provider Integrations</h2>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
