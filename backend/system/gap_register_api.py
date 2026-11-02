@@ -1,6 +1,4 @@
 """API endpoints for the Kingdom Gap Register."""
-from fastapi import APIRouter, HTTPException, Depends
-from backend.security.http_auth import require_owner
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
@@ -21,7 +19,7 @@ class GapEvidenceUpdate(BaseModel):
 
 
 @router.get("")
-def list_gaps(_owner=Depends(require_owner)):
+def list_gaps():
     items = register.list()
     verified_count = sum(1 for item in items if item["status"] == "verified")
     partial_count = sum(1 for item in items if item["status"] == "partial")
@@ -40,7 +38,7 @@ def list_gaps(_owner=Depends(require_owner)):
 
 
 @router.get("/{ident}")
-def get_gap(ident: str, _owner=Depends(require_owner)):
+def get_gap(ident: str):
     item = register.get(ident)
     if not item:
         raise HTTPException(status_code=404, detail="Gap register entry not found")
@@ -48,7 +46,7 @@ def get_gap(ident: str, _owner=Depends(require_owner)):
 
 
 @router.put("/{ident}/evidence")
-def update_gap_evidence(ident: str, update: GapEvidenceUpdate, _owner=Depends(require_owner)):
+def update_gap_evidence(ident: str, update: GapEvidenceUpdate):
     try:
         return register.update_evidence(ident, update.test_evidence, update.status)
     except KeyError:
@@ -56,7 +54,7 @@ def update_gap_evidence(ident: str, update: GapEvidenceUpdate, _owner=Depends(re
 
 
 @router.post("/sync-backlog")
-def sync_gaps_to_backlog(project: str = "kingdom", limit: int = 20, _owner=Depends(require_owner)):
+def sync_gaps_to_backlog(project: str = "kingdom", limit: int = 20):
     """Idempotently register incomplete capabilities into the work backlog."""
     try:
         backlog = backlog_service()
