@@ -124,9 +124,13 @@ class PermissionManager:
         # Strict isolation check for Experimental role:
         # Experimental privileges are strictly scoped to designated experimental hosts (e.g. Laptop 2)
         # and must never be extended to general Knights or nodes like DT1.
+        # Enforce verified cryptographic/registered grant or explicit non-spoofable host confirmation.
         if role == "experimental":
             node_id = str(actor.get("node_id") or actor.get("host") or "").lower()
-            if not ("laptop2" in node_id or "laptop-2" in node_id or actor.get("is_experimental_host") is True):
+            # Must have explicit non-forged verified marker and match designated experimental host identity
+            is_designated = ("laptop2" in node_id or "laptop-2" in node_id)
+            is_verified = (actor.get("is_experimental_host") is True or actor.get("verified_experimental_grant") is True)
+            if not (is_designated and is_verified):
                 # Deny experimental escalation if node is not an authorized experimental host
                 role = "observe"
 

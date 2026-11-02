@@ -1,9 +1,12 @@
 """API endpoints for the Kingdom Gap Register."""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from backend.storage.db import db
 from backend.system.gap_register import GapRegister
+from backend.system.gap_backlog_bridge import register_missing_capabilities
+from backend.runtime.work_backlog_api import service as backlog_service
+from backend.security.http_auth import require_owner
 
 router = APIRouter(prefix="/system/gap-register", tags=["Gap Register"])
 register = GapRegister(db)
@@ -16,7 +19,7 @@ class GapEvidenceUpdate(BaseModel):
 
 
 @router.get("")
-def list_gaps():
+def list_gaps(_owner=Depends(require_owner)):
     items = register.list()
     verified_count = sum(1 for item in items if item["status"] == "verified")
     partial_count = sum(1 for item in items if item["status"] == "partial")
@@ -35,7 +38,7 @@ def list_gaps():
 
 
 @router.get("/{ident}")
-def get_gap(ident: str):
+def get_gap(ident: str, _owner=Depends(require_owner)):
     item = register.get(ident)
     if not item:
         raise HTTPException(status_code=404, detail="Gap register entry not found")
@@ -43,8 +46,22 @@ def get_gap(ident: str):
 
 
 @router.put("/{ident}/evidence")
-def update_gap_evidence(ident: str, update: GapEvidenceUpdate):
+def update_gap_evidence(ident: str, update: GapEvidenceUpdate, _owner=Depends(require_owner)):
     try:
         return register.update_evidence(ident, update.test_evidence, update.status)
     except KeyError:
         raise HTTPException(status_code=404, detail="Gap register entry not found")
+
+
+@router.post("/sync-backlog")
+def sync_gaps_to_backlog(project: str = "kingdom", limit: int = 20, _owner=Depends(require_owner)):
+    """Idempotently register incomplete capabilities into the work backlog."""
+    try:
+        backlog = backlog_service()
+        items = register_missing_capabilities(register, backlog, project=project, limit=limit)
+        return {
+            "synced_count": len(items),
+            "items": items
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
