@@ -90,6 +90,8 @@ def provider():
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_): pass
         def output(self, value, media='application/json'):
+            if isinstance(value, dict) and self.path in state.get('padded_paths', set()):
+                value = {**value, 'metadata': 'x' * 300000}
             raw = json.dumps(value).encode() if not isinstance(value, bytes) else value
             self.send_response(200); self.send_header('Content-Type', media)
             if state['drip'] == self.path:
@@ -108,7 +110,7 @@ def provider():
                 self.output({'issuer': AUTH, 'jwks_uri': AUTH+'/jwks', 'revocation_endpoint': AUTH+'/revoke'})
             elif self.path == '/jwks':
                 self.output({'keys': [{'kid': 'fixture', 'kty': 'RSA', 'n': num(public.n), 'e': num(public.e)}]})
-            else: self.output({'models': [{'slug': 'gpt-fixture', 'display_name': 'Fixture chat', 'visibility': 'list'}]})
+            else: self.output(state.get('catalog', {'models': [{'slug': 'gpt-fixture', 'display_name': 'Fixture chat', 'visibility': 'list'}]}))
         def do_POST(self):
             raw = self.rfile.read(int(self.headers['Content-Length']))
             state['posts'].append(self.path)
@@ -158,6 +160,61 @@ def test_real_signed_oauth_and_completed_response_do_not_disclose_credentials(tm
         assert result['completed'] is True and result['text'] == 'Propose a bounded check.'
         assert 'fixture-access-token' not in json.dumps(connection.status())
         assert 'fixture-refresh-token' not in json.dumps(connection.status())
+
+
+def test_model_catalog_accepts_large_metadata_without_exposing_it(tmp_path):
+    with provider() as fixture:
+        connection, _ = connected(tmp_path, fixture)
+        fixture[0]['catalog'] = {'models': [{'slug': 'gpt-fixture', 'display_name': 'Fixture chat',
+            'visibility': 'list', 'metadata': 'x' * 650000}]}
+        assert connection.models() == [{'slug': 'gpt-fixture', 'display_name': 'Fixture chat'}]
+
+
+def test_model_catalog_still_rejects_more_than_one_mib(tmp_path):
+    with provider() as fixture:
+        connection, _ = connected(tmp_path, fixture)
+        fixture[0]['catalog'] = {'models': [{'slug': 'gpt-fixture', 'visibility': 'list',
+            'metadata': 'x' * 1048576}]}
+        with pytest.raises(ChatGPTPlanError) as error:
+            connection.models()
+        assert error.value.code == 'provider_response_invalid'
+
+
+@pytest.mark.parametrize('path', ['/api/accounts/oauth/token', '/.well-known/openid-configuration', '/jwks'])
+def test_identity_and_token_responses_keep_smaller_size_budget(tmp_path, path):
+    with provider() as fixture:
+        state, transport = fixture
+        state['padded_paths'] = {path}
+        connection = ChatGPTPlanConnection(Database(tmp_path/'state.db'), root=tmp_path/'secrets',
+            async_transport=transport, clock=lambda: 1000.0, request_timeout=2)
+        auth = connection.begin()
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(auth['authorization_url']).query)
+        state['nonce'] = query['nonce'][0]
+        try:
+            with pytest.raises(ChatGPTPlanError) as error:
+                connection.complete_sign_in({'code': 'fixture-code', 'state': query['state'][0],
+                    'client_id': 'oaiapp_fixture'})
+            assert error.value.code == 'provider_response_invalid'
+            assert connection.status()['state'] == 'sign_in_required'
+            assert connection.status()['accounts'] == []
+        finally:
+            connection.cancel()
+
+
+def test_dripping_catalog_keeps_total_deadline_and_closes_network_worker(tmp_path):
+    with provider() as fixture:
+        connection, _ = connected(tmp_path, fixture)
+        connection.request_timeout = .5
+        fixture[0]['drip'] = '/v1/models'
+        started = time.monotonic()
+        with pytest.raises(ChatGPTPlanError) as error:
+            connection.models()
+        assert error.value.code == 'provider_deadline_exceeded'
+        assert time.monotonic() - started < 1.5
+        until = time.monotonic()+1
+        while fixture[0]['active'] and time.monotonic() < until:
+            time.sleep(.02)
+        assert fixture[0]['active'] == 0
 
 
 @pytest.mark.parametrize('mode', ['failed', 'incomplete'])
