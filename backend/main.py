@@ -79,6 +79,8 @@ from backend.cluster.alternate_path_api import router as alternate_path_router
 app.include_router(alternate_path_router)
 from backend.system.ui_update_api import router as ui_update_router
 app.include_router(ui_update_router)
+from backend.system.gap_register_api import router as gap_register_router
+app.include_router(gap_register_router)
 from backend.accessibility import router as accessibility_router
 app.include_router(accessibility_router)
 from backend.recovery import router as recovery_router

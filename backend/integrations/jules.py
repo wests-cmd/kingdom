@@ -19,6 +19,7 @@ import urllib.error
 import urllib.request
 import uuid
 from functools import wraps
+from contextlib import nullcontext
 
 from cryptography.fernet import Fernet
 from backend.security.user_key_protection import protect_user_key,unprotect_user_key,PREFIX,key_file_lock
@@ -26,6 +27,7 @@ from backend.memory.portable_vault import clean_text, identifier
 
 API = "https://jules.googleapis.com/v1alpha/"
 TERMINAL_PHASES = {
+    "rejected",
     "completed",
     "failed",
     "submission_unknown",
@@ -44,7 +46,8 @@ def announces(kind='job'):
         @wraps(method)
         def wrapped(self,*args,**kwargs):
             result=method(self,*args,**kwargs)
-            self._announce(result,kind)
+            if kwargs.get("_connection") is None:
+                self._announce(result,kind)
             return result
         return wrapped
     return decorate
@@ -288,6 +291,8 @@ class JulesService:
         prompt,
         max_repair_budget=3,
         deadline_seconds=3600,
+        _connection=None,
+        _deadline_at=None,
     ):
         identifier(project)
         identifier(backlog_id)
@@ -316,8 +321,9 @@ class JulesService:
         ):
             raise ValueError("Deadline seconds must be between 60 and 86400")
 
-        with self.db.get_connection() as conn:
-            conn.execute("BEGIN IMMEDIATE")
+        with (nullcontext(_connection) if _connection is not None else self.db.get_connection()) as conn:
+            if _connection is None:
+                conn.execute("BEGIN IMMEDIATE")
             # Check duplicate idempotency key
             existing = conn.execute(
                 "SELECT state_json FROM jules_jobs WHERE project=? AND idem=?",
@@ -344,6 +350,8 @@ class JulesService:
 
             job_id = f"jules-{uuid.uuid4().hex[:12]}"
             now = self.clock()
+            if _deadline_at is not None and _deadline_at-now<60:
+                raise ValueError("Remaining owner batch window is too short")
             state = {
                 "id": job_id,
                 "project": project,
@@ -366,13 +374,14 @@ class JulesService:
                 "repair_diagnostics": None,
                 "consecutive_errors": 0,
                 "backoff_until": 0,
-                "deadline_at": now + deadline_seconds,
+                "deadline_at": min(now + deadline_seconds, _deadline_at) if _deadline_at is not None else now + deadline_seconds,
                 "created_at": now,
                 "updated_at": now,
                 "reason": "Queued for submission to Jules provider",
             }
             self._save_job(conn, state)
-            conn.commit()
+            if _connection is None:
+                conn.commit()
         return state
 
     def request(self, path, body=None, opener=None, timeout=30):
@@ -541,7 +550,7 @@ class JulesService:
     def poll_job(self, job_id, opener=None):
         with self._lock:
             state = self.get_job(job_id)
-            if state["phase"] != "watching":
+            if state["phase"] not in {"watching", "paused"}:
                 return state
             try:self._programme_authority(state)
             except DispatchDeferred:return state
@@ -621,7 +630,7 @@ class JulesService:
                     phase = "watching"
                     reason = f"Remote session in progress: {remote_state}"
 
-                state=self._poll_update(job_id,state['session'],dict(phase=phase,remote_state=remote_state,consecutive_errors=0,backoff_until=0,reason=reason))
+                state=self._poll_update(job_id,state['session'],dict(phase=phase,remote_state=remote_state,consecutive_errors=0,backoff_until=self.clock()+30 if phase=='paused' else 0,reason=reason))
             except urllib.error.HTTPError as error:
                 if error.code in {429, 503}:
                     err_count = state.get("consecutive_errors", 0) + 1
@@ -635,7 +644,7 @@ class JulesService:
         with self.db.get_connection() as conn:
             conn.execute('BEGIN IMMEDIATE')
             current=json.loads(conn.execute('SELECT state_json FROM jules_jobs WHERE id=?',(job_id,)).fetchone()[0])
-            if current['phase']!='watching' or current.get('session')!=session:return current
+            if current['phase'] not in {'watching','paused'} or current.get('session')!=session:return current
             current.update(changes);self._save_job(conn,current);conn.commit()
             return current
 
@@ -676,6 +685,10 @@ class JulesService:
         if self.clock() >= state["deadline_at"]:
             with self.db.get_connection() as conn:
                 conn.execute("BEGIN IMMEDIATE")
+                current=self.get_job(job_id)
+                if current['record_version']!=state['record_version'] or current['phase'] in TERMINAL_PHASES:
+                    return current
+                state=current
                 state.update(
                     phase="expired_remote_may_continue",
                     reason="Local observation ended; remote work was not cancelled",
@@ -688,8 +701,12 @@ class JulesService:
             state = self.submit_job(job_id, opener=opener)
         if state['phase']=='repair_queued':
             return self.repair_job(job_id,opener=opener)
-        if state["phase"] == "watching":
+        observation_due=self.clock()>=state.get("backoff_until",0)
+        if state["phase"] in {"watching", "paused"}:
             state = self.poll_job(job_id, opener=opener)
+        if observation_due and state['phase']=='paused' and state.get('remote_state')=='AWAITING_USER_FEEDBACK':
+            from backend.integrations.jules_feedback import remind_original_scope
+            state=remind_original_scope(self,job_id,opener=opener)
         if (state['phase']=='awaiting_independent_review' and state.get('repair_history')
                 and not state.get('candidate') and self.clock()>=state.get('backoff_until',0)):
             try:
@@ -721,9 +738,17 @@ class JulesService:
         ):
             return {"status": "policy_halted", "processed": 0}
 
+        from backend.integrations.jules_backlog import JulesBacklogQueue
+        try:
+            JulesBacklogQueue(self).tick()
+        except Exception as error:
+            if self.engine and hasattr(self.engine,'events'):
+                self.engine.events.publish('jules.backlog_admission_error',{'error_type':type(error).__name__,
+                    'notice':'Admission held; existing jobs continue through their retained checkpoints'})
+
         active_jobs = [
             j for j in self.list_jobs()
-            if j["phase"] in {"queued", "submitting", "watching", "repair_queued", "repair_sending"}
+            if j["phase"] in {"queued", "submitting", "watching", "paused", "repair_queued", "repair_sending"}
             or (j['phase']=='awaiting_independent_review' and j.get('repair_history') and not j.get('candidate'))
         ]
         processed = 0
@@ -743,11 +768,17 @@ class JulesService:
             row=conn.execute('SELECT state_json FROM jules_jobs WHERE id=?',(job_id,)).fetchone()
             if not row:raise KeyError(job_id)
             state=json.loads(row[0])
-            if state['phase'] in {'completed','failed'}:return state
+            if state['phase'] in {'completed','failed','rejected'}:return state
             remote_possible=state['phase']!='queued'
             state.update(phase='cancelled',reason=clean_text(str(reason))[:300]+(' ; local cancellation only; remote work may continue' if remote_possible else ''))
             self._save_job(conn,state);conn.commit()
             return state
+
+    @announces()
+    def reject_candidate(self,job_id,*,expected_job_binding,expected_record_version,reason,opener=None):
+        from backend.integrations.jules_rejection import reject_candidate
+        return reject_candidate(self,job_id,expected_job_binding=expected_job_binding,
+            expected_record_version=expected_record_version,reason=reason,opener=opener)
 
     @announces()
     def fetch_candidate(self, job_id, opener=None):
@@ -934,9 +965,9 @@ class JulesService:
             state=self.get_job(job_id)
             if state.get('repair_dispatch_id')!=dispatch:return state
             state['repair_history'][-1]['status']=outcome
-            if outcome=='acknowledged':
+            if outcome=='acknowledged' and state['phase']!='rejected':
                 state['previous_candidate']=state.pop('candidate',None)
-            if state['phase']!='cancelled':
+            if state['phase'] not in {'cancelled','rejected'}:
                 if outcome=='unknown':
                     # Revocation must never turn an uncertain POST into a retryable review.
                     state.update(phase='repair_submission_unknown',reason='Correction outcome uncertain; no automatic replay; remote work may continue')
@@ -953,6 +984,10 @@ class JulesService:
 
     def _programme_authority(self,state):
         """Programme registration is not dispatch until its final owner binding."""
+        if state['phase'] in {'queued','submitting'}:
+            from backend.integrations.jules_backlog import JulesBacklogQueue
+            try:JulesBacklogQueue(self).validate_submission(state)
+            except ValueError as error:raise DispatchDeferred('Batch prerequisite or note binding changed') from error
         with self.db.get_connection() as conn:
             if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_programmes'").fetchone():return
             matches=[]

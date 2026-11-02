@@ -48,6 +48,19 @@
         "memory",
         "security"
       ]
+    },
+    "experimental_autonomous": {
+      "name": "Experimental Autonomous Host",
+      "description": "Laptop 2 experimental autonomy profile for sandbox package management, local containers/VMs, temporary coding agents, and bounded failure simulations.",
+      "recommended_min_ram_gb": 8,
+      "gui": true,
+      "knights": [
+        "planner",
+        "coder",
+        "researcher",
+        "memory",
+        "security"
+      ]
     }
   }
 }
