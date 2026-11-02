@@ -1,11 +1,12 @@
 """API endpoints for the Kingdom Gap Register."""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from backend.security.http_auth import require_owner
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from backend.storage.db import db
 from backend.system.gap_register import GapRegister
 
-router = APIRouter(prefix="/system/gap-register", tags=["Gap Register"])
+router = APIRouter(prefix="/system/gap-register", tags=["Gap Register"], dependencies=[Depends(require_owner)])
 register = GapRegister(db)
 
 
