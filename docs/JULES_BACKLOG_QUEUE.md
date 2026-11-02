@@ -36,3 +36,8 @@ Tests exercise the real SQLite backlog, encrypted Jules service and admission sc
 Paused remote sessions continue to be observed, with a thirty-second pause backoff. When the latest fully retrieved agent message ends with the exact routine question “Would you like me to proceed with submitting these changes for review?”, the runtime may send one fixed reminder to return the original patch and test evidence. That reminder explicitly forbids PR creation, merge, deployment, release, spending, permission changes and weakened checks. It is not an approval of the candidate or a free-form answer to a model question.
 
 The activity and question digest are claimed durably before the message POST. A lost acknowledgement or interrupted process cannot automatically resend that reminder. There are at most three such attempts per job, inside the original policy, allowlist and deadline. Other questions, including permission or publication requests, remain paused. No model may fabricate human answers. This is a narrow workflow repair, not a claim that arbitrary questions are handled autonomously.
+
+
+## Terminal candidate rejection
+
+[Exact candidate rejection and reconciliation](JULES_TERMINAL_REJECTION.md) provides a separate owner-only negative decision after fresh bound provider completion. It releases only a durably evidenced rejected slot, never accepts the patch or completes its prerequisites. Ordinary local cancellation without that evidence remains held.

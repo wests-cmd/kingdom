@@ -27,6 +27,7 @@ from backend.memory.portable_vault import clean_text, identifier
 
 API = "https://jules.googleapis.com/v1alpha/"
 TERMINAL_PHASES = {
+    "rejected",
     "completed",
     "failed",
     "submission_unknown",
@@ -684,6 +685,10 @@ class JulesService:
         if self.clock() >= state["deadline_at"]:
             with self.db.get_connection() as conn:
                 conn.execute("BEGIN IMMEDIATE")
+                current=self.get_job(job_id)
+                if current['record_version']!=state['record_version'] or current['phase'] in TERMINAL_PHASES:
+                    return current
+                state=current
                 state.update(
                     phase="expired_remote_may_continue",
                     reason="Local observation ended; remote work was not cancelled",
@@ -763,11 +768,17 @@ class JulesService:
             row=conn.execute('SELECT state_json FROM jules_jobs WHERE id=?',(job_id,)).fetchone()
             if not row:raise KeyError(job_id)
             state=json.loads(row[0])
-            if state['phase'] in {'completed','failed'}:return state
+            if state['phase'] in {'completed','failed','rejected'}:return state
             remote_possible=state['phase']!='queued'
             state.update(phase='cancelled',reason=clean_text(str(reason))[:300]+(' ; local cancellation only; remote work may continue' if remote_possible else ''))
             self._save_job(conn,state);conn.commit()
             return state
+
+    @announces()
+    def reject_candidate(self,job_id,*,expected_job_binding,expected_record_version,reason,opener=None):
+        from backend.integrations.jules_rejection import reject_candidate
+        return reject_candidate(self,job_id,expected_job_binding=expected_job_binding,
+            expected_record_version=expected_record_version,reason=reason,opener=opener)
 
     @announces()
     def fetch_candidate(self, job_id, opener=None):
@@ -954,9 +965,9 @@ class JulesService:
             state=self.get_job(job_id)
             if state.get('repair_dispatch_id')!=dispatch:return state
             state['repair_history'][-1]['status']=outcome
-            if outcome=='acknowledged':
+            if outcome=='acknowledged' and state['phase']!='rejected':
                 state['previous_candidate']=state.pop('candidate',None)
-            if state['phase']!='cancelled':
+            if state['phase'] not in {'cancelled','rejected'}:
                 if outcome=='unknown':
                     # Revocation must never turn an uncertain POST into a retryable review.
                     state.update(phase='repair_submission_unknown',reason='Correction outcome uncertain; no automatic replay; remote work may continue')

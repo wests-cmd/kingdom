@@ -90,8 +90,10 @@ class JulesBacklogQueue:
                 raise ValueError('Expired or unavailable batch authority')
             state['enabled']=enabled;self.save(conn,state);conn.commit()
             return state
-    @staticmethod
-    def occupies_slot(job):
+    def occupies_slot(self,job):
+        if job['phase']=='rejected':
+            from backend.integrations.jules_rejection import terminal_rejection_current
+            return not terminal_rejection_current(self.service,job)
         if job['phase']=='completed' and job.get('accepted') is True:return False
         if job['phase']=='failed' and job.get('remote_state')=='FAILED':return False
         if job['phase']=='cancelled' and not job.get('session'):return False

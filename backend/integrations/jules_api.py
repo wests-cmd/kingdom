@@ -6,6 +6,8 @@ from typing import Any
 from typing import Literal
 from backend.integrations.jules_backlog import JulesBacklogQueue, QueueRequest
 from backend.security.http_auth import require_owner
+from backend.integrations.jules_rejection import RejectionRequest, RejectionResponse
+import urllib.error
 
 router = APIRouter(
     prefix="/integrations/jules", dependencies=[Depends(require_owner)]
@@ -177,3 +179,13 @@ def configure_backlog_queue(ident: str,request: QueueSettingsRequest):
     try:return JulesBacklogQueue(service()).configure(ident,**request.model_dump())
     except KeyError as error:raise HTTPException(404,'Backlog queue not found') from error
     except ValueError as error:raise HTTPException(409,'Queue scope changed or authorization unavailable') from error
+
+
+@router.post('/jobs/{job_id}/reject-candidate',response_model=RejectionResponse)
+def reject_candidate(job_id: str,request: RejectionRequest):
+    try:
+        result=service().reject_candidate(job_id,**request.model_dump())
+        return RejectionResponse.model_validate({key:result[key] for key in RejectionResponse.model_fields})
+    except KeyError as error:raise HTTPException(404,'Job not found') from error
+    except ValueError as error:raise HTTPException(409,'Candidate, provider terminal state or expected binding changed; reload without retrying effects') from error
+    except (OSError,urllib.error.URLError) as error:raise HTTPException(502,'Provider terminal observation unavailable; no rejection committed') from error
