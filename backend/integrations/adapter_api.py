@@ -1,11 +1,11 @@
 """REST API endpoints for Adapter Capability Discovery and Beginner Readiness.
 
-Guarded by owner authentication: requires Level 5 owner credentials.
-Exposes installed, supported, and unavailable states, capabilities,
-and beginner setup guides without collecting external credentials.
+Guarded by owner authentication: requires authenticated owner and trusted origin.
+Exposes installed, supported, observed, and unavailable states, capabilities,
+and beginner setup guides without collecting external credentials or executing binaries.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException
 from backend.security.http_auth import require_owner
 from backend.integrations.acp_adapters import ACPToolManager
@@ -28,7 +28,8 @@ def list_adapters() -> Dict[str, Any]:
     return {
         "tools": mgr.list_tools(),
         "models": mgr.list_models(),
-        "credential_isolation": "Strict: no browser cookies or external credentials extracted"
+        "credential_isolation": "Strict: no browser cookies or external credentials extracted",
+        "execution_authority_granted": False
     }
 
 
@@ -44,7 +45,7 @@ def inspect_adapter(tool_id: str) -> Dict[str, Any]:
 
 @router.get("/{tool_id}/connectivity", response_model=Dict[str, Any])
 def verify_connectivity(tool_id: str) -> Dict[str, Any]:
-    """Verify tool connectivity, permissions, and planner availability."""
+    """Verify tool connectivity, permissions, and planner availability without executing binaries."""
     mgr = get_manager()
     try:
         return mgr.verify_connectivity(tool_id)

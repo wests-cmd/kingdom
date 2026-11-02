@@ -30,7 +30,7 @@ export default function AdapterDiscovery() {
       <div className="border-b border-gray-800 pb-3">
         <h2 className="text-xl font-semibold text-white">External Coding Adapters & Model Readiness</h2>
         <p className="text-xs text-gray-400">
-          Discovers installed apps and models without extracting browser cookies or account credentials.
+          Discovers installed apps and configured models without extracting browser cookies or account credentials.
         </p>
       </div>
 
@@ -55,22 +55,32 @@ export default function AdapterDiscovery() {
                   <span className="text-xs text-gray-500 font-mono">{tool.executable}</span>
                 </div>
                 <span className={`px-2 py-0.5 text-xs font-semibold rounded ${
-                  tool.installed
+                  tool.connected && tool.authenticated
                     ? 'bg-green-900/40 text-green-400 border border-green-800'
-                    : 'bg-yellow-900/40 text-yellow-400 border border-yellow-800'
+                    : tool.installed
+                    ? 'bg-yellow-900/40 text-yellow-400 border border-yellow-800'
+                    : 'bg-gray-800 text-gray-400 border border-gray-700'
                 }`}>
-                  {tool.installed ? 'Ready' : 'Not Installed'}
+                  {tool.connected && tool.authenticated ? 'Connected' : tool.installed ? 'Installed (Unverified)' : 'Not Installed'}
                 </span>
               </div>
 
               <div className="text-xs space-y-1 text-gray-300">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Protocol:</span>
-                  <span className="font-mono">{tool.protocol.toUpperCase()} {tool.supports_acp ? '(ACP Native)' : '(CLI)'}</span>
+                  <span className="font-mono">{tool.protocol.toUpperCase()} {tool.supports_acp ? '(ACP)' : '(CLI)'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Protocol Version:</span>
-                  <span>{tool.protocol_version}</span>
+                  <span className="text-gray-500">ACP Compliance:</span>
+                  <span className={tool.acp_compliant ? 'text-green-400' : 'text-yellow-500'}>
+                    {tool.acp_compliant ? 'Verified' : 'Unverified'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Planner Ready:</span>
+                  <span className={tool.available_to_planner ? 'text-green-400' : 'text-gray-500'}>
+                    {tool.available_to_planner ? 'Yes' : 'No'}
+                  </span>
                 </div>
               </div>
 
@@ -104,7 +114,7 @@ export default function AdapterDiscovery() {
 
       <div className="pt-4">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-3">
-          Supported Model Profiles & Capability Readiness
+          Configured Model Profiles & Capability Readiness
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {(adaptersData.models || []).map(model => (
@@ -122,6 +132,9 @@ export default function AdapterDiscovery() {
                 <div>Context: {model.context_window?.toLocaleString()} tokens</div>
                 <div>Tools: {model.supports_tools ? 'Supported' : 'Unavailable'}</div>
                 <div>Vision: {model.supports_vision ? 'Supported' : 'Unavailable'}</div>
+                <div>Status: <span className={model.available ? 'text-green-400' : 'text-yellow-500'}>
+                  {model.available ? 'Available' : 'Unavailable'}
+                </span></div>
               </div>
               {model.unavailable_reasons && model.unavailable_reasons.length > 0 && (
                 <div className="text-[10px] text-yellow-500 bg-yellow-950/20 p-1.5 rounded">

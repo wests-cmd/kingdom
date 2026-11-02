@@ -9,32 +9,32 @@ This document describes the external tool adapter capability discovery layer, Ag
 Kingdom provides a model-neutral, protocol-aware discovery layer for external coding assistants and language engines:
 
 - **Strict Credential Isolation:** Kingdom **never** extracts browser cookies, keychain passwords, or other applications' session tokens. External tools manage their own authentication locally.
-- **Accurate Protocol & Capability Representation:** Tools and models report only their verified capabilities and protocols (e.g. native `acp`, `cli_wrapper`, or `http_api`). Kingdom does not assume universal tool calling, vision support, or ACP compatibility across all engines.
-- **Explicit Unavailable Reasons:** If an engine executable is missing from the system `PATH` or unauthenticated, it is marked with clear, actionable `unavailable_reasons`.
-- **Level 5 Owner Protection:** REST discovery endpoints (`/integrations/adapters`) require authenticated Level 5 owner credentials via `require_owner`.
+- **Accurate Protocol & Capability Representation:** Tools and models report catalog hints and observed facts truthfully. Documented protocol support (e.g., ACP) is not returned as verified runtime compliance without protocol negotiation. Kingdom does not assume universal tool calling, vision support, or ACP compatibility across all engines.
+- **No Binary Execution During Inspection:** Discovered binaries in system PATH are never executed merely to inspect or test them. Presence in PATH alone does not prove connectivity, authentication, daemon readiness, model weights, or planner readiness.
+- **Explicit Unavailable Reasons:** If an engine executable is missing from the system `PATH`, unauthenticated, or unhandshaked, it is marked with clear, actionable `unavailable_reasons`.
+- **Owner Authentication Protection:** REST discovery endpoints (`/integrations/adapters`) authenticate the owner identity and trusted request origin via `require_owner`. `require_owner` authenticates owner and origin for the control plane; it does not check or elevate the autonomy policy level (which remains bound to execution governance). Discovery does not grant execution authority.
 
 ---
 
 ## 2. Supported Tools and Adapters
 
-| Adapter ID | Name | Protocol | ACP Native | Executable | Required Permissions |
+| Adapter ID | Name | Protocol | ACP Documented | Executable | Required Permissions |
 |---|---|---|---|---|---|
 | `codex` | OpenAI Codex CLI | `acp` | Yes | `codex` | `filesystem.read`, `filesystem.write`, `process.execute` |
 | `claude_code` | Anthropic Claude Code | `cli_wrapper` | No | `claude` | `filesystem.read`, `filesystem.write`, `process.execute` |
 | `gemini_cli` | Google Gemini CLI | `cli_wrapper` | No | `gemini` | `filesystem.read`, `process.execute` |
-| `jules` | Kingdom Native Jules Adapter | `acp` | Yes | `jules` | `filesystem.read`, `filesystem.write`, `process.execute` |
+| `jules` | Kingdom Native Jules Adapter | `acp` | Yes | (native service) | `filesystem.read`, `filesystem.write`, `process.execute` |
 | `ollama` | Ollama Local Engine | `http_api` | No | `ollama` | `process.execute`, `network.access` |
 
 ---
 
-## 3. Supported Model Profiles
+## 3. Supported Model Profiles & Configured Inventory
 
-Model profiles describe exact execution parameters, context window limits, and capability flags:
+Model inventory separates configured model profiles from catalog reference templates:
 
-- `chatgpt-4o`: Cloud reasoning and multimodal analysis (128k context, tools, vision).
-- `ollama-qwen-coder`: Local coding completion and editing (32k context, tools, local execution).
-- `ollama-llama3`: General-purpose local reasoning (131k context, tools, local execution).
-- `gemini-1.5-pro`: Cloud ultra-long context reasoning (1M context, tools, vision).
+- **Configured Model Profiles:** Sourced dynamically from `ModelProfiles` in SQLite. Reports actual user-configured endpoints, context windows, tools, vision capabilities, and authentication status.
+- **ChatGPT Plan Connection:** Evaluated through `ChatGPTPlanConnection` state; does not default to available unless the owner has completed sign-in and authorization.
+- **Catalog Reference Templates:** Reference specifications for known models (`chatgpt-4o`, `ollama-qwen-coder`, `ollama-llama3`, `gemini-1.5-pro`). Marked unavailable with clear reasons if the provider daemon, weights, or account connection are missing.
 
 ---
 
@@ -56,18 +56,18 @@ Each adapter manifest includes a `beginner_setup_guide` detailing non-destructiv
 
 ### Ollama Local Engine
 - **Installation:** Download and install from [ollama.com](https://ollama.com).
-- **Setup:** Local daemon listening on `http://localhost:11434`. No account login required.
+- **Setup:** Local daemon listening on `http://localhost:11434`. No account login required. Model weights must be pulled locally.
 
 ### Native Jules Adapter
 - **Installation:** Native Kingdom supervisor integration in `backend/integrations/jules.py`.
-- **Sign-in:** Owner authorization key configured in `data/secrets/jules.key` (mode `0o600`).
+- **Sign-in:** Requires owner key configured in `data/secrets/jules.key` (mode `0o600`) and Level 5 standing authorization for cloud dispatch.
 
 ---
 
 ## 5. REST API Reference
 
-All endpoints require owner authentication headers (`Authorization: Bearer <owner_token>`).
+All endpoints require owner authentication headers (`Authorization: Bearer <owner_token>`) from a trusted origin.
 
-- `GET /integrations/adapters`: Returns lists of all supported tools and model profiles with installation status and capability tags.
+- `GET /integrations/adapters`: Returns lists of all supported tools and model profiles with observed installation status, protocol verification state, and capability tags.
 - `GET /integrations/adapters/{tool_id}`: Returns detailed inspection of a specific tool, including beginner setup guide and unavailable reasons.
-- `GET /integrations/adapters/{tool_id}/connectivity`: Validates executable presence and connectivity status.
+- `GET /integrations/adapters/{tool_id}/connectivity`: Reports connectivity, installation, ACP compliance, protocol verification, and planner availability status without executing binaries.
