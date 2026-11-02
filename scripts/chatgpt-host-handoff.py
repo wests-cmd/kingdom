@@ -8,11 +8,27 @@ import json
 from pathlib import Path
 import sys
 import sqlite3
+from contextlib import contextmanager
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from backend.models.chatgpt_plan import ChatGPTPlanConnection, ChatGPTPlanError
 from backend.models.chatgpt_handoff import ChatGPTHostHandoff, MAX_BUNDLE, bundle_digest
-from backend.storage.db import Database
+
+
+class ExistingStore:
+    """Use only the selected existing DB; never initialize a default app DB."""
+    def __init__(self, path):
+        self.db_path = path
+
+    @contextmanager
+    def get_connection(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
 
 def read_record(stream):
@@ -55,7 +71,7 @@ def main(argv=None):
             raise ChatGPTPlanError('handoff_existing_store_required')
         if any(p.is_symlink() for p in (args.database, *args.database.parents, args.secrets, *args.secrets.parents)):
             raise ChatGPTPlanError('handoff_existing_store_required')
-        connection = ChatGPTPlanConnection(Database(args.database), root=args.secrets)
+        connection = ChatGPTPlanConnection(ExistingStore(args.database), root=args.secrets)
         handoff = ChatGPTHostHandoff(connection)
         if args.phase == 'prepare':
             result = handoff.prepare(target_host_id=args.target_host_id)
