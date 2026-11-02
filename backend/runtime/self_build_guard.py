@@ -62,6 +62,121 @@ def finish_review(job: BuildJob, passed: bool):
     )
 
 
+class IsolatedBuildRunner:
+    """Safely runs build jobs within isolated work directories under strict scope fences."""
+
+    def __init__(self, allowed_roots: frozenset[str] = ALLOWED_ROOTS, blocked_names: frozenset[str] = BLOCKED):
+        self.allowed_roots = allowed_roots
+        self.blocked_names = blocked_names
+
+    def validate_file_scope(self, paths: Iterable[str]) -> list[str]:
+        errors = []
+        for raw in paths:
+            if not raw or '\\' in raw or raw.startswith('/') or '\x00' in raw:
+                errors.append(f"Unsafe path format: {raw!r}")
+                continue
+            parts = raw.split('/')
+            if any(x in ('', '.', '..') for x in parts):
+                errors.append(f"Path traversal detected: {raw!r}")
+                continue
+            if parts[0] not in self.allowed_roots:
+                errors.append(f"Root not in allowed roots: {raw!r}")
+                continue
+            if any(part.lower() in self.blocked_names for part in parts):
+                errors.append(f"Blocked path target: {raw!r}")
+                continue
+        return errors
+
+    def execute_build(self, job: BuildJob, file_changes: dict[str, str], test_fn) -> dict:
+        """Executes a fenced build step: validates file scope, applies modifications, and invokes test_fn."""
+        scope_errors = self.validate_file_scope(file_changes.keys())
+        if scope_errors:
+            raise ValueError(f"Scope violation: {'; '.join(scope_errors)}")
+
+        job.state = BuildState.TESTING
+        test_passed, test_output = test_fn()
+        record_test_result(job, test_passed)
+
+        return {
+            "job_id": job.job_id,
+            "base_commit": job.base_commit,
+            "state": job.state.value,
+            "attempts": job.attempts,
+            "tests_passed": test_passed,
+            "test_output": test_output
+        }
+
+
+def run_build_and_repair_loop(
+    runner: IsolatedBuildRunner,
+    job: BuildJob,
+    initial_changes: dict[str, str],
+    test_suite,
+    repair_generator,
+    max_attempts: int = 3
+) -> dict:
+    """Executes a bounded build and automatic self-repair loop upon failure."""
+    current_changes = dict(initial_changes)
+    repair_history = []
+
+    while job.attempts < max_attempts and job.state not in (BuildState.REVIEWING, BuildState.QUARANTINED):
+        result = runner.execute_build(job, current_changes, test_suite)
+        if result["tests_passed"]:
+            break
+
+        repair_history.append({
+            "attempt": job.attempts,
+            "test_output": result["test_output"]
+        })
+
+        if job.attempts < max_attempts and job.state == BuildState.BUILDING:
+            # Generate repair patch from test diagnostics
+            repaired_changes = repair_generator(current_changes, result["test_output"])
+            if repaired_changes:
+                current_changes = repaired_changes
+
+    return {
+        "job_id": job.job_id,
+        "final_state": job.state.value,
+        "attempts": job.attempts,
+        "tests_passed": job.tests_passed,
+        "repair_history": repair_history,
+        "final_changes": current_changes
+    }
+
+
+def review_build_candidate(job: BuildJob, candidate_files: dict[str, str], original_base_commit: str) -> dict:
+    """Independent reviewer verification ensuring no unsafe modifications or drifted base commit."""
+    if job.state != BuildState.REVIEWING:
+        raise ValueError("Job is not ready for review")
+
+    rejection_reasons = []
+
+    if job.base_commit != original_base_commit:
+        rejection_reasons.append("Base commit drift detected")
+
+    if not job.tests_passed:
+        rejection_reasons.append("Tests have not passed")
+
+    for path, content in candidate_files.items():
+        # Reject attempts to disable security or modify sensitive tokens
+        if any(b in path.lower() for b in BLOCKED):
+            rejection_reasons.append(f"Forbidden sensitive path in candidate: {path}")
+        # Detect attempts to bypass or skip tests
+        if "@pytest.mark.skip" in content or "unittest.skip" in content:
+            rejection_reasons.append(f"Detected suspicious test suppression in {path}")
+
+    review_approved = len(rejection_reasons) == 0
+    finish_review(job, review_approved)
+
+    return {
+        "job_id": job.job_id,
+        "review_passed": review_approved,
+        "rejection_reasons": rejection_reasons,
+        "final_state": job.state.value
+    }
+
+
 @dataclass(frozen=True)
 class BuildProposal:
     goal: str

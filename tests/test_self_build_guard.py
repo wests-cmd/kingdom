@@ -65,3 +65,50 @@ class Tests(unittest.TestCase):
         record_test_result(job, passed=True)
         finish_review(job, passed=False)
         self.assertEqual(job.state, BuildState.QUARANTINED)
+
+    def test_isolated_build_runner_scope_enforcement(self):
+        from backend.runtime.self_build_guard import IsolatedBuildRunner
+        runner = IsolatedBuildRunner()
+        # Valid paths
+        self.assertEqual(runner.validate_file_scope(["backend/runtime/health.py", "tests/test_health.py"]), [])
+        # Out-of-tree / traversal
+        errors = runner.validate_file_scope(["backend/../.env", "unauthorized_root/foo.py"])
+        self.assertEqual(len(errors), 2)
+
+    def test_run_build_and_repair_loop_success_after_repair(self):
+        from backend.runtime.self_build_guard import IsolatedBuildRunner, run_build_and_repair_loop
+        runner = IsolatedBuildRunner()
+        job = BuildJob(job_id="job-repair", base_commit=SHA, approved=True)
+
+        call_count = 0
+        def test_suite():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return False, "AssertionError: expected 200, got 500"
+            return True, "All tests passed"
+
+        def repair_gen(changes, failure_log):
+            updated = dict(changes)
+            updated["backend/runtime/health.py"] = "fixed_content"
+            return updated
+
+        res = run_build_and_repair_loop(
+            runner, job,
+            initial_changes={"backend/runtime/health.py": "broken_content"},
+            test_suite=test_suite,
+            repair_generator=repair_gen
+        )
+        self.assertEqual(res["final_state"], "reviewing")
+        self.assertTrue(res["tests_passed"])
+        self.assertEqual(len(res["repair_history"]), 1)
+
+    def test_independent_review_catches_test_suppression(self):
+        from backend.runtime.self_build_guard import review_build_candidate
+        job = BuildJob(job_id="job-review", base_commit=SHA, state=BuildState.REVIEWING, tests_passed=True, approved=True)
+        # Attempt to insert test skipping
+        candidate_files = {"tests/test_bad.py": "@pytest.mark.skip(reason='bypass')"}
+        res = review_build_candidate(job, candidate_files, original_base_commit=SHA)
+        self.assertFalse(res["review_passed"])
+        self.assertEqual(res["final_state"], "quarantined")
+        self.assertTrue(any("test suppression" in r for r in res["rejection_reasons"]))
