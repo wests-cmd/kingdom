@@ -238,3 +238,44 @@ def test_storage_abort_rolls_back_import_and_source_secret_deletion(tmp_path):
         assert source._account(parcel['account']['id'])[1] is not None
         assert sender.status(parcel['transfer_id'])['phase']=='exported'
         assert dest.status()['state']=='handoff_pending'
+
+
+def test_import_rechecks_fixed_window_after_identity_network_validation(tmp_path, monkeypatch):
+    with provider() as fixture:
+        source, clock = connected(tmp_path, fixture)
+        dest = target(tmp_path, fixture, clock)
+        parcel = ChatGPTHostHandoff(source).prepare(target_host_id=dest.status()['host_id'])
+        original = dest._identity
+        def delayed_identity(*args, **kwargs):
+            claims = original(*args, **kwargs)
+            clock[0] = parcel['expires_at'] + 1
+            return claims
+        monkeypatch.setattr(dest, '_identity', delayed_identity)
+        before = dest.status()
+        with pytest.raises(ChatGPTPlanError, match='handoff_expired_or_unavailable'):
+            ChatGPTHostHandoff(dest).import_bundle(parcel, expected_sha256=bundle_digest(parcel))
+        assert dest.status() == before
+        with dest.db.get_connection() as conn:
+            assert conn.execute('SELECT COUNT(*) FROM chatgpt_host_handoffs').fetchone()[0] == 0
+
+
+def test_operator_prepare_publishes_redacted_event_to_selected_store(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location('handoff_event_cli', Path(__file__).resolve().parents[1]/'scripts/chatgpt-host-handoff.py')
+    cli = importlib.util.module_from_spec(spec); spec.loader.exec_module(cli)
+    with provider() as fixture:
+        source, clock = connected(tmp_path, fixture)
+        actual = cli.ChatGPTPlanConnection
+        def fixture_connection(database, **kwargs):
+            return actual(database, **kwargs, clock=lambda: clock[0], transport=source.transport,
+                          async_transport=source.async_transport)
+        monkeypatch.setattr(cli, 'ChatGPTPlanConnection', fixture_connection)
+        output, error = io.StringIO(), io.StringIO()
+        monkeypatch.setattr(cli.sys, 'stdout', output); monkeypatch.setattr(cli.sys, 'stderr', error)
+        assert cli.main(['--database', str(Path(source.db.db_path).resolve()), '--secrets',
+                         str((tmp_path/'secrets').resolve()), 'prepare', '--target-host-id',
+                         'urn:uuid:another-host', '--secret-stdout']) == 0
+        parcel = json.loads(output.getvalue())
+        with source.db.get_connection() as conn:
+            records = conn.execute("SELECT payload_json FROM events WHERE event_type='chatgpt_plan.host_handoff'").fetchall()
+        assert [json.loads(row[0]) for row in records] == [{'transfer_id': parcel['transfer_id'], 'phase': 'exported'}]
+        assert parcel['credentials']['access_token'] not in json.dumps([row[0] for row in records])

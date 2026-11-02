@@ -192,6 +192,11 @@ class ChatGPTHostHandoff:
         ack = {**unsigned, 'proof':hmac.new(bytes.fromhex(parcel['acknowledgement_key']), canonical(unsigned), hashlib.sha256).hexdigest()}
         with c.db.get_connection() as conn:
             conn.execute('BEGIN IMMEDIATE')
+            now = c.clock()
+            if (not now-300 <= parcel['created_at'] <= now+30
+                    or not now < parcel['expires_at'] <= parcel['created_at']+300
+                    or public['expires_at'] <= now+60 or claims['exp'] <= now):
+                raise ChatGPTPlanError('handoff_expired_or_unavailable')
             meta = self._meta(conn)
             if meta['host_id'] != parcel['target_host']:
                 raise ChatGPTPlanError('handoff_host_invalid')

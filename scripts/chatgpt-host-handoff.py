@@ -11,6 +11,7 @@ import sqlite3
 from contextlib import contextmanager
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from backend.events.event_bus import EventBus
 from backend.models.chatgpt_plan import ChatGPTPlanConnection, ChatGPTPlanError
 from backend.models.chatgpt_handoff import ChatGPTHostHandoff, MAX_BUNDLE, bundle_digest
 
@@ -29,6 +30,14 @@ class ExistingStore:
                 yield conn
         finally:
             conn.close()
+
+    def save(self, event):
+        """Persist EventBus notifications only in the explicitly selected store."""
+        with self.get_connection() as conn:
+            conn.execute('INSERT INTO events(event_id,event_type,timestamp,source,task_id,payload_json) '
+                         'VALUES(?,?,?,?,?,?) ON CONFLICT(event_id) DO NOTHING',
+                         (event['event_id'], event['event_type'], event['timestamp'], event['source'],
+                          event.get('task_id'), json.dumps(event['payload'])))
 
 
 def read_record(stream):
@@ -71,7 +80,9 @@ def main(argv=None):
             raise ChatGPTPlanError('handoff_existing_store_required')
         if any(p.is_symlink() for p in (args.database, *args.database.parents, args.secrets, *args.secrets.parents)):
             raise ChatGPTPlanError('handoff_existing_store_required')
-        connection = ChatGPTPlanConnection(ExistingStore(args.database), root=args.secrets)
+        store = ExistingStore(args.database)
+        events = EventBus(repository=store)
+        connection = ChatGPTPlanConnection(store, root=args.secrets, publish=events.publish)
         handoff = ChatGPTHostHandoff(connection)
         if args.phase == 'prepare':
             result = handoff.prepare(target_host_id=args.target_host_id)
