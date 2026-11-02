@@ -41,7 +41,7 @@ INITIAL_CAPABILITIES = [
         "missing_work": "Closed-loop git worktree branch management, compile-test-patch cycles with self-modification fences",
         "test_evidence": "tests/test_work_backlog.py, tests/test_jules_adapter.py, tests/test_self_build_guard.py",
         "priority": "P0",
-        "status": "verified"
+        "status": "partial"
     },
     {
         "id": "independent-verification",
@@ -50,7 +50,7 @@ INITIAL_CAPABILITIES = [
         "missing_work": "Cross-agent independent verification isolating creator tokens from verifier assertions",
         "test_evidence": "tests/test_jules_independent_gate.py, tests/test_programme_acceptance_fences.py, tests/test_self_build_guard.py",
         "priority": "P0",
-        "status": "verified"
+        "status": "partial"
     },
     {
         "id": "self-repair",
@@ -77,7 +77,7 @@ INITIAL_CAPABILITIES = [
         "missing_work": "Durable execution graphs with idempotent state resumption without re-running completed side effects",
         "test_evidence": "tests/unit/test_durable_workflow_checkpoints.py, tests/test_runtime_core.py",
         "priority": "P0",
-        "status": "verified"
+        "status": "partial"
     },
     {
         "id": "swarm-administration",
@@ -95,7 +95,7 @@ INITIAL_CAPABILITIES = [
         "missing_work": "Host-level sandbox enforcement for destructive tasks and non-root execution boundaries",
         "test_evidence": "tests/test_security.py, tests/unit/test_credential_broker.py",
         "priority": "P0",
-        "status": "verified"
+        "status": "partial"
     },
     {
         "id": "voice-and-vision",
@@ -113,7 +113,7 @@ INITIAL_CAPABILITIES = [
         "missing_work": "Automated regression benchmark gate triggering signed tag creation and release notes generation",
         "test_evidence": "tests/test_release_artifact_integrity.py, tests/test_version_preparation.py",
         "priority": "P1",
-        "status": "verified"
+        "status": "partial"
     },
     {
         "id": "resource-optimization",
@@ -131,7 +131,7 @@ INITIAL_CAPABILITIES = [
         "missing_work": "One-click bundled runtime installer with zero CLI prerequisites across platforms",
         "test_evidence": "tests/unit/test_install_profile_registry.py, tests/test_release_installation_contract.py",
         "priority": "P1",
-        "status": "verified"
+        "status": "partial"
     }
 ]
 
