@@ -96,7 +96,7 @@ class ModelSelectionRequest(BaseModel):
 
 class UniversalModelLayer:
     def __init__(self, models: Optional[Dict[str, ModelCapability]] = None):
-        self.models = dict(models or KNOWN_MODELS)
+        self.models = dict(KNOWN_MODELS if models is None else models)
 
     def register_model(self, model_id: str, cap: ModelCapability):
         self.models[model_id] = cap
@@ -135,15 +135,8 @@ class UniversalModelLayer:
             candidates.append((score, model_id, cap))
 
         if not candidates:
-            # Deterministic fallback: pick safest available local model or lowest cost
-            local_fallbacks = [m for m in self.models.items() if m[1].is_local and m[1].is_available]
-            if local_fallbacks:
-                selected_id, cap = local_fallbacks[0]
-                return {
-                    "selected_model": selected_id,
-                    "details": cap.model_dump(),
-                    "reason": "Deterministic local fallback due to strict constraint exhaustion"
-                }
+            # Local preference can rank eligible models, but cannot remove
+            # required capabilities or repopulate an empty observed inventory.
             raise RuntimeError("No suitable model available matching request constraints")
 
         candidates.sort(key=lambda x: x[0], reverse=True)
