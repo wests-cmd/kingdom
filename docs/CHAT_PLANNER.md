@@ -112,3 +112,10 @@ Verification: clarification/restart/CAS/bounds tests; planner chat messages and
 truncation tests; explicit/pooled/automatic Codex exclusion tests; existing programme
 acceptance, HTTP ownership and runtime-loop tests. These test the implementation;
 live provider execution and fleet deployment require separate receipts.
+
+## Remote host provisioning
+
+An existing Kingdom OAuth session can be moved to one approved remote Knight
+using the [operator-only fenced host handoff](CHATGPT_HOST_HANDOFF.md). The
+destination retains its own host ID and stays planner-disabled until explicitly
+configured; this is not a shared refresh-token or execution-permission grant.
