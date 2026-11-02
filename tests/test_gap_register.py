@@ -5,6 +5,16 @@ from backend.main import app
 from backend.system.gap_register import INITIAL_CAPABILITIES
 
 
+from backend.security.http_auth import require_owner
+
+
+@pytest.fixture(autouse=True)
+def override_owner_auth():
+    app.dependency_overrides[require_owner] = lambda: {"role": "owner"}
+    yield
+    app.dependency_overrides.pop(require_owner, None)
+
+
 def test_gap_register_seeding_and_list():
     client = TestClient(app)
     response = client.get("/system/gap-register")
@@ -66,3 +76,19 @@ def test_gap_register_not_found():
         json={"test_evidence": "some test", "status": "verified"}
     )
     assert put_res.status_code == 404
+
+
+def test_gap_register_auth_required():
+    app.dependency_overrides.pop(require_owner, None)
+    client = TestClient(app)
+    res = client.get("/system/gap-register")
+    assert res.status_code in (401, 403)
+
+
+def test_sync_backlog_endpoint():
+    client = TestClient(app)
+    res = client.post("/system/gap-register/sync-backlog")
+    assert res.status_code == 200
+    data = res.json()
+    assert "synced_count" in data
+    assert "items" in data

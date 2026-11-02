@@ -30,19 +30,20 @@ def test_permission_tiers():
 
 
 def test_laptop2_experimental_host_isolation():
-    # Laptop 2 authorized host receives experimental capabilities
-    actor_laptop2 = {"role": "experimental", "node_id": "laptop2-host"}
+    # Laptop 2 authorized host with verified grant receives experimental capabilities
+    actor_laptop2 = {"role": "experimental", "node_id": "laptop2-host", "is_experimental_host": True}
     assert permission_manager.check_capability(actor_laptop2, "docker.execute") is True
     assert permission_manager.check_capability(actor_laptop2, "process.execute") is True
     assert permission_manager.check_capability(actor_laptop2, "filesystem.write") is True
 
-    # Explicit flag on authorized host
-    actor_flagged = {"role": "experimental", "node_id": "custom-node", "is_experimental_host": True}
-    assert permission_manager.check_capability(actor_flagged, "docker.execute") is True
+    # Forged node_id claiming to be laptop2 without verified grant is rejected
+    actor_spoofed = {"role": "experimental", "node_id": "laptop2-spoof", "is_experimental_host": False}
+    assert permission_manager.check_capability(actor_spoofed, "docker.execute") is False
+    assert permission_manager.check_capability(actor_spoofed, "memory.read") is True
 
     # Untrusted / Non-experimental node (e.g. DT1 or ordinary knight) MUST NOT inherit experimental privileges
-    actor_dt1 = {"role": "experimental", "node_id": "dt1-remote-knight"}
-    # Must be downgraded to observe privileges
+    actor_dt1 = {"role": "experimental", "node_id": "dt1-remote-knight", "is_experimental_host": True}
+    # Must be downgraded to observe privileges even if spoofing flag
     assert permission_manager.check_capability(actor_dt1, "docker.execute") is False
     assert permission_manager.check_capability(actor_dt1, "process.execute") is False
     assert permission_manager.check_capability(actor_dt1, "filesystem.write") is False
