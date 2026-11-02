@@ -50,6 +50,11 @@ tampered source or expired review yields no attestation. Observed behavioral
 failures can retain the existing signed `FAILED` protocol for bounded failure
 handback; they cannot produce a passing acceptance receipt.
 
+The protected producer refuses optimized Python (`-O`/`-OO`) before reading a
+configuration or launching a container, because optimization disables the fixed
+host assertions. Missing explicit readiness/authentication/protocol/authority
+flags are not treated as false; they fail the contract as unknown evidence.
+
 The public-key trust registry, current mission and exact job/patch binding must
 still be installed/reviewed through the existing independent-review process.
 This change installs no key, registry, grant, mission, service or live adapter.

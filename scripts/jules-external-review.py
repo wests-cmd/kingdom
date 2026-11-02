@@ -165,6 +165,8 @@ def finish_candidate(run,container_id,name,run_id):
 
 
 def execute(config_path):
+    if sys.flags.optimize:
+        raise ValueError('Assertion checks must remain enabled in the protected supervisor')
     if not sys.flags.isolated:
         raise ValueError('Launch the protected supervisor with Python -I')
     config_path=protected(config_path,private=True)
@@ -176,6 +178,8 @@ def execute(config_path):
 
 
 def _execute(config_path):
+    if sys.flags.optimize:
+        raise ValueError('Assertion checks must remain enabled in the protected supervisor')
     config_path = protected(config_path, private=True)
     if config_path.stat().st_size > 65536:
         raise ValueError('Bounded supervisor configuration required')

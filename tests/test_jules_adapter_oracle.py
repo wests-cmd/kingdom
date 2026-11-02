@@ -138,3 +138,13 @@ def test_oversized_or_credential_disclosing_responses_are_never_success_signals(
         result = load().AdapterReadinessSuite(hostile, 'disposable-owner-token').run()
         assert all(not row['passed'] for row in result)
         assert all('disposable-owner-token' not in row['detail'] for row in result)
+
+
+def test_optimized_python_cannot_silently_disable_external_assertions():
+    import subprocess
+    import sys
+    result = subprocess.run([sys.executable, '-I', '-O',
+        str(Path(__file__).parents[1]/'scripts/jules-external-review.py'), '--config', 'unused-config.json'],
+        capture_output=True, text=True, timeout=10)
+    assert result.returncode != 0
+    assert 'Assertion checks must remain enabled' in result.stderr
