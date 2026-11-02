@@ -1,0 +1,70 @@
+# Fixed external adapter-readiness contract
+
+`adapter-readiness-v1` is an operator-owned extension of
+`scripts/jules-external-review.py`. It is not a candidate command or a general
+claim that arbitrary engineering work is correct.
+
+The protected controller reconstructs the exact Git base plus retained patch,
+pins its source tree and installed image, and starts one non-root, read-only,
+network-isolated candidate with bounded CPU, RAM and process count. The signer
+and fixed assertions stay outside that container. Candidate source, test files,
+pytest plugins, JUnit and success prose are never imported or used as verdicts.
+
+The finite scope is the eight original adapter implementation/UI/docs/test paths
+plus `frontend/tests/adapterDiscovery.test.js`. The controller checks the exact
+allowlist, rather than accepting paths named by the patch. The contract digest
+includes the protected oracle, producer, source-preparation and raw exporter.
+Changing installed producer code requires a newly reviewed digest; do not
+silently replace an existing trusted contract.
+
+## Seven external API assertions
+
+1. The real discovery endpoint denies unauthenticated access.
+2. A forged token does not become an owner.
+3. Fresh, unconfigured tools and catalog entries do not claim authentication,
+   protocol verification, readiness, planner availability or execution authority.
+4. Unconfigured native Jules remains unavailable.
+5. An owner-created randomized disabled model profile appears in discovery,
+   preserving its exact identity/model and unavailable state. A hard-coded
+   example list cannot satisfy this round trip.
+6. An enabled profile pointing to an unverified local endpoint does not become
+   inference-ready merely because its configuration was saved.
+7. A saved invalid disposable Jules key and allowlist do not prove provider
+   authentication or connectivity.
+
+The last assertion sets level five and enables a fake-key adapter **only inside
+fresh disposable state**, with no jobs and no external network. No owner
+credentials, device state, model weights or production configuration are mounted.
+No discovered application is executed, and no model or provider call is needed.
+
+The contract deliberately fixes the current `/integrations/adapters` response
+fields. A future API-schema change needs a separately reviewed contract update,
+not a permissive fallback that interprets missing data as success.
+
+## Verdict boundary and limitations
+
+All counts originate in the host assertions. A candidate HTTP error carrying
+`99 passed` or fabricated XML remains a failure. Source/container/identity
+integrity and deadline checks run before and after the suite. Unknown startup,
+tampered source or expired review yields no attestation. Observed behavioral
+failures can retain the existing signed `FAILED` protocol for bounded failure
+handback; they cannot produce a passing acceptance receipt.
+
+The public-key trust registry, current mission and exact job/patch binding must
+still be installed/reviewed through the existing independent-review process.
+This change installs no key, registry, grant, mission, service or live adapter.
+It does not make catalog inspection into an ACP bridge, installer, authenticated
+provider, tested model or production release. Passing these seven checks is
+specific readiness evidence only.
+
+## Verification
+
+`python -m pytest tests/test_jules_adapter_oracle.py tests/test_jules_external_review.py tests/test_jules_native_review_worker.py -q`
+
+The new tests exercise the fixed controller against a real local HTTP boundary
+simulator, including false-ready and hard-coded inventory responses. They are
+controller tests, not Docker or production signature evidence. The protected
+supervisor requires a POSIX host; Windows skips in existing tests must not be
+reported as successful protected-host execution. A separately authorized Linux
+container experiment remains required before installing production reviewer
+trust or accepting a live task.

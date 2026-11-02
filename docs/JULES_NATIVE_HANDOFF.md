@@ -94,4 +94,8 @@ module tests alone.
 
 ## Durable backlog admission
 
+[The fixed adapter-readiness external contract](ADAPTER_EXTERNAL_REVIEW.md)
+adds task-specific API assertions to the same protected producer. Its controller
+tests are not a production signature or an installed reviewer grant.
+
 [Owner-scoped coding batches](JULES_BACKLOG_QUEUE.md) let the native runner select the next eligible approved note, preserving dependency, acceptance and uncertain-effect holds. This is separate from a claim of full autonomous backlog completion.

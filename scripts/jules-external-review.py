@@ -47,6 +47,8 @@ def contract_files(contract_id='api-negative-fences'):
     names = ['jules-external-review.py', 'jules-source-preparation.py', 'jules-external-oracle.py','archive-verified-source.py']
     if contract_id == 'backlog-advancement-v1':
         names.append('jules-backlog-oracle.py')
+    elif contract_id == 'adapter-readiness-v1':
+        names.append('jules-adapter-oracle.py')
     elif contract_id != 'api-negative-fences':
         raise ValueError('Only fixed installed external contracts are supported')
     return names
@@ -213,6 +215,10 @@ def _execute(config_path):
         oracle_module = load('jules-backlog-oracle')
         if config['allowed_paths'] != oracle_module.ALLOWED_PATHS:
             raise ValueError('Positive backlog contract permits only the scheduler implementation')
+    elif contract_id == 'adapter-readiness-v1':
+        oracle_module = load('jules-adapter-oracle')
+        if config['allowed_paths'] != oracle_module.ALLOWED_PATHS:
+            raise ValueError('Adapter contract permits only its fixed discovery implementation scope')
     proof = prep.prepare(repository, binding['base_revision'], patch_path.read_bytes(),
                          binding['patch_sha256'], run, config['allowed_paths'])
     # Candidate source never receives real credentials. Authentication uses a
@@ -271,7 +277,8 @@ def _execute(config_path):
             test_auth_token=token,output_dir=str(run/'verdict'))
         filename = run/'oracle-config.json'
         durable_json(filename,oracle_config)
-        oracle_class = oracle_module.BacklogOracle if contract_id == 'backlog-advancement-v1' else oracle_module.ExternalOracle
+        oracle_class = (oracle_module.BacklogOracle if contract_id == 'backlog-advancement-v1' else
+                        oracle_module.AdapterOracle if contract_id == 'adapter-readiness-v1' else oracle_module.ExternalOracle)
         oracle=oracle_class(filename)
         oracle.inspect_candidate_container()
         ready=False
