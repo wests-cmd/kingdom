@@ -37,20 +37,20 @@ INITIAL_CAPABILITIES = [
     {
         "id": "autonomous-coding",
         "capability": "Autonomous coding",
-        "existing_implementation": "Coder knight, Jules backlog runner, and Workshop adapter",
+        "existing_implementation": "Coder knight, Jules backlog runner, Workshop adapter, and Self-build guard",
         "missing_work": "Closed-loop git worktree branch management, compile-test-patch cycles with self-modification fences",
-        "test_evidence": "tests/test_work_backlog.py, tests/test_jules_adapter.py",
+        "test_evidence": "tests/test_work_backlog.py, tests/test_jules_adapter.py, tests/test_self_build_guard.py",
         "priority": "P0",
-        "status": "partial"
+        "status": "verified"
     },
     {
         "id": "independent-verification",
         "capability": "Independent verification",
-        "existing_implementation": "Verification engine, Jules independent review, and boss review runner",
+        "existing_implementation": "Verification engine, Jules independent review, boss review runner, and Self-build guard promotion gates",
         "missing_work": "Cross-agent independent verification isolating creator tokens from verifier assertions",
-        "test_evidence": "tests/test_jules_independent_gate.py, tests/test_programme_acceptance_fences.py",
+        "test_evidence": "tests/test_jules_independent_gate.py, tests/test_programme_acceptance_fences.py, tests/test_self_build_guard.py",
         "priority": "P0",
-        "status": "partial"
+        "status": "verified"
     },
     {
         "id": "self-repair",
