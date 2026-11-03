@@ -3,6 +3,7 @@ import hashlib
 import urllib.parse
 
 QUESTION='Would you like me to proceed with submitting these changes for review?'
+SUBMISSION_QUESTIONS=(QUESTION, 'Would you like me to proceed with the pre-commit review and final submission?')
 REMINDER=('Return the final patch/diff artifact and test evidence within the original assignment only. '
           'Kingdom will independently review the exact returned patch. Do not create a pull request. '
           'Do not merge, deploy, publish a release, spend funds, change permissions or weaken checks. '
@@ -26,7 +27,7 @@ def remind_original_scope(service,job_id,opener=None):
         if not page:break
     if page or latest is None:return state
     message=latest[2]
-    if not isinstance(message,str) or len(message)>24000 or not message.strip().endswith(QUESTION):return state
+    if not isinstance(message,str) or len(message)>24000 or not message.strip().endswith(SUBMISSION_QUESTIONS):return state
     ident=hashlib.sha256((state['session']+':'+latest[1]+':'+hashlib.sha256(message.encode()).hexdigest()).encode()).hexdigest()
     with service.db.get_connection() as conn:
         conn.execute('BEGIN IMMEDIATE')
