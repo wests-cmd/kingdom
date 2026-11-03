@@ -1,4 +1,4 @@
-"""Protected finite local worker for the fixed external negative-fence contract.
+"""Protected finite local worker for fixed installed external contracts.
 
 Run with python -I as an operator. The trusted producer launches disposable
 containers. This worker installs no keys, grants, images or network rules.
@@ -23,6 +23,8 @@ import uuid
 BINDING = {'job_id', 'project', 'backlog_id', 'mission_id', 'mission_version', 'step_id',
            'source', 'base_revision', 'patch_sha256', 'contract_sha256'}
 DELIVERY_PROTOCOL = 'kingdom.idempotent-verdict.v1'
+CONTRACT_TEST_COUNTS = {'api-negative-fences': 7, 'backlog-advancement-v1': 4,
+                        'adapter-readiness-v2': 9}
 SCRIPTS = ['jules-native-review-worker.py', 'jules-external-review.py',
            'jules-source-preparation.py', 'jules-external-oracle.py', 'archive-verified-source.py']
 CONFIG = {'api_port', 'owner_token', 'signing_key', 'repository_directory', 'image',
@@ -72,7 +74,7 @@ class Worker:
             raise ValueError('Only the fixed native worker configuration fields are allowed')
         if (type(c['api_port']) is not int or not 1 <= c['api_port'] <= 65535
                 or c['project'] != 'kingdom' or c['source'] != 'sources/github/wests-cmd/kingdom'
-                or not re.fullmatch('[a-z][a-z0-9_-]{0,100}', c['contract_id'])
+                or not isinstance(c['contract_id'], str) or c['contract_id'] not in CONTRACT_TEST_COUNTS
                 or not re.fullmatch('[a-f0-9]{64}', c['contract_sha256'])
                 or not re.fullmatch('[A-Za-z0-9_.-]{1,120}', c['reviewer_id'])
                 or not re.fullmatch('sha256:[a-f0-9]{64}', c['image'])
@@ -80,6 +82,7 @@ class Worker:
                 or type(c['deadline_at']) not in (int, float) or not math.isfinite(c['deadline_at'])
                 or c['deadline_at'] > clock() + 86400):
             raise ValueError('Finite exact owner project, contract, image and budget required')
+        self.test_count = CONTRACT_TEST_COUNTS[c['contract_id']]
         if not isinstance(c['allowed_paths'], list) or not 1 <= len(c['allowed_paths']) <= 100:
             raise ValueError('A bounded exact operator file allowlist is required')
         for value in c['allowed_paths']:
@@ -198,14 +201,14 @@ class Worker:
                 or contract.get('contract_sha256') != self.config['contract_sha256']
                 or contract.get('project') != binding['project'] or contract.get('source') != binding['source']
                 or contract.get('base_revision') != binding['base_revision']
-                or type(contract.get('minimum_tests')) is not int or not 1 <= contract['minimum_tests'] <= 7
+                or type(contract.get('minimum_tests')) is not int or contract['minimum_tests'] != self.test_count
                 or type(binding['mission_version']) is not int or binding['mission_version'] < 1
                 or not re.fullmatch('[a-f0-9]{40}', binding['base_revision'])
                 or not isinstance(value['patch'], str) or not 0 < len(value['patch'].encode()) <= 2_000_000
                 or hashlib.sha256(value['patch'].encode()).hexdigest() != binding['patch_sha256']
                 or type(value['deadline_at']) not in (int, float) or not math.isfinite(value['deadline_at'])
                 or self.clock() >= min(value['deadline_at'], self.config['deadline_at'])):
-            raise ValueError('Retained artifact, source, deadline or fixed negative-fence contract changed')
+            raise ValueError('Retained artifact, source, deadline or fixed installed contract changed')
         return value
 
     def claim(self, binding):
@@ -280,8 +283,8 @@ class Worker:
                 or proof.get('format') != 'kingdom.patch-test.v2'
                 or not re.fullmatch('external-[a-f0-9]{32}', proof.get('receipt_id', ''))
                 or len(base64.b64decode(envelope['signature'], validate=True)) != 64
-                or type(execution.get('test_count')) is not int or execution['test_count'] != 7
-                or type(execution.get('failed_count')) is not int or not 0 <= execution['failed_count'] <= 7
+                or type(execution.get('test_count')) is not int or execution['test_count'] != self.test_count
+                or type(execution.get('failed_count')) is not int or not 0 <= execution['failed_count'] <= self.test_count
                 or type(execution.get('exit_code')) is not int or execution['exit_code'] not in {0, 1}
                 or execution.get('network_isolated') is not True or execution.get('read_only_source') is not True
                 or execution.get('verdict_origin') != 'external_controller'
@@ -292,7 +295,7 @@ class Worker:
             raise ValueError('Inconsistent producer verdict')
         state.update(phase='delivery_reserved', receipt_id=proof['receipt_id'],
                      route='verify' if passed else 'failure', attestation=envelope,
-                     scope='Seven fixed API negative fences only; no general functional correctness claim')
+                     scope=f"{self.config['contract_id']}: {self.test_count} fixed assertions only; no general functional correctness claim")
         self.deliver_reserved(state)
 
     def deliver_reserved(self, state):

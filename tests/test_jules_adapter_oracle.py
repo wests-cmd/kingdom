@@ -112,8 +112,11 @@ def test_synthetic_jules_secret_and_allowlist_are_not_provider_authentication():
 def test_adapter_contract_must_be_hash_bound_by_protected_supervisor():
     spec = importlib.util.spec_from_file_location('supervisor', Path(__file__).parents[1]/'scripts/jules-external-review.py')
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
-    assert 'jules-adapter-oracle.py' in module.contract_files('adapter-readiness-v1')
-    assert module.contract_digest('adapter-readiness-v1') != module.contract_digest('api-negative-fences')
+    assert 'jules-adapter-oracle.py' in module.contract_files('adapter-readiness-v2')
+    assert module.contract_digest('adapter-readiness-v2') != module.contract_digest('api-negative-fences')
+    import pytest
+    with pytest.raises(ValueError):
+        module.contract_files('adapter-readiness-v1')
 
 
 def test_changing_installed_assertions_changes_only_its_own_contract_hash(tmp_path):
@@ -124,10 +127,10 @@ def test_changing_installed_assertions_changes_only_its_own_contract_hash(tmp_pa
         shutil.copyfile(source/name, tmp_path/name)
     spec = importlib.util.spec_from_file_location('copied_supervisor', tmp_path/'jules-external-review.py')
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
-    before = module.contract_digest('adapter-readiness-v1')
+    before = module.contract_digest('adapter-readiness-v2')
     negative = module.contract_digest('api-negative-fences')
     with (tmp_path/'jules-adapter-oracle.py').open('a') as handle: handle.write('\n# changed installed assertion contract\n')
-    assert module.contract_digest('adapter-readiness-v1') != before
+    assert module.contract_digest('adapter-readiness-v2') != before
     assert module.contract_digest('api-negative-fences') == negative
 
 
@@ -148,3 +151,80 @@ def test_optimized_python_cannot_silently_disable_external_assertions():
         capture_output=True, text=True, timeout=10)
     assert result.returncode != 0
     assert 'Assertion checks must remain enabled' in result.stderr
+
+
+def test_fixed_sql_probe_detects_initialization_and_seeds_only_saved_status(tmp_path):
+    import sqlite3
+    import subprocess
+    import sys
+    module = load()
+    database = tmp_path/'kingdom.db'
+    sqlite3.connect(database).close()
+    secrets = tmp_path/'secrets'
+    secrets.mkdir()
+    with sqlite3.connect(database) as connection:
+        connection.execute('CREATE TABLE jules_settings(id INTEGER PRIMARY KEY, enabled INTEGER)')
+        connection.execute('INSERT INTO jules_settings VALUES(1,0)')
+        connection.execute('CREATE TABLE jules_jobs(id TEXT PRIMARY KEY)')
+    (secrets/'jules.key').write_bytes(b'disposable-native-key')
+    # Local fixture path substitution only; the installed helper has fixed paths.
+    script = module.STATE_PROBE.replace('/data/data', tmp_path.as_posix())
+    def probe(mode):
+        result = subprocess.run([sys.executable, '-I', '-S', '-c', script, mode],
+                                capture_output=True, text=True, timeout=10)
+        assert result.returncode == 0, result.stderr
+        return json.loads(result.stdout)
+    empty = probe('empty')
+    assert probe('snapshot') == empty
+    with sqlite3.connect(database) as connection:
+        assert connection.execute('SELECT enabled FROM jules_settings').fetchone() == (0,)
+        assert connection.execute('SELECT count(*) FROM jules_jobs').fetchone() == (0,)
+    assert (secrets/'jules.key').read_bytes() == b'disposable-native-key'
+    with sqlite3.connect(database) as connection:
+        connection.execute('CREATE TABLE model_profiles(id TEXT PRIMARY KEY, config_json TEXT NOT NULL, secret BLOB)')
+    (secrets/'vault.key').write_bytes(b'disposable-key')
+    assert probe('snapshot') != empty
+    assert probe('empty') == empty
+    probe('ready')
+    with sqlite3.connect(database) as connection:
+        meta = json.loads(connection.execute('SELECT value_json FROM chatgpt_plan_meta').fetchone()[0])
+        public, secret = connection.execute('SELECT public_json,secret FROM chatgpt_plan_accounts').fetchone()
+    assert meta['model'] == 'gpt-6-sol' and meta['enabled'] is True
+    assert json.loads(public)['connected'] is True and secret is None
+    assert sorted(p.name for p in secrets.iterdir()) == ['jules.key']
+    # The reset cannot silently destroy an existing account/profile/job fixture.
+    refused = subprocess.run([sys.executable, '-I', '-S', '-c', script, 'empty'],
+                             capture_output=True, text=True, timeout=10)
+    assert refused.returncode != 0
+    with sqlite3.connect(database) as connection:
+        assert connection.execute('SELECT count(*) FROM chatgpt_plan_accounts').fetchone()[0] == 1
+
+
+def test_extra_assertions_reject_both_regressions_and_accept_correct_boundaries():
+    module = load()
+    class SuiteOracle(module.AdapterOracle):
+        def __init__(self, *, mutated=False, unrelated_available=False, absent=False):
+            self.config = {'test_auth_token': 'disposable-owner-token'}
+            self.mutated = mutated
+            self.unrelated_available = unrelated_available
+            self.absent = absent
+            self.transport_fn = self.transport
+        def state_probe(self, mode):
+            return {'sha256': 'changed' if mode == 'snapshot' and self.mutated else 'empty'}
+        def transport(self, method, path, headers, body):
+            if path == '/chatgpt-plan':
+                value = {'state': 'ready', 'model': 'gpt-6-sol'}
+            else:
+                value = {'tools': [{'id': 'jules'}], 'models': [{
+                    'id': 'chatgpt-4o', 'source': 'catalog_template',
+                    'available': self.unrelated_available,
+                    'unavailable_reasons': [] if self.unrelated_available else ['Different selected model']}]}
+                if self.absent:
+                    value['models'] = []
+            return {'status': 200, 'truncated': False, 'body': base64.b64encode(json.dumps(value).encode()).decode()}
+    for mutated, available in ((False, False), (True, False), (False, True)):
+        oracle = SuiteOracle(mutated=mutated, unrelated_available=available)
+        assert oracle.extra_result(module.EXTRA_CASES[0], oracle.inventory_read_only)['passed'] is (not mutated)
+        assert oracle.extra_result(module.EXTRA_CASES[1], oracle.unrelated_catalog)['passed'] is (not available)
+    oracle = SuiteOracle(absent=True)
+    assert oracle.extra_result(module.EXTRA_CASES[1], oracle.unrelated_catalog)['passed'] is True
