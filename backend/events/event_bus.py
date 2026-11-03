@@ -8,13 +8,11 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 from uuid import uuid4
 
-from backend.storage.repository import event_repo
-
-
 class EventBus:
     """Publish runtime events to connected consumers and retain recent history."""
 
-    def __init__(self, history_size: int = 200) -> None:
+    def __init__(self, history_size: int = 200, *, repository: Any = None) -> None:
+        self._repository = repository
         self._history: deque[dict[str, Any]] = deque(maxlen=history_size)
         self._subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
         self._callbacks: set[Callable[[dict[str, Any]], None]] = set()
@@ -46,7 +44,11 @@ class EventBus:
         }
         self._history.append(event)
         try:
-            event_repo.save(event)
+            repository = self._repository
+            if repository is None:
+                from backend.storage.repository import event_repo
+                repository = event_repo
+            repository.save(event)
         except Exception:
             pass
 
