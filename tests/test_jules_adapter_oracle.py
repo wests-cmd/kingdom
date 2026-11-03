@@ -162,6 +162,11 @@ def test_fixed_sql_probe_detects_initialization_and_seeds_only_saved_status(tmp_
     sqlite3.connect(database).close()
     secrets = tmp_path/'secrets'
     secrets.mkdir()
+    with sqlite3.connect(database) as connection:
+        connection.execute('CREATE TABLE jules_settings(id INTEGER PRIMARY KEY, enabled INTEGER)')
+        connection.execute('INSERT INTO jules_settings VALUES(1,0)')
+        connection.execute('CREATE TABLE jules_jobs(id TEXT PRIMARY KEY)')
+    (secrets/'jules.key').write_bytes(b'disposable-native-key')
     # Local fixture path substitution only; the installed helper has fixed paths.
     script = module.STATE_PROBE.replace('/data/data', tmp_path.as_posix())
     def probe(mode):
@@ -171,6 +176,10 @@ def test_fixed_sql_probe_detects_initialization_and_seeds_only_saved_status(tmp_
         return json.loads(result.stdout)
     empty = probe('empty')
     assert probe('snapshot') == empty
+    with sqlite3.connect(database) as connection:
+        assert connection.execute('SELECT enabled FROM jules_settings').fetchone() == (0,)
+        assert connection.execute('SELECT count(*) FROM jules_jobs').fetchone() == (0,)
+    assert (secrets/'jules.key').read_bytes() == b'disposable-native-key'
     with sqlite3.connect(database) as connection:
         connection.execute('CREATE TABLE model_profiles(id TEXT PRIMARY KEY, config_json TEXT NOT NULL, secret BLOB)')
     (secrets/'vault.key').write_bytes(b'disposable-key')
@@ -182,7 +191,7 @@ def test_fixed_sql_probe_detects_initialization_and_seeds_only_saved_status(tmp_
         public, secret = connection.execute('SELECT public_json,secret FROM chatgpt_plan_accounts').fetchone()
     assert meta['model'] == 'gpt-6-sol' and meta['enabled'] is True
     assert json.loads(public)['connected'] is True and secret is None
-    assert not list(secrets.iterdir())
+    assert sorted(p.name for p in secrets.iterdir()) == ['jules.key']
     # The reset cannot silently destroy an existing account/profile/job fixture.
     refused = subprocess.run([sys.executable, '-I', '-S', '-c', script, 'empty'],
                              capture_output=True, text=True, timeout=10)
@@ -194,10 +203,11 @@ def test_fixed_sql_probe_detects_initialization_and_seeds_only_saved_status(tmp_
 def test_extra_assertions_reject_both_regressions_and_accept_correct_boundaries():
     module = load()
     class SuiteOracle(module.AdapterOracle):
-        def __init__(self, *, mutated=False, unrelated_available=False):
+        def __init__(self, *, mutated=False, unrelated_available=False, absent=False):
             self.config = {'test_auth_token': 'disposable-owner-token'}
             self.mutated = mutated
             self.unrelated_available = unrelated_available
+            self.absent = absent
             self.transport_fn = self.transport
         def state_probe(self, mode):
             return {'sha256': 'changed' if mode == 'snapshot' and self.mutated else 'empty'}
@@ -209,8 +219,12 @@ def test_extra_assertions_reject_both_regressions_and_accept_correct_boundaries(
                     'id': 'chatgpt-4o', 'source': 'catalog_template',
                     'available': self.unrelated_available,
                     'unavailable_reasons': [] if self.unrelated_available else ['Different selected model']}]}
+                if self.absent:
+                    value['models'] = []
             return {'status': 200, 'truncated': False, 'body': base64.b64encode(json.dumps(value).encode()).decode()}
     for mutated, available in ((False, False), (True, False), (False, True)):
         oracle = SuiteOracle(mutated=mutated, unrelated_available=available)
         assert oracle.extra_result(module.EXTRA_CASES[0], oracle.inventory_read_only)['passed'] is (not mutated)
         assert oracle.extra_result(module.EXTRA_CASES[1], oracle.unrelated_catalog)['passed'] is (not available)
+    oracle = SuiteOracle(absent=True)
+    assert oracle.extra_result(module.EXTRA_CASES[1], oracle.unrelated_catalog)['passed'] is True

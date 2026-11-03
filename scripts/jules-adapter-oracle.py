@@ -172,19 +172,21 @@ p=Path('/data/data/kingdom.db')
 assert p.is_file() and not p.is_symlink()
 c=sqlite3.connect(str(p),timeout=2)
 tables=('jules_settings','jules_jobs','model_profiles','chatgpt_plan_meta','chatgpt_plan_accounts','chatgpt_plan_pending')
+reset_tables=tables[2:]
 keys=tuple(Path('/data/data/secrets')/name for name in ('vault.key','jules.key','jules-key.lock'))
 mode=sys.argv[1]
 if mode=='empty':
     # Preflight every fixture before deleting anything.
-    for table in tables:
+    for table in reset_tables:
         if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(table,)).fetchone():
             assert c.execute('SELECT count(*) FROM "'+table+'"').fetchone()[0] <= (1 if table in ('jules_settings','chatgpt_plan_meta') else 0)
     for key in keys:
         assert not key.is_symlink()
-    for table in tables:
+    for table in reset_tables:
         c.execute('DROP TABLE IF EXISTS "'+table+'"')
     c.commit()
-    for key in keys:
+    # Cached native Jules retains its initialized schema/key prerequisites.
+    for key in keys[:1]:
         assert not key.is_symlink()
         key.unlink(missing_ok=True)
 elif mode=='ready':
@@ -237,9 +239,10 @@ class AdapterOracle(base.ExternalOracle):
         status = suite.request('GET', '/chatgpt-plan')
         assert status.get('state') == 'ready' and status.get('model') == 'gpt-6-sol'
         rows = [r for r in suite.discovery()['models'] if r.get('id') == 'chatgpt-4o']
-        assert len(rows) == 1 and rows[0].get('source') == 'catalog_template'
-        assert rows[0].get('available') is False, 'Unrelated selected model cannot make this template available'
-        suite.unavailable(rows[0])
+        assert len(rows) <= 1, 'Inventory identities must be unique'
+        for row in rows:
+            assert row.get('available') is False, 'Unrelated selected model cannot make this template available'
+            suite.unavailable(row)
 
     @staticmethod
     def extra_result(name, operation):

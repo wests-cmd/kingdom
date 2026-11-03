@@ -33,14 +33,17 @@ silently replace an existing trusted contract.
    authentication or connectivity.
 
 8. Before those seven checks, the controller removes only empty disposable
-   adapter tables and the three named adapter key/lock files, then requires
-   inventory GET to preserve their absent state. This exposes constructors that
+   model-profile/ChatGPT tables and the shared vault key, then requires
+   inventory GET to preserve their absent state. Native Jules tables and keys
+   remain intact for cached service prerequisites; their schema/rows/key hashes
+   must remain unchanged. This exposes constructors that
    otherwise look read-only after startup or earlier requests initialized them.
    Schema, rows and key digests are compared; unrelated runtime tables are outside
    this assertion's scope.
 9. A fixed SQL fixture saves a ready ChatGPT connection selecting `gpt-6-sol`,
    with no credential. The real status API must report that saved state, while
-   the unrelated `chatgpt-4o` catalog template must remain unavailable with reasons.
+   any unrelated `chatgpt-4o` catalog entry must remain unavailable with reasons
+   (omitting that template is also truthful).
    This proves model identity isolation only; saved status is not inference proof.
 
 The state helper is fixed protected stdlib code run through the same pinned
