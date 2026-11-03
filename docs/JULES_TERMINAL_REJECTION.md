@@ -31,3 +31,33 @@ The ordinary `/failure` and `/verify` APIs still require current governed indepe
 `python -m pytest tests/test_jules_terminal_rejection.py tests/test_jules_backlog_queue.py tests/test_jules_adapter.py -q`
 
 Real-store/API tests cover exact binding and patch corruption, expired-window rejection without renewal, owner authentication, active/unknown/mismatched provider refusal, cancellation during observation, uncertain outbound messages, concurrent observers, atomic rollback, idempotency, stale expiry writes, admission of unrelated next work, and preservation of incomplete prerequisites. Only external provider transport and API service selection are substituted.
+
+## Terminal session negative closure when no candidate was retained
+
+`POST /integrations/jules/jobs/{id}/reject-terminal-session` is owner-authenticated.
+Its strict request contains `expected_job_binding` (the existing assignment fields
+from candidate rejection, excluding `patch_sha256`), `expected_record_version`,
+and the same bounded owner rejection reason. Callers cannot nominate artifact hashes.
+
+This separate path allows explicit negative closure after expiry or provider base
+mismatch prevented native candidate retention. It reads the bound provider session,
+requires matching source/session and `COMPLETED`, reads at most 12 pages of 25
+activities, and rechecks matching `COMPLETED` afterward. Every observed change set
+must have a matching source, a valid actual provider base and a bounded patch.
+The service computes artifact digests directly from provider bytes. Complete empty
+observations record `none_observed`; malformed, unknown or incomplete artifacts
+and pagination fail closed. Raw patches/provider prose are not copied into the
+negative evidence. Provider responses are already byte bounded by the adapter.
+
+A transaction rechecks assignment version/binding, current observation scope and
+absence of uncertain outbound actions, then records a separate durable negative
+audit and `session_rejection`. Only matching persisted evidence releases this
+job's admission slot. It does not create candidate acceptance, finish the backlog,
+satisfy dependent work, renew deadlines, send messages or cancel remote work.
+Concurrent identical requests and restart preserve one closure; stale callbacks
+cannot resurrect the rejected terminal job. Unknown outbound effects still hold.
+
+Evidence describes observations at two times, not immutable artifact finality.
+A provider could publish later activity; this is an explicit owner decision to
+stop pursuing the observed session, never proof of a successful implementation.
+The existing exact-candidate rejection and positive acceptance APIs are unchanged.
