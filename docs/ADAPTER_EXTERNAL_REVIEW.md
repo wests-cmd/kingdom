@@ -76,6 +76,10 @@ flags are not treated as false; they fail the contract as unknown evidence.
 
 The public-key trust registry, current mission and exact job/patch binding must
 still be installed/reviewed through the existing independent-review process.
+The native review worker accepts only the installed contract IDs and their fixed
+counts: `api-negative-fences` (7), `backlog-advancement-v1` (4), and
+`adapter-readiness-v2` (9). Retained review material and producer receipts must
+match that configured count; API material cannot select another test count.
 This change installs no key, registry, grant, mission, service or live adapter.
 It does not make catalog inspection into an ACP bridge, installer, authenticated
 provider, tested model or production release. Passing these nine checks is

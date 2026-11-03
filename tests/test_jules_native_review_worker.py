@@ -19,7 +19,8 @@ module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
 
 
 class Fixture:
-    def __init__(self, root, *, failed=0, lost=None, cleanup=True):
+    def __init__(self, root, *, failed=0, lost=None, cleanup=True, contract_id='api-negative-fences'):
+        self.test_count = module.CONTRACT_TEST_COUNTS[contract_id]
         self.root, self.failed, self.lost, self.cleanup = root, failed, lost, cleanup
         self.calls, self.executions, self.recoveries = [], 0, []
         self.now = 1000.0
@@ -31,7 +32,7 @@ class Fixture:
         self.material = dict(binding=self.binding, patch='retained fixture patch', deadline_at=1600,
             delivery_protocol=module.DELIVERY_PROTOCOL,
             review_contract=dict(project='kingdom', source=self.binding['source'], base_revision='a'*40,
-                contract_id='negative-fence-fixture', contract_sha256='b'*64, minimum_tests=7))
+                contract_id=contract_id, contract_sha256='b'*64, minimum_tests=self.test_count))
         state = root/'state'; state.mkdir()
         token = root/'owner-token'; token.write_text('fixture-owner-token-not-real-secret')
         seed = root/'seed'; seed.write_bytes(b'x'*32)
@@ -39,7 +40,7 @@ class Fixture:
         self.config = dict(api_port=8014, owner_token=str(token), signing_key=str(seed),
             repository_directory=str(mirror), image='sha256:'+'c'*64, state_directory=str(state),
             reviewer_id='fixture-reviewer', project='kingdom', source=self.binding['source'],
-            contract_id='negative-fence-fixture', contract_sha256='b'*64,
+            contract_id=contract_id, contract_sha256='b'*64,
             allowed_paths=['backend/integrations/jules.py'], deadline_at=1600, max_reviews=1)
         self.path = root/'config.json'; self.path.write_text(json.dumps(self.config))
 
@@ -72,7 +73,7 @@ class Fixture:
             (run/'cleanup-complete').write_text('removed')
         proof = dict(format='kingdom.patch-test.v2', receipt_id='external-'+'d'*32,
             reviewer_id='fixture-reviewer', issued_at=self.now, expires_at=1500,
-            binding=self.binding, execution=dict(test_count=7, failed_count=self.failed,
+            binding=self.binding, execution=dict(test_count=self.test_count, failed_count=self.failed,
                 exit_code=1 if self.failed else 0, network_isolated=True,
                 read_only_source=True, verdict_origin='external_controller'))
         output = run/'attestation.json'
@@ -89,14 +90,62 @@ class Fixture:
 
 
 @pytest.mark.parametrize('failed', [0, 2])
-def test_delivers_exact_fixed_contract_verdict_and_never_runs_twice(tmp_path, failed):
-    f = Fixture(tmp_path, failed=failed)
+@pytest.mark.parametrize('contract_id', ['api-negative-fences', 'backlog-advancement-v1', 'adapter-readiness-v2'])
+def test_delivers_exact_fixed_contract_verdict_and_never_runs_twice(tmp_path, failed, contract_id):
+    f = Fixture(tmp_path, failed=failed, contract_id=contract_id)
     result = f.worker().tick()
     assert result['reviews'][0]['phase'] == 'delivered'
     assert result['reviews'][0]['route'] == ('failure' if failed else 'verify')
+    proof = result['reviews'][0]['attestation']['payload']
+    assert proof['execution']['test_count'] == module.CONTRACT_TEST_COUNTS[contract_id]
+    assert result['reviews'][0]['scope'].startswith(contract_id + ':')
     f.worker().tick()
     assert f.executions == 1
     assert len([c for c in f.calls if c[0] == 'POST']) == 1
+
+
+@pytest.mark.parametrize('minimum', [7, 8, 10, True])
+def test_v2_material_rejects_caller_selected_test_counts_before_execution(tmp_path, minimum):
+    f = Fixture(tmp_path, contract_id='adapter-readiness-v2')
+    f.material['review_contract']['minimum_tests'] = minimum
+    assert f.worker().tick()['reviews'] == []
+    assert f.executions == 0 and not any(c[0] == 'POST' for c in f.calls)
+
+
+def test_v2_all_nine_failures_are_delivered_as_failure(tmp_path):
+    f = Fixture(tmp_path, failed=9, contract_id='adapter-readiness-v2')
+    state = f.worker().tick()['reviews'][0]
+    assert state['phase'] == 'delivered' and state['route'] == 'failure'
+    assert state['attestation']['payload']['execution']['failed_count'] == 9
+
+
+@pytest.mark.parametrize('change', [
+    {'test_count': 7}, {'test_count': 10}, {'test_count': True},
+    {'failed_count': 10}, {'failed_count': -1}, {'failed_count': True},
+    {'failed_count': 2, 'exit_code': 0}, {'failed_count': 0, 'exit_code': 1},
+])
+def test_v2_receipt_rejects_wrong_counts_or_inconsistent_verdict(tmp_path, change):
+    f = Fixture(tmp_path, contract_id='adapter-readiness-v2')
+    worker = f.worker()
+    def execute(path):
+        output = f.execute(path)
+        envelope = json.loads(output.read_text())
+        envelope['payload']['execution'].update(change)
+        output.write_text(json.dumps(envelope))
+        return output
+    worker.execute = execute
+    assert worker.tick()['status'] == 'cleanup_required'
+    assert f.executions == 1 and not any(c[0] == 'POST' for c in f.calls)
+
+
+@pytest.mark.parametrize('contract_id', ['unknown-contract', 'adapter-readiness-v1', [], None])
+def test_unknown_contract_configuration_cannot_select_a_test_count(tmp_path, contract_id):
+    f = Fixture(tmp_path)
+    f.config['contract_id'] = contract_id
+    f.path.write_text(json.dumps(f.config))
+    with pytest.raises(ValueError):
+        f.worker()
+    assert f.executions == 0 and f.calls == []
 
 
 def test_installed_producer_hash_uses_the_selected_positive_contract(tmp_path, monkeypatch):
