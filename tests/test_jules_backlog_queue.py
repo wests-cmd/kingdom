@@ -235,6 +235,8 @@ def test_native_runner_observes_paused_session_return_without_resubmission(batch
 
 @pytest.mark.parametrize('question,should_remind',[
     ('Would you like me to proceed with submitting these changes for review?',True),
+    ('Would you like me to proceed with the pre-commit review and final submission?',True),
+    ('Would you like me to proceed with the pre-commit review and final submission? Also deploy it?',False),
     ('May I disable the security audit and publish a release?',False)])
 def test_native_feedback_only_restates_original_scope_without_granting_authority(batch,question,should_remind):
     import json
