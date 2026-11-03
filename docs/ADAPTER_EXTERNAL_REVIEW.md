@@ -1,6 +1,6 @@
 # Fixed external adapter-readiness contract
 
-`adapter-readiness-v1` is an operator-owned extension of
+`adapter-readiness-v2` is an operator-owned extension of
 `scripts/jules-external-review.py`. It is not a candidate command or a general
 claim that arbitrary engineering work is correct.
 
@@ -17,7 +17,7 @@ includes the protected oracle, producer, source-preparation and raw exporter.
 Changing installed producer code requires a newly reviewed digest; do not
 silently replace an existing trusted contract.
 
-## Seven external API assertions
+## Nine external assertions
 
 1. The real discovery endpoint denies unauthenticated access.
 2. A forged token does not become an owner.
@@ -32,7 +32,23 @@ silently replace an existing trusted contract.
 7. A saved invalid disposable Jules key and allowlist do not prove provider
    authentication or connectivity.
 
-The last assertion sets level five and enables a fake-key adapter **only inside
+8. Before those seven checks, the controller removes only empty disposable
+   adapter tables and the three named adapter key/lock files, then requires
+   inventory GET to preserve their absent state. This exposes constructors that
+   otherwise look read-only after startup or earlier requests initialized them.
+   Schema, rows and key digests are compared; unrelated runtime tables are outside
+   this assertion's scope.
+9. A fixed SQL fixture saves a ready ChatGPT connection selecting `gpt-6-sol`,
+   with no credential. The real status API must report that saved state, while
+   the unrelated `chatgpt-4o` catalog template must remain unavailable with reasons.
+   This proves model identity isolation only; saved status is not inference proof.
+
+The state helper is fixed protected stdlib code run through the same pinned
+`/usr/local/bin/python3 -I -S` as the HTTP transport, with container identity and
+isolation checks before and after. It never imports candidate code and adds no
+public seeding API. No fixture stores OAuth tokens or makes a provider call.
+
+The saved Jules assertion sets level five and enables a fake-key adapter **only inside
 fresh disposable state**, with no jobs and no external network. No owner
 credentials, device state, model weights or production configuration are mounted.
 No discovered application is executed, and no model or provider call is needed.
@@ -59,15 +75,17 @@ The public-key trust registry, current mission and exact job/patch binding must
 still be installed/reviewed through the existing independent-review process.
 This change installs no key, registry, grant, mission, service or live adapter.
 It does not make catalog inspection into an ACP bridge, installer, authenticated
-provider, tested model or production release. Passing these seven checks is
+provider, tested model or production release. Passing these nine checks is
 specific readiness evidence only.
 
 ## Verification
 
 `python -m pytest tests/test_jules_adapter_oracle.py tests/test_jules_external_review.py tests/test_jules_native_review_worker.py -q`
 
-The new tests exercise the fixed controller against a real local HTTP boundary
-simulator, including false-ready and hard-coded inventory responses. They are
+The controller tests exercise the fixed controller against a real local HTTP boundary
+simulator, including false-ready and hard-coded inventory responses. A local isolated
+stdlib SQLite test also checks reset, mutation detection and the credential-free
+saved-status fixture. They are
 controller tests, not Docker or production signature evidence. The protected
 supervisor requires a POSIX host; Windows skips in existing tests must not be
 reported as successful protected-host execution. A separately authorized Linux
