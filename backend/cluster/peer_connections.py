@@ -46,7 +46,10 @@ class PeerConnections:
     async def tick(self, wait=True):
         if self.refresh and (self.refresh_task is None or self.refresh_task.done()):
             self.refresh_task = asyncio.create_task(self._refresh())
-        peers = {n.node_id: n for n in self.registry.list_nodes()
+        # Listing also checks stale heartbeats and can wait on SQLite locks.
+        # Keep that storage wait off the HTTP/heartbeat event loop.
+        nodes = await asyncio.to_thread(self.registry.list_nodes)
+        peers = {n.node_id: n for n in nodes
                  if not n.is_local and (n.public_identity or {}).get('node_type') == 'commander'
                  and n.node_state in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}}
         self.status = {k: v for k, v in self.status.items() if k in peers}
