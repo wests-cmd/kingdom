@@ -124,6 +124,11 @@ class ChatGPTPlanConnection:
         except Exception as error:
             raise ChatGPTPlanError('credential_store_unavailable') from error
 
+    @staticmethod
+    def _reject_handoff(public):
+        if str(public.get('refresh_state', '')).startswith('handoff_'):
+            raise ChatGPTPlanError('handoff_pending')
+
     def status(self):
         meta = self._meta()
         with self.db.get_connection() as conn:
@@ -132,7 +137,9 @@ class ChatGPTPlanConnection:
         active = next((p for p in accounts if p['id'] == meta['active_account']), None)
         state = 'sign_in_required'
         if active and active.get('connected'):
-            if not REQUIRED_SCOPES <= set(active['scopes']):
+            if str(active.get('refresh_state', '')).startswith('handoff_'):
+                state = 'handoff_pending'
+            elif not REQUIRED_SCOPES <= set(active['scopes']):
                 state = 'plan_permission_required'
             elif active.get('refresh_state') not in (None, 'idle'):
                 state = 'refreshing' if active['refresh_state'] == 'refreshing' and active.get('refresh_deadline', 0) > self.clock() else 'reauthorization_required'
@@ -235,6 +242,8 @@ class ChatGPTPlanConnection:
         with _guard:
             self.cancel()
             selected = self._account(account_id)[0] if account_id is not None else None
+            if selected:
+                self._reject_handoff(selected)
             pending = {'state': secrets.token_urlsafe(32), 'nonce': secrets.token_urlsafe(32),
                        'verifier': secrets.token_urlsafe(48), 'account_id': account_id,
                        'client_id': selected['client_id'] if selected else None,
@@ -273,6 +282,12 @@ class ChatGPTPlanConnection:
             pending['redirect_uri'] = 'http://127.0.0.1:'+str(server.server_port)+'/auth/callback'
             try:
                 with self.db.get_connection() as conn:
+                    conn.execute('BEGIN IMMEDIATE')
+                    if selected:
+                        current = json.loads(conn.execute('SELECT public_json FROM chatgpt_plan_accounts WHERE id=?', (selected['id'],)).fetchone()[0])
+                        self._reject_handoff(current)
+                        if current['revision'] != selected['revision']:
+                            raise ChatGPTPlanError('request_authorization_changed')
                     conn.execute('INSERT OR REPLACE INTO chatgpt_plan_pending VALUES(1,?,?,?)',
                         (self.cipher.encrypt(json.dumps(pending).encode()), pending['expires_at'], 'waiting'))
                     conn.commit()
@@ -349,6 +364,9 @@ class ChatGPTPlanConnection:
                 current = conn.execute('SELECT value,phase FROM chatgpt_plan_pending WHERE id=1').fetchone()
                 if not current or current[1] != 'exchanging' or self.cipher.decrypt(current[0]) != json.dumps(pending).encode():
                     raise ChatGPTPlanError('sign_in_cancelled')
+                existing = conn.execute('SELECT public_json FROM chatgpt_plan_accounts WHERE id=?', (public['id'],)).fetchone()
+                if existing:
+                    self._reject_handoff(json.loads(existing[0]))
                 conn.execute('INSERT INTO chatgpt_plan_accounts VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET public_json=excluded.public_json,secret=excluded.secret',
                     (public['id'], json.dumps(public), self.cipher.encrypt(json.dumps(secret).encode())))
                 conn.execute('DELETE FROM chatgpt_plan_pending WHERE id=1')
@@ -406,6 +424,7 @@ class ChatGPTPlanConnection:
         if not meta.get('active_account'):
             raise ChatGPTPlanError('sign_in_required')
         public, secret = self._account(meta['active_account'])
+        self._reject_handoff(public)
         if not public.get('connected') or not secret:
             raise ChatGPTPlanError('sign_in_required')
         if not REQUIRED_SCOPES <= set(public['scopes']):
@@ -422,6 +441,7 @@ class ChatGPTPlanConnection:
         return public, secret
 
     def _refresh(self, public, secret):
+        self._reject_handoff(public)
         if not secret.get('refresh_token'):
             if public['expires_at'] > self.clock():
                 return public, secret
@@ -596,8 +616,13 @@ class ChatGPTPlanConnection:
         if not ident:
             return {'signed_out': True, 'remote_revocation_confirmed': True}
         public, secret = self._account(ident)
+        self._reject_handoff(public)
         with self.db.get_connection() as conn:
             conn.execute('BEGIN IMMEDIATE')
+            current = json.loads(conn.execute('SELECT public_json FROM chatgpt_plan_accounts WHERE id=?', (ident,)).fetchone()[0])
+            self._reject_handoff(current)
+            if current['revision'] != public['revision']:
+                raise ChatGPTPlanError('request_authorization_changed')
             public.update(connected=False, refresh_available=False, refresh_state='idle', revision=public['revision']+1)
             public.pop('refresh_claim', None)
             conn.execute('UPDATE chatgpt_plan_accounts SET public_json=?,secret=NULL WHERE id=?', (json.dumps(public), ident))

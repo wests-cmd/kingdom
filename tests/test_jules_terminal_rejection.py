@@ -68,6 +68,7 @@ def test_exact_owner_rejection_observes_terminal_without_accepting_or_renewing(c
     assert service.reject_candidate(job['id'],**request,opener=provider)==rejected
     assert len(provider.calls)==1
     assert any(name=='jules.candidate_rejected' for name,payload in events)
+    assert any(name=='jules.job_changed' and payload.get('phase')=='rejected' for name,payload in events)
 
 
 @pytest.mark.parametrize('changes',[{'state':'IN_PROGRESS'},{'state':'QUEUED'},{'state':'FAILED'},{'state':'UNRECOGNIZED'},{'name':'sessions/other'},{'sourceContext':{'source':'sources/github/other/repo'}},{'sourceContext':{}},{'sourceContext':[]}])

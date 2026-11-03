@@ -93,7 +93,8 @@ class JulesBacklogQueue:
     def occupies_slot(self,job):
         if job['phase']=='rejected':
             from backend.integrations.jules_rejection import terminal_rejection_current
-            return not terminal_rejection_current(self.service,job)
+            from backend.integrations.jules_session_rejection import current
+            return not (terminal_rejection_current(self.service,job) or current(self.service,job))
         if job['phase']=='completed' and job.get('accepted') is True:return False
         if job['phase']=='failed' and job.get('remote_state')=='FAILED':return False
         if job['phase']=='cancelled' and not job.get('session'):return False
