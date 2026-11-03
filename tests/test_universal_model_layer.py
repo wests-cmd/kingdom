@@ -4,6 +4,28 @@ from backend.models.universal_layer import (
     UniversalModelLayer,
     ModelSelectionRequest
 )
+from backend.models.universal_layer import ModelCapability
+
+
+@pytest.mark.parametrize('requirements', [
+    {'requires_vision': True},
+    {'requires_tools': True},
+    {'requires_vision': True, 'requires_tools': True},
+])
+def test_no_fallback_can_discard_required_capabilities(requirements):
+    layer = UniversalModelLayer({'text-only': ModelCapability(
+        provider='ollama', model_name='installed-text-only', is_local=True,
+        supports_tools=False, supports_vision=False,
+    )})
+    with pytest.raises(RuntimeError, match='No suitable model'):
+        layer.select_model(ModelSelectionRequest(task_type='general', **requirements))
+
+
+def test_explicit_empty_inventory_does_not_restore_example_models():
+    layer = UniversalModelLayer({})
+    assert layer.discover_models() == []
+    with pytest.raises(RuntimeError, match='No suitable model'):
+        layer.select_model(ModelSelectionRequest(task_type='general'))
 
 
 def test_discover_models():
