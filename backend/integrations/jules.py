@@ -749,6 +749,8 @@ class JulesService:
         active_jobs = [
             j for j in self.list_jobs()
             if j["phase"] in {"queued", "submitting", "watching", "paused", "repair_queued", "repair_sending"}
+            or (j['phase'] in {'awaiting_independent_review', 'review_required'}
+                and self.clock() >= j['deadline_at'])
             or (j['phase']=='awaiting_independent_review' and j.get('repair_history') and not j.get('candidate'))
         ]
         processed = 0

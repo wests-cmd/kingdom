@@ -288,3 +288,24 @@ def test_lost_scope_reminder_acknowledgement_is_not_replayed(batch):
     current=service.get_job(job['id'])
     assert current['scope_reminders'][0]['outcome']=='unknown'
     assert current['accepted'] is False
+
+def test_scheduler_expires_retained_review_without_provider_io(batch):
+    queue, service, _, _, _, _, now, _ = batch
+    queue.tick()
+    job, = service.list_jobs()
+    with service.db.get_connection() as conn:
+        job.update(phase='awaiting_independent_review', session='sessions/123')
+        service._save_job(conn, job)
+        conn.commit()
+
+    def unexpected_provider_call(*args, **kwargs):
+        pytest.fail('Expired review must not contact the provider')
+
+    assert service.tick(opener=unexpected_provider_call)['processed'] == 0
+    now[0] = job['deadline_at']
+    assert service.tick(opener=unexpected_provider_call)['processed'] == 1
+    expired = service.get_job(job['id'])
+    assert expired['phase'] == 'expired_remote_may_continue'
+    assert expired['accepted'] is False
+    assert expired['session'] == 'sessions/123'
+    assert service.tick(opener=unexpected_provider_call)['processed'] == 0
