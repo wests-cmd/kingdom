@@ -113,6 +113,27 @@ class NodeSecurityTests(unittest.TestCase):
         mgr.revoke_node("custom_knight")
         self.assertIsNone(mgr.authenticate_token(token))
 
+    def test_authenticate_token_constant_time_and_edge_cases(self):
+        mgr = NodeSecurityManager()
+        node = mgr.register_node("knight_edge", name="Edge Knight")
+        valid_token = node["token"]
+
+        # Valid token authenticates successfully
+        self.assertEqual(mgr.authenticate_token(valid_token), "knight_edge")
+
+        # Invalid token of same length
+        invalid_same_len = "x" * len(valid_token)
+        self.assertIsNone(mgr.authenticate_token(invalid_same_len))
+
+        # Invalid token of different length
+        self.assertIsNone(mgr.authenticate_token("short_invalid_token"))
+
+        # Empty string, None, and non-string inputs
+        self.assertIsNone(mgr.authenticate_token(""))
+        self.assertIsNone(mgr.authenticate_token(None))
+        self.assertIsNone(mgr.authenticate_token(12345))
+        self.assertIsNone(mgr.authenticate_token({"token": valid_token}))
+
 
 class ZeroTrustEngineTests(unittest.TestCase):
     def setUp(self):

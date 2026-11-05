@@ -62,13 +62,23 @@ class NodeSecurityManager:
         return node_record
 
     def authenticate_token(self, token: str) -> str | None:
-        """Returns node_id if token is valid and active, otherwise None."""
-        node_id = self._tokens.get(token)
-        if node_id:
-            node = self._nodes.get(node_id)
-            if node and node.get("active"):
-                return node_id
-        return None
+        """Returns node_id if token is valid and active, otherwise None.
+
+        Security: Uses secrets.compare_digest for constant-time comparison
+        to mitigate timing side-channel attacks against authentication tokens.
+        """
+        if not isinstance(token, str) or not token:
+            return None
+
+        # Constant-time comparison against all registered active node tokens
+        matched_node_id = None
+        for registered_token, node_id in self._tokens.items():
+            if secrets.compare_digest(registered_token, token):
+                node = self._nodes.get(node_id)
+                if node and node.get("active"):
+                    matched_node_id = node_id
+
+        return matched_node_id
 
     def get_node(self, node_id: str) -> dict[str, Any] | None:
         return self._nodes.get(node_id)
