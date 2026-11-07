@@ -10,6 +10,7 @@ from backend.security.capabilities import CapabilityEvaluator
 from backend.security.node_security import NodeSecurityManager
 from backend.security.prompt_firewall import PromptFirewall
 from backend.security.risk import RiskClassifier, RiskLevel
+from backend.security.required_monitor import RequiredMonitor
 
 
 class ZeroTrust:
@@ -26,6 +27,7 @@ class ZeroTrust:
         # Installed runtime supplies the authenticated owner-selected policy.
         # Task metadata and model output cannot supply this authority.
         self.owner_policy = None
+        self.required_monitor = RequiredMonitor()
 
     def validate(self, actor: Any, required_capability: str | None = None) -> dict[str, Any]:
         """Backward compatible validator method."""
@@ -130,6 +132,17 @@ class ZeroTrust:
 
         # 4. Risk Classification & Approval check
         risk = self.risk_classifier.classify_operation(capability, parameters)
+        monitor_receipt = None
+        if risk == RiskLevel.HIGH:
+            try:
+                monitor_receipt = self.required_monitor.attest(actor=actor_id, capability=capability,
+                    operation=operation, parameters=parameters)
+            except Exception:
+                reason = "Required independent security monitoring unavailable"
+                self.audit.record(actor=actor_id, operation=operation, capability=capability,
+                    decision="DENIED", reason=reason, approval_id=approval_id)
+                return {"authorized": False, "reason": reason,
+                        "risk_level": risk.value, "approval_id": None}
 
         standing_owner = self.owner_policy is not None and self.owner_policy.get()["level"] == 5
         if require_human_approval or (self.approvals.requires_approval(capability, risk) and not standing_owner):
@@ -144,6 +157,7 @@ class ZeroTrust:
                         decision="ALLOWED",
                         reason="Approved via human authorization",
                         approval_id=approval_id,
+                        metadata={"monitor_receipt": monitor_receipt} if monitor_receipt else {},
                     )
                     return {
                         "authorized": True,
@@ -188,6 +202,7 @@ class ZeroTrust:
             capability=capability,
             decision="ALLOWED",
             reason="Owner level 5 standing authorization" if standing_owner and risk == RiskLevel.HIGH else "Authorized by zero-trust policy",
+            metadata={"monitor_receipt": monitor_receipt} if monitor_receipt else {},
         )
         return {
             "authorized": True,
