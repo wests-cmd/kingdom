@@ -113,6 +113,13 @@ class NodeSecurityTests(unittest.TestCase):
         mgr.revoke_node("custom_knight")
         self.assertIsNone(mgr.authenticate_token(token))
 
+        # Security check: verify non-string, empty, and invalid tokens return None safely
+        self.assertIsNone(mgr.authenticate_token(None))
+        self.assertIsNone(mgr.authenticate_token(""))
+        self.assertIsNone(mgr.authenticate_token(12345))
+        self.assertIsNone(mgr.authenticate_token(["token"]))
+        self.assertIsNone(mgr.authenticate_token("invalid-token-12345"))
+
 
 class ZeroTrustEngineTests(unittest.TestCase):
     def setUp(self):
