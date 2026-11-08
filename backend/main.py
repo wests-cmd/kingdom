@@ -125,6 +125,8 @@ from backend.integrations.payment_api import router as payment_router
 app.include_router(payment_router)
 from backend.integrations.jules_api import router as jules_router
 app.include_router(jules_router)
+from backend.integrations.adapter_api import router as adapter_router
+app.include_router(adapter_router)
 from backend.runtime.scheduled_runner import ScheduledRunner
 from backend.runtime.automation_api import scheduled
 scheduled.enqueue_request = lambda body: request_service().create(body)

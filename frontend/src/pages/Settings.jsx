@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react"
 import api from "../api"
 import GapRegister from "../components/GapRegister"
+import AdapterDiscovery from "../components/AdapterDiscovery"
 
 export default function Settings() {
   const [security, setSecurity] = useState(null)
@@ -57,6 +58,10 @@ export default function Settings() {
       )}
 
       <GapRegister />
+
+      <div style={{ marginTop: "24px", paddingTop: "20px", borderTop: "1px solid var(--surface-border, #333)" }}>
+        <AdapterDiscovery />
+      </div>
     </div>
   )
 }

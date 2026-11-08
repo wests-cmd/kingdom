@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import AdapterDiscovery from '../components/AdapterDiscovery';
 
 export default function Integrations() {
   const [integrations, setIntegrations] = useState([
@@ -26,6 +27,8 @@ export default function Integrations() {
           + Connect Integration
         </button>
       </div>
+
+      <AdapterDiscovery />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {integrations.map((item) => (
