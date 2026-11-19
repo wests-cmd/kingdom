@@ -46,6 +46,19 @@ def test_complete_multiword_and_multiline_secret_values_are_redacted(runtime, se
     assert 'Explain the failure.' in saved['question']
 
 
+def test_list_filters_and_limits_without_changing_request_order(runtime):
+    _, _, _, store = runtime
+    expected = []
+    for index in range(12):
+        row = request(store, parent_work_id=f"work-{index}",
+                      project="kingdom" if index % 2 else "centipede")
+        if index % 2:
+            expected.append(row["id"])
+    assert [row["id"] for row in store.list(project="kingdom", limit=3)] == expected[:3]
+    assert [row["id"] for row in store.list(project="kingdom", limit=20)] == expected
+    assert len(store.list(limit=2)) == 2
+
+
 def answer(store, **changes):
     row = request(store, **changes)
     claim = store.claim('worker-a', row['id'])

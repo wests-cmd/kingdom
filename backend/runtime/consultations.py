@@ -156,9 +156,15 @@ class ConsultationStore:
             raise ValueError('Choose a bounded limit')
         if project is not None and (not isinstance(project, str) or not _PROJECT.fullmatch(project)):
             raise ValueError('Supply a project')
+        result = []
         with self.db.get_connection() as conn:
-            rows = [json.loads(v[0]) for v in conn.execute('SELECT state_json FROM consultations ORDER BY rowid')]
-        return [r for r in rows if project is None or r['project'] == project][:limit]
+            for (payload,) in conn.execute('SELECT state_json FROM consultations ORDER BY rowid'):
+                row = json.loads(payload)
+                if project is None or row['project'] == project:
+                    result.append(row)
+                    if len(result) == limit:
+                        break
+        return result
 
     def claim(self, worker_id, question_id=None, *, lease_seconds=120):
         _identifier(worker_id)
@@ -167,8 +173,9 @@ class ConsultationStore:
         now = self._now()
         with self.db.get_connection() as conn:
             conn.execute('BEGIN IMMEDIATE')
+            # Stream candidates rather than materializing and deserializing the full table.
             rows = ([self._load(conn, question_id)] if question_id is not None else
-                    [json.loads(v[0]) for v in conn.execute('SELECT state_json FROM consultations ORDER BY rowid')])
+                    (json.loads(v[0]) for v in conn.execute('SELECT state_json FROM consultations ORDER BY rowid')))
             for row in rows:
                 if (row['status'] != 'queued' or row['attempts'] >= 2
                         or now < row['created_at'] or now < row.get('retry_at', 0)):
