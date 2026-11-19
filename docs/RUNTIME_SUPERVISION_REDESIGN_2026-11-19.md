@@ -24,7 +24,8 @@ and did not check active background service or scheduler failures.
 - The readiness endpoint reports active lifecycle/scheduler failures with
   boolean flags and HTTP 503, without exposing private service information.
 - The owner-only `GET /system/services` endpoint provides named service state
-  and scheduler errors for the native Command Center and future mobile views.
+  and scheduler errors. The existing native-app Runtime page displays the same
+  backend data; no second service-state implementation is created.
 - Regression tests cover partial startup, idempotent start, interrupted stop,
   bounded scheduler retry, and owner-only status.
 
