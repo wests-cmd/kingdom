@@ -1,5 +1,13 @@
 # Kingdom
 
+## Watch: Download and use Kingdom (beginner video)
+
+[![Kingdom getting started: from GitHub to your first task](https://raw.githubusercontent.com/wests-cmd/kingdom/main/docs/media/kingdom-getting-started-preview.gif)](https://github.com/wests-cmd/kingdom/blob/main/docs/media/kingdom-getting-started.mp4)
+
+**[Play the getting-started tutorial (video with narration)](https://github.com/wests-cmd/kingdom/blob/main/docs/media/kingdom-getting-started.mp4)** · [Read the step-by-step transcript](docs/GETTING_STARTED_VIDEO.md)
+
+Start right here on the Kingdom GitHub page. The video shows where to click to get the published native installer, how to launch the app, configure a model when needed, start Runtime, run **Tasks → Analyze text**, and check the result. It uses illustrated screens for **v1.2.4**, not a live app recording. The [current release](https://github.com/wests-cmd/kingdom/releases/latest) and your OS security protections remain authoritative; the v1.2.4 packages are unsigned.
+
 ## Overview
 
 Kingdom is a standalone web and desktop command center for models, Apprentices,
