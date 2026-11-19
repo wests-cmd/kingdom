@@ -305,8 +305,11 @@ class RuntimeEngine:
         task = self.tasks.claim_next()
         if task is None:
             return
-        self.events.publish("task.running", task)
         try:
+            # Audit/event publication belongs inside the claimed task's failure
+            # envelope. If the event bus fails after the DB claim, we must
+            # reconcile the task instead of leaving it forever RUNNING.
+            self.events.publish("task.running", task)
             # Zero-trust policy check before executing task
             auth_res = self.authorize_task(task)
             if not auth_res["authorized"] and auth_res.get("approval_id"):

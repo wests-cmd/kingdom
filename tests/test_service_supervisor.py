@@ -125,3 +125,56 @@ def test_scheduler_stop_interrupts_backoff_after_repeated_failure():
         assert not scheduler.running
         assert scheduler.health()["total_failures"] >= 1
     asyncio.run(run())
+
+
+def test_claimed_task_not_stranded_if_running_event_fails():
+    """The durable task outcome must not remain RUNNING after event-bus failure."""
+    from backend.runtime.engine import RuntimeEngine
+    from types import SimpleNamespace
+
+    class Tasks:
+        def __init__(self):
+            self.retry_calls = 0
+            self.repo = SimpleNamespace(get=lambda ident: {"status": "running",
+                                                        "cancellation_requested": False})
+
+        def counts(self):
+            return {"queued": 1}
+
+        def claim_next(self):
+            return {"id": "claimed-task", "status": "running", "attempt": 1,
+                    "max_attempts": 1, "metadata": {"actor": "system"}}
+
+        def retry_or_fail(self, ident, message):
+            self.retry_calls += 1
+            return {"id": ident, "status": "failed", "error": message, "metadata": {}}
+
+    class Events:
+        def __init__(self):
+            self.successes = []
+
+        def publish(self, event_type, payload):
+            if event_type == "task.running":
+                raise RuntimeError("event bus temporarily unavailable")
+            self.successes.append(event_type)
+
+    async def run():
+        tasks = Tasks()
+        events = Events()
+        fail_records = []
+        engine = SimpleNamespace(
+            scheduler=SimpleNamespace(_interval_seconds=0.1),
+            execution_policy=SimpleNamespace(get=lambda: {"level": 4}),
+            recover_remote_tasks=lambda: None,
+            missions=SimpleNamespace(advance_all=lambda: None),
+            tasks=tasks,
+            events=events,
+            memory=SimpleNamespace(record_task=lambda row: fail_records.append(row)),
+            dlq=SimpleNamespace(push=lambda **kwargs: None),
+        )
+        await RuntimeEngine._process_next_task(engine)
+        assert tasks.retry_calls == 1
+        assert events.successes == ["task.failed"]
+        assert fail_records[0]["status"] == "failed"
+
+    asyncio.run(run())

@@ -41,3 +41,12 @@ checks remain the sole execution authority.
 Promotion requires all backend tests and distributed process E2E, owner-access
 security, native package builds, and representative 1/2/5-machine live tests. No
 unexecuted tests should be reported as passing.
+
+## Additional task-state seam
+
+`RuntimeEngine._process_next_task()` previously published `task.running`
+after claiming the durable task but **outside** the task's error/recovery
+boundary. An event-bus exception could therefore strand the task in RUNNING
+until the next process restart. The publish is now inside the same guarded
+execution envelope; a failed event transition takes the existing
+`retry_or_fail()` path. A focused regression test injects this failure.
