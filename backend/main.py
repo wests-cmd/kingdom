@@ -10,31 +10,13 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(_app):
-    import asyncio
-    if await asyncio.to_thread(engine.autostart_requested):
-        await engine.start(persist=False)
-    await schedule_runner.start()
-    await programme_runner.start()
-    await consultation_runner.start()
-    await boss_runner.start()
-    await backlog_runner.start()
-    await problem_runner.start()
-    await jules_runner.start()
-    await peer_connections.start()
+    # A single supervisor owns the service graph, including partial-start
+    # rollback and shutdown even when startup fails before yield.
+    await application_supervisor.start()
     try:
         yield
     finally:
-        from backend.runtime.request_api import background
-        await background.stop()
-        await peer_connections.stop()
-        await jules_runner.stop()
-        await problem_runner.stop()
-        await boss_runner.stop()
-        await consultation_runner.stop()
-        await programme_runner.stop()
-        await backlog_runner.stop()
-        await schedule_runner.stop()
-        await engine.stop(persist=False)
+        await application_supervisor.stop()
 
 app = FastAPI(
     title="Kingdom v1TAS",
@@ -154,6 +136,33 @@ jules_runner = JulesRunner(jules_service, engine.events.publish)
 from backend.runtime.boss_review_api import router as boss_router, service as boss_service
 app.include_router(boss_router)
 boss_runner = WorkProgrammeRunner(boss_service, engine.events.publish, name='boss')
+
+from backend.runtime.service_supervisor import RuntimeServiceSupervisor
+from backend.runtime.request_api import background as request_background
+from backend.security.http_auth import require_owner
+from fastapi import Depends
+
+application_supervisor = RuntimeServiceSupervisor(
+    engine,
+    {
+        "schedules": schedule_runner,
+        "programmes": programme_runner,
+        "consultations": consultation_runner,
+        "boss_reviews": boss_runner,
+        "work_backlog": backlog_runner,
+        "problem_guide": problem_runner,
+        "jules": jules_runner,
+        "peer_connections": peer_connections,
+    },
+    shutdown_extra=(request_background,),
+)
+
+
+@app.get("/system/services", dependencies=[Depends(require_owner)])
+def system_services():
+    """Authenticated operational view; anonymous readiness stays minimal."""
+    return application_supervisor.status()
+
 
 
 # Serve built frontend static assets if available

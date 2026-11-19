@@ -239,35 +239,40 @@ def health_liveness():
 
 @router.get("/health/ready")
 def health_readiness():
-    db_ok = False
+    # Anonymous readiness only advertises booleans, not internal service names,
+    # exception contents, credentials, or the owner-only fleet topology.
     try:
         with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT 1")
-            row = cursor.fetchone()
-            db_ok = row is not None
-    except Exception as exc:
-        print(f"[health_readiness] DB Exception: {exc}")
+            db_ok = conn.execute("SELECT 1").fetchone() is not None
+    except Exception:
         db_ok = False
-
-    sec_ok = zero_trust is not None
-    nodes_ok = len(node_registry.list_nodes()) >= 0
-
-    ready = db_ok and sec_ok and nodes_ok
+    sec_ok = (zero_trust is not None and
+              getattr(zero_trust, "nodes", None) is not None and
+              getattr(zero_trust, "approvals", None) is not None)
+    try:
+        node_registry.list_nodes()
+        nodes_ok = True
+    except Exception:
+        nodes_ok = False
+    from backend.main import application_supervisor
+    supervision = application_supervisor.status()
+    # When app lifespan is not entered (for direct unit-test clients), services
+    # are intentionally stopped. A failed/degraded active lifecycle is not ready.
+    service_ok = supervision["state"] in {"running", "stopped"}
+    runtime_ok = not STATE.get("running") or (
+        engine.scheduler.running and engine.scheduler.health()["status"] != "degraded"
+    )
+    ready = db_ok and sec_ok and nodes_ok and service_ok and runtime_ok
     if not ready:
         raise HTTPException(status_code=503, detail={
-            "status": "not_ready",
-            "database": db_ok,
-            "security_engine": sec_ok,
-            "node_registry": nodes_ok
+            "status": "not_ready", "database": db_ok,
+            "security_engine": sec_ok, "node_registry": nodes_ok,
+            "service_supervisor": service_ok, "runtime_scheduler": runtime_ok,
         })
-
     return {
-        "status": "ready",
-        "database": "healthy",
-        "security_engine": "healthy",
-        "node_registry": "healthy",
-        "timestamp": time.time()
+        "status": "ready", "database": "healthy", "security_engine": "healthy",
+        "node_registry": "healthy", "service_supervisor": "healthy",
+        "timestamp": time.time(),
     }
 
 @router.get("/system/check")
