@@ -15,6 +15,7 @@ import sys
 import time
 import json
 import argparse
+import re
 import urllib.request
 import urllib.parse
 from typing import Dict, Any, List, Optional
@@ -64,8 +65,11 @@ class KnightDaemon:
             raise RuntimeError(f"HTTP {method} {url} failed: {str(exc)}")
 
     def request_pairing(self, pairing_code: str) -> bool:
-        cmd_id_res = self._http_request("GET", "/nodes/identity")
-        cmd_k_id = cmd_id_res.get("node_id", "KG-MASTER-01")
+        try:
+            cmd_k_id = self._get_commander_id()
+        except (RuntimeError, ValueError) as exc:
+            print(f"[{self.node_id}] Cannot pair without a valid Commander identity response: {exc}")
+            return False
 
         msg_to_sign = f"{pairing_code}:{self.identity.node_id}:{cmd_k_id}".encode("utf-8")
         sig_bytes = self.identity.sign_message(msg_to_sign)
@@ -101,11 +105,12 @@ class KnightDaemon:
             return self.node_state
 
     def _get_commander_id(self) -> str:
-        try:
-            res = self._http_request("GET", "/nodes/identity")
-            return res.get("node_id", "KG-MASTER-01")
-        except Exception:
-            return "KG-MASTER-01"
+        # Never sign RPC to an assumed Commander ID after lookup failure.
+        res = self._http_request("GET", "/nodes/identity")
+        commander_id = res.get("node_id") if isinstance(res, dict) else None
+        if not isinstance(commander_id, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", commander_id):
+            raise RuntimeError("Commander identity is unavailable or malformed")
+        return commander_id
 
     def send_rpc(self, msg_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         target_id = self._get_commander_id()

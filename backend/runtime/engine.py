@@ -41,7 +41,14 @@ class RuntimeEngine:
         self.models = ModelService()
         self.memory = MemoryService()
         self.maps = AIMap()
-        self.scheduler = Scheduler(self._process_next_task)
+        self.scheduler = Scheduler(
+            self._process_next_task,
+            on_error=lambda error_type, failures: self.events.publish(
+                "runtime.scheduler_tick_error",
+                {"error_type": error_type, "consecutive_failures": failures,
+                 "notice": "Task polling has paused for bounded retry; durable tasks remain authoritative."},
+            ),
+        )
         self.idempotency = IdempotencyManager()
         self.circuit_breaker = CircuitBreakerEngine()
         self.dlq = DeadLetterQueue()
@@ -156,6 +163,7 @@ class RuntimeEngine:
             "protocol": dict(CENTIPEDE_PROTOCOL),
             "capabilities": sorted(ALL_CAPABILITIES),
             "scheduler_running": self.scheduler.running,
+            "scheduler_health": self.scheduler.health(),
             "tasks": self.tasks.counts(),
             "autonomy_level": self.execution_policy.get()["level"],
         }
@@ -297,8 +305,11 @@ class RuntimeEngine:
         task = self.tasks.claim_next()
         if task is None:
             return
-        self.events.publish("task.running", task)
         try:
+            # Audit/event publication belongs inside the claimed task's failure
+            # envelope. If the event bus fails after the DB claim, we must
+            # reconcile the task instead of leaving it forever RUNNING.
+            self.events.publish("task.running", task)
             # Zero-trust policy check before executing task
             auth_res = self.authorize_task(task)
             if not auth_res["authorized"] and auth_res.get("approval_id"):

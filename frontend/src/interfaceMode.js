@@ -2,7 +2,7 @@ export const INTERFACE_MODE_KEY = 'kingdom.interface-mode'
 export const EASY_PAGES = ['Dashboard','Workbench','Tasks','Swarm','Memory','Nodes','Governance','Security','Recovery','Settings']
 export const ADVANCED_NAVIGATION = [
  {name:'Operate',items:[['Dashboard','Dashboard'],['Workbench','Agent workbench'],['Preparation','Tools & model lab'],['Tasks','Tasks'],['Automations','Automations'],['Swarm','Swarm'],['Runtime','Runtime']]},
- {name:'Knowledge',items:[['AIMap','Intelligence records'],['SkillMaps','Skill maps & Discord'],['Memory','Memory'],['Routing','Routing'],['Skills','Skills'],['Learning','Learning Center']]},
+ {name:'Knowledge',items:[['AIMap','Intelligence records'],['SkillMaps','Skill maps & Discord'],['Memory','Memory'],['Routing','Routing'],['Skills','Skills'],['Learning','Learning Center'],['Integrations','Integrations']]},
  {name:'Manage',items:[['Governance','Governance'],['Nodes','Nodes & Cluster'],['Mobile','Devices & Knowledge'],['Security','Security'],['Recovery','Recovery'],['Logs','Logs & Activity'],['Settings','Settings']]}
 ]
 export function navigationForMode(mode) {

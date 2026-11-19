@@ -4,6 +4,7 @@ import useLiveData from '../hooks/useLiveData'
 const modes = [{id:'persistent',title:'Persistent',description:'Check the queue every 100 ms.'},{id:'burst',title:'Burst',description:'Check the queue every 20 ms while the runtime is active.'},{id:'adaptive',title:'Adaptive',description:'Check every 100 ms with queued work, or 500 ms when idle.'}]
 export default function Runtime() {
  const {data, error, refresh} = useLiveData('/status', 3000)
+ const {data: services, error: servicesError} = useLiveData('/system/services', 10000)
  const [busy,setBusy] = useState(false)
  const [message,setMessage] = useState('')
  const change = async (path, method='post', body={}) => {setBusy(true);setMessage('');try {await api[method](path,body);await refresh();setMessage('Runtime updated.')} catch(e){setMessage(e.response?.data?.detail || 'Runtime change failed.')} finally {setBusy(false)}}
@@ -11,6 +12,21 @@ export default function Runtime() {
   {error && <p role="alert" className="notice error">{error}</p>}
   <div className="grid-cards"><div className="card"><div className="card-title">Engine</div><div className="card-value">{data ? data.running ? 'Running' : 'Stopped' : 'Loading…'}</div></div><div className="card"><div className="card-title">Mode</div><div className="card-value">{data?.mode || 'Loading…'}</div></div><div className="card"><div className="card-title">Version</div><div className="card-value">{data?.version || 'Loading…'}</div></div><div className="card"><div className="card-title">Autonomy</div><div className="card-value">{data ? `L${data.autonomy_level}` : 'Loading…'}</div></div></div>
   <div className="action-row"><button className="primary-red" onClick={() => change('/start')} disabled={!data || busy || data.running || !!error}>Start Runtime</button><button onClick={() => change('/stop')} disabled={!data || busy || !data.running || !!error}>Stop Runtime</button>{message && <span role="status">{message}</span>}</div>
+  <section className="panel" aria-label="Background services">
+   <h2>Background services</h2>
+   <p className="muted">Shows the actual local worker processes and scheduler. A running service does not prove that individual tasks succeeded.</p>
+   {servicesError && <p role="alert" className="notice error">{servicesError}</p>}
+   <div className="grid-cards" style={{marginTop: 14}}>
+    <div className="card"><div className="card-title">Service supervision</div><div className="card-value">{services?.state || 'Unavailable'}</div></div>
+    <div className="card"><div className="card-title">Task scheduler</div><div className="card-value">{services?.scheduler?.status || 'Unavailable'}</div></div>
+    <div className="card"><div className="card-title">Scheduler failures</div><div className="card-value">{services?.scheduler?.consecutive_failures ?? '—'}</div></div>
+   </div>
+   {services?.last_error_type && <p className="notice error" role="status">Startup/shutdown error type: {services.last_error_type}</p>}
+   {services?.scheduler?.last_error_type && <p className="notice error" role="status">Last scheduler error type: {services.scheduler.last_error_type}</p>}
+   <div className="grid-cards">
+    {Object.entries(services?.services || {}).map(([name, state]) => <div className="card" key={name}><div className="card-title">{name.replaceAll('_', ' ')}</div><strong>{state}</strong></div>)}
+   </div>
+  </section>
   <section className="panel"><h2>Queue processing mode</h2><p className="muted">Modes change polling speed. They do not grant authority or enable privacy, sandboxing, or a calendar schedule.</p><div className="mode-options">{modes.map(mode => <button key={mode.id} className={`mode-option ${data?.mode === mode.id ? 'selected' : ''}`} onClick={() => change('/mode','put',{mode:mode.id})} disabled={!data || busy || !!error || data.mode === mode.id}><strong>{mode.title}</strong><small>{mode.description}</small><span>{data?.mode === mode.id ? 'Active' : 'Use this mode'}</span></button>)}</div></section>
  </div>
 }

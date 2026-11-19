@@ -113,6 +113,31 @@ class NodeSecurityTests(unittest.TestCase):
         mgr.revoke_node("custom_knight")
         self.assertIsNone(mgr.authenticate_token(token))
 
+    def test_rotated_credential_invalidates_old_token(self):
+        manager = NodeSecurityManager()
+        original = manager.register_node("rotating_worker", token="first-token")["token"]
+        self.assertEqual(manager.authenticate_token(original), "rotating_worker")
+        manager.register_node("rotating_worker", token="second-token")
+        self.assertIsNone(manager.authenticate_token(original))
+        self.assertEqual(manager.authenticate_token("second-token"), "rotating_worker")
+        manager.revoke_node("rotating_worker")
+        self.assertIsNone(manager.authenticate_token("second-token"))
+
+    def test_credential_cannot_be_reassigned_between_nodes(self):
+        manager = NodeSecurityManager()
+        manager.register_node("node_one", token="shared-token")
+        with self.assertRaises(ValueError):
+            manager.register_node("node_two", token="shared-token")
+        self.assertEqual(manager.authenticate_token("shared-token"), "node_one")
+        self.assertIsNone(manager.get_node("node_two"))
+        with self.assertRaises(ValueError):
+            manager.register_node("node_two", token="unicode-ü")
+
+    def test_malformed_tokens_fail_closed(self):
+        manager = NodeSecurityManager()
+        for invalid in (None, "", [], {}, 5, "x" * 1025, "non-ascii-ü"):
+            self.assertIsNone(manager.authenticate_token(invalid))
+
 
 class ZeroTrustEngineTests(unittest.TestCase):
     def setUp(self):

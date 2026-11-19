@@ -59,8 +59,10 @@ class AuditLogger:
             with path.open("a", encoding="utf-8") as output:
                 output.write(json.dumps(record, sort_keys=True) + "\n")
             self._records.append(record)
-        if len(self._records) > self.max_history:
-            self._records.pop(0)
+            # Eviction must share the append lock so concurrent writers cannot
+            # overflow the bounded history or corrupt its retention order.
+            if len(self._records) > max(0, self.max_history):
+                del self._records[:len(self._records) - max(0, self.max_history)]
 
         log_msg = f"[AUDIT] decision={decision} actor={record['actor']} cap={capability} op={record['operation']} reason={record['reason']}"
         if decision == "DENIED":
@@ -97,28 +99,22 @@ class AuditLogger:
         decision: str | None = None,
         capability: str | None = None,
     ) -> list[dict[str, Any]]:
-        # Bolt performance optimization: Reverse iterate over self._records under lock and exit early once
-        # limit matching records are found, improving time complexity from O(N) multi-pass filtering
-        # to O(min(N, limit)) single-pass retrieval (~2.9x benchmark speedup).
-        with self._lock:
-            records = list(self._records)
-
-        # Handle non-positive limit edge case (preserve empty list or slice behavior)
+        # Reuse the older branch's bounded reverse scan, but keep its iterator
+        # under the existing lock: no O(N) snapshot copy and no iterator races.
         if limit <= 0:
             return []
-
         results: list[dict[str, Any]] = []
-        for r in reversed(records):
-            if actor and r["actor"] != actor:
-                continue
-            if decision and r["decision"] != decision:
-                continue
-            if capability and r["capability"] != capability:
-                continue
-            results.append(r)
-            if len(results) >= limit:
-                break
-
+        with self._lock:
+            for r in reversed(self._records):
+                if actor and r["actor"] != actor:
+                    continue
+                if decision and r["decision"] != decision:
+                    continue
+                if capability and r["capability"] != capability:
+                    continue
+                results.append(r)
+                if len(results) >= limit:
+                    break
         return results
 
     def _sanitize_dict(self, data: dict[str, Any]) -> dict[str, Any]:

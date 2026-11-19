@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import secrets
+from threading import RLock
 from typing import Any
 
 from backend.security.capabilities import DEFAULT_KNIGHT_CAPABILITIES
@@ -14,6 +15,7 @@ class NodeSecurityManager:
     def __init__(self) -> None:
         self._nodes: dict[str, dict[str, Any]] = {}
         self._tokens: dict[str, str] = {}  # token -> node_id
+        self._lock = RLock()
         # Pre-register default built-in knights and system actor with automatic tokens
         self._init_default_knights()
 
@@ -45,30 +47,50 @@ class NodeSecurityManager:
         capabilities: set[str] | list[str] | None = None,
         token: str | None = None,
     ) -> dict[str, Any]:
-        node_token = token or f"node-tok-{secrets.token_hex(16)}"
+        """Register or rotate a node credential without leaving the old credential active."""
+        if not isinstance(node_id, str) or not node_id or len(node_id) > 128:
+            raise ValueError("A bounded node ID is required")
+        if token is not None and (not isinstance(token, str) or not token or len(token) > 1024 or not token.isascii()):
+            raise ValueError("A valid nonempty node token is required")
+
         caps = set(capabilities) if capabilities is not None else set(DEFAULT_KNIGHT_CAPABILITIES)
-
-        node_record = {
-            "node_id": node_id,
-            "name": name or node_id,
-            "token": node_token,
-            "capabilities": list(caps),
-            "verified": True,
-            "active": True,
-        }
-
-        self._nodes[node_id] = node_record
-        self._tokens[node_token] = node_id
-        return node_record
+        with self._lock:
+            node_token = token if token is not None else f"node-tok-{secrets.token_hex(16)}"
+            previous_owner = self._tokens.get(node_token)
+            if previous_owner is not None and previous_owner != node_id:
+                raise ValueError("A credential may not be assigned to a different node")
+            old_record = self._nodes.get(node_id)
+            old_token = old_record.get("token") if old_record else None
+            if old_token is not None and old_token != node_token:
+                self._tokens.pop(old_token, None)
+            record = {
+                "node_id": node_id,
+                "name": name or node_id,
+                "token": node_token,
+                "capabilities": list(caps),
+                "verified": True,
+                "active": True,
+            }
+            self._nodes[node_id] = record
+            self._tokens[node_token] = node_id
+            return record
 
     def authenticate_token(self, token: str) -> str | None:
-        """Returns node_id if token is valid and active, otherwise None."""
-        node_id = self._tokens.get(token)
-        if node_id:
-            node = self._nodes.get(node_id)
-            if node and node.get("active"):
-                return node_id
-        return None
+        """Authenticate active nodes without token lookup short-circuiting.
+
+        Walk all registered credentials, as proposed by the timing-hardening
+        branch. Reject malformed tokens before comparing them.
+        """
+        if not isinstance(token, str) or not token or len(token) > 1024 or not token.isascii():
+            return None
+        matched_id = None
+        with self._lock:
+            for registered_token, node_id in self._tokens.items():
+                if secrets.compare_digest(registered_token, token):
+                    node = self._nodes.get(node_id)
+                    if node and node.get("active"):
+                        matched_id = node_id
+        return matched_id
 
     def get_node(self, node_id: str) -> dict[str, Any] | None:
         return self._nodes.get(node_id)
@@ -87,12 +109,13 @@ class NodeSecurityManager:
         return node
 
     def revoke_node(self, node_id: str) -> None:
-        node = self._nodes.get(node_id)
-        if node:
-            node["active"] = False
-            token = node.get("token")
-            if token and token in self._tokens:
-                del self._tokens[token]
+        with self._lock:
+            node = self._nodes.get(node_id)
+            if node:
+                node["active"] = False
+                token = node.get("token")
+                if token:
+                    self._tokens.pop(token, None)
 
     def list_nodes(self) -> list[dict[str, Any]]:
         # Return list without raw tokens for security
