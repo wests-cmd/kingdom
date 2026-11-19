@@ -1,0 +1,38 @@
+name: Review and retire historical Kingdom branches
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Audit first. Archive-and-delete requires exact confirmation and a merged integration."
+        required: true
+        default: audit
+        type: choice
+        options:
+          - audit
+          - archive-and-delete
+      confirmation:
+        description: "For deletion type ARCHIVE_AND_RETIRE_35 (leave empty for audit)"
+        required: false
+        type: string
+permissions:
+  contents: write
+  pull-requests: read
+concurrency:
+  group: kingdom-historical-branch-retirement
+  cancel-in-progress: false
+jobs:
+  review:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify the keeper and archive original heads before removal
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RETIRE_MODE: ${{ inputs.mode }}
+          RETIRE_CONFIRMATION: ${{ inputs.confirmation }}
+        run: python3 scripts/retire_historical_branches.py
