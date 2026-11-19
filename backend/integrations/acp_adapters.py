@@ -46,7 +46,7 @@ SUPPORTED_TOOLS: Dict[str, ToolAdapterManifest] = {
         version_command=["gemini", "--version"], documentation_url="https://github.com/google-gemini/gemini-cli",
         setup_hint="Install Gemini CLI and configure its own sign-in."),
     "jules": ToolAdapterManifest(
-        id="jules", name="Kingdom Jules adapter", executable="jules",
+        id="jules", name="Kingdom Jules adapter", supports_acp=True, executable="jules",
         protocol="native", required_permissions=["filesystem.read", "filesystem.write", "process.execute"],
         setup_hint="Configure the existing owner-governed Jules integration inside Kingdom."),
     "ollama": ToolAdapterManifest(
