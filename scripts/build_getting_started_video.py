@@ -155,7 +155,7 @@ def create(out):
             cmd(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
                  "-loop", "1", "-framerate", "24", "-i", str(frame), "-i", str(voice),
                  "-t", f"{seconds:.3f}", "-vf",
-                 f"fade=t=in:st=0:d=.2,fade=t=out:st={seconds-.25:.3f}:d=.25,format=yuv420p",
+                 f"fade=t=in:st=0:d=0.2,fade=t=out:st={seconds-0.25:.3f}:d=0.25,format=yuv420p",
                  "-c:v", "libx264", "-preset", "veryfast", "-crf", "27",
                  "-r", "24", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k",
                  str(segment)])
