@@ -130,10 +130,12 @@ class NodeSecurityTests(unittest.TestCase):
             manager.register_node("node_two", token="shared-token")
         self.assertEqual(manager.authenticate_token("shared-token"), "node_one")
         self.assertIsNone(manager.get_node("node_two"))
+        with self.assertRaises(ValueError):
+            manager.register_node("node_two", token="unicode-ü")
 
     def test_malformed_tokens_fail_closed(self):
         manager = NodeSecurityManager()
-        for invalid in (None, "", [], {}, 5, "x" * 1025):
+        for invalid in (None, "", [], {}, 5, "x" * 1025, "non-ascii-ü"):
             self.assertIsNone(manager.authenticate_token(invalid))
 
 

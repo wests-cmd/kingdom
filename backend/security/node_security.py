@@ -50,7 +50,7 @@ class NodeSecurityManager:
         """Register or rotate a node credential without leaving the old credential active."""
         if not isinstance(node_id, str) or not node_id or len(node_id) > 128:
             raise ValueError("A bounded node ID is required")
-        if token is not None and (not isinstance(token, str) or not token or len(token) > 1024):
+        if token is not None and (not isinstance(token, str) or not token or len(token) > 1024 or not token.isascii()):
             raise ValueError("A valid nonempty node token is required")
 
         caps = set(capabilities) if capabilities is not None else set(DEFAULT_KNIGHT_CAPABILITIES)
@@ -81,7 +81,7 @@ class NodeSecurityManager:
         Walk all registered credentials, as proposed by the timing-hardening
         branch. Reject malformed tokens before comparing them.
         """
-        if not isinstance(token, str) or not token or len(token) > 1024:
+        if not isinstance(token, str) or not token or len(token) > 1024 or not token.isascii():
             return None
         matched_id = None
         with self._lock:

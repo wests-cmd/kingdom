@@ -68,7 +68,7 @@ class KnightDaemon:
         try:
             cmd_k_id = self._get_commander_id()
         except (RuntimeError, ValueError) as exc:
-            print(f"[{self.node_id}] Cannot pair without verified Commander identity: {exc}")
+            print(f"[{self.node_id}] Cannot pair without a valid Commander identity response: {exc}")
             return False
 
         msg_to_sign = f"{pairing_code}:{self.identity.node_id}:{cmd_k_id}".encode("utf-8")
