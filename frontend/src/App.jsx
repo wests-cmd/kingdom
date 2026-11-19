@@ -19,6 +19,7 @@ import Learning from "./pages/Learning"
 import { Nodes } from "./pages/Nodes"
 import { MobileGateway } from "./pages/MobileGateway"
 import Settings from "./pages/Settings"
+import Integrations from "./pages/Integrations"
 import AppearanceSettings from './pages/AppearanceSettings'
 import AccessibilitySettings from './components/common/AccessibilitySettings'
 import AppearanceSync from './components/common/AppearanceSync'
@@ -110,6 +111,7 @@ function OwnerApp() {
       case "Learning": return <Learning />
       case "Nodes": return <Nodes />
       case "Mobile": return <MobileGateway />
+      case "Integrations": return <Integrations />
       case "Security": return <Settings />
       case "Settings": return <AppearanceSettings interfaceMode={interfaceMode} changeInterfaceMode={changeInterfaceMode} modeSaved={modeSaved}/>
       case "Recovery": return <Recovery />
