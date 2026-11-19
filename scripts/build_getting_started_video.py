@@ -122,7 +122,13 @@ def slide(i, scene):
     return canvas
 
 def cmd(args):
-    subprocess.run(args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    try:
+        subprocess.run(args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as error:
+        # CI should expose the actual encoder/filter failure instead of a
+        # traceback with only the exit code.
+        print(error.stderr.decode("utf-8", errors="replace")[-6000:])
+        raise
 
 def clip_length(path):
     return float(subprocess.check_output(
