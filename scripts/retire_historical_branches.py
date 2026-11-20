@@ -78,7 +78,7 @@ def record_summary(results):
         output.write("## Historical branch retirement\n\n")
         output.write("| Branch | Result |\n|---|---|\n")
         for branch, state in results:
-            output.write(f"| \`{branch}\` | {state} |\n")
+            output.write(f"| `{branch}` | {state} |\n")
 
 
 def main():
