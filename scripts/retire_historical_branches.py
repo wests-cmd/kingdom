@@ -39,11 +39,15 @@ def load_manifest(path=None):
         raise ValueError("Invalid commit pin")
     if manifest["history_tag_prefix"] != "kingdom-history/2026-11-19/":
         raise ValueError("Archive namespace changed")
-    accepted = {"integrated", "superseded", "review_required"}
+    accepted = {"integrated", "superseded", "review_required", "archived_not_adopted"}
     if any(row.get("disposition") not in accepted or
            not isinstance(row.get("review"), str) or len(row["review"]) < 20
            for row in candidates):
         raise ValueError("Every historical branch needs a reviewed disposition and rationale")
+    if any(row["disposition"] == "archived_not_adopted" and
+           row.get("decision_evidence") != "docs/FOUR_BRANCH_REVIEW_2026-11-20.md"
+           for row in candidates):
+        raise ValueError("Explicit recorded rejection evidence is required")
     return manifest
 
 
