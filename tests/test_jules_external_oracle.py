@@ -93,9 +93,17 @@ class OracleTests(unittest.TestCase):
  def test_probe_client_is_isolated_and_uses_pinned_instance(self):
   oracle=self.oracle();oracle._container_id='d'*64
   result=self.transport('GET','/health/live',{},None)
+  fake_token='Bearer disposable-secret-do-not-put-in-process-list'
   with patch.object(m.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout=json.dumps(result))) as run:
-   oracle.docker_exec_transport('GET','/health/live',{},None)
-   argv=run.call_args.args[0];self.assertEqual(argv[2],'d'*64);self.assertEqual(argv[3],'/usr/local/bin/python3');self.assertIn('-I',argv);self.assertIn('-S',argv)
+   oracle.docker_exec_transport('GET','/health/live',{'Authorization':fake_token},None)
+   argv=run.call_args.args[0]
+   self.assertEqual(argv[:4],['docker','exec','-i','d'*64])
+   self.assertEqual(argv[4],'/usr/local/bin/python3')
+   self.assertIn('-I',argv);self.assertIn('-S',argv)
+   self.assertNotIn(fake_token,repr(argv))
+   request=json.loads(run.call_args.kwargs['input'])
+   self.assertEqual(request['headers']['Authorization'],fake_token)
+   self.assertEqual(request['url'],'http://127.0.0.1:8012/health/live')
 
  def admission_transport(self, alteration=None):
   """Scripted API boundary tests controller checks, never scheduler behavior."""

@@ -32,20 +32,29 @@ def test_retirement_is_opt_in_and_refuses_missing_confirmation(monkeypatch):
     else:
         raise AssertionError("Deletion unexpectedly allowed")
 
-def test_every_branch_is_reviewed_and_unported_features_are_held():
+def test_every_branch_reviewed_and_four_legacy_sources_explicitly_rejected():
     rows = load().load_manifest()["branches"]
-    assert {row["disposition"] for row in rows} == {"integrated", "superseded", "review_required"}
-    held = [row["name"] for row in rows if row["disposition"] == "review_required"]
-    assert "codex/monitor-execution-guard-20261023" in held
-    assert "jules-12217898583924398317-1da231a0" in held
-    assert "feat/autonomous-harness-foundation-17802645864919866654" in held
-    assert "jules-external-oracle-harness-4034832206850530088" in held
+    assert {row["disposition"] for row in rows} == {
+        "integrated", "superseded", "archived_not_adopted"}
+    rejected = [row for row in rows if row["disposition"] == "archived_not_adopted"]
+    assert len(rejected) == 4
+    assert {row["name"] for row in rejected} == {
+        "codex/monitor-execution-guard-20261023",
+        "feat/autonomous-harness-foundation-17802645864919866654",
+        "jules-12217898583924398317-1da231a0",
+        "jules-external-oracle-harness-4034832206850530088",
+    }
+    assert all(row["decision_evidence"] == "docs/FOUR_BRANCH_REVIEW_2026-11-20.md"
+               for row in rejected)
 
 
 def test_review_required_branch_never_deleted_even_with_confirmation(monkeypatch):
     script = load()
     manifest = script.load_manifest()
-    row = next(b for b in manifest["branches"] if b["disposition"] == "review_required")
+    row = next(b for b in manifest["branches"] if b["disposition"] == "archived_not_adopted")
+    # Simulate an unreviewed branch: the gate must remain fail-closed.
+    row["disposition"] = "review_required"
+    monkeypatch.setattr(script, "load_manifest", lambda: manifest)
     monkeypatch.setenv("RETIRE_MODE", "archive-and-delete")
     monkeypatch.setenv("RETIRE_CONFIRMATION", "ARCHIVE_AND_RETIRE_35")
     monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
@@ -134,3 +143,19 @@ def test_archive_tag_must_exist_before_retiring(monkeypatch):
                         ("git", "push", "origin", "refs/tags/" + tag),
                         ("git", "push", "--force-with-lease=refs/heads/" + row["name"] + ":" + row["sha"],
                          "origin", ":refs/heads/" + row["name"])]
+
+
+def test_unreviewed_rejection_requires_evidence(tmp_path):
+    import json
+    script = load()
+    manifest = script.load_manifest()
+    row = next(b for b in manifest["branches"] if b["disposition"] == "archived_not_adopted")
+    del row["decision_evidence"]
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    try:
+        script.load_manifest(path)
+    except ValueError as exc:
+        assert "evidence" in str(exc)
+    else:
+        raise AssertionError("Unreviewed deletion was accepted")

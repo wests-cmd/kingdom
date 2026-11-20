@@ -6,7 +6,7 @@
     "integration/kingdom-cohesion-20261119"
   ],
   "history_tag_prefix": "kingdom-history/2026-11-19/",
-  "notes": "Each original SHA is archived before any deletion. 'integrated' and 'superseded' are reviewed dispositions, not proof of identical behavior. 'review_required' is held and cannot be deleted. Backup tags preserve source but not operational feature parity.",
+  "notes": "All original SHAs were archived into remote tags. 'archived_not_adopted' is an explicit decision to retire a branch without claiming its unique features work on main. See docs/FOUR_BRANCH_REVIEW_2026-11-20.md. No automatic deletion is authorized on a push.",
   "branches": [
     {
       "name": "bolt/audit-log-history-speedup-16176806299477506921",
@@ -59,8 +59,9 @@
     {
       "name": "codex/monitor-execution-guard-20261023",
       "sha": "aee1296f97878c8ec5ccc7879a674cd2e0cd02ba",
-      "disposition": "review_required",
-      "review": "Linux external signer and durable monitor are NOT on main; separate UID, on-host integrity and live fail-closed tests required before adoption. Open draft PR #131."
+      "disposition": "archived_not_adopted",
+      "review": "ARCHIVED, NOT MERGED: Linux-only external Ed25519 signer is a genuine separate security model, but no demonstrated OS-principal isolation or installed fail-closed fleet acceptance. Do not splice a new signer into current ZeroTrust; preserve source/tag for a future separately threat-modeled project.",
+      "decision_evidence": "docs/FOUR_BRANCH_REVIEW_2026-11-20.md"
     },
     {
       "name": "codex/opt-in-parallel-pan-paths-20261024",
@@ -95,8 +96,9 @@
     {
       "name": "feat/autonomous-harness-foundation-17802645864919866654",
       "sha": "980772d689651accd8b1b4d68c20591d8031274a",
-      "disposition": "review_required",
-      "review": "Experimental IsolatedBuildRunner and state machine are not on main; old runner does not actually apply proposed files and must not be represented as executable self-repair."
+      "disposition": "archived_not_adopted",
+      "review": "ARCHIVED, NOT MERGED: experimental IsolatedBuildRunner does not apply candidate changes before running tests; its claimed repair loop can pass without testing the patch. Retain modern existing proposal guards. Selectively port the owner's Gap Register denial regression tests, not the fake executor.",
+      "decision_evidence": "docs/FOUR_BRANCH_REVIEW_2026-11-20.md"
     },
     {
       "name": "feat-native-jules-handoff-adapter-9784710610709854012",
@@ -179,8 +181,9 @@
     {
       "name": "jules-12217898583924398317-1da231a0",
       "sha": "f60585244e67250cfb63fa6f0adcb6a15b93af67",
-      "disposition": "review_required",
-      "review": "Profile/API catalog with database, provider sync and frontend is missing from main. Model profiles exist but are NOT equivalent; review external source availability and SSRF/authorization boundaries."
+      "disposition": "archived_not_adopted",
+      "review": "ARCHIVED, NOT MERGED: old general API catalog auto-fetches and follows redirects to untrusted provider URLs; provider verification does blind GET with redirects, risking SSRF. Static metadata inferred from auth alone cannot prove an API free or functional. Keep existing truthful read-only discovery; future catalog needs design and new implementation.",
+      "decision_evidence": "docs/FOUR_BRANCH_REVIEW_2026-11-20.md"
     },
     {
       "name": "jules-9044776383071301607-06615c47",
@@ -191,8 +194,9 @@
     {
       "name": "jules-external-oracle-harness-4034832206850530088",
       "sha": "df15fe1fba098faeb0eb18d5dfa6e0c1bfc6f87e",
-      "disposition": "review_required",
-      "review": "Standalone Jules external-oracle harness CLI is absent from main; existing native Jules adapter is not equivalent to the offline verification CLI."
+      "disposition": "archived_not_adopted",
+      "review": "SUPERSEDED: current main already has scripts/jules-external-oracle.py and tests, stronger pinned-instance/source/isolation checks and verified test fixtures. Never overwrite it with older implementation. Harden current probe transport to keep disposable auth header out of process argv.",
+      "decision_evidence": "docs/FOUR_BRANCH_REVIEW_2026-11-20.md"
     },
     {
       "name": "review/readiness-progress-20261103",

@@ -1,6 +1,4 @@
 """API endpoints for the Kingdom Gap Register."""
-from fastapi import APIRouter, HTTPException, Depends
-from backend.security.http_auth import require_owner
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional

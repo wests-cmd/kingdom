@@ -33,10 +33,16 @@ PROBE_HELPER_SCRIPT = """import urllib.request, urllib.error, json, sys, base64
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args): return None
 
-url = sys.argv[1]
-headers = json.loads(sys.argv[2])
-body_data = sys.argv[3].encode('utf-8') if sys.argv[3] else None
-method = sys.argv[4]
+request_line = sys.stdin.buffer.readline(32769)
+if not request_line or len(request_line) > 32768:
+    raise ValueError('Invalid or oversized probe request')
+request = json.loads(request_line)
+if not isinstance(request, dict) or set(request) != {'url', 'headers', 'body', 'method'}:
+    raise ValueError('Exact probe request fields required')
+url = request['url']
+headers = request['headers']
+body_data = request['body'].encode('utf-8') if request['body'] else None
+method = request['method']
 
 opener = urllib.request.build_opener(NoRedirect(), urllib.request.ProxyHandler({}))
 req = urllib.request.Request(url, data=body_data, headers=headers, method=method)
@@ -321,14 +327,19 @@ class ExternalOracle:
     def docker_exec_transport(self, method, path, headers, body):
         port = self.config.get('api_port', 8012)
         url = f"http://127.0.0.1:{port}{path}"
-        headers_json = json.dumps(headers or {})
-        body_str = body or ""
+        # Keep even disposable fixture tokens out of host/container process argv.
+        # Only the constant, pinned probe script appears on the command line.
+        request = json.dumps({'url': url, 'headers': headers or {},
+                              'body': body or '', 'method': method},
+                             sort_keys=True, separators=(',', ':'))
+        if len(request.encode('utf-8')) > 32767:
+            raise ValueError('Probe request exceeds 32 KiB transport limit')
         cmd = [
-            'docker','exec',self._container_id,
+            'docker', 'exec', '-i', self._container_id,
             PROBE_PYTHON, '-I', '-S', '-c', PROBE_HELPER_SCRIPT,
-            url, headers_json, body_str, method
         ]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        res = subprocess.run(cmd, input=request+'\n', capture_output=True,
+                             text=True, timeout=15)
         if res.returncode != 0:
             raise ValueError(f"Probe transport exec failed with exit code {res.returncode}")
         try:

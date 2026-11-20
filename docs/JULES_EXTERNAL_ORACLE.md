@@ -2,6 +2,9 @@
 
 ## Threat Model & Core Isolation Directives
 
+**2026-11-20 transport hardening:** Fixture authorization headers and probe bodies are sent to the pinned `docker exec -i` process on standard input, **not on its command line**. Process argument lists contain only a constant reviewed Python helper script and a pinned container instance. This does not authorize real owner credentials: supply only disposable test fixtures.
+
+
 Importing untrusted candidate Python code directly into `pytest` running on host or controller environments permits candidate code to execute arbitrary instructions during module load or test collection. This can allow candidates to forge test reports (such as generating synthetic JUnit XML output like `<testsuite tests="1"><testcase name="x"/></testsuite>`), print `"1 passed"`, or invoke `os._exit(0)` to abruptly terminate test execution while signaling success to the host controller.
 
 `scripts/jules-external-oracle.py` provides an isolated, trusted host-side behavioral test harness.
