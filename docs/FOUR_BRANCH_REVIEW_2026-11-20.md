@@ -2,7 +2,7 @@
 
 **Decision date:** 2026-11-20 · **Reviewed against:** `main` at `e5781a873b3cddd6fa4226f20e902ab4ac60cfd8` · **Owner-directed choice:** retain useful, safe improvements; reject unsafe or already-obsolete branch implementations. This is a code/source comparison, not a claim of installed-device acceptance.
 
-All four original SHAs were verified under `kingdom-history/2026-11-19/<branch-name>` before branch cleanup. Archiving is not implementing.
+All four original SHAs were verified under `kingdom-history/2026-11-19/<branch-name>` before branch cleanup, and all four old branch references were subsequently retired. The full historical tag set (35) was preserved. Archiving is not implementing.
 
 | Historical source and immutable head | Decision | Code-level evidence | What is retained on current main |
 | --- | --- | --- | --- |
@@ -16,10 +16,10 @@ All four original SHAs were verified under `kingdom-history/2026-11-19/<branch-n
 - [x] Compare all four source branches against current `main`; no whole-branch merge (historical branches trail current main by 66–355 commits).
 - [x] Keep four exact historical commit backups (tags; no released feature implied).
 - [x] Copy/adapt only the owner-authentication regression from the self-build prototype and harden the actual current oracle's Docker probe argv.
-- [ ] Latest combined backend/frontend/desktop CI must pass on the code change before merge.
+- [x] Latest combined backend/frontend/desktop CI on PR #168 passed before merge: 1,977 backend tests, 5 skipped; frontend and desktop packaging succeeded. Windows native hit a networked E2E timeout; it is separately tracked and not certified by this acceptance.
 - [ ] Independently installed multi-node signer, auto-build executor and general provider catalog **are not included and are not represented as passed**.
-- [ ] Close draft PR #131 as reviewed/rejected for this release; leave original source recoverable via immutable archive tag.
-- [ ] Remove all four historical branch refs *only after* their original SHAs and tags are rechecked; preserve two keepers: `main` and `integration/kingdom-cohesion-20261119`.
+- [x] Close draft PR #131 as reviewed/rejected for this release; original source remains recoverable via immutable archive tag.
+- [x] Delete all four historical branch refs after exact original SHA and tag checks. [Action run 44785597436](https://github.com/wests-cmd/kingdom/actions/runs/44785597436) succeeded with four retired, zero skipped. Preserve only `main` and `integration/kingdom-cohesion-20261119`.
 
 ## Guardrails
 

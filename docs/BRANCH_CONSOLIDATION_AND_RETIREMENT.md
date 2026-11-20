@@ -2,19 +2,19 @@
 
 The original 31 reviewed branches were archived and retired successfully in [run 44782217907](https://github.com/wests-cmd/kingdom/actions/runs/44782217907). Every original SHA is recorded in [the manifest](branch_retirement_manifest.json) and preserved under remote tags `kingdom-history/2026-11-19/<branch-name>`.
 
-The remaining four branches were independently inspected and **explicitly rejected as legacy implementations** (not falsely described as merged). The decision, comparison, selected regression and constraints are recorded in [the four-branch review](FOUR_BRANCH_REVIEW_2026-11-20.md).
+The remaining four branches were independently inspected and **explicitly rejected as legacy implementations** (not falsely described as merged), then deleted in [verified retirement run 44785597436](https://github.com/wests-cmd/kingdom/actions/runs/44785597436) (four archived-and-retired, zero holds/skips). **All 35 original source commit tags remain available.** The decision, comparison, selected regression and constraints are recorded in [the four-branch review](FOUR_BRANCH_REVIEW_2026-11-20.md).
 
-**Outcomes:** 5 original branches had work integrated, 26 were superseded by later code, and 4 were archived-not-adopted. Only `main` and `integration/kingdom-cohesion-20261119` are keeper branches once the final four refs are retired. A branch can be deleted without losing its source under the verified tag. A deleted branch is **not** evidence that its old features operate in Kingdom.
+**Outcomes:** 5 original branches had work integrated, 26 were superseded by later code, and 4 were archived-not-adopted. **Only `main` and `integration/kingdom-cohesion-20261119` remain as branch refs after the final four were retired.** A branch can be deleted without losing its source under the verified tag. A deleted branch is **not** evidence that its old features operate in Kingdom.
 
-The open external-monitor draft PR #131 was rejected because its actual separately isolated Linux signer had not been commissioned; do not auto-merge that policy-changing integration.
+The external-monitor draft PR #131 was closed as reviewed but not adopted because its actual separately isolated Linux signer had not been commissioned; do not auto-merge that policy-changing integration.
 
 ## Retirement controls
 
 - Always check branch head == manifest SHA and tag SHA == manifest SHA.
 - Prevent deletion when a PR is open against that head.
 - Preserve both keeper branches; use force-with-lease for deletions.
-- The manual retirement workflow is the normal choice, requiring `ARCHIVE_AND_RETIRE_35`; a one-time verified cleanup workflow is removed after it completes.
-- CI, native validation, physical 2/5-node rehearsal and update rollback are separate release gates—not proven by branch cleanup.
+- The manual retirement workflow remains available for future historical checks. Both one-time deletion workflows have been removed after successful retirement. No branch deletion is automatically scheduled on pushes.
+- CI, native validation, physical 2/5-node rehearsal and update rollback are separate release gates—not proven by branch cleanup. PR #168 passed 1,977 backend tests (5 skipped), frontend and desktop packaging; Windows native had a process-level E2E timeout and is not certified green by this audit.
 
 ## Complete historical inventory
 
