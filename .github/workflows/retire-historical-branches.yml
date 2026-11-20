@@ -1,7 +1,6 @@
 name: Review and retire historical Kingdom branches
 on:
-  # One exact reviewed main commit triggers retirement once; subsequent pushes archive only.
-  # All branch refs must match the pinned, archived manifest; four held branches and open PRs stay.
+  # Normal pushes create backup tags only and never delete branches.
   push:
     branches: [main]
     paths:
@@ -42,6 +41,6 @@ jobs:
       - name: Audit reviewed dispositions and archive original heads before any removal
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RETIRE_MODE: ${{ github.event_name == 'push' && github.event.head_commit.message == 'ops: execute reviewed branch retirement (one-time)' && 'archive-and-delete' || github.event_name == 'push' && 'archive-only' || inputs.mode }}
-          RETIRE_CONFIRMATION: ${{ github.event_name == 'push' && github.event.head_commit.message == 'ops: execute reviewed branch retirement (one-time)' && 'ARCHIVE_AND_RETIRE_35' || github.event_name == 'push' && '' || inputs.confirmation }}
+          RETIRE_MODE: ${{ github.event_name == 'push' && 'archive-only' || inputs.mode }}
+          RETIRE_CONFIRMATION: ${{ github.event_name == 'push' && '' || inputs.confirmation }}
         run: python3 scripts/retire_historical_branches.py
