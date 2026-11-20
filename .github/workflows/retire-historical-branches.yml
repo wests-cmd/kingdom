@@ -1,14 +1,22 @@
 name: Review and retire historical Kingdom branches
 on:
+  # A merge to main creates BACKUP TAGS ONLY, never deletes branch refs.
+  push:
+    branches: [main]
+    paths:
+      - docs/branch_retirement_manifest.json
+      - scripts/retire_historical_branches.py
+      - .github/workflows/retire-historical-branches.yml
   workflow_dispatch:
     inputs:
       mode:
-        description: "Audit first. Archive-and-delete requires exact confirmation and a merged integration."
+        description: "Audit first, archive exact heads without deletion, then retire reviewed branches only."
         required: true
         default: audit
         type: choice
         options:
           - audit
+          - archive-only
           - archive-and-delete
       confirmation:
         description: "For deletion type ARCHIVE_AND_RETIRE_35 (leave empty for audit)"
@@ -30,9 +38,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
-      - name: Verify the keeper and archive original heads before removal
+      - name: Audit reviewed dispositions and archive original heads before any removal
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RETIRE_MODE: ${{ inputs.mode }}
-          RETIRE_CONFIRMATION: ${{ inputs.confirmation }}
+          RETIRE_MODE: ${{ github.event_name == 'push' && 'archive-only' || inputs.mode }}
+          RETIRE_CONFIRMATION: ${{ github.event_name == 'push' && '' || inputs.confirmation }}
         run: python3 scripts/retire_historical_branches.py

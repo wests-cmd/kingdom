@@ -6,147 +6,217 @@
     "integration/kingdom-cohesion-20261119"
   ],
   "history_tag_prefix": "kingdom-history/2026-11-19/",
-  "notes": "Historic heads are saved with immutable commit tags before deleting any original branch. Tags preserve source, not merge certification.",
+  "notes": "Each original SHA is archived before any deletion. 'integrated' and 'superseded' are reviewed dispositions, not proof of identical behavior. 'review_required' is held and cannot be deleted. Backup tags preserve source but not operational feature parity.",
   "branches": [
     {
       "name": "bolt/audit-log-history-speedup-16176806299477506921",
-      "sha": "6d0b0450dd33d8adfae80e47f7241f700657b4cc"
+      "sha": "6d0b0450dd33d8adfae80e47f7241f700657b4cc",
+      "disposition": "integrated",
+      "review": "AuditLogger.history now uses bounded reverse iteration, with append/eviction locking and tests."
     },
     {
       "name": "bolt/memory-search-token-cache-8691068860340529059",
-      "sha": "f0faf00ed06547c0e2ce89340d7aca3352bab071"
+      "sha": "f0faf00ed06547c0e2ce89340d7aca3352bab071",
+      "disposition": "superseded",
+      "review": "Current memory service has token cache and more recent query behavior; historical one-file optimization is not authoritative."
     },
     {
       "name": "bolt/optimize-learning-collector-get-outcomes-12740401110657446076",
-      "sha": "02981cf122876e822518d8ff8cb2f4ade7a053f1"
+      "sha": "02981cf122876e822518d8ff8cb2f4ade7a053f1",
+      "disposition": "superseded",
+      "review": "Current learning collector has bounded retrieval already; old get_outcomes optimization not independently adopted."
     },
     {
       "name": "bolt-stream-consultation-queries-2243824996762498214",
-      "sha": "2979ecce503ba12b7fb8bdb15143c71f8f2694cc"
+      "sha": "2979ecce503ba12b7fb8bdb15143c71f8f2694cc",
+      "disposition": "integrated",
+      "review": "Bounded SQL consultation streaming and tests were ported in PR #165."
     },
     {
       "name": "codex/autonomy-security-next-20261102",
-      "sha": "6bbe0000d9be2da75cadbb874d5bf35089047fb9"
+      "sha": "6bbe0000d9be2da75cadbb874d5bf35089047fb9",
+      "disposition": "superseded",
+      "review": "Current gap register endpoints already enforce owner dependency and strictly typed evidence; clean duplicate imports separately."
     },
     {
       "name": "codex/centipede-compatibility",
-      "sha": "021bf778bc3ec6aff84dd2ef47a6905f5b232cf8"
+      "sha": "021bf778bc3ec6aff84dd2ef47a6905f5b232cf8",
+      "disposition": "superseded",
+      "review": "Current Centipede compatibility, release process and installer contract supersede this older branch."
     },
     {
       "name": "codex/harness-readiness-repair-20261101",
-      "sha": "9087dd971553f1374b68c9011285fa571cccc7c7"
+      "sha": "9087dd971553f1374b68c9011285fa571cccc7c7",
+      "disposition": "superseded",
+      "review": "Newer read-only adapter discovery API/UI is in main; old ACP implementation not copied wholesale."
     },
     {
       "name": "codex/harness-repair-input-20261102",
-      "sha": "fda0cef403f81985b9f56df62d9bf2fe76a52922"
+      "sha": "fda0cef403f81985b9f56df62d9bf2fe76a52922",
+      "disposition": "superseded",
+      "review": "Current adapter implementation keeps unverified binaries from being advertised as connected or authorized."
     },
     {
       "name": "codex/monitor-execution-guard-20261023",
-      "sha": "aee1296f97878c8ec5ccc7879a674cd2e0cd02ba"
+      "sha": "aee1296f97878c8ec5ccc7879a674cd2e0cd02ba",
+      "disposition": "review_required",
+      "review": "Linux external signer and durable monitor are NOT on main; separate UID, on-host integrity and live fail-closed tests required before adoption. Open draft PR #131."
     },
     {
       "name": "codex/opt-in-parallel-pan-paths-20261024",
-      "sha": "2622c1bd4d62d468032f25b2dcf1e968dff530ff"
+      "sha": "2622c1bd4d62d468032f25b2dcf1e968dff530ff",
+      "disposition": "superseded",
+      "review": "Main has a newer opt-in signed LAN/Bluetooth PAN probe with identity and route checks; draft PR #133 remains open."
     },
     {
       "name": "codex/preview-release-status",
-      "sha": "2b5bce4c0af4386a4e226e329cde61d90d8ce336"
+      "sha": "2b5bce4c0af4386a4e226e329cde61d90d8ce336",
+      "disposition": "superseded",
+      "review": "Main README and status document describe later published v1.2.4; older preview status is obsolete."
     },
     {
       "name": "codex-adapter-observation-repair-20261103-12474211212681984112",
-      "sha": "d482ab64c58eed94ef0de9a645c1a960d3ff99a5"
+      "sha": "d482ab64c58eed94ef0de9a645c1a960d3ff99a5",
+      "disposition": "integrated",
+      "review": "A read-only tested adapter inventory and model discovery were integrated into the native desktop via PR #165."
     },
     {
       "name": "docs/downloads-and-discord",
-      "sha": "4fd0cb4132218ce4f53e5a0f1997565fd4b96104"
+      "sha": "4fd0cb4132218ce4f53e5a0f1997565fd4b96104",
+      "disposition": "superseded",
+      "review": "README now includes verified v1.2.4 downloads and Discord/community links."
     },
     {
       "name": "docs/v112-downloads",
-      "sha": "647bf01aa12abca6b6393fa4072111ea2696d40f"
+      "sha": "647bf01aa12abca6b6393fa4072111ea2696d40f",
+      "disposition": "superseded",
+      "review": "v1.1.2 download note is obsolete; main publishes v1.2.4 packages."
     },
     {
       "name": "feat/autonomous-harness-foundation-17802645864919866654",
-      "sha": "980772d689651accd8b1b4d68c20591d8031274a"
+      "sha": "980772d689651accd8b1b4d68c20591d8031274a",
+      "disposition": "review_required",
+      "review": "Experimental IsolatedBuildRunner and state machine are not on main; old runner does not actually apply proposed files and must not be represented as executable self-repair."
     },
     {
       "name": "feat-native-jules-handoff-adapter-9784710610709854012",
-      "sha": "8a9f2c2377dd0c73f3360446cb8d351bd6b83647"
+      "sha": "8a9f2c2377dd0c73f3360446cb8d351bd6b83647",
+      "disposition": "superseded",
+      "review": "Main Jules adapter is much larger and includes owner gates, encrypted secret handling, deterministic job lifecycle and review."
     },
     {
       "name": "feature/agentscope-additions",
-      "sha": "1eb0f6a9d5980acb153aaa1ebd991b6848667e73"
+      "sha": "1eb0f6a9d5980acb153aaa1ebd991b6848667e73",
+      "disposition": "superseded",
+      "review": "Current accessibility/recovery/checkpoint mechanisms and desktop UX supersede early AgentScope additions."
     },
     {
       "name": "feature/durable-workflow-checkpoints",
-      "sha": "3c4a343c3656d60de991c404c8845d4ba50933ac"
+      "sha": "3c4a343c3656d60de991c404c8845d4ba50933ac",
+      "disposition": "superseded",
+      "review": "Current workflow checkpoint and recovery implementations supersede earlier prototype."
     },
     {
       "name": "feature/inplace-desktop-updates",
-      "sha": "1f7d9fcfacbb233fe9b91b819da422567ec2b836"
+      "sha": "1f7d9fcfacbb233fe9b91b819da422567ec2b836",
+      "disposition": "superseded",
+      "review": "Current Windows desktop update and signed artifact protocol supersede historical v1.2.1 work."
     },
     {
       "name": "feature/mission-workspace",
-      "sha": "d98650e1b6add73b98de63ba497d4b3cfc5aecc9"
+      "sha": "d98650e1b6add73b98de63ba497d4b3cfc5aecc9",
+      "disposition": "superseded",
+      "review": "Main mission task API, file upload, approvals and workspace are newer and broadly tested."
     },
     {
       "name": "feature/royal-appearance-settings",
-      "sha": "c32eb7d9f52aa91bfb5431d03da7018f7a72fe27"
+      "sha": "c32eb7d9f52aa91bfb5431d03da7018f7a72fe27",
+      "disposition": "superseded",
+      "review": "Current appearance settings, light/dark options and first-run desktop settings supersede old styling branch."
     },
     {
       "name": "feature/verified-automation-handover",
-      "sha": "915b85092c7ea20f42a93041c22d573402282c3b"
+      "sha": "915b85092c7ea20f42a93041c22d573402282c3b",
+      "disposition": "superseded",
+      "review": "Main includes audited automation handover routes, guarded policy and supervision."
     },
     {
       "name": "fix/audit-log-sanitization-8026888189466175010",
-      "sha": "16b41e02bbfea5c8e4fb167affbea3fb36a84c08"
+      "sha": "16b41e02bbfea5c8e4fb167affbea3fb36a84c08",
+      "disposition": "superseded",
+      "review": "Current sanitization and bounded audit logging cover this older patch; PR #165 adds thread-safety."
     },
     {
       "name": "fix/device-pairing-user-flows",
-      "sha": "6d7fa69874544df2ef7a3f4cdddaac22cd8537de"
+      "sha": "6d7fa69874544df2ef7a3f4cdddaac22cd8537de",
+      "disposition": "superseded",
+      "review": "Main has current remote pairing flow, fingerprint approvals, node revocation and tests."
     },
     {
       "name": "fix/docker-worker-enrollment",
-      "sha": "c920ea63dfb2d3761c6cac1d25ddf3b1cdfa75ee"
+      "sha": "c920ea63dfb2d3761c6cac1d25ddf3b1cdfa75ee",
+      "disposition": "superseded",
+      "review": "Main Docker enrollment and cluster documentation supersede the initial worker installer."
     },
     {
       "name": "fix/final-control-clarity",
-      "sha": "d8d66bc5a7033ee3391c6ddfcbd329f0aa75b913"
+      "sha": "d8d66bc5a7033ee3391c6ddfcbd329f0aa75b913",
+      "disposition": "superseded",
+      "review": "Main UI and Nodes/Cluster permissions separate trust and task authority; old style-only changes obsolete."
     },
     {
       "name": "fix/independent-installations",
-      "sha": "1a8b74d0c0da7f16b0fb4d600f59b8a24b83c1c2"
+      "sha": "1a8b74d0c0da7f16b0fb4d600f59b8a24b83c1c2",
+      "disposition": "superseded",
+      "review": "Main identity handling and first-time setup separate installed owner from remote pairing."
     },
     {
       "name": "fix/node-token-timing-validation-4845865787450809576",
-      "sha": "12d0c5c198062a83cdfe5a2b66585bebdf8570af"
+      "sha": "12d0c5c198062a83cdfe5a2b66585bebdf8570af",
+      "disposition": "integrated",
+      "review": "Constant-time token compare, collision-safe rotation and malformed token rejection ported with tests in PR #165."
     },
     {
       "name": "jules-12217898583924398317-1da231a0",
-      "sha": "f60585244e67250cfb63fa6f0adcb6a15b93af67"
+      "sha": "f60585244e67250cfb63fa6f0adcb6a15b93af67",
+      "disposition": "review_required",
+      "review": "Profile/API catalog with database, provider sync and frontend is missing from main. Model profiles exist but are NOT equivalent; review external source availability and SSRF/authorization boundaries."
     },
     {
       "name": "jules-9044776383071301607-06615c47",
-      "sha": "563d007a779917e47cfe6062aa4535c32e2bed81"
+      "sha": "563d007a779917e47cfe6062aa4535c32e2bed81",
+      "disposition": "superseded",
+      "review": "No additional changed files versus main; historical commit reachable only through archive tag."
     },
     {
       "name": "jules-external-oracle-harness-4034832206850530088",
-      "sha": "df15fe1fba098faeb0eb18d5dfa6e0c1bfc6f87e"
+      "sha": "df15fe1fba098faeb0eb18d5dfa6e0c1bfc6f87e",
+      "disposition": "review_required",
+      "review": "Standalone Jules external-oracle harness CLI is absent from main; existing native Jules adapter is not equivalent to the offline verification CLI."
     },
     {
       "name": "review/readiness-progress-20261103",
-      "sha": "b42473b77496ff80503de73eee9ddd8899a3dc65"
+      "sha": "b42473b77496ff80503de73eee9ddd8899a3dc65",
+      "disposition": "superseded",
+      "review": "Read-only adapter discovery revised after this review branch; latest main code is source of truth."
     },
     {
       "name": "sentinel/constant-time-node-auth-18283649182827028197",
-      "sha": "3512899c2d50fb83d6a6954524dfb6bb9f666c26"
+      "sha": "3512899c2d50fb83d6a6954524dfb6bb9f666c26",
+      "disposition": "integrated",
+      "review": "Constant-time node authentication and stronger token validation covered by main regression tests."
     },
     {
       "name": "sentinel/fix-credential-broker-sanitization-8341564342343024733",
-      "sha": "1c70155541bfae65280681c4a5ef8eae4a48f64d"
+      "sha": "1c70155541bfae65280681c4a5ef8eae4a48f64d",
+      "disposition": "superseded",
+      "review": "Main credential broker and recent dependency pins supersede old token redaction and lockfile churn."
     },
     {
       "name": "sentinel/prompt-firewall-custom-exception-5861370810917762694",
-      "sha": "24697b095e48f757cfb3d165d63d1e729200dec4"
+      "sha": "24697b095e48f757cfb3d165d63d1e729200dec4",
+      "disposition": "superseded",
+      "review": "Current prompt firewall includes dedicated rejection exceptions and test coverage; old patch unnecessary."
     }
   ]
 }

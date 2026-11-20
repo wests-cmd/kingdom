@@ -1,65 +1,85 @@
-# Kingdom branch consolidation and retirement
+# Kingdom historical branches: evidence and safe retirement
 
-**Repository:** `wests-cmd/kingdom` · **Reviewed:** 2026-11-19
+**Updated 2026-11-19 after merged PR [#165](https://github.com/wests-cmd/kingdom/pull/165).** This is an inventory and source comparison, not an execution or hardware acceptance certificate.
 
-## One runtime, two keeper branches
+## Decision
 
-- `main` stays the protected public release baseline.
-- `integration/kingdom-cohesion-20261119` is the only proposed integration
-  branch. The integration PR must pass reviewed CI before merging to `main`.
-- The 35 historical branch tips are pinned in
-  `docs/branch_retirement_manifest.json`. Their source can be recovered through
-  permanent Git tags under `kingdom-history/2026-11-19/<original-name>`.
+**Do not delete all 35 yet.** Main includes the selected runtime/security fixes but it does not contain every historical experiment. Each branch has a pinned SHA and explicit disposition in [the machine-checked manifest](branch_retirement_manifest.json). This preserves a complete, reviewable map instead of assuming that a clean merge means functional parity.
 
-## Results of branch review
+| Code disposition | Count | Safe to delete after archive and PR closure? |
+| --- | ---: | --- |
+| Integrated in main | 5 | Yes, subject to checks |
+| Superseded by newer main implementation | 26 | Yes, subject to checks |
+| Needs distinct engineering review | 4 | **No** |
 
-Every historical branch diverged from the integration branch. Many were hundreds
-of commits behind it. Importing their entire trees would restore outdated
-authorization, packaging, UI and runtime behavior.
+## Four historical features explicitly NOT covered
 
-**Ported and repaired in the integration branch:**
+- **`codex/monitor-execution-guard-20261023`** (pinned `aee1296f9787`): Linux external signer and durable monitor are NOT on main; separate UID, on-host integrity and live fail-closed tests required before adoption. Open draft PR #131.
+- **`feat/autonomous-harness-foundation-17802645864919866654`** (pinned `980772d68965`): Experimental IsolatedBuildRunner and state machine are not on main; old runner does not actually apply proposed files and must not be represented as executable self-repair.
+- **`jules-12217898583924398317-1da231a0`** (pinned `f60585244e67`): Profile/API catalog with database, provider sync and frontend is missing from main. Model profiles exist but are NOT equivalent; review external source availability and SSRF/authorization boundaries.
+- **`jules-external-oracle-harness-4034832206850530088`** (pinned `df15fe1fba09`): Standalone Jules external-oracle harness CLI is absent from main; existing native Jules adapter is not equivalent to the offline verification CLI.
 
-- `bolt-stream-consultation-queries-...` — bounded SQLite query streaming
-- `fix/node-token-timing-validation-...` — token checking plus stronger token
-  rotation, collision, and non-ASCII rejection
-- `codex-adapter-observation-repair-...` — read-only, truthful agent/model
-  discovery; does not mistake a PATH binary for an authenticated tool
-- `bolt/audit-log-history-speedup-...` — bounded newest-first history scan,
-  repaired thread-safe append/evict semantics
+The catalog branch implements a general **API provider catalog**, which is different from current configured **model profiles**. The monitor branch implements a separate Linux UID and Ed25519 receipt process, which is different from Kingdom's current in-process audit log. The Jules external-oracle CLI and the isolated self-build runner are not proof of equivalent current functionality either.
 
-**Prefer current main implementations:** memory token caching and learning
-outcome scanning already use optimized patterns with edge-case safeguards.
-Existing node enrollment, mission workspace, native desktop updates, autonomous
-build proposal guards and worker lifecycle are newer than the old branches.
+**Do not cherry-pick these entire branches.** The monitor requires multi-process identity/isolation tests, key protection, fail-closed operation evidence, and Windows/macOS opt-in semantics; the catalog needs provider URL validation, safe verification and owner-only lifecycle; the old builder must actually apply isolated file edits and pass immutable tests; and the old Jules script needs comparison with the current vetted Jules adapter.
 
-**Retained in history, not declared merged or production-ready:** independent
-security-monitor experiments, self-repair executor experiments, older desktop
-and mobile interface branches, archived Jules and profile/catalog experiments,
-and other divergent work. Their backup tags preserve source code for later
-inspection; preserving a branch is not proof that all its features were adopted.
+## Open PR heads to resolve before branch deletion
 
-## Safe retirement workflow
+As of this audit the repository has six open PRs on historical branches: [#164](https://github.com/wests-cmd/kingdom/pull/164) consultation, [#163](https://github.com/wests-cmd/kingdom/pull/163) token validation, [#149](https://github.com/wests-cmd/kingdom/pull/149) token auth, [#133](https://github.com/wests-cmd/kingdom/pull/133) PAN paths, [#131](https://github.com/wests-cmd/kingdom/pull/131) external monitor and [#123](https://github.com/wests-cmd/kingdom/pull/123) audit history. The retirement script does **not** delete any open PR head, even when code is already superseded.
 
-1. Review draft PR #165 and its CI. Merge only when required tests pass.
-2. After the workflow exists on `main`, open **Actions → Review and retire
-   historical Kingdom branches → Run workflow**.
-3. Choose `audit` first. The audit performs no branch deletions.
-4. Choose `archive-and-delete` and enter `ARCHIVE_AND_RETIRE_35` to retire
-   eligible historical branches. The workflow refuses changed branch heads and
-   active-PR heads; it creates and verifies backup tags before a leased deletion.
-5. Confirm that only `main` and the integration branch remain in Branches.
-   A skipped branch needs separate review, never forced deletion.
+## Exact per-branch disposition
 
-This is a manual, explicit action. Merging the integration PR never triggers
-deletion. The retirement script is not allowed to delete either keeper branch.
+| Historical branch | Classification | Main decision |
+| --- | --- | --- |
+| `bolt/audit-log-history-speedup-16176806299477506921` | integrated | AuditLogger.history now uses bounded reverse iteration, with append/eviction locking and tests. |
+| `bolt/memory-search-token-cache-8691068860340529059` | superseded | Current memory service has token cache and more recent query behavior; historical one-file optimization is not authoritative. |
+| `bolt/optimize-learning-collector-get-outcomes-12740401110657446076` | superseded | Current learning collector has bounded retrieval already; old get_outcomes optimization not independently adopted. |
+| `bolt-stream-consultation-queries-2243824996762498214` | integrated | Bounded SQL consultation streaming and tests were ported in PR #165. |
+| `codex/autonomy-security-next-20261102` | superseded | Current gap register endpoints already enforce owner dependency and strictly typed evidence; clean duplicate imports separately. |
+| `codex/centipede-compatibility` | superseded | Current Centipede compatibility, release process and installer contract supersede this older branch. |
+| `codex/harness-readiness-repair-20261101` | superseded | Newer read-only adapter discovery API/UI is in main; old ACP implementation not copied wholesale. |
+| `codex/harness-repair-input-20261102` | superseded | Current adapter implementation keeps unverified binaries from being advertised as connected or authorized. |
+| `codex/monitor-execution-guard-20261023` | review_required | Linux external signer and durable monitor are NOT on main; separate UID, on-host integrity and live fail-closed tests required before adoption. Open draft PR #131. |
+| `codex/opt-in-parallel-pan-paths-20261024` | superseded | Main has a newer opt-in signed LAN/Bluetooth PAN probe with identity and route checks; draft PR #133 remains open. |
+| `codex/preview-release-status` | superseded | Main README and status document describe later published v1.2.4; older preview status is obsolete. |
+| `codex-adapter-observation-repair-20261103-12474211212681984112` | integrated | A read-only tested adapter inventory and model discovery were integrated into the native desktop via PR #165. |
+| `docs/downloads-and-discord` | superseded | README now includes verified v1.2.4 downloads and Discord/community links. |
+| `docs/v112-downloads` | superseded | v1.1.2 download note is obsolete; main publishes v1.2.4 packages. |
+| `feat/autonomous-harness-foundation-17802645864919866654` | review_required | Experimental IsolatedBuildRunner and state machine are not on main; old runner does not actually apply proposed files and must not be represented as executable self-repair. |
+| `feat-native-jules-handoff-adapter-9784710610709854012` | superseded | Main Jules adapter is much larger and includes owner gates, encrypted secret handling, deterministic job lifecycle and review. |
+| `feature/agentscope-additions` | superseded | Current accessibility/recovery/checkpoint mechanisms and desktop UX supersede early AgentScope additions. |
+| `feature/durable-workflow-checkpoints` | superseded | Current workflow checkpoint and recovery implementations supersede earlier prototype. |
+| `feature/inplace-desktop-updates` | superseded | Current Windows desktop update and signed artifact protocol supersede historical v1.2.1 work. |
+| `feature/mission-workspace` | superseded | Main mission task API, file upload, approvals and workspace are newer and broadly tested. |
+| `feature/royal-appearance-settings` | superseded | Current appearance settings, light/dark options and first-run desktop settings supersede old styling branch. |
+| `feature/verified-automation-handover` | superseded | Main includes audited automation handover routes, guarded policy and supervision. |
+| `fix/audit-log-sanitization-8026888189466175010` | superseded | Current sanitization and bounded audit logging cover this older patch; PR #165 adds thread-safety. |
+| `fix/device-pairing-user-flows` | superseded | Main has current remote pairing flow, fingerprint approvals, node revocation and tests. |
+| `fix/docker-worker-enrollment` | superseded | Main Docker enrollment and cluster documentation supersede the initial worker installer. |
+| `fix/final-control-clarity` | superseded | Main UI and Nodes/Cluster permissions separate trust and task authority; old style-only changes obsolete. |
+| `fix/independent-installations` | superseded | Main identity handling and first-time setup separate installed owner from remote pairing. |
+| `fix/node-token-timing-validation-4845865787450809576` | integrated | Constant-time token compare, collision-safe rotation and malformed token rejection ported with tests in PR #165. |
+| `jules-12217898583924398317-1da231a0` | review_required | Profile/API catalog with database, provider sync and frontend is missing from main. Model profiles exist but are NOT equivalent; review external source availability and SSRF/authorization boundaries. |
+| `jules-9044776383071301607-06615c47` | superseded | No additional changed files versus main; historical commit reachable only through archive tag. |
+| `jules-external-oracle-harness-4034832206850530088` | review_required | Standalone Jules external-oracle harness CLI is absent from main; existing native Jules adapter is not equivalent to the offline verification CLI. |
+| `review/readiness-progress-20261103` | superseded | Read-only adapter discovery revised after this review branch; latest main code is source of truth. |
+| `sentinel/constant-time-node-auth-18283649182827028197` | integrated | Constant-time node authentication and stronger token validation covered by main regression tests. |
+| `sentinel/fix-credential-broker-sanitization-8341564342343024733` | superseded | Main credential broker and recent dependency pins supersede old token redaction and lockfile churn. |
+| `sentinel/prompt-firewall-custom-exception-5861370810917762694` | superseded | Current prompt firewall includes dedicated rejection exceptions and test coverage; old patch unnecessary. |
 
-## Non-negotiable acceptance gates
+## Verified process to retire, without data loss
 
-- Backend and distributed-process E2E green at the exact integration head
-- Desktop builds verified for supported OS targets
-- Operator approval/security regression tests green
-- Physical two-node and five-node recovery rehearsals
-- Installer/update/rollback verification on clean machines
-- Branch retirement dry-run inspected before deletion
+1. On **Actions → Review and retire historical Kingdom branches**, run **audit**. The script compares original SHA pins against remote heads and lists open PRs. No writes.
+2. Run **archive-only**. For every unchanged original SHA, it creates a unique lightweight tag under `kingdom-history/2026-11-19/` and verifies it against the remote. Branches remain untouched, including active-PR and unresolved-feature branches. Protect these tags from deletion or rewriting in repository rules if your account supports it.
+3. Resolve open PR reviews. Bring missing features into modern code with tests, or make an explicit reviewed decision to drop them. Mark a hold branch `integrated` or `superseded` **only after** a demonstrated outcome, never just because a tag exists.
+4. Only then run **archive-and-delete**, with exact confirmation `ARCHIVE_AND_RETIRE_35`. It archives again and deletes **only reviewed, current SHA, no-open-PR branches**, force-with-lease. Any unresolved branch is held.
+5. Re-run audit and check tags and GitHub Branches. Target is only `main` and `integration/kingdom-cohesion-20261119` after the remaining design work, not before.
 
-Do not present historical source tags as a substitute for tested feature parity.
+## Quality gates
+
+- Latest branch CI must pass, including owner-only APIs and no bypass of policy.
+- Verify real native installers and rollback on supported platforms before release.
+- Test multiple physical nodes and interruption/recovery before treating distributed autonomy as accepted.
+- A history tag is recoverable source, **not** a working feature, deployment approval or warranty.
+
+This review did not delete branches, close PRs, publish a release, or claim physical-device verification.
