@@ -1,10 +1,21 @@
 # Kingdom historical branches: evidence and safe retirement
 
-**Updated 2026-11-19 after merged PR [#165](https://github.com/wests-cmd/kingdom/pull/165).** This is an inventory and source comparison, not an execution or hardware acceptance certificate.
+**Updated 2026-11-20 after merged PRs [#165](https://github.com/wests-cmd/kingdom/pull/165) and [#166](https://github.com/wests-cmd/kingdom/pull/166).** This is a source-branch audit and retirement record, not an installed-fleet acceptance certificate.
+
+## Completed cleanup — 2026-11-20
+
+- **31 historical branches deleted** through the audited workflow [run 44782217907](https://github.com/wests-cmd/kingdom/actions/runs/44782217907), with no deletion errors.
+- **35/35 exact historic commit heads are preserved** by verified remote tags under `kingdom-history/2026-11-19/` (including the four held branches).
+- **4 branches retained** for unfinished distinct features: security monitor, self-build harness, provider catalog and standalone Jules oracle.
+- **Only six branches remain**: `main`, `integration/kingdom-cohesion-20261119`, and those four held branches.
+- Five superseded historical pull requests (#123, #133, #149, #163, #164) were closed with review explanations. Draft #131 (external monitor) remains open.
+- The special one-time deletion workflow was removed after success. Normal workflow pushes are archive-only; future deletion remains manually authorized.
+
+**Do not mistake retention under archive tags for implemented feature parity.** No full-tree mass merges were performed. Latest verified production release remains distinct from updated main source.
 
 ## Decision
 
-**Do not delete all 35 yet.** Main includes the selected runtime/security fixes but it does not contain every historical experiment. Each branch has a pinned SHA and explicit disposition in [the machine-checked manifest](branch_retirement_manifest.json). This preserves a complete, reviewable map instead of assuming that a clean merge means functional parity.
+**The 31 reviewed branches have been retired; do not delete the four held branches yet.** Main includes the selected runtime/security fixes but it does not contain every historical experiment. Each branch has a pinned SHA and explicit disposition in [the machine-checked manifest](branch_retirement_manifest.json). This preserves a complete, reviewable map instead of assuming that a clean merge means functional parity.
 
 | Code disposition | Count | Safe to delete after archive and PR closure? |
 | --- | ---: | --- |
@@ -23,9 +34,9 @@ The catalog branch implements a general **API provider catalog**, which is diffe
 
 **Do not cherry-pick these entire branches.** The monitor requires multi-process identity/isolation tests, key protection, fail-closed operation evidence, and Windows/macOS opt-in semantics; the catalog needs provider URL validation, safe verification and owner-only lifecycle; the old builder must actually apply isolated file edits and pass immutable tests; and the old Jules script needs comparison with the current vetted Jules adapter.
 
-## Open PR heads to resolve before branch deletion
+## Outstanding pull request
 
-As of this audit the repository has six open PRs on historical branches: [#164](https://github.com/wests-cmd/kingdom/pull/164) consultation, [#163](https://github.com/wests-cmd/kingdom/pull/163) token validation, [#149](https://github.com/wests-cmd/kingdom/pull/149) token auth, [#133](https://github.com/wests-cmd/kingdom/pull/133) PAN paths, [#131](https://github.com/wests-cmd/kingdom/pull/131) external monitor and [#123](https://github.com/wests-cmd/kingdom/pull/123) audit history. The retirement script does **not** delete any open PR head, even when code is already superseded.
+Only the [draft external-monitor PR #131](https://github.com/wests-cmd/kingdom/pull/131) remains open on a historical branch. It has not been merged because separate-host identity isolation and crash/fail-closed acceptance remain unproven. Retire it only after an implementation review, tests, and archive verification. [Issue #167](https://github.com/wests-cmd/kingdom/issues/167) tracks the remaining four feature areas.
 
 ## Exact per-branch disposition
 
@@ -67,13 +78,15 @@ As of this audit the repository has six open PRs on historical branches: [#164](
 | `sentinel/fix-credential-broker-sanitization-8341564342343024733` | superseded | Main credential broker and recent dependency pins supersede old token redaction and lockfile churn. |
 | `sentinel/prompt-firewall-custom-exception-5861370810917762694` | superseded | Current prompt firewall includes dedicated rejection exceptions and test coverage; old patch unnecessary. |
 
-## Verified process to retire, without data loss
+## Remaining retirement process
 
-1. On **Actions → Review and retire historical Kingdom branches**, run **audit**. The script compares original SHA pins against remote heads and lists open PRs. No writes.
-2. Run **archive-only**. For every unchanged original SHA, it creates a unique lightweight tag under `kingdom-history/2026-11-19/` and verifies it against the remote. Branches remain untouched, including active-PR and unresolved-feature branches. Protect these tags from deletion or rewriting in repository rules if your account supports it.
-3. Resolve open PR reviews. Bring missing features into modern code with tests, or make an explicit reviewed decision to drop them. Mark a hold branch `integrated` or `superseded` **only after** a demonstrated outcome, never just because a tag exists.
-4. Only then run **archive-and-delete**, with exact confirmation `ARCHIVE_AND_RETIRE_35`. It archives again and deletes **only reviewed, current SHA, no-open-PR branches**, force-with-lease. Any unresolved branch is held.
-5. Re-run audit and check tags and GitHub Branches. Target is only `main` and `integration/kingdom-cohesion-20261119` after the remaining design work, not before.
+The first 31 branches are already deleted and their remote archive tags have been checked against the pinned manifest. Keep the four held branches until each has either been adapted and tested in today's architecture or explicitly rejected with evidence.
+
+1. For each held branch, finish the acceptance criteria in [Issue #167](https://github.com/wests-cmd/kingdom/issues/167). Never directly replace main's security, runtime or model authorization subsystems with historic trees.
+2. Run the manual **audit** workflow; it checks the pinned expected SHA against live branch refs and checks for open pull requests.
+3. Update `docs/branch_retirement_manifest.json` only when evidence warrants a new reviewed disposition.
+4. Once all matching tags still exist and open PRs are resolved, manually run `archive-and-delete` with `ARCHIVE_AND_RETIRE_35`. The script skips everything unresolved and uses force-with-lease.
+5. Confirm the expected final two branches: `main` and `integration/kingdom-cohesion-20261119`.
 
 ## Quality gates
 
