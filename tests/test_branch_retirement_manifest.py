@@ -78,3 +78,59 @@ def test_archive_only_does_not_delete_even_with_open_pull_request(monkeypatch):
     monkeypatch.setattr(script, "run", lambda *args: commands.append(args) or "")
     script.main()
     assert commands == []
+
+
+def setup_one_branch(monkeypatch, *, disposition="integrated", is_open=False, moved=False, tag_exists=True):
+    script = load()
+    row = next(b for b in script.load_manifest()["branches"]
+               if b["disposition"] == disposition)
+    monkeypatch.setenv("RETIRE_MODE", "archive-and-delete")
+    monkeypatch.setenv("RETIRE_CONFIRMATION", "ARCHIVE_AND_RETIRE_35")
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "wests-cmd/kingdom")
+    monkeypatch.setattr(script, "remote_heads", lambda: {
+        "main": "a" * 40, "integration/kingdom-cohesion-20261119": "b" * 40,
+        row["name"]: ("c" * 40 if moved else row["sha"])
+    })
+    monkeypatch.setattr(script, "active_pull_request_heads",
+                        lambda repository: {row["name"]} if is_open else set())
+    archived = [tag_exists]
+    monkeypatch.setattr(script, "remote_tag_sha",
+                        lambda tag: row["sha"] if archived[0] else None)
+    commands = []
+    def fake_run(*args):
+        commands.append(args)
+        if args[:3] == ("git", "push", "origin"):
+            archived[0] = True
+        return ""
+    monkeypatch.setattr(script, "run", fake_run)
+    return script, row, commands
+
+
+def test_historical_ref_requires_no_open_pr(monkeypatch):
+    script, row, commands = setup_one_branch(monkeypatch, is_open=True)
+    script.main()
+    assert commands == []
+
+
+def test_moved_sha_is_not_archived_or_deleted(monkeypatch):
+    script, row, commands = setup_one_branch(monkeypatch, moved=True)
+    script.main()
+    assert commands == []
+
+
+def test_verified_safe_ref_retired_with_expected_sha_lease(monkeypatch):
+    script, row, commands = setup_one_branch(monkeypatch)
+    script.main()
+    assert commands == [("git", "push", "--force-with-lease=refs/heads/" + row["name"] + ":" + row["sha"],
+                         "origin", ":refs/heads/" + row["name"])]
+
+
+def test_archive_tag_must_exist_before_retiring(monkeypatch):
+    script, row, commands = setup_one_branch(monkeypatch, tag_exists=False)
+    script.main()
+    tag = "kingdom-history/2026-11-19/" + row["name"]
+    assert commands == [("git", "tag", tag, row["sha"]),
+                        ("git", "push", "origin", "refs/tags/" + tag),
+                        ("git", "push", "--force-with-lease=refs/heads/" + row["name"] + ":" + row["sha"],
+                         "origin", ":refs/heads/" + row["name"])]
