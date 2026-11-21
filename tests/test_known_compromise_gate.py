@@ -63,6 +63,22 @@ class AdvisoryGateTests(unittest.TestCase):
             "node_modules/nested/node_modules/mem0-mcp-server": {"version": "0.0.1"}}}))
         self.assertEqual(audit.scan(self.root)["status"], "blocked")
 
+    def test_editable_vcs_egg_cannot_hide_compromised_python_package(self):
+        self.write("requirements.txt", "-e git+https://example.test/repo#egg=agent-framework")
+        with self.assertRaises(ValueError):
+            audit.scan(self.root)
+
+    def test_npm_alias_cannot_hide_malicious_plugin(self):
+        self.write("desktop/package.json",
+                   json.dumps({"dependencies": {"innocent-name": "npm:mem0-mcp-server@0.0.1"}}))
+        self.assertEqual(audit.scan(self.root)["status"], "blocked")
+
+    def test_lockfile_declared_actual_name_takes_precedence_over_alias(self):
+        self.write("frontend/package-lock.json",
+                   json.dumps({"packages": {"node_modules/alias": {
+                       "name": "mem0-mcp-server", "version": "0.0.1"}}}))
+        self.assertEqual(audit.scan(self.root)["status"], "blocked")
+
     def test_missing_manifest_is_a_failing_audit(self):
         (self.root / "frontend/package-lock.json").unlink()
         with self.assertRaises(ValueError):

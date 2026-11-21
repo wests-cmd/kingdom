@@ -54,9 +54,16 @@ def requirement_entries(path, seen, root):
     if not path.is_file() or not path.is_relative_to(root):
         raise ValueError("Missing or out-of-root requirements file: " + str(path))
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        line = line.split("#", 1)[0].strip()
-        if not line:
+        original = line.strip()
+        if not original or original.startswith("#"):
             continue
+        # A VCS/editable requirement can hide its normalized name behind #egg.
+        # Do not execute or attempt to resolve such a dependency during audit.
+        if original.startswith(("-e ", "--editable ", "git+", "https://", "http://")):
+            if any(name in normalize(original) for name in WATCHED):
+                raise ValueError(f"Unreviewed watched VCS requirement at {path}:{number}")
+            continue
+        line = original.split("#", 1)[0].strip()
         if line.startswith(("-r ", "--requirement ")):
             yield from requirement_entries(path.parent / line.split(None, 1)[1], seen, root)
             continue
@@ -72,6 +79,10 @@ def requirement_entries(path, seen, root):
 def npm_manifest_entries(data, path):
     for group in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies"):
         for name, value in data.get(group, {}).items():
+            # npm aliases can hide a dangerous package under an unrelated key.
+            if isinstance(value, str) and value.startswith("npm:"):
+                real_name = value[4:].rsplit("@", 1)[0]
+                yield real_name, None, f"{path}:{group}:alias:{name}"
             yield name, value if version_tuple(value) is not None else None, f"{path}:{group}"
 
 
@@ -79,7 +90,7 @@ def npm_lock_entries(data, path):
     for location, info in data.get("packages", {}).items():
         if not location or not isinstance(info, dict):
             continue
-        yield location.rsplit("node_modules/", 1)[-1], info.get("version"), f"{path}:{location}"
+        yield info.get("name") or location.rsplit("node_modules/", 1)[-1], info.get("version"), f"{path}:{location}"
     def walk(deps, prefix):
         for name, value in deps.items():
             if isinstance(value, dict):
