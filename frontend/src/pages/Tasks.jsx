@@ -141,12 +141,15 @@ export default function Tasks() {
 
     <div>
 
-      <WorkProgrammePanel/>
-      <ProblemGuide/>
-      <WorkBacklogPanel/>
       <h2>Task Management</h2>
 
       <p className="muted" style={{marginBottom:20}}>See what has been saved, what is running, what needs your decision, and what actually finished. Submitting a request does not mean its outcome is verified.</p>
+      <details><summary>Advanced work tracking and problem reports</summary>
+        <p className="muted">Optional: inspect scheduled programmes, recorded problems and longer-running work. For a simple first task, use the form below.</p>
+        <WorkProgrammePanel/>
+        <ProblemGuide/>
+        <WorkBacklogPanel/>
+      </details>
       <details><summary>Understand how Kingdom handles your work</summary><ol><li><strong>Saved:</strong> the task enters a queue.</li><li><strong>Assigned or running:</strong> an approved worker may be executing; there is no completed result yet.</li><li><strong>Waiting for approval:</strong> you review the exact action before it proceeds.</li><li><strong>Completed:</strong> inspect the result and verification evidence. A completed model response alone does not prove external actions succeeded.</li><li><strong>Failed or recovery needed:</strong> read the recorded error and decide whether to retry or revise the request.</li></ol></details>
 
       {loadError && <p role="alert">{loadError}</p>}
