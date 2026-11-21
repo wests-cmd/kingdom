@@ -147,14 +147,14 @@ export default function Dashboard({onNavigate,interfaceMode='easy'}) {
       </>}
     </section>
 
-    <NotificationCenter onNavigate={onNavigate}/>
-
     <WorkSection heading="Working now" description="Tasks queued, assigned, or executing. Assigned does not mean completed."
       tasks={groups?.active || []} dataReady={current} onNavigate={onNavigate}
       emptyMessage="No tasks are recorded as waiting or in progress."/>
     <WorkSection heading="Recently finished" description="Recorded task outcomes and the evidence available for each."
       tasks={groups?.finished || []} dataReady={current} onNavigate={onNavigate} finished
       emptyMessage="No completed or cancelled tasks recorded yet."/>
+
+    <NotificationCenter onNavigate={onNavigate}/>
 
     <section className="panel" aria-label="More information">
       <div className="section-heading"><div><h2>More information</h2>
