@@ -109,20 +109,22 @@ def test_slow_sqlite_and_acceptance_leave_heartbeat_loop_responsive(offered, del
 def test_cancelling_blocked_selection_retains_lease_without_sending_or_detaching_claim(offered):
     _, controller, engine, leases, accept, calls, offer = responsive_pair(offered)
     claimed, release = threading.Event(), threading.Event()
-    original_dispatch = engine.dispatch_remote_task
+    original_validate = leases.validate_lease_execution
 
-    # Hold the synchronous claim AFTER the durable lease has been created.
-    # Under WAL, a competing SQLite writer cannot reliably block SELECT.
-    # This barrier tests cancellation and exactly-once transport regardless
-    # of database journal mode, without faking a lease or result.
-    def slow_dispatch(*args):
-        selected = original_dispatch(*args)
-        claimed.set()
-        if not release.wait(5):
-            raise RuntimeError('Test claim barrier was not released')
-        return selected
+    # The offered fixture already holds a real, durable lease. Its dispatch
+    # path RECOVERS that lease rather than creating a new claim, so a
+    # dispatch_remote_task barrier is never reached. Pause at the real lease
+    # validation boundary instead: after validation but before signing/sending
+    # the first offer. No task, lease or transport result is mocked.
+    def paused_validation(*args, **kwargs):
+        result = original_validate(*args, **kwargs)
+        if not claimed.is_set():
+            claimed.set()
+            if not release.wait(5):
+                raise RuntimeError('Test lease-validation barrier was not released')
+        return result
 
-    engine.dispatch_remote_task = slow_dispatch
+    leases.validate_lease_execution = paused_validation
 
     async def cancel_then_retry():
         pending = asyncio.create_task(dispatch_one(controller, 'worker', engine, leases, accept))
