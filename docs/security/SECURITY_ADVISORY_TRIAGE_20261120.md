@@ -16,7 +16,7 @@ These reports concern **other software**. Their presence in a news brief is not 
 
 ## Source evidence
 
-The three `requirements*.txt` files, three direct npm `package.json` files, and three npm lockfiles on main were inspected for these specific dependency names. None was present in these declared sources at review time. This does **not** establish a full transitive, system, model-extension or worker installation inventory.
+The three `requirements*.txt` files, four direct npm `package.json` files, and three npm lockfiles on main were inspected for these specific dependency names. None was present in these declared sources at review time. This does **not** establish a full transitive, system, model-extension or worker installation inventory.
 
 Existing reusable code:
 - `backend/security/zero_trust.py`, `approval_engine.py`, `http_auth.py` enforce a range of identity, approval and owner controls.
@@ -30,6 +30,7 @@ Existing reusable code:
 
 - `scripts/audit_known_compromises.py`: network-free, standard-library static check for the named affected packages in recursively included Python requirements and npm direct/lock manifests. Any unpinned watched package or affected pinned version fails; missing/invalid manifest blocks the scan. `--installed` additionally scans installed Python metadata, but that check necessarily happens after Python startup.
 - `tests/test_known_compromise_gate.py`: adversarial fixtures for malicious `.pth` package versions, old MCP Git releases, npm transitive malware, registry SSRF version, missing inventory, and nested Python requirements.
+- `Dockerfile`: a separately cached Python pre-install audit stage gates both the Node frontend stage and final Python runtime stage, including the independent mobile gateway manifest.
 - `.github/workflows/ci.yml`, `.github/workflows/release.yml`: fail the jobs **before** `pip`/`npm` installation if a known compromised dependency appears in checked manifests; keep the existing OSV release audit.
 - `backend/security/scoped_authorization.py`: repair an independent *secondary* authorization helper that previously trusted `request.context["approved_by_commander"]` or a caller-selected governance level for HIGH risk. New HIGH-risk decisions require a trusted runtime-supplied validator of the exact request. The request alone never constitutes verified approval. A host must actually inject a verifier bound to its existing approval records; this change does not silently add a second approval store.
 - `tests/test_scoped_authorization_proof.py`: prove forged commander assertions fail, exceptions deny, scope mutation is rejected, revocation denies, and low-risk reads remain possible.

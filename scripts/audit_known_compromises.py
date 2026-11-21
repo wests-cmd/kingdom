@@ -11,7 +11,7 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON = ("requirements.txt", "requirements-dev.txt", "requirements-release.txt")
-NPM = ("desktop/package.json", "frontend/package.json", "apps/mobile/native/package.json")
+NPM = ("desktop/package.json", "frontend/package.json", "apps/mobile/package.json", "apps/mobile/native/package.json")
 LOCKS = ("desktop/package-lock.json", "frontend/package-lock.json", "apps/mobile/native/package-lock.json")
 WATCHED = ("agent-framework", "mcp-server-git", "mcp-gateway-registry", "mem0-mcp-server")
 

@@ -1,9 +1,22 @@
 # Multi-stage Docker build for Kingdom v1.0.0 production runtime
 
+# Stage 0: Audit all checked-in dependency manifests before any package scripts run.
+# The audited stage is a prerequisite for BOTH the npm and Python installs.
+FROM python:3.12-slim AS dependency-audit
+WORKDIR /audit
+COPY requirements*.txt ./
+COPY scripts/audit_known_compromises.py scripts/audit_known_compromises.py
+COPY frontend/package*.json frontend/
+COPY desktop/package*.json desktop/
+COPY apps/mobile/package.json apps/mobile/
+COPY apps/mobile/native/package*.json apps/mobile/native/
+RUN python scripts/audit_known_compromises.py && touch /audit-ok
+
 # Stage 1: Build Production Frontend Static Assets
 FROM node:24-alpine AS frontend-builder
 
 WORKDIR /app/frontend
+COPY --from=dependency-audit /audit-ok /audit-ok
 
 COPY frontend/package*.json ./
 RUN npm ci
@@ -15,6 +28,7 @@ RUN npm run build
 FROM python:3.12-slim
 
 WORKDIR /app
+COPY --from=dependency-audit /audit-ok /audit-ok
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
