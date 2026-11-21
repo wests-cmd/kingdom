@@ -151,11 +151,32 @@ def test_three_backend_automatic_mesh(tmp_path):
             'automatic_pairs': 3, 'directions': 6, 'restart': True, 'revocation': True, 'new_grants': 0,
             'transport':'HTTPS through real restricted peer listeners'}), encoding='utf-8')
     except Exception:
+        # Preserve real backend and listener evidence from this disposable
+        # fixture. The normal pytest tmp directory is not included in CI
+        # artifacts, so otherwise a transient failure cannot be diagnosed.
+        evidence = Path(__file__).resolve().parents[1] / 'evidence' / 'mesh-live'
+        evidence.mkdir(parents=True, exist_ok=True)
         diagnostics = []
         for node in nodes:
-            try: diagnostics.append({'port':node['port'], 'links':invoke(node,'/federation/connections/status'), 'membership':invoke(node,'/federation/mesh')})
-            except OSError: pass
-        (tmp_path / 'failure-status.json').write_text(json.dumps(diagnostics), encoding='utf-8')
+            state = {'port': node['port'],
+                     'process_exit': node['process'].poll() if node.get('process') else None,
+                     'listener_exit': node['listener'].poll() if node.get('listener') else None}
+            for path in ('/federation/connections/status', '/federation/mesh'):
+                try:
+                    state[path] = invoke(node, path)
+                except Exception as exc:
+                    state[path] = {'error_type': type(exc).__name__}
+            diagnostics.append(state)
+            for name in ('server.log', 'listener.log'):
+                source_log = node['dir'] / name
+                if not source_log.is_file():
+                    continue
+                safe = source_log.read_text(encoding='utf-8', errors='replace')[-100000:]
+                safe = safe.replace(token, '<REDACTED_OWNER_TOKEN>')
+                (evidence / (str(node['port']) + '-' + name)).write_text(safe, encoding='utf-8')
+        safe_status = json.dumps(diagnostics).replace(token, '<REDACTED_OWNER_TOKEN>')
+        (tmp_path / 'failure-status.json').write_text(safe_status, encoding='utf-8')
+        (evidence / 'failure-status.json').write_text(safe_status, encoding='utf-8')
         raise
     finally:
         for node in nodes:
