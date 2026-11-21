@@ -69,6 +69,7 @@ export function notificationItems(events,limit=30) {
     used.add(id);return true
   }).slice().reverse().slice(0,limit).map(event=>({
     id:event.event_id,
+    kind:event.event_type,
     title:eventInfo(event.event_type).title,
     explanation:eventInfo(event.event_type).explanation,
     when:safeRecordedTime(event.timestamp),
