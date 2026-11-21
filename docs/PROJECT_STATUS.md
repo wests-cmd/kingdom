@@ -1,30 +1,18 @@
 # Verified status and remaining work
 
-Published native release: [v1.2.4](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.4), checked October 27, 2026. Its release manifest, per-platform evidence and hashes describe that artifact. Earlier v1.2.2 and source-service previews are historical; a source branch or locally patched installation can differ from all of them.
+Published native release: [v1.2.6](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.6), published November 21, 2026. The release has versioned Windows, Intel macOS, Linux AppImage and Debian x86_64 installers, evidence files, release manifest and SHA256SUMS. The exact released artifacts are **not** automatically replaced when main or a candidate branch changes.
 
-This documentation checkout starts at main revision `d6c036b`. The current source/package version is 1.2.4. [PR 134](https://github.com/wests-cmd/kingdom/pull/134) is a separate engineering candidate; its additional adapters, review workers or emergency-stop work must not be advertised as part of the published v1.2.4 installers. Independent candidate tests do not establish a fleet update.
+This document records the v1.2.6 user-download checkpoint. [PR #173](https://github.com/wests-cmd/kingdom/pull/173) (approval hardening), [PR #176](https://github.com/wests-cmd/kingdom/pull/176) (SQLite/mesh/revocation), and [PR #175](https://github.com/wests-cmd/kingdom/pull/175) (future Docker audit and v1.2.7) are **unmerged candidates**. Do not describe them as installed v1.2.6 features. The eight installed-machine security tests remain [open and unverified](https://github.com/wests-cmd/kingdom/issues/172).
 
 ## Documentation and source navigation
 
 Use the [documentation index](README.md), [architecture](ARCHITECTURE.md), [development](DEVELOPMENT.md) and [operations](OPERATIONS.md) as the current navigation. Detailed guides and dated audits remain in place; historical conclusions apply to their own source and environment.
 
-## Desktop dependency security update
+## Desktop dependency security status
 
-Source pins Electron 44.9.3 and refreshes the existing lockfile's patched undici
-and fast-uri resolutions. The previous desktop lock failed native packaging's
-high-severity dependency audit; the updated lock reports zero advisories in the
-October 27 audit. Audit enforcement remains enabled.
+Published v1.2.6 includes the known-compromise dependency gate merged in PR #171, audited desktop dependencies and versioned release checks. These controls reduce package-installation risk; they are **not** an OS-boundary security certification. The v1.2.6 packages are unsigned (macOS is also not notarized). The separate final-Docker-image audit and 1.2.7 metadata are in candidate PR #175 and are not part of published v1.2.6.
 
-Electron's [upstream certificate advisory](https://github.com/electron/electron/security/advisories/GHSA-jr5w-w6x2-84p9)
-requires a patched runtime for its TLS mitigation; undici's
-[upstream response-handling advisory](https://github.com/nodejs/undici/security/advisories/GHSA-xjj6-f33q-929c)
-also requires its fixed dependency version. These are dependency-specific fixes,
-not a blanket security certification.
-
-The existing published v1.2.4 installers are unchanged and must not be described
-as containing later source patches. Delivering the updated runtime requires a
-new versioned release, native verification and an installed update. No installer,
-tag or published asset is overwritten by this source change.
+The required real-machine checks include malicious dependency containment, hostile Git isolation, self-approval rejection, RPC replay, persistent revocation, network destination policy, independent monitoring and rollback without resurrecting grants. See [security commissioning issue #172](https://github.com/wests-cmd/kingdom/issues/172); the installed evidence remains 0/8 verified.
 
 ## Verified foundations and release scope
 
@@ -32,7 +20,7 @@ tag or published asset is overwritten by this source change.
 - Supported remote text/Python analysis with signed placement and independent controller checks. Syntax checks do not prove program correctness.
 - Visible work status, bounded mission budgets, recorded receipts and background/reconnect foundations.
 - Per-Knight release reporting and a saved desired release. Checking versions does not install software or grant access.
-- Earlier v1.2.2 Windows, Linux and Intel macOS packaging/installer checks passed in [run 39193830360](https://github.com/wests-cmd/kingdom/actions/runs/39193830360). This is not exhaustive hardware certification or trusted signing.
+- v1.2.6 native Windows, Linux and Intel macOS installer verification and release publication passed in [run 44926235976](https://github.com/wests-cmd/kingdom/actions/runs/44926235976). This does not certify every physical machine, operating-system signing or autonomous security boundaries.
 
 ## Eight remaining acceptance areas
 
@@ -44,7 +32,7 @@ tag or published asset is overwritten by this source change.
 | Deterministic-first routing and inference | Partial | No-model status answers, meaningful model/worker selection, measured concurrency, grounding and fallback acceptance. |
 | Portable background continuity | Partial | Installed startup/reconnect and recovery without temporary developer tunnels; prove device behavior and expose missing dependencies. Local custom helpers are not automatically bundled product features. |
 | Beginner/advanced usability | Partial | Narrow-window and half-screen review, clearer topology and onboarding, and accurate distinction between visual hierarchy and execution authority. |
-| Stable release integration | Released; wider device acceptance open | v1.2.4 native assets and release evidence are published; see its manifest for exact scope. Broader real-device installation, cross-Knight update/reconnect/rollback and hardware coverage remain separate acceptance work. |
+| Stable release integration | Released; wider device acceptance open | v1.2.6 native assets and release evidence are published; see its manifest for exact scope. Broader real-device installation, cross-Knight update/reconnect/rollback and hardware coverage remain separate acceptance work. |
 | Shared architecture and adaptation | Partial | Cross-interface idempotent jobs, portable project memory, restart-safe automation, optional voice/perception/connectors and measured adaptation. |
 
 There are eight broad areas with remaining acceptance work. A checkbox or percentage would not fairly represent their different sizes. The foundations above are separately verified; no claim that the project is otherwise finished.
@@ -53,4 +41,4 @@ There are eight broad areas with remaining acceptance work. A checkbox or percen
 
 Cloud providers, harnesses, payment accounts, signing services and hardware integrations are optional and require actual configuration. No live payment provider or universal autonomous repair is implied by a UI control. The unsigned native packages may be blocked by operating-system application-control policies; no bypass is supplied.
 
-[Published downloads and exact build evidence](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.4) · [Release notes](releases/v1.2.4.md)
+[Published downloads and exact build evidence](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.6) · [Release notes](releases/v1.2.6.md)
