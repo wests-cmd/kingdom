@@ -140,6 +140,55 @@ class KnightRepository:
     def __init__(self, database=None):
         self.db = database or db
 
+    def refresh_heartbeat(
+        self, node_id, *, now, health, load_metrics=None,
+        apprentice_inventory=None, native_analysis_return=None,
+    ):
+        """Atomically refresh liveness without rewriting owner trust or grants.
+
+        The old read/modify/save of an entire Knight could restore a revoked
+        state or capabilities when a heartbeat raced an owner revocation.
+        BEGIN IMMEDIATE serializes this decision against the persisted row.
+        """
+        with self.db.get_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT node_state,status,connection_metadata_json FROM knights WHERE id=?",
+                (node_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            state = row["node_state"]
+            if state in {"REVOKED", "REJECTED", "QUARANTINED"}:
+                return {"accepted": False, "node_state": state}
+            if apprentice_inventory is not None and state not in {
+                "APPROVED", "CONNECTED", "DISCONNECTED", "RECONNECTING"
+            }:
+                return {"accepted": False, "node_state": state}
+            metadata = json.loads(row["connection_metadata_json"] or "{}")
+            if native_analysis_return is not None:
+                metadata["native_analysis_return"] = native_analysis_return
+            if apprentice_inventory is not None:
+                metadata["apprentice_inventory"] = {
+                    "received_at": now, "report": apprentice_inventory,
+                }
+            if load_metrics is not None:
+                metadata["load_metrics"] = load_metrics
+            connected = state in {"APPROVED", "DISCONNECTED", "RECONNECTING"}
+            new_state = "CONNECTED" if connected else state
+            new_status = "CONNECTED" if connected else row["status"]
+            conn.execute(
+                "UPDATE knights SET node_state=?,status=?,last_heartbeat=?,"
+                "health=?,connection_metadata_json=?,updated_at=? WHERE id=?",
+                (new_state, new_status, now, health,
+                 json.dumps(metadata), now, node_id),
+            )
+            conn.commit()
+            return {
+                "accepted": True, "previous_state": state,
+                "node_state": new_state, "transitioned": connected,
+            }
+
     def save(self, knight):
         knight_id = knight["id"]
         now = time.time()
