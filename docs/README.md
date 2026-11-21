@@ -1,7 +1,7 @@
 # Kingdom documentation
 
 This index organizes the existing project without moving its executable files.
-The [repository README](../README.md) is the install/start entry point.
+The [repository README](../README.md) provides one-click installer downloads and the latest illustrated installation video. [Follow the v1.2.6 transcript](GETTING_STARTED_VIDEO.md) for a first built-in task that needs no model.
 
 ## Start and operate
 
@@ -25,7 +25,7 @@ The [repository README](../README.md) is the install/start entry point.
 
 - [Current status](PROJECT_STATUS.md): source/release scope and remaining acceptance.
 - [Release process](RELEASE_PROCESS.md), [cluster shipping gates](CLUSTER_SHIPPING_CHECKLIST.md), [coding-worker acceptance](CODING_WORKER_ACCEPTANCE.md).
-- [v1.2.4 notes](releases/v1.2.4.md), [Windows signing](WINDOWS_SIGNING.md), [production definition of done](PRODUCTION_DEFINITION_OF_DONE.md).
+- [v1.2.6 notes](releases/v1.2.6.md), [Windows signing](WINDOWS_SIGNING.md), [production definition of done](PRODUCTION_DEFINITION_OF_DONE.md).
 
 ## Plans and history
 

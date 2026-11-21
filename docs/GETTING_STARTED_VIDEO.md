@@ -1,41 +1,56 @@
-# Getting started with Kingdom — narrated video transcript
+# Kingdom v1.2.6 — GitHub download, install and first task video
 
-**Open this link first:** https://github.com/wests-cmd/kingdom
+**Start:** https://github.com/wests-cmd/kingdom
 
-The tutorial shows the published **v1.2.4** installers checked November 19, 2026. Newer source branches are not automatically newer public releases. These frames are explanatory drawings, not a live desktop capture. The real product may have a different layout depending on version or interface mode.
+**Verified package shown:** [published v1.2.6 release](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.6). The narrated video uses **illustrated explanatory slides, not a live desktop or GitHub screen recording**. Button text and page layout may vary. Always use the latest published release that matches your computer.
 
-## 1. You're already on the GitHub page
-Look for the Releases link on the Kingdom repository or scroll down to the README's **Install the desktop app** section. Avoid **Code → Download ZIP** if you just want to use the installed desktop app; that option is source code.
+## 1. Find the real installer on GitHub
 
-## 2. Choose the right file for your computer
-- Windows Intel/AMD 64-bit: **Kingdom-Setup-1.2.4.exe**.
-- macOS Intel: **Kingdom-1.2.4.dmg**.
-- Linux Intel/AMD 64-bit: **Kingdom-1.2.4.AppImage**.
-- Debian/Ubuntu amd64: **kingdom-desktop_1.2.4_amd64.deb**.
+On the repository page, select **Releases** or follow the **Install the desktop app** links in the README. You **do not need** to clone Kingdom or choose **Code → Download ZIP** to install the desktop app. The ZIP under Code contains source files, not the one-click desktop installer.
 
-Use https://github.com/wests-cmd/kingdom/releases/tag/v1.2.4 or the installer links in the README. These are real, published release assets; do not substitute unrelated backend executables or the repository's source ZIP.
+## 2. Choose the right download
 
-## 3. Run the native installer
-Open the appropriate downloaded package and follow normal instructions for your operating system. Read and respect operating-system security warnings. These particular packages are unsigned, and the macOS release is not notarized. Do not bypass security restrictions simply to proceed.
+| Computer | Published v1.2.6 asset |
+| --- | --- |
+| Windows Intel/AMD 64-bit | [Kingdom-Setup-1.2.6.exe](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/Kingdom-Setup-1.2.6.exe) |
+| macOS **Intel**, not Apple Silicon | [Kingdom-1.2.6.dmg](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/Kingdom-1.2.6.dmg) |
+| Linux Intel/AMD 64-bit | [Kingdom-1.2.6.AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/Kingdom-1.2.6.AppImage) |
+| Debian/Ubuntu 64-bit | [kingdom-desktop_1.2.6_amd64.deb](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/kingdom-desktop_1.2.6_amd64.deb) |
+
+From the GitHub Releases page, open **v1.2.6** and expand **Assets** if necessary. Download **one** matching installer. The `SHA256SUMS` and release manifest are also published for integrity verification. The source ZIP, backend-only binaries and UI ZIP are not substitutes for the complete desktop installer.
+
+## 3. Install without developer tools
+
+**Windows:** open the downloaded Setup EXE and follow the installer. **Intel Mac:** open the DMG and install the application as directed by macOS. **Linux:** run the AppImage according to your desktop file-manager instructions, or use a graphical package installer for the Debian/Ubuntu DEB.
+
+The native packages include Kingdom's application runtime: a beginner does not have to install Python, Node, npm or Docker separately. **Windows and macOS packages are unsigned; macOS is not notarized.** Do not disable application-control protections, ignore integrity failures or bypass security policy to force an installation. If your computer blocks it, the safe next step is to report the message and your OS version to [GitHub Issues](https://github.com/wests-cmd/kingdom/issues).
 
 ## 4. First launch
-Open Kingdom in its own desktop window, complete first-run setup and choose a profile. The optional **local opening passcode starts disabled**. Your private owner access code and any pairing code must never be shared publicly.
 
-## 5. Configure AI if you want it
-Model-generated responses need an actual configured provider. Open **Routing**, select a supported model connection, and save/test it. Basic built-in text analysis is a simpler first task.
+Open Kingdom as its own desktop application. Follow the guided setup and choose a sensible profile. The optional *local opening passcode starts disabled*. Private owner access and remote pairing codes are distinct and must remain private.
 
-## 6. Start the runtime
-Open **Runtime** and select **Start Runtime**. If you are using the simple/easy interface and the page is not visible, select the advanced interface under Settings. Runtime scheduling does not grant unapproved computer tools.
+## 5. First verified task — no model required
 
-## 7. Run your first task
-Open **Tasks**, choose **Analyze text**, enter a paragraph, submit it, and inspect the returned task status and result. A model response, queued task or connected device alone does not prove execution succeeded.
+Choose **Runtime → Start Runtime**. In the simple UI, use **Settings → advanced interface** if Runtime is hidden. Then open **Tasks → Analyze text**, enter a short paragraph and submit. Check the actual result and verification record; `queued` is not `completed`. `Waiting approval` means you need to review the action.
 
-## 8. Optional: add another computer
-In **Nodes & Cluster**, create a single-use pairing invitation, review the device identity and fingerprint, then approve only necessary capabilities. Pairing is not automatic authorization.
+This built-in analysis task does not require a configured generative model.
 
-## 9. Updates and help
-Windows v1.2.1+ has **Settings → Desktop updates**; on macOS/Linux use matching native packages. Always check the latest published release notes and source-versus-installed security status. For help, see the [documentation index](README.md), [release notes](releases/v1.2.4.md), [project status](PROJECT_STATUS.md), or [GitHub Issues](https://github.com/wests-cmd/kingdom/issues). Windows/macOS installers are unsigned; the v1.2.4 release is not a Play Store or App Store release.
+## 6. Optional: connect an AI model
 
-## Video build
+For AI-generated answers, open **Routing**, configure a supported provider or local model endpoint, and **save and test** the connection. A stored model name or a connected Knight does not prove inference is available.
 
-The source for the video is in [scripts/build_getting_started_video.py](../scripts/build_getting_started_video.py). [The associated workflow](../.github/workflows/getting-started-video.yml) generates the MP4 and animated README preview. It uses local illustration, caption text, and speech synthesis, and never downloads user secrets or signs installers.
+## 7. Optional: add another computer
+
+Use **Nodes & Cluster** to create a single-use invitation. Verify the identity and fingerprint and approve only necessary capabilities. A network connection does not authorize sensitive tools.
+
+## 8. Updates and help
+
+Windows installed desktops expose **Settings → Desktop updates**. macOS and Linux use their matching newly published installers. Back up actual task/state data before upgrading, and check the selected release notes and hashes.
+
+If anything fails, use the [documentation index](README.md), [operations guide](OPERATIONS.md), [current release](https://github.com/wests-cmd/kingdom/releases/latest), or [GitHub Issues](https://github.com/wests-cmd/kingdom/issues). Android APK, iOS IPA, ARM64 native installers and security-signed production bundles are not supplied by v1.2.6.
+
+## Video source and publication
+
+The illustrated slides, captions, synthesized narration and animated preview are generated by [`scripts/build_getting_started_video.py`](../scripts/build_getting_started_video.py). The [video workflow](../.github/workflows/getting-started-video.yml) builds them on the documentation branch and archives the rendered assets for review. It does **not** rewrite `main` from an unrelated release job. The merged README should link the reviewed MP4/GIF committed in the same pull request.
+
+This tutorial teaches installation and one bounded task; it is not a demonstration of all autonomous development, model inference, mobile distribution or multi-machine security acceptance.
