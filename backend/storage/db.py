@@ -21,12 +21,21 @@ class Database:
         self.init_db()
 
     def get_connection(self):
-        conn = sqlite3.connect(self.db_path, factory=ClosingConnection)
+        conn = sqlite3.connect(self.db_path, timeout=5.0, factory=ClosingConnection)
         conn.row_factory = sqlite3.Row
         return conn
 
     def init_db(self):
         with self.get_connection() as conn:
+            # WAL permits revocation/audit writes to commit while status and
+            # mesh readers hold a snapshot. Keep FULL synchronous durability
+            # for authority and security evidence; do not hide lock failures.
+            mode = conn.execute("PRAGMA journal_mode=WAL").fetchone()[0]
+            if mode.lower() != "wal":
+                raise RuntimeError(
+                    "Kingdom requires a local SQLite database with WAL support; "
+                    f"journal mode is {mode!r}"
+                )
             cursor = conn.cursor()
 
             # Tasks table
