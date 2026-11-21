@@ -60,3 +60,15 @@ test('event explanations distinguish recorded state from proof of external succe
   assert.equal(eventInfo({event_type:'task.completed'}).title,'Kingdom recorded a system event')
   assert.equal(eventInfo('<script>fake</script>').title,'Kingdom recorded a system event')
 })
+
+test('every documented lifecycle state is explained, and preexecution or verification never counts as complete',()=>{
+  const states=['CREATED','VALIDATING','WAITING_AUTHORIZATION','WAITING_APPROVAL','AUTHORIZED',
+    'APPROVED','QUEUED','LEASED','RUNNING','VERIFYING','SUCCEEDED','COMPLETED','FAILED',
+    'CANCEL_REQUESTED','CANCELLED','EXPIRED','BLOCKED','RECOVERY_REQUIRED','UNKNOWN','DENIED']
+  for (const state of states) assert.notEqual(taskStatusInfo(state).label,'Status unavailable',state)
+  assert.match(taskStatusInfo('WAITING_AUTHORIZATION').explanation,/does not automatically/)
+  assert.match(taskStatusInfo('VERIFYING').explanation,/not yet been established/)
+  assert.match(taskStatusInfo('EXPIRED').explanation,/Do not assume/)
+  const counts=taskCounts(states.map(status=>({status})))
+  assert.deepEqual(counts,{queued:6,running:4,approvals:1,recovery:4,completed:2,failed:1,cancelled:1,unknown:1})
+})
