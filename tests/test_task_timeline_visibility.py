@@ -65,5 +65,48 @@ class TaskTimelineVisibilityTests(unittest.TestCase):
         self.assertEqual([r['event_id'] for r in res.json()['events']],['new'])
 
 
+
+class NotificationVisibilityTests(unittest.TestCase):
+    def setUp(self):
+        self.client=owner_client(app)
+
+    def test_notification_history_exposes_only_allowlisted_event_metadata(self):
+        rows=[
+            {'event_id':'new','event_type':'task.completed','timestamp':3,'task_id':'task-1',
+             'payload':{'secret':'PRIVATE_TOKEN'}},
+            {'event_id':'ignored','event_type':'agent.prompt','timestamp':2,'task_id':'task-1',
+             'payload':{'prompt':'EXFILTRATE_ME'}},
+            {'event_id':'old','event_type':'task.failed','timestamp':1,'task_id':'task-2',
+             'payload':{'api_key':'PRIVATE_KEY'}}
+        ]
+        with patch('backend.storage.repository.event_repo.query',return_value=rows) as query:
+            response=self.client.get('/notifications?limit=10')
+        self.assertEqual(response.status_code,200)
+        self.assertEqual([x['event_id'] for x in response.json()],['old','new'])
+        self.assertEqual(list(response.json()[0]),['event_id','event_type','timestamp','task_id'])
+        for private in ('PRIVATE_TOKEN','EXFILTRATE_ME','PRIVATE_KEY','payload'):
+            self.assertNotIn(private,response.text)
+        query.assert_called_once_with(limit=300)
+
+    def test_notifications_no_false_empty_state_when_database_fails(self):
+        with patch('backend.storage.repository.event_repo.query',side_effect=RuntimeError('unavailable')):
+            response=self.client.get('/notifications')
+        self.assertEqual(response.status_code,503)
+
+    def test_notification_limit_is_bounded(self):
+        self.assertEqual(self.client.get('/notifications?limit=1000').status_code,422)
+
+    def test_anonymous_notification_history_denied(self):
+        from fastapi.testclient import TestClient
+        from backend.security.http_auth import require_owner
+        prior=app.dependency_overrides.pop(require_owner,None)
+        try:
+            response=TestClient(app).get('/notifications')
+            self.assertIn(response.status_code,{401,403})
+        finally:
+            if prior is not None:
+                app.dependency_overrides[require_owner]=prior
+
+
 if __name__=='__main__':
     unittest.main()
