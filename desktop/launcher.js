@@ -10,8 +10,10 @@ const fs = require('fs');
 
 let BACKEND_PORT = process.env.PORT || 8000;
 let READINESS_URL = `http://127.0.0.1:${BACKEND_PORT}/health/ready`;
-const MAX_POLL_ATTEMPTS = 30;
-const POLL_INTERVAL_MS = 1000;
+// Check promptly when the bundled backend becomes ready, while keeping the
+// original ~30-second nominal startup window on slower CPUs.
+const MAX_POLL_ATTEMPTS = 120;
+const POLL_INTERVAL_MS = 250;
 
 let backendProcess = null;
 const ownerToken = process.env.KINGDOM_OWNER_TOKEN || require('crypto').randomBytes(48).toString('base64url');
