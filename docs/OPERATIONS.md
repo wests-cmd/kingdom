@@ -42,8 +42,15 @@ verification; a private tailnet address alone cannot receive those callbacks.
 ## Backup, recovery and updates
 
 Back up the actual database, required keys/configuration and external vault
-using an application-consistent procedure before upgrades. A copied SQLite file
-while writes/WAL are active is not a tested restore. Retain the previous artifact
+using an application-consistent procedure before upgrades. Kingdom's SQLite database uses **WAL journal mode** to allow status readers
+and approved revocation/audit writers to work concurrently. The `-wal` and
+`-shm` sidecar files are transient operational state, not disposable junk.
+Never copy or replace just the live `.db` file while the application is running:
+that can omit committed but uncheckpointed changes. Use SQLite's online backup
+API for a consistent snapshot, or stop all writers and checkpoint/verify the
+database before a file-level backup. An untested copied database is not a
+verified restore. Preserve owner keys, grants, revocations and audit state during
+rollback. Retain the previous artifact
 and verify a restore in an isolated environment before claiming disaster recovery.
 
 Windows v1.2.1+ uses Settings → Desktop updates; macOS/Linux use their matching
