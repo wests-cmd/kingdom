@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: kingdom-getting-started-video-${{ github.ref }}
@@ -26,8 +26,6 @@ jobs:
   render:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: ${{ github.event_name == 'push' && startsWith(github.ref_name, 'docs/quickstart-video-') && 'write' || 'read' }}
     steps:
       - uses: actions/checkout@v4
         with:
