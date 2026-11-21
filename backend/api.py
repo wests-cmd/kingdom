@@ -577,6 +577,36 @@ def project_test_report(task_id: str):
         raise HTTPException(409, 'Persisted project test descriptor is invalid') from exc
 
 
+@router.get("/tasks/{task_id}/timeline")
+def task_timeline(task_id: str, limit: int = Query(default=60, ge=1, le=100)):
+    """Read-only, owner-authenticated, persisted task events without event payloads."""
+    task = engine.tasks.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    from backend.storage.repository import event_repo
+    try:
+        # Repository returns newest-first. Never expose payload, prompt, secrets,
+        # stack traces, arbitrary source strings or worker-generated text here.
+        rows = event_repo.query(task_id=task_id, limit=limit + 1)
+    except Exception:
+        raise HTTPException(status_code=503, detail="Task timeline unavailable") from None
+    events = []
+    for row in reversed(rows[:limit]):
+        if row.get("task_id") != task_id:
+            continue
+        events.append({
+            "event_id": row.get("event_id"),
+            "event_type": row.get("event_type"),
+            "timestamp": row.get("timestamp"),
+        })
+    return {
+        "task_id": task_id,
+        "events": events,
+        "truncated": len(rows) > limit,
+        "notice": "These are persisted event records, not proof of external side effects or a complete execution trace.",
+    }
+
+
 @router.get("/tasks/{task_id}")
 def get_task(task_id: str):
     task = engine.tasks.get(task_id)
@@ -607,6 +637,33 @@ def cancel_task(task_id: str):
 def event_history(limit: int = Query(default=50, ge=1, le=200), event_type: str | None = None):
     events = engine.events.history(200 if event_type else limit)
     return [event for event in events if not event_type or event["event_type"] == event_type][-limit:]
+
+@router.get("/notifications")
+def notification_history(limit: int = Query(default=50, ge=1, le=100)):
+    """Durable, owner-only recent events for the UI: never expose payload contents."""
+    from backend.storage.repository import event_repo
+    allowed = {
+        "task.failed", "task.completed", "task.cancelled", "task.recovery_required",
+        "governance.approval_required", "runtime.scheduler_tick_error",
+    }
+    try:
+        rows = event_repo.query(limit=300)  # Newest first, bounded database read.
+    except Exception:
+        raise HTTPException(status_code=503, detail="Notification history unavailable") from None
+    messages = []
+    for event in rows:
+        if event.get("event_type") not in allowed:
+            continue
+        messages.append({
+            "event_id": event.get("event_id"),
+            "event_type": event.get("event_type"),
+            "timestamp": event.get("timestamp"),
+            "task_id": event.get("task_id"),
+        })
+        if len(messages) >= limit:
+            break
+    return list(reversed(messages))
+
 
 @router.get("/knights")
 def knights():

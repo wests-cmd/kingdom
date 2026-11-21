@@ -1,146 +1,174 @@
-import React, { useState, useEffect } from "react"
-import api from "../api"
-import SwarmGraph from "../components/graphs/SwarmGraph"
-import ApprovalsView from "../components/security/ApprovalsView"
-import Tasks from "./Tasks"
-import useLiveData from "../hooks/useLiveData"
-import ComputerIdentity from "../components/ComputerIdentity"
+import React, {useState} from 'react'
+import api from '../api'
+import useLiveData from '../hooks/useLiveData'
 import OrchestrationBoard from '../components/OrchestrationBoard'
-import { startPolling } from '../common/polling'
-import {plainLanguageOverview} from '../components/common/userStatus'
+import SystemHealth from '../components/SystemHealth'
+import NotificationCenter from '../components/NotificationCenter'
+import ApprovalsView from '../components/security/ApprovalsView'
+import SwarmGraph from '../components/graphs/SwarmGraph'
+import ComputerIdentity from '../components/ComputerIdentity'
+import {plainLanguageOverview, taskCounts, taskStatusInfo} from '../components/common/userStatus'
+import {homeTaskGroups, homeTaskTitle, homeTaskEvidence} from '../components/common/homeSummary'
 
-export default function Dashboard() {
-  const {data: hierarchy, error: hierarchyError} = useLiveData("/hierarchy", 10000)
-  const [status, setStatus] = useState({})
-  const [knights, setKnights] = useState([])
-  const [tasks, setTasks] = useState([])
-  const [security, setSecurity] = useState({})
+function AdvancedHomeDetails() {
+  const {data:hierarchy,error} = useLiveData('/hierarchy',10000)
+  return <div className="home-advanced">
+    <p className="muted">Advanced details use separate recorded inventories and activity reports. A connected computer or an agent response does not prove a task succeeded.</p>
+    <ComputerIdentity data={hierarchy} error={error}/>
+    <OrchestrationBoard/>
+    <ApprovalsView/>
+    <SwarmGraph/>
+  </div>
+}
 
-  const [connectionState, setConnectionState] = useState("CONNECTING")
-  const [lastUpdated, setLastUpdated] = useState(null)
-  const [actionError, setActionError] = useState('')
+function TaskRow({task,finished=false,onNavigate}) {
+  const info=taskStatusInfo(task?.status)
+  const evidence=finished ? homeTaskEvidence(task):null
+  const date=task?.created_at ? new Date(task.created_at) : null
+  const validDate=date && Number.isFinite(date.getTime())
+  return <li className="home-task-row">
+    <div className="home-task-title"><strong>{homeTaskTitle(task)}</strong><span className="status-chip">{info.label}</span></div>
+    <p>{info.explanation}</p>
+    {evidence && <p className="muted"><strong>Evidence:</strong> {evidence}</p>}
+    {!finished && <p className="muted"><strong>Next:</strong> {info.next}</p>}
+    <div className="home-task-footer"><small>{validDate ? date.toLocaleString() : 'Time not recorded'}</small>
+      <button type="button" onClick={()=>onNavigate?.('Tasks')}>Open task details</button></div>
+  </li>
+}
 
-  const fetchDashboardData = () => {
-    return Promise.all([
-      api.get("/status"),
-      api.get("/knights"),
-      api.get("/tasks"),
-      api.get("/security/status")
-    ]).then(([statusRes, knightsRes, tasksRes, secRes]) => {
-      setStatus(statusRes.data || {})
-      setKnights(knightsRes.data?.knights || knightsRes.data || [])
-      setTasks(tasksRes.data || [])
-      setSecurity(secRes.data || {})
-      setConnectionState("LIVE")
-      setLastUpdated(new Date().toLocaleTimeString())
-    }).catch(() => {
-      setConnectionState("OFFLINE")
-    })
-  }
-
-  useEffect(() => {
-    return startPolling(fetchDashboardData, 3000)
-  }, [])
-
-  const changeRuntime = async action => {
-    setActionError('')
-    try {
-      await api.post(action === 'start' ? '/start' : '/stop')
-      await fetchDashboardData()
-    } catch {
-      setActionError('Could not change Runtime. Check the connection and try again.')
-    }
-  }
-  const overview = plainLanguageOverview({
-    connection: connectionState, lastUpdated, runtime: status, security, tasks
-  })
-  const counts = overview.counts
-  const isCurrent = connectionState === 'LIVE' && !!lastUpdated
-
-  return (
-    <div style={{minWidth:0, overflowWrap:"anywhere"}}>
-      <ComputerIdentity data={hierarchy} error={hierarchyError}/>
-      <section className="panel" aria-label="Kingdom explained" style={{marginBottom:20}}>
-        <div className="section-heading">
-          <div>
-            <h2>Kingdom right now</h2>
-            <p className="muted">The last status received from this Kingdom installation, in plain language.</p>
-          </div>
-          <button type="button" onClick={fetchDashboardData}>Refresh status</button>
-        </div>
-        <p role="status"><strong>{overview.headline}</strong></p>
-        <p>{overview.explanation}</p>
-        <p><strong>What to do next:</strong> {overview.next}</p>
-        <div className="grid-cards" aria-label="Recorded task counts" style={{marginTop:12}}>
-          <div className="card"><strong>{counts ? counts.queued : '—'}</strong><small>Waiting to start</small></div>
-          <div className="card"><strong>{counts ? counts.running : '—'}</strong><small>In progress or assigned</small></div>
-          <div className="card"><strong>{counts ? counts.approvals : '—'}</strong><small>Tasks waiting for approval</small></div>
-          <div className="card"><strong>{counts ? counts.recovery : '—'}</strong><small>Blocked or need recovery</small></div>
-          <div className="card"><strong>{counts ? counts.completed : '—'}</strong><small>Recorded as completed</small></div>
-          <div className="card"><strong>{counts ? counts.failed : '—'}</strong><small>Failed</small></div>
-        </div>
-        {counts?.unknown > 0 && <p className="muted">{counts.unknown} task records have an unrecognized status. Check their details before interpreting them.</p>}
-        {overview.stale && <p role="alert">These are last-seen counts, not a live report. No new work or approval status can be confirmed until Kingdom reconnects.</p>}
-        <details><summary>What do these numbers mean?</summary><p>Waiting means saved but not started. Assigned means a worker has a lease, not proof of execution. Completed is a recorded task state; inspect the result and verification. A model reply or an online computer alone is not proof that the requested action succeeded.</p></details>
-      </section>
-      <OrchestrationBoard/>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", padding: "8px 16px", background: "var(--input-bg)", border: "1px solid var(--surface-border)", borderRadius: "6px" }}>
-        <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-          Connection to Kingdom: <span style={{ fontWeight: "700" }}>{connectionState === 'LIVE' ? 'Updated' : connectionState === 'OFFLINE' ? 'Cannot refresh' : 'Connecting'}</span>
-        </div>
-        <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-          {lastUpdated ? `Last synchronized at ${lastUpdated}` : "Synchronizing state..."}
-        </div>
-      </div>
-
-      <div className="grid-cards">
-        <div className="card">
-          <div className="card-title">System Status</div>
-          <div className="card-value" style={{ color: status.running ? "var(--accent-green)" : "var(--text-muted)" }}>
-            {!lastUpdated ? "Loading…" : !isCurrent ? "Last known (offline)" : status.running ? "ACTIVE" : "STOPPED"}
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-title">Runtime Mode</div>
-          <div className="card-value" style={{ textTransform: "capitalize" }}>
-            {status.mode || "Loading…"}
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-title">Local Apprentices</div>
-          <div className="card-value">{hierarchy && !hierarchyError && Array.isArray(hierarchy.apprentices) ? hierarchy.apprentices.length : '—'}</div>
-        </div>
-
-        <div className="card">
-          <div className="card-title">Not finished (recorded)</div>
-          <div className="card-value">{counts ? counts.queued + counts.running + counts.approvals + counts.recovery : '—'}</div>
-        </div>
-
-        <div className="card">
-          <div className="card-title">Pending Approvals</div>
-          <div className="card-value" style={{ color: security.pending_approvals_count > 0 ? "var(--accent-red)" : "var(--text-main)" }}>
-            {isCurrent && Number.isInteger(security.pending_approvals_count) ? security.pending_approvals_count : '—'}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ marginBottom: "20px", display: "flex", flexWrap: "wrap", gap: "12px" }}>
-        <button className="primary-red" onClick={() => changeRuntime('start')} disabled={!isCurrent || status.running}>Start Runtime</button>
-        <button onClick={() => changeRuntime('stop')} disabled={!isCurrent || !status.running}>Stop Runtime</button>
-        {actionError && <p role="alert">{actionError}</p>}
-      </div>
-
-      <ApprovalsView />
-
-      <div style={{ marginTop: "24px" }}>
-        <Tasks />
-      </div>
-
-      <div style={{ marginTop: "24px" }}>
-        <SwarmGraph />
-      </div>
+function WorkSection({heading,description,tasks,dataReady,finished=false,onNavigate,emptyMessage}) {
+  return <section className="panel home-work-section" aria-label={heading}>
+    <div className="section-heading">
+      <div><h2>{heading}</h2><p className="muted">{description}</p></div>
+      <button type="button" onClick={()=>onNavigate?.('Tasks')}>All tasks</button>
     </div>
-  )
+    {!dataReady ? <p role="status">Task information not available yet.</p>
+      : tasks.length ? <ul className="home-task-list">{tasks.map((task,index)=>
+        <TaskRow key={task.id || index} task={task} onNavigate={onNavigate} finished={finished}/>)}</ul>
+      : <p className="muted">{emptyMessage}</p>}
+  </section>
+}
+
+export default function Dashboard({onNavigate,interfaceMode='easy'}) {
+  const statusFeed=useLiveData('/status',3000)
+  const tasksFeed=useLiveData('/tasks',3000)
+  const securityFeed=useLiveData('/security/status',5000)
+  const [advancedOverride,setAdvancedOverride]=useState(null)
+  const [showHealth,setShowHealth]=useState(false)
+  const advanced=advancedOverride===null ? interfaceMode==='advanced' : advancedOverride
+  const [busy,setBusy]=useState(false)
+  const [actionError,setActionError]=useState('')
+  const runtime=statusFeed.data
+  const tasks=Array.isArray(tasksFeed.data)?tasksFeed.data:null
+  const security=securityFeed.data
+  const dataReady=runtime && tasks && security && !statusFeed.error && !tasksFeed.error && !securityFeed.error
+  const lastUpdated=(statusFeed.updated && tasksFeed.updated && securityFeed.updated)
+    ? new Date(Math.min(statusFeed.updated.getTime(),tasksFeed.updated.getTime(),securityFeed.updated.getTime())) : null
+  const connection=[statusFeed.error,tasksFeed.error,securityFeed.error].some(Boolean)
+    ? 'OFFLINE' : dataReady ? 'LIVE' : 'CONNECTING'
+  const overview=plainLanguageOverview({connection,lastUpdated,runtime,security,tasks})
+  const counts=taskCounts(tasks)
+  const groups=homeTaskGroups(tasks)
+  const current=!!dataReady
+  const pendingApprovals=current && Number.isInteger(security?.pending_approvals_count)
+    ? security.pending_approvals_count : null
+
+  async function refreshAll(){
+    await Promise.all([statusFeed.refresh(),tasksFeed.refresh(),securityFeed.refresh()])
+  }
+  async function changeRuntime(action) {
+    if (!current || busy) return
+    setBusy(true);setActionError('')
+    try {await api.post(action==='start'?'/start':'/stop');await refreshAll()}
+    catch {setActionError('Kingdom could not confirm this runtime command. Check the Runtime status and connection before retrying.')}
+    finally {setBusy(false)}
+  }
+
+  return <div className="home-control-center">
+    <header className="home-welcome">
+      <div><p className="eyebrow">Your workspace</p><h1>Home</h1>
+        <p className="muted">See what needs you, what is happening, and what Kingdom actually recorded as finished.</p></div>
+      <button type="button" onClick={refreshAll}>Refresh information</button>
+    </header>
+
+    <section className="panel home-overview" aria-label="Kingdom system status">
+      <div className="section-heading">
+        <div><h2>Kingdom right now</h2>
+          <p className="muted">{lastUpdated?`Last synchronized at ${lastUpdated.toLocaleTimeString()}`:'Waiting for a complete status report'}</p>
+        </div>
+        <span className="status-chip">{connection==='LIVE'?'Information current':connection==='OFFLINE'?'Update failed':'Connecting'}</span>
+      </div>
+      <p role="status" className="home-headline"><strong>{overview.headline}</strong></p>
+      <p>{overview.explanation}</p>
+      <p><strong>Next step:</strong> {overview.next}</p>
+      {(statusFeed.error || tasksFeed.error || securityFeed.error) && <p role="alert">
+        One or more status sources could not refresh. Previous values may be out of date. Do not assume any action completed.</p>}
+      <div className="home-summary-grid" aria-label="Status at a glance">
+        <div className="card"><div className="card-title">Runtime</div><div className="card-value">
+          {!current?'Unknown':runtime.running===true?'ACTIVE':runtime.running===false?'STOPPED':'Unknown'}</div>
+          <small>{current?'Task processing switch on this computer':'Cannot confirm the current state'}</small>
+        </div>
+        <div className="card"><div className="card-title">Waiting / assigned</div><div className="card-value">
+          {current&&counts?counts.queued+counts.running:'—'}</div><small>Not verified as finished</small>
+        </div>
+        <div className="card"><div className="card-title">Security requests</div><div className="card-value">
+          {pendingApprovals??'—'}</div><small>Actions requiring your decision</small>
+        </div>
+        <div className="card"><div className="card-title">Recorded as finished</div><div className="card-value">
+          {current&&counts?counts.completed:'—'}</div><small>Check each result's evidence</small>
+        </div>
+      </div>
+      <div className="action-row">
+        <button type="button" className="primary-red" disabled={!current || busy || runtime.running!==false}
+          onClick={()=>changeRuntime('start')}>Start Runtime</button>
+        <button type="button" disabled={!current || busy || runtime.running!==true}
+          onClick={()=>changeRuntime('stop')}>Stop Runtime</button>
+        <button type="button" onClick={()=>onNavigate?.('Tasks')}>Create a task</button>
+        <button type="button" onClick={()=>onNavigate?.('Workbench')}>Talk & work</button>
+      </div>
+      {actionError && <p role="alert">{actionError}</p>}
+    </section>
+
+    <section className="panel home-work-section" aria-label="Needs your attention">
+      <div className="section-heading"><div><h2>Needs your attention</h2>
+        <p className="muted">Decisions, failures, or work that cannot safely continue.</p></div>
+        <button type="button" onClick={()=>onNavigate?.('Governance')}>Review approvals</button></div>
+      {!current ? <p role="status">Waiting for current approval and task information.</p> : <>
+        {pendingApprovals>0 && <div className="home-attention-message" role="status">
+          <strong>{pendingApprovals} security request{pendingApprovals===1?'':'s'} waiting for review.</strong>
+          <p>Open Approvals & permissions to check the action, scope, and requesting computer before deciding.</p>
+          <button type="button" onClick={()=>onNavigate?.('Governance')}>Review each request</button>
+        </div>}
+        {groups?.attention.length ? <ul className="home-task-list">
+          {groups.attention.map((task,index)=><TaskRow key={task.id || index} task={task} onNavigate={onNavigate}/>)}
+        </ul> : pendingApprovals===0 ? <p className="muted">No recorded task alerts or pending security requests in this snapshot.</p> : null}
+        {counts?.unknown>0 && <p className="muted">{counts.unknown} task state{counts.unknown===1?' is':'s are'} unknown. Check the full task record before interpreting the result.</p>}
+        <button type="button" onClick={()=>onNavigate?.('Recovery')}>Review recovery options</button>
+      </>}
+    </section>
+
+    <WorkSection heading="Working now" description="Tasks queued, assigned, or executing. Assigned does not mean completed."
+      tasks={groups?.active || []} dataReady={current} onNavigate={onNavigate}
+      emptyMessage="No tasks are recorded as waiting or in progress."/>
+    <WorkSection heading="Recently finished" description="Recorded task outcomes and the evidence available for each."
+      tasks={groups?.finished || []} dataReady={current} onNavigate={onNavigate} finished
+      emptyMessage="No completed or cancelled tasks recorded yet."/>
+
+    <NotificationCenter onNavigate={onNavigate}/>
+
+    <section className="panel" aria-label="More information">
+      <div className="section-heading"><div><h2>More information</h2>
+        <p className="muted">Your computers, permission settings and technical details are available when needed.</p></div></div>
+      <div className="action-row">
+        <button type="button" onClick={()=>onNavigate?.('Nodes')}>Connected computers</button>
+        <button type="button" onClick={()=>onNavigate?.('Governance')}>Permissions</button>
+        <button type="button" onClick={()=>onNavigate?.('Recovery')}>Recovery</button>
+        <button type="button" aria-expanded={showHealth} onClick={()=>setShowHealth(show=>!show)}>{showHealth?'Hide health':'Computers & model health'}</button>
+        <button type="button" aria-expanded={advanced} onClick={()=>setAdvancedOverride(!advanced)}>
+          {advanced?'Hide technical details':'Show technical details'}</button>
+      </div>
+      {showHealth && <SystemHealth/>}
+      {advanced && <AdvancedHomeDetails/>}
+    </section>
+  </div>
 }
