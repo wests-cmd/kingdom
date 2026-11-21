@@ -27,6 +27,17 @@ class TaskTimelineVisibilityTests(unittest.TestCase):
         self.assertNotIn('password',response.text)
         query.assert_called_once_with(task_id='example-123',limit=31)
 
+    def test_anonymous_cannot_read_other_task_events(self):
+        from fastapi.testclient import TestClient
+        from backend.security.http_auth import require_owner
+        prior=app.dependency_overrides.pop(require_owner,None)
+        try:
+            response=TestClient(app).get('/tasks/example-123/timeline')
+            self.assertIn(response.status_code,{401,403})
+        finally:
+            if prior is not None:
+                app.dependency_overrides[require_owner]=prior
+
     def test_missing_task_has_no_timeline(self):
         with patch('backend.api.engine.tasks.get',return_value=None):
             self.assertEqual(self.client.get('/tasks/not-found/timeline').status_code,404)
