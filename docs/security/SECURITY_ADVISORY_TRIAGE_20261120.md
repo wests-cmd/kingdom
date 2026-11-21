@@ -32,8 +32,8 @@ Existing reusable code:
 - `tests/test_known_compromise_gate.py`: adversarial fixtures for malicious `.pth` package versions, old MCP Git releases, npm transitive malware, registry SSRF version, missing inventory, and nested Python requirements.
 - `Dockerfile`: a separately cached Python pre-install audit stage gates both the Node frontend stage and final Python runtime stage, including the independent mobile gateway manifest.
 - `.github/workflows/ci.yml`, `.github/workflows/release.yml`: fail the jobs **before** `pip`/`npm` installation if a known compromised dependency appears in checked manifests; keep the existing OSV release audit.
-- `backend/security/scoped_authorization.py`: repair an independent *secondary* authorization helper that previously trusted `request.context["approved_by_commander"]` or a caller-selected governance level for HIGH risk. New HIGH-risk decisions require a trusted runtime-supplied validator of the exact request. The request alone never constitutes verified approval. A host must actually inject a verifier bound to its existing approval records; this change does not silently add a second approval store.
-- `tests/test_scoped_authorization_proof.py`: prove forged commander assertions fail, exceptions deny, scope mutation is rejected, revocation denies, and low-risk reads remain possible.
+- **Separate policy review:** the secondary `ScopedAuthorizationEngine` request-context approval bypass was identified. Its proposed repair, owner-approval integration requirements, and negative tests have been moved into **draft PR #173**, intentionally NOT part of this supply-chain PR.
+- `docs/security/SCOPED_AUTHORIZATION_REVIEW.md` in draft PR #173 records the distinct policy-change acceptance contract.
 
 ## Strict installed-runtime security acceptance checklist
 
@@ -52,6 +52,6 @@ Existing reusable code:
 
 ## Decision boundary
 
-This PR is a **reviewed candidate**, not an automatic security-policy deployment. Do not self-merge this authorization change. Release remains blocked under the eight-item policy until mandatory physical tests provide evidence. Do not claim the workstation, mobile APK, or remote workers were audited from a GitHub source tree.
+This PR only adds pre-install safeguards and audit evidence. It **does not modify authorization policy**. Draft PR #173 holds that proposed security change for separate human approval. Release remains blocked under the eight-item policy until mandatory physical tests provide evidence. Do not claim the workstation, mobile APK, or remote workers were audited from a GitHub source tree.
 
 **Next commissioning work:** inspect every installed dependency and service account on Laptop 2 and DT1, ensure untrusted Git and package execution take place under OS-enforced isolation with no production secrets, and execute the eight adversarial scenarios above with trusted external evidence and a fail-closed release gate.
