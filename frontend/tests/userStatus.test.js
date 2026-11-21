@@ -39,6 +39,8 @@ test('dashboard reports unknown/stale information before trying to recommend con
 test('runtime and scheduler state come from recorded booleans, not task counts',()=>{
   assert.match(plainLanguageOverview({...base,runtime:{running:false},tasks:[{status:'running'}]}).headline,/stopped/)
   assert.match(plainLanguageOverview({...base,runtime:{running:true,scheduler_running:false}}).headline,/needs attention/)
+  assert.match(plainLanguageOverview({...base,runtime:{}}).headline,/unavailable/)
+  assert.match(plainLanguageOverview({...base,tasks:null}).headline,/unavailable/)
   assert.match(plainLanguageOverview(base).headline,/ready/)
 })
 
