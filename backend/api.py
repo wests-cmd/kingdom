@@ -577,6 +577,36 @@ def project_test_report(task_id: str):
         raise HTTPException(409, 'Persisted project test descriptor is invalid') from exc
 
 
+@router.get("/tasks/{task_id}/timeline")
+def task_timeline(task_id: str, limit: int = Query(default=60, ge=1, le=100)):
+    """Read-only, owner-authenticated, persisted task events without event payloads."""
+    task = engine.tasks.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    from backend.storage.repository import event_repo
+    try:
+        # Repository returns newest-first. Never expose payload, prompt, secrets,
+        # stack traces, arbitrary source strings or worker-generated text here.
+        rows = event_repo.query(task_id=task_id, limit=limit + 1)
+    except Exception:
+        raise HTTPException(status_code=503, detail="Task timeline unavailable") from None
+    events = []
+    for row in reversed(rows[:limit]):
+        if row.get("task_id") != task_id:
+            continue
+        events.append({
+            "event_id": row.get("event_id"),
+            "event_type": row.get("event_type"),
+            "timestamp": row.get("timestamp"),
+        })
+    return {
+        "task_id": task_id,
+        "events": events,
+        "truncated": len(rows) > limit,
+        "notice": "These are persisted event records, not proof of external side effects or a complete execution trace.",
+    }
+
+
 @router.get("/tasks/{task_id}")
 def get_task(task_id: str):
     task = engine.tasks.get(task_id)
