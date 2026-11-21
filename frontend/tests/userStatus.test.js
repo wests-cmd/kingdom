@@ -1,6 +1,6 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {normalizedTaskStatus, taskStatusInfo, taskCounts, plainLanguageOverview} from '../src/components/common/userStatus.js'
+import {normalizedTaskStatus, taskStatusInfo, taskCounts, plainLanguageOverview, eventInfo} from '../src/components/common/userStatus.js'
 
 test('task states are plain-language and never imply that a lease or model response proves completion',()=>{
   assert.equal(taskStatusInfo('QUEUED').label, 'Waiting in line')
@@ -48,4 +48,13 @@ test('approval and recovery take priority; queued, leased and running work stay 
   assert.match(plainLanguageOverview({...base,tasks:[{status:'recovery_required'},{status:'running'}]}).headline,/recovery/)
   assert.match(plainLanguageOverview({...base,tasks:[{status:'leased'}]}).headline,/processing/)
   assert.match(plainLanguageOverview({...base,tasks:[{status:'queued'}]}).headline,/waiting/)
+})
+
+test('event explanations distinguish recorded state from proof of external success',()=>{
+  assert.match(eventInfo('task.queued').explanation,/not been confirmed/)
+  assert.match(eventInfo('task.running').explanation,/not a successful finish/)
+  assert.match(eventInfo('task.completed').explanation,/verification/)
+  assert.match(eventInfo('governance.approval_required').explanation,/Inspect/)
+  assert.equal(eventInfo({event_type:'task.completed'}).title,'Kingdom recorded a system event')
+  assert.equal(eventInfo('<script>fake</script>').title,'Kingdom recorded a system event')
 })
