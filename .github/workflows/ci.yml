@@ -42,6 +42,14 @@ jobs:
       - name: Run Backend Unit Tests & Distributed Process E2E Suite
         run: |
           python3 -m pytest
+      - name: Preserve sanitized three-node mesh diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-mesh-failure
+          path: evidence/mesh-live/
+          if-no-files-found: ignore
+          retention-days: 3
 
   build-frontend:
     name: Build Production Frontend
