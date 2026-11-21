@@ -1,5 +1,4 @@
 import asyncio
-import threading
 from types import SimpleNamespace
 
 from backend.cluster.node_registry import NodeRegistry
@@ -11,7 +10,8 @@ from backend.storage.repository import KnightRepository
 def test_busy_registry_does_not_block_http_loop(tmp_path):
     database = Database(tmp_path / 'peers.db')
     registry = NodeRegistry(repository=KnightRepository(database))
-    locked, release = threading.Event(), threading.Event()
+    from threading import Event
+    locked, release = Event(), Event()
 
     # With SQLite WAL, an EXCLUSIVE writer no longer blocks reader snapshots.
     # Block the actual registry operation instead so this tests the event-loop
