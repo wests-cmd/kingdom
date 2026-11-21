@@ -5,6 +5,7 @@ import api from "../api"
 import useLiveData from "../hooks/useLiveData"
 
 import TaskResult, {DebugDetails, scrubText} from '../components/common/TaskResult'
+import TaskInsights from '../components/TaskInsights'
 
 import {workerLabel} from '../components/common/presentation'
 import {taskStatusInfo,taskCounts} from '../components/common/userStatus'
@@ -228,6 +229,7 @@ export default function Tasks() {
               {t.assigned_knight && <p className="muted">Worker: {workerLabel(t.assigned_knight)}</p>}
 
               {t.result && <TaskResult result={t.result} taskId={t.id}/>}
+              <TaskInsights task={t}/>
               {String(t.status || '').toLowerCase() === 'completed' && !t.result && <p role="alert">Kingdom recorded completion, but this view has no result to show. Do not treat this as verified work.</p>}
 
               {developerView && <DebugDetails value={{id:t.id,metadata:t.metadata,input:t.input,result:t.result,error:t.error}}/>}
