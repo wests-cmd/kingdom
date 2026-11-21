@@ -7,6 +7,7 @@ The [repository README](../README.md) provides one-click installer downloads and
 
 - [Operations and configuration](OPERATIONS.md): local state, ports, authentication, recovery and updates.
 - [Mission workspace](MISSION_WORKSPACE.md): tasks, attachments and reviewed work.
+- [Understand Kingdom's status](USER_VISIBILITY.md): clear meanings for waiting/running/completed, stale information, approval requests, and verification evidence.
 - [Runtime controls](runtime-controls.md), [model connections](MODEL_OFFLOADING.md), [knowledge](KNOWLEDGE.md).
 - [Planning help and retained lessons](PLANNING_HELP.md): optional ChatGPT advice, local reuse, cancellation and verified training exports.
 - [Device pairing](device-connections.md), [vault/device layout](VAULT_AND_DEVICE_LAYOUT.md), [container enrollment](docker-cluster.md).
