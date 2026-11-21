@@ -990,3 +990,36 @@ input[type=color] { width:56px; height:40px; padding:4px!important; cursor:point
  .home-control-center .action-row { display:flex; flex-wrap:wrap; }
 }
 :root[data-large-display=true] .home-summary-grid { grid-template-columns:1fr; }
+
+
+/* Expandable task evidence: timeline shows only persisted event metadata. */
+.task-insights {margin-top:12px;border-top:1px solid var(--surface-border);padding-top:12px;min-width:0;}
+.task-insights summary {cursor:pointer;font-weight:600;}
+.task-insights-panel {display:grid;gap:16px;margin-top:14px;max-width:100%;}
+.task-insights-panel>section {min-width:0;overflow-wrap:anywhere;}
+.task-insights-panel .section-heading {display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.task-insights-panel h4 {margin:0 0 8px;}
+.task-insights-panel ul {padding-left:20px;}
+.task-timeline {margin:12px 0;padding:0 0 0 22px;display:grid;gap:12px;}
+.task-timeline li {padding-left:8px;min-width:0;}
+.task-timeline time {display:block;color:var(--text-muted);font-size:12px;}
+.task-timeline p {margin:4px 0 0;}
+/* Recorded event notification center: no animation or OS notifications. */
+.notification-center .section-heading {flex-wrap:wrap;gap:12px;align-items:center;}
+.notification-center .action-row {flex-wrap:wrap;}
+.notification-list {list-style:none;margin:12px 0 0;padding:0;display:grid;gap:8px;}
+.notification-list li {min-width:0;border:1px solid var(--surface-border);border-radius:8px;padding:12px;}
+.notification-list li.notice-new {border-left:3px solid var(--accent-orange);}
+.notification-list .home-task-title {display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+.notification-list p {margin:6px 0;overflow-wrap:anywhere;}
+/* Health values use unambiguous units and stack on compact displays. */
+.health-panel {display:grid;gap:12px;margin-top:14px;min-width:0;}
+.health-panel .section-heading {flex-wrap:wrap;}
+.health-panel .home-summary-grid {grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));}
+.health-provider-status {border:1px solid var(--surface-border);border-radius:8px;padding:12px;}
+.health-provider-status p {margin:4px 0;}
+@media(max-width:540px) {
+ .notification-list .home-task-title,.task-insights-panel .section-heading {display:grid;gap:8px;}
+ .notification-list button,.task-insights-panel button {width:100%;}
+ .health-panel .home-summary-grid {grid-template-columns:1fr;}
+}
