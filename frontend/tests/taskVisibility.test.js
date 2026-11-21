@@ -19,6 +19,13 @@ test('changes only reflect verified recorded workspace/build receipts',()=>{
  assert.match(report.notice,/not a Git diff/)
 })
 
+test('spoofed verified model prose is never a file change receipt',()=>{
+ const report=taskChangeReport({status:'completed',result:{results:[
+  {outcome:{kind:'model_response',tool:'workspace.write@1.0.0',output:{path:'fake-file.py'}},verification:{state:'VERIFIED'}}
+ ]}})
+ assert.equal(report.lines.length,0)
+})
+
 test('a model reply alone cannot say files were changed',()=>{
  const report=taskChangeReport({status:'completed',result:{results:[
   {outcome:{kind:'model_response',output:{text:'I edited a secret'}},verification:{state:'VERIFIED'}}
