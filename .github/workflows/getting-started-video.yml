@@ -65,5 +65,16 @@ jobs:
             echo "Video is already current."
           else
             git commit -m "docs: publish reviewed v1.2.6 narrated tutorial media"
-            git push origin "HEAD:$GITHUB_REF_NAME"
+            # A README edit may have arrived after this render checked out
+            # the branch. Rebase the media-only commit onto the new tip
+            # rather than force-pushing or dropping the updated docs.
+            for attempt in 1 2 3; do
+              git fetch origin "$GITHUB_REF_NAME"
+              git rebase "origin/$GITHUB_REF_NAME"
+              if git push origin "HEAD:$GITHUB_REF_NAME"; then
+                exit 0
+              fi
+            done
+            echo "Documentation branch moved repeatedly; leaving media unmerged for review."
+            exit 1
           fi
