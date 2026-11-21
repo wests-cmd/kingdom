@@ -20,6 +20,7 @@ export default function Tasks() {
   const {data: taskData, error: loadError, refresh: loadTasks} = useLiveData("/tasks", 3000)
 
   const tasks = taskData || []
+  const counts = taskCounts(tasks)
 
   const [taskMode, setTaskMode] = useState("mission")
 
@@ -196,7 +197,7 @@ export default function Tasks() {
       <section><h3>Missions</h3>{(missions||[]).map(item=><article className="task-record" key={item.id}><h4>{item.plan.title}</h4><p>{item.status.replaceAll('_',' ')} · revision {item.version}</p><p>Deliverables: {item.plan.deliverables.join('; ')}</p>{item.plan.missing_requirements.map((r,i)=><p role="status" key={i}>Needed: {r}</p>)}<ol>{item.plan.steps.map(step=><li key={step.id}>{step.title} · {step.kind} · {item.steps[step.id]?.status||'not started'}<small> — {step.acceptance}</small></li>)}</ol>{item.placement_wait&&<p role="status">{item.placement_wait.reason} · {item.placement_wait.computer_id}</p>}{item.failure&&<p role="alert">{item.failure}</p>}{item.status==='draft'&&<button disabled={submitting||item.plan.missing_requirements.length>0} onClick={()=>missionAction(item,'approve')}>Approve this plan and start</button>}{['approved','running'].includes(item.status)&&<><button disabled={submitting} onClick={()=>missionAction(item,'advance')}>Continue next ready step</button><button disabled={submitting} onClick={()=>missionAction(item,'cancel')}>Cancel mission</button></>}{item.report?.length>0&&<details><summary>Completion report and why</summary>{item.report.map(r=><p key={r.task_id}>{r.step}: {r.why} · evidence task {r.task_id}</p>)}</details>}</article>)}</section>
 
       <h4>Recorded tasks ({tasks.length})</h4>
-      {taskData && <p className="muted">Recorded: {taskCounts(tasks).queued} waiting to start · {taskCounts(tasks).running} assigned/running · {taskCounts(tasks).approvals} waiting for approval · {taskCounts(tasks).recovery} blocked/recovery · {taskCounts(tasks).completed} completed · {taskCounts(tasks).failed} failed. This is not an estimate of time remaining.</p>}
+      {taskData && <p className="muted">Recorded: {counts.queued} waiting to start · {counts.running} assigned/running · {counts.approvals} waiting for approval · {counts.recovery} blocked/recovery · {counts.completed} completed · {counts.failed} failed. This is not an estimate of time remaining.</p>}
 
       <label><input type="checkbox" checked={developerView} onChange={event => setDeveloperView(event.target.checked)}/>Show developer diagnostics for these owner-authorized tasks</label>
 
