@@ -7,6 +7,13 @@ on:
     branches: [ main, master ]
 
 jobs:
+  audit-docker-preinstall:
+    name: Verify Docker dependency audit stage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker audit stage only (no pip or npm execution)
+        run: docker build --file Dockerfile --target dependency-audit --tag kingdom-dependency-audit .
   test-backend:
     name: Backend Tests & Distributed E2E
     runs-on: ubuntu-latest
@@ -58,7 +65,7 @@ jobs:
   build-desktop-release:
     name: Package Desktop Release
     runs-on: ubuntu-latest
-    needs: [test-backend, build-frontend]
+    needs: [test-backend, build-frontend, audit-docker-preinstall]
     steps:
       - uses: actions/checkout@v4
       - name: Set up Node.js 24 & Python 3.12
