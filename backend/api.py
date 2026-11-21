@@ -638,6 +638,33 @@ def event_history(limit: int = Query(default=50, ge=1, le=200), event_type: str 
     events = engine.events.history(200 if event_type else limit)
     return [event for event in events if not event_type or event["event_type"] == event_type][-limit:]
 
+@router.get("/notifications")
+def notification_history(limit: int = Query(default=50, ge=1, le=100)):
+    """Durable, owner-only recent events for the UI: never expose payload contents."""
+    from backend.storage.repository import event_repo
+    allowed = {
+        "task.failed", "task.completed", "task.cancelled", "task.recovery_required",
+        "governance.approval_required", "runtime.scheduler_tick_error",
+    }
+    try:
+        rows = event_repo.query(limit=300)  # Newest first, bounded database read.
+    except Exception:
+        raise HTTPException(status_code=503, detail="Notification history unavailable") from None
+    messages = []
+    for event in rows:
+        if event.get("event_type") not in allowed:
+            continue
+        messages.append({
+            "event_id": event.get("event_id"),
+            "event_type": event.get("event_type"),
+            "timestamp": event.get("timestamp"),
+            "task_id": event.get("task_id"),
+        })
+        if len(messages) >= limit:
+            break
+    return list(reversed(messages))
+
+
 @router.get("/knights")
 def knights():
     return engine.swarm.status()
