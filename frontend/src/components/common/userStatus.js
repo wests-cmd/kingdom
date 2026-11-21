@@ -152,3 +152,48 @@ export function plainLanguageOverview({connection, lastUpdated, runtime, securit
     counts, stale: false
   }
 }
+
+const EVENTS = Object.freeze({
+  'task.queued': {
+    title: 'A task was added to the queue',
+    explanation: 'The request was saved. Execution has not been confirmed.'
+  },
+  'task.waiting_approval': {
+    title: 'A task is waiting for approval',
+    explanation: 'Review the exact request before deciding whether it can continue.'
+  },
+  'task.running': {
+    title: 'Task execution started',
+    explanation: 'This records a start, not a successful finish.'
+  },
+  'task.completed': {
+    title: 'Task marked completed',
+    explanation: 'Check the task result and verification evidence to understand what was actually done.'
+  },
+  'task.failed': {
+    title: 'A task failed',
+    explanation: 'The task did not complete successfully. Review the failure record.'
+  },
+  'task.cancelled': {
+    title: 'A task was cancelled',
+    explanation: 'Kingdom recorded a cancellation, not a completed result.'
+  },
+  'governance.approval_required': {
+    title: 'Kingdom requested your approval',
+    explanation: 'An action is waiting for your authorization. Inspect the request before approving.'
+  },
+  'runtime.started': {
+    title: 'Runtime was started',
+    explanation: 'Task processing is enabled. This does not prove any particular task finished.'
+  },
+  'runtime.stopped': {
+    title: 'Runtime was stopped',
+    explanation: 'New task processing was stopped; confirm the status of any ongoing work separately.'
+  }
+})
+export function eventInfo(value) {
+  return typeof value === 'string' && Object.hasOwn(EVENTS, value)
+    ? EVENTS[value]
+    : {title: 'Kingdom recorded a system event',
+       explanation: 'This event has no beginner explanation yet. Its recorded type is available under technical details.'}
+}
