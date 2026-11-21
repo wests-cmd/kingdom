@@ -95,7 +95,7 @@ function OwnerApp() {
 
   const renderPage = () => {
     switch (currentPage) {
-      case "Dashboard": return <Dashboard />
+      case "Dashboard": return <Dashboard onNavigate={setCurrentPage} />
       case "Swarm": return <Swarm interfaceMode={interfaceMode}/>
       case "Runtime": return <Runtime />
       case "Tasks": return <Tasks />
