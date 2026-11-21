@@ -1,12 +1,27 @@
 # Kingdom
 
+## Install Kingdom — no terminal needed
+
+**Choose your computer and click its installer.** This is the complete native desktop app; you do **not** need to clone the repository, install Python/Node/Docker, or choose **Code → Download ZIP**.
+
+| Computer | Download Kingdom v1.2.6 |
+| --- | --- |
+| Windows 64-bit (Intel/AMD) | **[Download Windows installer (.exe)](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/Kingdom-Setup-1.2.6.exe)** |
+| Intel Mac (not Apple Silicon) | **[Download macOS installer (.dmg)](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/Kingdom-1.2.6.dmg)** |
+| Linux 64-bit (Intel/AMD) | **[Download Linux AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/Kingdom-1.2.6.AppImage)** |
+| Debian/Ubuntu 64-bit | **[Download Debian package (.deb)](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/kingdom-desktop_1.2.6_amd64.deb)** |
+
+**After downloading:** open the package, follow your operating system's normal install steps, then launch **Kingdom**. Follow guided setup, choose a profile, select **Runtime → Start Runtime**, and try **Tasks → Analyze text**. That first built-in task does not need an external AI model. Check its status and result.
+
+These Windows/macOS packages are **unsigned**, and macOS is **not notarized**. Respect your operating system's security warnings; do not turn off security protections to force installation. Apple Silicon, Android APK and iOS IPA release packages are not supplied. [See all current release assets](https://github.com/wests-cmd/kingdom/releases/latest) and [troubleshooting steps](docs/GETTING_STARTED_VIDEO.md).
+
 ## Watch: Download and use Kingdom (beginner video)
 
 [![Kingdom getting started: from GitHub to your first task](https://raw.githubusercontent.com/wests-cmd/kingdom/main/docs/media/kingdom-getting-started-preview.gif)](https://github.com/wests-cmd/kingdom/blob/main/docs/media/kingdom-getting-started.mp4)
 
-**[Play the getting-started tutorial (video with narration)](https://github.com/wests-cmd/kingdom/blob/main/docs/media/kingdom-getting-started.mp4)** · [Read the step-by-step transcript](docs/GETTING_STARTED_VIDEO.md)
+**[Watch the illustrated v1.2.6 install-and-first-task video (with narration)](https://github.com/wests-cmd/kingdom/blob/main/docs/media/kingdom-getting-started.mp4)** · [Read the step-by-step transcript](docs/GETTING_STARTED_VIDEO.md)
 
-Start right here on the Kingdom GitHub page. The video shows where to click to get the published native installer, how to launch the app, configure a model when needed, start Runtime, run **Tasks → Analyze text**, and check the result. It uses illustrated screens for **v1.2.4**, not a live app recording. The [current release](https://github.com/wests-cmd/kingdom/releases/latest) and your OS security protections remain authoritative; native Windows/macOS packages are unsigned.
+Start right here on the Kingdom GitHub page. The video shows where to click to get the published native installer, how to launch the app, configure a model when needed, start Runtime, run **Tasks → Analyze text**, and check the result. It uses illustrated v1.2.6 screens, not a live GitHub or app recording. The [current release](https://github.com/wests-cmd/kingdom/releases/latest) and your OS security protections remain authoritative; native Windows/macOS packages are unsigned.
 
 ## Overview
 
@@ -28,26 +43,11 @@ multi-computer security acceptance or OS signing. See [open security acceptance]
 
 ### Install the desktop app
 
-Choose one matching installer; native packages include their runtime.
+The **four matching, one-click downloads are at the top of this README**. Open the selected package; native releases include the backend runtime. Do not download the source ZIP or a backend-only executable when you want the desktop app.
 
-| Computer | Pinned v1.2.6 installer |
-| --- | --- |
-| Windows Intel/AMD 64-bit | [Kingdom-Setup-1.2.6.exe](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/Kingdom-Setup-1.2.6.exe) |
-| macOS Intel | [Kingdom-1.2.6.dmg](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/Kingdom-1.2.6.dmg) |
-| Linux Intel/AMD 64-bit | [Kingdom-1.2.6.AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/Kingdom-1.2.6.AppImage) |
-| Debian/Ubuntu amd64 | [kingdom-desktop_1.2.6_amd64.deb](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/kingdom-desktop_1.2.6_amd64.deb) |
+For integrity checks, use the [v1.2.6 SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/SHA256SUMS) and [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/release-manifest.json). The macOS package targets **Intel**; Windows/macOS are unsigned, and the Mac package is not notarized. These packages are not ARM64 or mobile releases. If app-control blocks the install, do not bypass protections: see [beginner troubleshooting](docs/GETTING_STARTED_VIDEO.md) or [report a problem](https://github.com/wests-cmd/kingdom/issues).
 
-Check [SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/SHA256SUMS)
-and the [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/release-manifest.json).
-Windows/macOS packages are unsigned; macOS is not notarized. Native ARM64,
-Android and iOS release installers are not supplied by this release. Operating
-system protections remain in force. The [browser app](docs/FREE_WEB_APP.md) is a
-separate option that needs a running reachable server.
-
-Open the app, complete setup, choose a profile, start Runtime, then submit
-**Tasks → Analyze text** and inspect its actual result. AI generation needs a
-configured provider. An optional opening passcode starts disabled; remote access
-still needs its own authentication. [Mission guide](docs/MISSION_WORKSPACE.md).
+You can test built-in text analysis without a model. For model-generated answers, configure and test a supported provider under **Routing**. An optional local opening passcode starts disabled; pairing and owner access require separate authorization. [Mission guide](docs/MISSION_WORKSPACE.md).
 
 ## Project map
 
