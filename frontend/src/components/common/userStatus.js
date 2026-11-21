@@ -1,6 +1,31 @@
 // Read-only explanations of actual Kingdom state. Never infer work completion
 // from model text, network connectivity, or an allocated worker.
 const STATES = Object.freeze({
+  created: {
+    label: 'Request created',
+    explanation: 'The task record exists. Kingdom has not started executing it.',
+    next: 'Check whether the request passes validation and enters the queue.'
+  },
+  validating: {
+    label: 'Checking the request',
+    explanation: 'Kingdom is reviewing the task requirements before execution.',
+    next: 'Wait for a permission decision or a queued task.'
+  },
+  waiting_authorization: {
+    label: 'Checking permissions',
+    explanation: 'Execution is waiting for an authorization decision. This does not automatically mean a human approval is needed.',
+    next: 'Check the recorded decision; human requests appear separately under Security Approvals.'
+  },
+  authorized: {
+    label: 'Allowed to proceed',
+    explanation: 'Authorization was recorded; execution has not yet been confirmed.',
+    next: 'Wait for the task to be queued or assigned.'
+  },
+  approved: {
+    label: 'Approved, not started',
+    explanation: 'Approval was recorded. The task is not yet confirmed as running.',
+    next: 'Check the queue and whether Runtime is running.'
+  },
   queued: {
     label: 'Waiting in line',
     explanation: 'Kingdom saved the task, but execution has not started.',
@@ -21,6 +46,31 @@ const STATES = Object.freeze({
     explanation: 'Kingdom recorded that execution started. The result has not been confirmed.',
     next: 'Check back for a completed result or a failure. You can inspect task details.'
   },
+  verifying: {
+    label: 'Checking the result',
+    explanation: 'Kingdom is in the verification stage. Success has not yet been established.',
+    next: 'Review the independent verification result when it is recorded.'
+  },
+  cancel_requested: {
+    label: 'Cancellation requested',
+    explanation: 'A cancellation was requested, but it has not yet been confirmed complete.',
+    next: 'Wait for the cancelled state or check the task record.'
+  },
+  expired: {
+    label: 'Assignment expired',
+    explanation: 'The task or worker lease expired. Do not assume the worker completed it.',
+    next: 'Review whether Kingdom requeues the task or asks for recovery.'
+  },
+  denied: {
+    label: 'Permission denied',
+    explanation: 'An authorization or approval decision prevented this action from proceeding.',
+    next: 'Review the denied request and its scope; do not bypass the permission boundary.'
+  },
+  unknown: {
+    label: 'Needs state review',
+    explanation: 'Kingdom marked the task state as unknown. Completion and authorization cannot be assumed.',
+    next: 'Review persisted work evidence and the recovery record before resuming.'
+  },
   recovery_required: {
     label: 'Recovery needs review',
     explanation: 'Kingdom recorded a problem that requires recovery before the work can continue.',
@@ -35,6 +85,11 @@ const STATES = Object.freeze({
     label: 'Failed',
     explanation: 'The task did not complete successfully.',
     next: 'Check the failure explanation and developer diagnostics if needed before retrying.'
+  },
+  succeeded: {
+    label: 'Recorded as successful',
+    explanation: 'Kingdom recorded a successful task state; external outcomes still need appropriate evidence.',
+    next: 'Inspect the result and any independent verification before accepting it.'
   },
   cancelled: {
     label: 'Cancelled',
@@ -83,13 +138,13 @@ export function taskCounts(tasks) {
     completed: 0, failed: 0, cancelled: 0, unknown: 0}
   for (const task of tasks) {
     const status = normalizedTaskStatus(task?.status)
-    if (status === 'queued' || status === 'pending') result.queued++
-    else if (status === 'running' || status === 'leased') result.running++
+    if (['queued','pending','created','validating','waiting_authorization','authorized','approved'].includes(status)) result.queued++
+    else if (['running','leased','verifying','cancel_requested'].includes(status)) result.running++
     else if (status === 'waiting_approval') result.approvals++
-    else if (status === 'recovery_required' || status === 'blocked' || status === 'paused') result.recovery++
-    else if (status === 'completed') result.completed++
+    else if (['recovery_required','blocked','paused','expired','denied'].includes(status)) result.recovery++
+    else if (['completed','succeeded'].includes(status)) result.completed++
     else if (status === 'failed') result.failed++
-    else if (status === 'cancelled' || status === 'canceled') result.cancelled++
+    else if (['cancelled','canceled'].includes(status)) result.cancelled++
     else result.unknown++
   }
   return result
