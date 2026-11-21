@@ -1,6 +1,22 @@
 # Understanding what Kingdom is doing
 
-This guide describes the **proposed plain-language status UI** in the [user-visibility PR](https://github.com/wests-cmd/kingdom/pulls). It is not a claim that the already published v1.2.6 installer contains the new screens. Wait for a new reviewed release and check your installed version.
+The plain-language status vocabulary was merged in [PR #180](https://github.com/wests-cmd/kingdom/pull/180). The simplified three-section Home layout is a separate candidate change. **Published v1.2.6 installers do not yet contain either update.** Check the installed release version, not merely GitHub main, before expecting these screens.
+
+## The beginner Home format
+
+Home should answer three questions, in this order:
+
+1. **Needs your attention** — security requests, failed or blocked work, and what review is required. Approvals stay in the authenticated permission screen; a dashboard shortcut must never approve an action.
+2. **Working now** — a short list of tasks waiting, assigned, running, or verifying, using recorded statuses only. Each shows a next step, not an invented percent-complete.
+3. **Recently finished** — a short list of completed or cancelled tasks, with any verified execution receipts and an explicit reminder that external outcomes require separate evidence.
+
+Above the lists, **Kingdom right now** shows the last complete status refresh, whether the runtime is running, waiting/assigned task counts, security request count, and completed task count. Unknown or failed refreshes display as unknown/stale rather than zero. Start/Stop Runtime and Task/Workbench shortcuts remain visible.
+
+Below the lists, **More information** links to computers, approvals, recovery and an intentionally hidden technical view. The technical view loads the existing orchestration, hierarchy, approvals and graph components only when opened, reducing the initial screen's information density and polling.
+
+The beginner Home must not print task prompts, internal source paths, sensitive metadata, or arbitrary model prose in a public status summary. Explicit task details retain the authorized technical view. Status colors never replace text labels; keyboard buttons, aria roles and responsive layouts remain required.
+
+**No new execution authority:** this layout reads existing APIs. No permission, task transition, pairing, or verified-result behavior changes.
 
 ## Kingdom right now
 
