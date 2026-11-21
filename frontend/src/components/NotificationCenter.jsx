@@ -3,7 +3,7 @@ import useLiveData from '../hooks/useLiveData'
 import {notificationItems} from './common/taskVisibility'
 
 export default function NotificationCenter({onNavigate}) {
- const feed=useLiveData('/events?limit=100',10000)
+ const feed=useLiveData('/notifications?limit=100',10000)
  const items=useMemo(()=>notificationItems(feed.data),[feed.data])
  const [seen,setSeen]=useState(null)
  const [open,setOpen]=useState(false)
