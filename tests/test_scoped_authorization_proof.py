@@ -1,70 +1,138 @@
-"""Negative-fence regression: an agent cannot declare its own high-risk approval.
+"""Regression for the secondary scoped authorization helper.
 
-This tests the secondary ScopedAuthorizationEngine helper, NOT all Kingdom
-effect-producing RPC paths or the installed multi-node authorization boundary.
+This exercises durable ApprovalEngine consumption. It does NOT prove RPC identity
+binding, OS permission enforcement, or installed-multi-node acceptance.
 """
+import tempfile
 import unittest
+from pathlib import Path
+
+from backend.security.approval_engine import ApprovalEngine
 from backend.security.identity_fabric import IdentityFabric, IdentityType
 from backend.security.scoped_authorization import (
     AuthorizationRequest, ScopedAuthorizationEngine,
 )
+from backend.storage.db import Database
 
 
 class ScopedAuthorizationProofTests(unittest.TestCase):
     def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.approvals = ApprovalEngine(database=Database(Path(tmp.name) / "approvals.sqlite"))
         self.fabric = IdentityFabric()
         self.actor = self.fabric.register_identity(
-            IdentityType.KNIGHT, "Unprivileged worker",
+            IdentityType.KNIGHT, "Approved worker",
             capabilities=["filesystem.delete", "filesystem.read"],
             trust_level="TRUSTED",
         )
         self.fabric.activate_identity(self.actor.identity_id)
 
     def request(self, **changes):
-        data = dict(actor_identity_id=self.actor.identity_id,
-                    capability="filesystem.delete",
-                    operation="Delete one reviewed temporary file",
-                    resource="scratch/approved.txt",
-                    context={"approved_by_commander": True})
+        data = dict(
+            actor_identity_id=self.actor.identity_id,
+            capability="filesystem.delete",
+            operation="Delete one reviewed temporary file",
+            resource="scratch/approved.txt",
+            context={"approved_by_commander": True},
+        )
         data.update(changes)
         return AuthorizationRequest(**data)
 
-    def test_untrusted_approval_claim_does_not_grant_high_risk_at_any_level(self):
-        engine = ScopedAuthorizationEngine(self.fabric)
-        for level in (1, 3, 4, 5):
+    def approve_exact(self, *, resource="scratch/approved.txt", data_scope="general"):
+        created = self.approvals.create_request(
+            capability="filesystem.delete",
+            operation="Delete one reviewed temporary file",
+            requesting_actor=self.actor.identity_id,
+            parameters={"resource": resource, "data_scope": data_scope},
+            ttl_seconds=120,
+        )
+        self.approvals.approve(created["id"], approver="owner")
+        return created["id"]
+
+    def test_forged_claim_and_numeric_level_cannot_self_authorize(self):
+        for level in (1, 3, 4, 5, 999):
             with self.subTest(level=level):
-                decision = engine.evaluate_authorization(self.request(), required_governance_level=level)
-                self.assertFalse(decision.allowed)
-                self.assertTrue(decision.requires_human_approval)
+                result = ScopedAuthorizationEngine(self.fabric, self.approvals).evaluate_authorization(
+                    self.request(), required_governance_level=level)
+                self.assertFalse(result.allowed)
+                self.assertTrue(result.requires_human_approval)
 
-    def test_only_exact_host_verified_scope_succeeds(self):
-        original = self.request()
-        key = (original.actor_identity_id, original.capability,
-               original.operation, original.resource)
-        def verifier(req):
-            return (req.actor_identity_id, req.capability, req.operation, req.resource) == key
-        engine = ScopedAuthorizationEngine(self.fabric, approval_validator=verifier)
-        self.assertTrue(engine.evaluate_authorization(original, required_governance_level=4).allowed)
-        self.assertFalse(engine.evaluate_authorization(
-            self.request(operation="Delete everything"), required_governance_level=5).allowed)
-        self.assertFalse(engine.evaluate_authorization(
-            self.request(resource="private/owner-token"), required_governance_level=5).allowed)
-        self.assertFalse(engine.evaluate_authorization(original, required_governance_level=3).allowed)
+    def test_missing_store_denies_even_with_approval_pointer(self):
+        approval_id = self.approve_exact()
+        request = self.request(context={"approval_id": approval_id, "approved_by_commander": True})
+        self.assertFalse(ScopedAuthorizationEngine(self.fabric).evaluate_authorization(
+            request, required_governance_level=5).allowed)
 
-    def test_verifier_error_fails_closed(self):
-        def unavailable(req):
-            raise OSError("Approval database unavailable")
-        engine = ScopedAuthorizationEngine(self.fabric, approval_validator=unavailable)
+    def test_exact_persisted_approval_is_consumed_once_even_at_level_three(self):
+        approval_id = self.approve_exact()
+        request = self.request(context={"approval_id": approval_id, "approved_by_commander": True})
+        engine = ScopedAuthorizationEngine(self.fabric, self.approvals)
+        self.assertTrue(engine.evaluate_authorization(
+            request, required_governance_level=3).allowed)
+        self.assertEqual(self.approvals.get_request(approval_id)["status"], "consumed")
         self.assertFalse(engine.evaluate_authorization(
-            self.request(), required_governance_level=5).allowed)
+            request, required_governance_level=5).allowed)
 
-    def test_revoked_identity_denied_even_if_verifier_accepts(self):
-        engine = ScopedAuthorizationEngine(self.fabric, approval_validator=lambda _: True)
-        self.fabric.revoke_identity(self.actor.identity_id, "Device revoked")
+    def test_mismatched_operation_actor_resource_and_scope_do_not_spend_approval(self):
+        approval_id = self.approve_exact()
+        engine = ScopedAuthorizationEngine(self.fabric, self.approvals)
+        other = self.fabric.register_identity(
+            IdentityType.KNIGHT, "Another worker",
+            capabilities=["filesystem.delete"], trust_level="TRUSTED")
+        self.fabric.activate_identity(other.identity_id)
+        for changes in (
+            {"operation": "Delete every file"},
+            {"resource": "private/owner-token"},
+            {"data_scope": "restricted"},
+            {"actor_identity_id": other.identity_id},
+        ):
+            with self.subTest(changes=changes):
+                req = self.request(context={"approval_id": approval_id}, **changes)
+                self.assertFalse(engine.evaluate_authorization(req).allowed)
+                self.assertEqual(self.approvals.get_request(approval_id)["status"], "approved")
+        self.assertTrue(engine.evaluate_authorization(
+            self.request(context={"approval_id": approval_id})).allowed)
+
+    def test_scope_denial_does_not_spend_approval(self):
+        approval_id = self.approve_exact(data_scope="finance")
+        self.actor.trust_level = "UNVERIFIED"
+        request = self.request(data_scope="finance",
+            context={"approval_id": approval_id, "restricted_data_scopes": ["finance"]})
+        engine = ScopedAuthorizationEngine(self.fabric, self.approvals)
+        self.assertFalse(engine.evaluate_authorization(request).allowed)
+        self.assertEqual(self.approvals.get_request(approval_id)["status"], "approved")
+        self.actor.trust_level = "TRUSTED"
+        self.assertTrue(engine.evaluate_authorization(request).allowed)
+
+    def test_expired_approval_is_rejected(self):
+        approval_id = self.approve_exact()
+        record = self.approvals.get_request(approval_id)
+        record["expires_at"] = "2000-01-01T00:00:00+00:00"
+        self.approvals._save(record)
+        engine = ScopedAuthorizationEngine(self.fabric, self.approvals)
         self.assertFalse(engine.evaluate_authorization(
-            self.request(), required_governance_level=5).allowed)
+            self.request(context={"approval_id": approval_id})).allowed)
 
-    def test_low_risk_read_remains_available(self):
+    def test_revoked_identity_denied_without_spending_approval(self):
+        approval_id = self.approve_exact()
+        engine = ScopedAuthorizationEngine(self.fabric, self.approvals)
+        self.fabric.revoke_identity(self.actor.identity_id, "Owner revocation")
+        result = engine.evaluate_authorization(
+            self.request(context={"approval_id": approval_id}))
+        self.assertFalse(result.allowed)
+        self.assertEqual(self.approvals.get_request(approval_id)["status"], "approved")
+
+    def test_storage_failure_denies(self):
+        class BrokenApprovals:
+            def consume(self, *args, **kwargs):
+                raise OSError("approval database unavailable")
+
+        engine = ScopedAuthorizationEngine(self.fabric, BrokenApprovals())
+        self.assertFalse(engine.evaluate_authorization(
+            self.request(context={"approval_id": "appr_unavailable"})).allowed)
+
+    def test_low_risk_read_remains_available_without_approval(self):
         engine = ScopedAuthorizationEngine(self.fabric)
         result = engine.evaluate_authorization(self.request(
             capability="filesystem.read", operation="Read reviewed log",
