@@ -2,6 +2,8 @@ import React, {useState} from 'react'
 import api from '../api'
 import useLiveData from '../hooks/useLiveData'
 import OrchestrationBoard from '../components/OrchestrationBoard'
+import SystemHealth from '../components/SystemHealth'
+import NotificationCenter from '../components/NotificationCenter'
 import ApprovalsView from '../components/security/ApprovalsView'
 import SwarmGraph from '../components/graphs/SwarmGraph'
 import ComputerIdentity from '../components/ComputerIdentity'
@@ -52,6 +54,7 @@ export default function Dashboard({onNavigate,interfaceMode='easy'}) {
   const tasksFeed=useLiveData('/tasks',3000)
   const securityFeed=useLiveData('/security/status',5000)
   const [advancedOverride,setAdvancedOverride]=useState(null)
+  const [showHealth,setShowHealth]=useState(false)
   const advanced=advancedOverride===null ? interfaceMode==='advanced' : advancedOverride
   const [busy,setBusy]=useState(false)
   const [actionError,setActionError]=useState('')
@@ -144,6 +147,8 @@ export default function Dashboard({onNavigate,interfaceMode='easy'}) {
       </>}
     </section>
 
+    <NotificationCenter onNavigate={onNavigate}/>
+
     <WorkSection heading="Working now" description="Tasks queued, assigned, or executing. Assigned does not mean completed."
       tasks={groups?.active || []} dataReady={current} onNavigate={onNavigate}
       emptyMessage="No tasks are recorded as waiting or in progress."/>
@@ -158,9 +163,11 @@ export default function Dashboard({onNavigate,interfaceMode='easy'}) {
         <button type="button" onClick={()=>onNavigate?.('Nodes')}>Connected computers</button>
         <button type="button" onClick={()=>onNavigate?.('Governance')}>Permissions</button>
         <button type="button" onClick={()=>onNavigate?.('Recovery')}>Recovery</button>
+        <button type="button" aria-expanded={showHealth} onClick={()=>setShowHealth(show=>!show)}>{showHealth?'Hide health':'Computers & model health'}</button>
         <button type="button" aria-expanded={advanced} onClick={()=>setAdvancedOverride(!advanced)}>
           {advanced?'Hide technical details':'Show technical details'}</button>
       </div>
+      {showHealth && <SystemHealth/>}
       {advanced && <AdvancedHomeDetails/>}
     </section>
   </div>
