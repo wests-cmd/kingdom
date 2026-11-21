@@ -47,11 +47,12 @@ function WorkSection({heading,description,tasks,dataReady,finished=false,onNavig
   </section>
 }
 
-export default function Dashboard({onNavigate}) {
+export default function Dashboard({onNavigate,interfaceMode='easy'}) {
   const statusFeed=useLiveData('/status',3000)
   const tasksFeed=useLiveData('/tasks',3000)
   const securityFeed=useLiveData('/security/status',5000)
-  const [advanced,setAdvanced]=useState(false)
+  const [advancedOverride,setAdvancedOverride]=useState(null)
+  const advanced=advancedOverride===null ? interfaceMode==='advanced' : advancedOverride
   const [busy,setBusy]=useState(false)
   const [actionError,setActionError]=useState('')
   const runtime=statusFeed.data
@@ -157,7 +158,7 @@ export default function Dashboard({onNavigate}) {
         <button type="button" onClick={()=>onNavigate?.('Nodes')}>Connected computers</button>
         <button type="button" onClick={()=>onNavigate?.('Governance')}>Permissions</button>
         <button type="button" onClick={()=>onNavigate?.('Recovery')}>Recovery</button>
-        <button type="button" aria-expanded={advanced} onClick={()=>setAdvanced(show=>!show)}>
+        <button type="button" aria-expanded={advanced} onClick={()=>setAdvancedOverride(!advanced)}>
           {advanced?'Hide technical details':'Show technical details'}</button>
       </div>
       {advanced && <AdvancedHomeDetails/>}
