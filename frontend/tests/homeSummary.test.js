@@ -46,3 +46,12 @@ test('verified receipts report their limited scope, not proof of a completed pro
   const signed={status:'succeeded',result:{verification:{state:'VERIFIED'},output:{kind:'native_tool',tool:'text.analyze@1.0.0'}}}
   assert.match(homeTaskEvidence(signed),/1 verified execution receipt recorded/)
 })
+
+test('verification marker on model prose never becomes a verified execution receipt',()=>{
+  const modelOnly={status:'completed',result:{
+    verification:{state:'VERIFIED'},
+    results:[{outcome:{kind:'model_response',output:{text:'I installed it'}},verification:{state:'VERIFIED'}}]
+  }}
+  assert.match(homeTaskEvidence(modelOnly),/No verified execution receipt/)
+  assert.match(homeTaskEvidence({status:'completed',result:{verification:{state:'VERIFIED'}}}),/No verified execution receipt/)
+})
