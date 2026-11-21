@@ -12,7 +12,7 @@ Home should answer three questions, in this order:
 
 Above the lists, **Kingdom right now** shows the last complete status refresh, whether the runtime is running, waiting/assigned task counts, security request count, and completed task count. Unknown or failed refreshes display as unknown/stale rather than zero. Start/Stop Runtime and Task/Workbench shortcuts remain visible.
 
-Below the lists, **More information** links to computers, approvals, recovery and an intentionally hidden technical view. The technical view loads the existing orchestration, hierarchy, approvals and graph components only when opened, reducing the initial screen's information density and polling.
+Below the lists, **More information** links to computers, approvals, recovery and an intentionally hidden technical view. In Easy mode, the technical view loads the existing orchestration, hierarchy, approvals and graph components only when opened, reducing the initial screen's information density and polling. In Advanced mode those details open by default, and can still be collapsed.
 
 The beginner Home must not print task prompts, internal source paths, sensitive metadata, or arbitrary model prose in a public status summary. Explicit task details retain the authorized technical view. Status colors never replace text labels; keyboard buttons, aria roles and responsive layouts remain required.
 
