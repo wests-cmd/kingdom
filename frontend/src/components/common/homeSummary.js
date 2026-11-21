@@ -25,8 +25,11 @@ export function homeTaskEvidence(task) {
   if (!FINISHED.has(state) || ['cancelled','canceled'].includes(state)) return null
   if (!task?.result) return 'No result record available; completion cannot be verified here.'
   const records = taskEvidenceRecords(task.result)
-  const verifiedReceipts = records.filter(r=>r?.verification?.state === 'VERIFIED').length
-    + (records.length ? 0 : (task.result?.verification?.state === 'VERIFIED' ? 1 : 0))
+  const verifiedReceipts = records.filter(r =>
+    r?.verification?.state === 'VERIFIED' &&
+    r?.outcome?.kind !== 'model_response' &&
+    typeof r?.outcome?.tool === 'string'
+  ).length
   return verifiedReceipts
     ? `${verifiedReceipts} verified execution receipt${verifiedReceipts===1?'':'s'} recorded. Check the scope before accepting the result.`
     : 'No verified execution receipt shown. A model response alone cannot prove an external outcome.'
