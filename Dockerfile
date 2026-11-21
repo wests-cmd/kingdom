@@ -34,12 +34,18 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --no-cache-dir --upgrade pip==26.3 \
+    && python -m pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
 # Copy prebuilt frontend static distribution
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
+
+# Audit the actual final image, including packaging tools inherited from its base.
+# Native installer audits cannot prove this separate container inventory is safe.
+RUN python scripts/audit_known_compromises.py --installed \
+    && python scripts/audit_release_dependencies.py
 
 EXPOSE 8000
 
