@@ -109,7 +109,13 @@ export function plainLanguageOverview({connection, lastUpdated, runtime, securit
     next: 'Check whether the local Kingdom service is running, then refresh this page.',
     counts, stale: true
   }
-  if (runtime?.running !== true) return {
+  if (typeof runtime?.running !== 'boolean' || counts === null) return {
+    headline: 'Some status information is unavailable',
+    explanation: 'Kingdom responded, but not every required status field was available.',
+    next: 'Refresh the dashboard or check Runtime and Tasks before assuming work is stopped or complete.',
+    counts, stale: false
+  }
+  if (runtime.running !== true) return {
     headline: 'Runtime is stopped',
     explanation: 'Kingdom is reachable, but it is not currently processing new tasks.',
     next: 'Choose Start Runtime when you are ready for approved tasks to run.',
