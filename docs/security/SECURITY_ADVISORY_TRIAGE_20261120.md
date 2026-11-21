@@ -30,6 +30,7 @@ Existing reusable code:
 
 - `scripts/audit_known_compromises.py`: network-free, standard-library static check for the named affected packages in recursively included Python requirements and npm direct/lock manifests. Any unpinned watched package or affected pinned version fails; missing/invalid manifest blocks the scan. `--installed` additionally scans installed Python metadata, but that check necessarily happens after Python startup.
 - `tests/test_known_compromise_gate.py`: adversarial fixtures for malicious `.pth` package versions, old MCP Git releases, npm transitive malware, registry SSRF version, missing inventory, and nested Python requirements.
+- `scripts/install.sh`: reject affected known packages before local source installation and use locked `npm ci` instead of unrestricted `npm install` for the frontend.
 - `Dockerfile`: a separately cached Python pre-install audit stage gates both the Node frontend stage and final Python runtime stage, including the independent mobile gateway manifest.
 - `.github/workflows/ci.yml`, `.github/workflows/release.yml`: fail the jobs **before** `pip`/`npm` installation if a known compromised dependency appears in checked manifests; keep the existing OSV release audit.
 - **Separate policy review:** the secondary `ScopedAuthorizationEngine` request-context approval bypass was identified. Its proposed repair, owner-approval integration requirements, and negative tests have been moved into **draft PR #173**, intentionally NOT part of this supply-chain PR.

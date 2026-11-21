@@ -79,6 +79,15 @@ class AdvisoryGateTests(unittest.TestCase):
                        "name": "mem0-mcp-server", "version": "0.0.1"}}}))
         self.assertEqual(audit.scan(self.root)["status"], "blocked")
 
+    def test_local_installer_audits_before_any_package_execution(self):
+        installer = (SCRIPT.parents[1] / "scripts/install.sh").read_text(encoding="utf-8")
+        audit_at = installer.index("python3 scripts/audit_known_compromises.py")
+        pip_at = installer.index("pip install")
+        npm_at = installer.index("npm ci")
+        self.assertLess(audit_at, pip_at)
+        self.assertLess(audit_at, npm_at)
+        self.assertNotIn("npm install", installer)
+
     def test_missing_manifest_is_a_failing_audit(self):
         (self.root / "frontend/package-lock.json").unlink()
         with self.assertRaises(ValueError):
