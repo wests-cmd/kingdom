@@ -1,22 +1,52 @@
-# Scoped authorization: review-required policy change
+# Scoped authorization: review-required trust-boundary change
 
-This PR is intentionally separated from Kingdom's fail-closed supply-chain checks.
-It changes the legacy, secondary ScopedAuthorizationEngine so arbitrary request
-metadata cannot stand in for HUMAN authorization.
+This draft hardens the **secondary** `ScopedAuthorizationEngine` without replacing
+Kingdom's production `ZeroTrust`/execution policy or inventing a second approval
+database. It is not itself authorization for production rollout.
 
-Prior behavior: high-risk request was permitted when caller supplied
-`context["approved_by_commander"] = True` or numeric governance level >=4,
-even if no stored owner approval had been verified.
+## Problem and change
 
-Proposed behavior: high-risk request always needs a trusted host-supplied
-`approval_validator(AuthorizationRequest) -> bool` AND level >=4, and the
-validator must verify an independently stored, precise actor/capability/operation/
-resource approval. Missing validator or exception denies. Low-risk reads remain
-unchanged. The callback is a seam to the EXISTING ApprovalEngine only, not an
-independent new store. The host must not populate it from model/task output.
+Previously a high-risk request could pass by providing
+`context["approved_by_commander"] = True` or choosing a numeric governance
+level >= 4. Neither establishes actual authenticated owner approval.
 
-**Review block:** confirm all actual callers of this secondary class, prove the
-integration with existing owner-authorized approval records before enabling
-high-risk use, and run negative tests on direct/remote effects. This source-only
-patch does not prove any joined-node permission behavior. No autonomous merge
-or production deployment is authorized by this branch.
+The secondary helper now accepts only the **existing durable**
+`ApprovalEngine` supplied by trusted host code. For high-risk requests it
+atomically consumes one stored, unexpired approval matching **all** of:
+
+- authenticated actor identity ID;
+- capability and operation;
+- exact `parameters = {"resource": request.resource, "data_scope": request.data_scope}`.
+
+The untrusted `approval_id` in request context is only a lookup handle. It is
+not proof; the database's exact record and one-time consume are proof of the
+reviewed authorization. Missing approval, no approval engine, revoked/unknown
+identity, mismatch, reuse, expiration or storage failure all deny. A numeric
+`required_governance_level` and `approved_by_commander` do not override this
+requirement. Restricted-scope checks run **before** consuming an approval.
+
+An exact human approval can authorize at any level in this secondary helper;
+the runtime's distinct authenticated **level 5 standing owner authorization**
+continues through `ZeroTrust`/the owner's persisted `ExecutionPolicy`. This
+helper does not mint, infer or override that standing authorization.
+
+## Review and verification limits
+
+- Source regression covers forged claims, levels, exact persistent approval,
+  single consumption, operation/resource/actor/scope drift, expiration,
+  revocation, unavailable approval storage, and low-risk reads in
+  `tests/test_scoped_authorization_proof.py`.
+- The code does **not** independently authenticate the transport actor;
+  the caller must bind `actor_identity_id` to an authenticated OS/RPC identity.
+  Do not pass arbitrary model or network values as identity or policy input.
+- Audit every actual constructor/caller and any data-scope policy caller before
+  promotion. This secondary helper is **not** the installed RPC execution path.
+  Passing source tests and CI does not show the remote effect path enforces it.
+- Do not merge until independently verifying real controller/worker high-risk
+  execution, positive approved actions, false-approval rejection, replay,
+  revocation/restart, and existing standing-owner policy behavior.
+- Issue #172's eight installed-system security commissioning gates remain
+  separate and unverified until supported by real-machine evidence.
+
+Do not auto-merge this draft, bypass repository review, or claim it fixes every
+authorization path. Treat this as a candidate hardening change only.
