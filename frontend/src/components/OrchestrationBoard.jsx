@@ -16,7 +16,7 @@ export default function OrchestrationBoard() {
   finally {setBusy('')}
  }
  return <section className="panel orchestration-board" aria-label="Kingdom orchestration">
-  <div className="section-heading"><div><h2>Kingdom at work</h2><p className="muted">What is running, who is doing it, and what needs attention.</p></div><span className="sync-note">{updated ? `Updated ${updated.toLocaleTimeString()}` : 'Connecting…'}</span></div>
+  <div className="section-heading"><div><h2>Kingdom at work</h2><p className="muted">What is running, who is doing it, and what needs attention. A <strong>Knight</strong> is an approved computer; an <strong>Apprentice</strong> is a software worker on a computer. They are not the same as a model connection.</p></div><span className="sync-note">{updated ? `Updated ${updated.toLocaleTimeString()}` : 'Connecting…'}</span></div>
   {(error || actionError) && <p role="alert" className="notice error">{actionError || error} Last visible data may be out of date.</p>}
   <div className="orchestration-counts">
    <div><strong>{data ? data.counts.knights : '—'}</strong><span>Connected Knight computers</span><small>This controller + {data?.counts.connected_peers ?? '—'} current peers</small><small>{data?.counts.paired_knights ?? '—'} paired peers shown · {data?.counts.unavailable_peers ?? '—'} offline or without a current report</small></div>
