@@ -11,56 +11,41 @@ class HeartbeatManager:
         self.timeout_seconds = timeout_seconds
 
     def ping(self, node_id: str, health: str = "healthy", load_metrics: Optional[Dict[str, Any]] = None, apprentice_inventory=None, native_analysis_return=None) -> Dict[str, Any]:
-        node = node_registry.get_node(node_id)
-        if not node:
-            return {"success": False, "error": f"Node {node_id} not found in cluster registry."}
-
-        state_val = node.node_state
-        if state_val in [NodeState.REVOKED.value, NodeState.REJECTED.value, NodeState.QUARANTINED.value]:
-            return {"success": False, "error": f"Node {node_id} is in invalid state {state_val}."}
-
-        now = time.time()
-        if native_analysis_return is not None:
-            if type(native_analysis_return) is not bool:
-                raise ValueError('Native analysis return support must be an explicit boolean')
-            node.connection_metadata = {**(getattr(node, 'connection_metadata', None) or {}),
-                                        'native_analysis_return': native_analysis_return}
+        if native_analysis_return is not None and type(native_analysis_return) is not bool:
+            raise ValueError('Native analysis return support must be an explicit boolean')
+        report = None
         if apprentice_inventory is not None:
-            if state_val not in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}:
-                return {'success': False, 'error': 'Apprentice inventories require an approved peer'}
             from backend.cluster.apprentice_inventory import validate_inventory
             report = validate_inventory(apprentice_inventory)
-            node.connection_metadata = {**(node.connection_metadata or {}), 'apprentice_inventory': {'received_at': now, 'report': report}}
-        node.last_heartbeat = now
-        node.health = health
-        if load_metrics is not None:
-            meta = node.connection_metadata or {}
-            # A new signed report without usable measurements cannot refresh
-            # the heartbeat while retaining a formerly idle load sample.
-            meta["load_metrics"] = load_metrics
-            node.connection_metadata = meta
+        now = time.time()
 
-        # Transition from DISCONNECTED / RECONNECTING back to CONNECTED
-        if state_val in [NodeState.DISCONNECTED.value, NodeState.RECONNECTING.value, NodeState.APPROVED.value]:
-            # update_node_state reloads the persisted node. Persist this ping
-            # first, or reconnect restores an old timestamp and immediately
-            # expires a freshly issued task lease.
-            node_registry.repo.save(node.to_dict())
-            node_registry.update_node_state(node_id, NodeState.CONNECTED)
-        else:
-            node_registry.repo.save(node.to_dict())
+        # The database, not a node snapshot taken before an HTTP await,
+        # decides whether the identity is still approved. This one transaction
+        # updates liveness fields only: it cannot overwrite grants, fingerprint
+        # or a concurrent owner revocation with stale NodeInfo data.
+        result = node_registry.repo.refresh_heartbeat(
+            node_id, now=now, health=health, load_metrics=load_metrics,
+            apprentice_inventory=report,
+            native_analysis_return=native_analysis_return,
+        )
+        if result is None:
+            return {"success": False, "error": f"Node {node_id} not found in cluster registry."}
+        if not result["accepted"]:
+            return {"success": False,
+                    "error": f"Node {node_id} is not approved for heartbeat in state {result['node_state']}."}
 
+        if result["transitioned"]:
+            event_bus.publish("cluster.node_state_changed", {
+                "node_id": node_id, "old_state": result["previous_state"],
+                "new_state": result["node_state"], "reason": "",
+                "admin_override": False, "actor": "system",
+            }, source="node_registry")
         event_bus.publish("cluster.heartbeat_received", {
-            "node_id": node_id,
-            "health": health,
-            "timestamp": now
+            "node_id": node_id, "health": health, "timestamp": now,
         }, source="heartbeat_manager")
-
         return {
-            "success": True,
-            "node_id": node_id,
-            "node_state": node_registry.get_node(node_id).node_state,
-            "timestamp": now
+            "success": True, "node_id": node_id,
+            "node_state": result["node_state"], "timestamp": now,
         }
 
     def evaluate_cluster_health(self) -> Dict[str, Any]:
