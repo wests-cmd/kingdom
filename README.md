@@ -6,7 +6,7 @@
 
 **[Play the getting-started tutorial (video with narration)](https://github.com/wests-cmd/kingdom/blob/main/docs/media/kingdom-getting-started.mp4)** · [Read the step-by-step transcript](docs/GETTING_STARTED_VIDEO.md)
 
-Start right here on the Kingdom GitHub page. The video shows where to click to get the published native installer, how to launch the app, configure a model when needed, start Runtime, run **Tasks → Analyze text**, and check the result. It uses illustrated screens for **v1.2.4**, not a live app recording. The [current release](https://github.com/wests-cmd/kingdom/releases/latest) and your OS security protections remain authoritative; the v1.2.4 packages are unsigned.
+Start right here on the Kingdom GitHub page. The video shows where to click to get the published native installer, how to launch the app, configure a model when needed, start Runtime, run **Tasks → Analyze text**, and check the result. It uses illustrated screens for **v1.2.4**, not a live app recording. The [current release](https://github.com/wests-cmd/kingdom/releases/latest) and your OS security protections remain authoritative; native Windows/macOS packages are unsigned.
 
 ## Overview
 
@@ -15,14 +15,14 @@ governed tasks, shared knowledge and approved Knight computers. Its direction is
 plan → place → execute → verify → remember → adapt. A connected computer or an
 AI answer is not proof that a task completed.
 
-**Published native release: [v1.2.4](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.4)**
-(release listing checked October 27, 2026). Source branches and locally patched
-installations can differ; see [project status](docs/PROJECT_STATUS.md).
+**Current stable native downloads:** [Latest published Kingdom release](https://github.com/wests-cmd/kingdom/releases/latest).
+The pinned installer links below point to v1.2.6; if a newer release is shown
+above, use its assets and matching SHA-256 checksums. Source branches and
+installed applications can differ.
 
-**Security update status:** source now pins a patched desktop dependency set,
-but the existing v1.2.4 download files have not been replaced. A new reviewed,
-versioned release is required to deliver that change. See the
-[source-versus-installed security note](docs/PROJECT_STATUS.md#desktop-dependency-security-update).
+**Security status:** v1.2.6 adds a source/installer dependency compromise gate
+and retains native dependency audits. These checks do not establish physical
+multi-computer security acceptance or OS signing. See [open security acceptance](https://github.com/wests-cmd/kingdom/issues/172).
 
 <img src="frontend/public/branding/kingdom-icon.png" alt="Kingdom crowned K" width="72">
 
@@ -30,15 +30,15 @@ versioned release is required to deliver that change. See the
 
 Choose one matching installer; native packages include their runtime.
 
-| Computer | Published v1.2.4 download |
+| Computer | Pinned v1.2.6 installer |
 | --- | --- |
-| Windows Intel/AMD 64-bit | [Kingdom-Setup-1.2.4.exe](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/Kingdom-Setup-1.2.4.exe) |
-| macOS Intel | [Kingdom-1.2.4.dmg](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/Kingdom-1.2.4.dmg) |
-| Linux Intel/AMD 64-bit | [Kingdom-1.2.4.AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/Kingdom-1.2.4.AppImage) |
-| Debian/Ubuntu amd64 | [kingdom-desktop_1.2.4_amd64.deb](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/kingdom-desktop_1.2.4_amd64.deb) |
+| Windows Intel/AMD 64-bit | [Kingdom-Setup-1.2.6.exe](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/Kingdom-Setup-1.2.6.exe) |
+| macOS Intel | [Kingdom-1.2.6.dmg](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/Kingdom-1.2.6.dmg) |
+| Linux Intel/AMD 64-bit | [Kingdom-1.2.6.AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/Kingdom-1.2.6.AppImage) |
+| Debian/Ubuntu amd64 | [kingdom-desktop_1.2.6_amd64.deb](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/kingdom-desktop_1.2.6_amd64.deb) |
 
-Check [SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/SHA256SUMS)
-and the [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/release-manifest.json).
+Check [SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/SHA256SUMS)
+and the [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/release-manifest.json).
 Windows/macOS packages are unsigned; macOS is not notarized. Native ARM64,
 Android and iOS release installers are not supplied by this release. Operating
 system protections remain in force. The [browser app](docs/FREE_WEB_APP.md) is a
