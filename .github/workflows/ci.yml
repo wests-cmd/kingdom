@@ -7,6 +7,13 @@ on:
     branches: [ main, master ]
 
 jobs:
+  audit-docker-preinstall:
+    name: Verify Docker dependency audit stage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker audit stage only (no pip or npm execution)
+        run: docker build --file Dockerfile --target dependency-audit --tag kingdom-dependency-audit .
   test-backend:
     name: Backend Tests & Distributed E2E
     runs-on: ubuntu-latest
@@ -16,6 +23,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Reject known compromised manifests before installing dependencies
+        run: |
+          python scripts/audit_known_compromises.py
+          python -m unittest tests.test_known_compromise_gate
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
@@ -41,6 +52,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Reject known compromised manifests before npm install
+        run: python3 scripts/audit_known_compromises.py
       - name: Install Frontend Dependencies & Compile Bundle
         run: |
           cd frontend
@@ -52,7 +65,7 @@ jobs:
   build-desktop-release:
     name: Package Desktop Release
     runs-on: ubuntu-latest
-    needs: [test-backend, build-frontend]
+    needs: [test-backend, build-frontend, audit-docker-preinstall]
     steps:
       - uses: actions/checkout@v4
       - name: Set up Node.js 24 & Python 3.12

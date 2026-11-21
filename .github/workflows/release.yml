@@ -79,6 +79,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Reject known compromised dependency manifests before pip and npm
+        run: python scripts/audit_known_compromises.py
       - name: Install test and build dependencies
         run: |
           python -m venv .release-venv
@@ -112,7 +114,9 @@ jobs:
             "$VENV_BIN/python" -m pip install --only-binary=cryptography -r requirements-release.txt
           fi
       - name: Audit installed Python dependencies
-        run: python scripts/audit_release_dependencies.py
+        run: |
+          python scripts/audit_known_compromises.py --installed
+          python scripts/audit_release_dependencies.py
       - name: Build frontend
         run: |
           npm --prefix frontend ci

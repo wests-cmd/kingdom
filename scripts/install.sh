@@ -20,6 +20,11 @@ echo "Platform: ${PLATFORM}"
 command -v python3 >/dev/null 2>&1 || { echo "Error: python3 is required but not installed." >&2; exit 1; }
 command -v npm >/dev/null 2>&1 || { echo "Error: npm is required but not installed." >&2; exit 1; }
 
+echo "Checking dependency inventories before running package installers..."
+# Fail closed before pip/npm setup scripts can start. No network or third-party
+# Python imports are required by this known-advisory manifest scanner.
+python3 scripts/audit_known_compromises.py
+
 echo "Creating Python Virtual Environment..."
 if [ ! -d "venv" ]; then
     python3 -m venv venv
@@ -34,7 +39,7 @@ pip install -r requirements.txt
 echo "Installing Frontend Dependencies & Building UI..."
 if [ -d "frontend" ]; then
     cd frontend
-    npm install
+    npm ci
     npm run build
     cd ..
 fi
