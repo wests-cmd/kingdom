@@ -7,12 +7,14 @@ export default function ApprovalsView() {
   const [error, setError] = useState(null)
   const [actionError, setActionError] = useState('')
   const [busy, setBusy] = useState('')
+  const [lastRefreshed, setLastRefreshed] = useState(null)
 
   const fetchApprovals = async () => {
     try {
       setLoading(true)
       const res = await api.get("/security/approvals?status=pending")
       setApprovals(res.data || [])
+      setLastRefreshed(new Date())
       setError(null)
     } catch (err) {
       setError("Failed to load security approvals")
@@ -42,7 +44,8 @@ export default function ApprovalsView() {
 
   return (
     <div className="security-approvals-card" style={{ border: "1px solid #333", padding: "16px", borderRadius: "8px", marginTop: "16px" }}>
-      <h3>Requests that need your decision</h3>
+      <div className="section-heading"><h3>Requests that need your decision</h3><button type="button" onClick={fetchApprovals} disabled={loading || !!busy}>Refresh requests</button></div>
+      <p className="muted">{lastRefreshed ? `Last checked ${lastRefreshed.toLocaleTimeString()}` : 'Not checked yet'}</p>
       <p>Kingdom pauses certain actions so you can check <strong>who is asking, what would be done, and the exact parameters</strong>. A request is not permission by itself. Approve only actions you recognize; otherwise deny them.</p>
       {loading && <p role="status">Checking pending requests…</p>}
       {error && <p role="alert">Could not check approvals. These requests may be out of date. Refresh before deciding.</p>}
@@ -60,10 +63,10 @@ export default function ApprovalsView() {
           <div><strong>Request expires:</strong> {req.expires_at ? new Date(req.expires_at).toLocaleString() : 'Not reported'}</div>
           <p className="muted">Approving submits this request for Kingdom's existing permission checks. It does not mean every future action is approved. Denying this request does not remove your other devices.</p>
           <div style={{ marginTop: "8px" }}>
-            <button disabled={!!busy || !!error} onClick={() => decide(req.approval_id,'approve')} style={{ marginRight: "8px", background: "var(--accent-primary)", color: "var(--accent-on-primary)", border: "none", padding: "6px 12px", borderRadius: "4px", cursor: "pointer" }}>
+            <button disabled={!!busy || !!error || loading} onClick={() => decide(req.approval_id,'approve')} style={{ marginRight: "8px", background: "var(--accent-primary)", color: "var(--accent-on-primary)", border: "none", padding: "6px 12px", borderRadius: "4px", cursor: "pointer" }}>
               {busy === req.approval_id ? 'Saving…' : 'Approve this request'}
             </button>
-            <button disabled={!!busy || !!error} onClick={() => decide(req.approval_id,'deny')} style={{ background: "var(--input-bg)", color: "var(--text-main)", border: "1px solid var(--surface-border)", padding: "6px 12px", borderRadius: "4px", cursor: "pointer" }}>
+            <button disabled={!!busy || !!error || loading} onClick={() => decide(req.approval_id,'deny')} style={{ background: "var(--input-bg)", color: "var(--text-main)", border: "1px solid var(--surface-border)", padding: "6px 12px", borderRadius: "4px", cursor: "pointer" }}>
               Deny this request
             </button>
           </div>
