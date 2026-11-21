@@ -27,7 +27,7 @@ export function taskChangeReport(task) {
     const output=record?.outcome?.output
     const verified=record?.verification?.state==='VERIFIED'
     // A verified model response is still not an execution receipt.
-    if(!verified || !APPROVED_TOOLS.has(tool) || !output || typeof output!=='object') continue
+    if(!verified || record?.outcome?.kind==='model_response' || !APPROVED_TOOLS.has(tool) || !output || typeof output!=='object') continue
     if(tool==='build.run@1.0.0') {
       for(const [name,artifact] of Object.entries(output.artifacts||{}).slice(0,20)){
         if(typeof artifact?.sha256==='string' && /^[a-f0-9]{64}$/i.test(artifact.sha256)) {
