@@ -81,11 +81,14 @@ class RuntimeEngine:
         import json, time
         from backend.storage.db import db
         from backend.runtime.computer_tools import TOOL_CAPABILITIES
-        if role not in self.swarm.registry._knights or not isinstance(capabilities, list) or not set(capabilities) <= set(TOOL_CAPABILITIES.values()):
+        permitted = set(TOOL_CAPABILITIES.values()) | {'network.access'}
+        if role not in self.swarm.registry._knights or not isinstance(capabilities, list) or not set(capabilities) <= permitted:
             raise ValueError('Choose an installed Apprentice and supported computer capabilities')
+        if 'network.access' in capabilities and 'computer.control' not in capabilities:
+            raise ValueError('Experimental browser network access requires a separate computer-control grant')
         for security in (self.security, self.swarm.registry.get(role).zero_trust):
             current = security.nodes.get_node_capabilities(role)
-            security.nodes.update_node_capabilities(role, (current - set(TOOL_CAPABILITIES.values())) | set(capabilities))
+            security.nodes.update_node_capabilities(role, (current - permitted) | set(capabilities))
         if persist:
             with db.get_connection() as conn:
                 row = conn.execute("SELECT value_json FROM runtime_state WHERE key='computer_worker_grants'").fetchone()
