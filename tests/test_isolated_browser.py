@@ -174,7 +174,8 @@ def test_headless_browser_uses_private_context_and_not_user_input(monkeypatch, t
         'allowed_hosts': ['example.org'],
         'actions': [{'action': 'click', 'selector': 'button'}],
         '_receipt_id': 'fake-task',
-    })
+    }, guard=lambda: events.append(('task_guard',)))
+    assert events.count(('task_guard',)) >= 3
     assert result['headless'] and result['uses_user_desktop'] is False
     assert result['capture_sha256'] and Path(result['capture']).parts[:2] == ('data', 'browser-captures')
     assert ('blocked', 'blockedbyclient') in events
@@ -193,3 +194,15 @@ def test_governed_receipt_identity_is_required_before_effects(monkeypatch):
     with pytest.raises(ValueError, match='governed task identity'):
         run_isolated_browser({'start_url': 'https://example.org',
                               'allowed_hosts': ['example.org'], 'actions': []})
+
+
+
+def test_browser_denies_preview_without_trusted_task_guard(monkeypatch):
+    monkeypatch.setenv('KINGDOM_EXPERIMENTAL_ISOLATED_BROWSER', '1')
+    monkeypatch.setenv('KINGDOM_BROWSER_ALLOWED_HOSTS', 'example.org')
+    with pytest.raises(PermissionError, match='trusted execution guard'):
+        run_isolated_browser({
+            'start_url': 'https://example.org/',
+            'allowed_hosts': ['example.org'], 'actions': [],
+            '_receipt_id': 'untrusted-task',
+        })
