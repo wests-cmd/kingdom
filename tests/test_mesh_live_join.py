@@ -151,10 +151,26 @@ def test_three_backend_automatic_mesh(tmp_path):
             'automatic_pairs': 3, 'directions': 6, 'restart': True, 'revocation': True, 'new_grants': 0,
             'transport':'HTTPS through real restricted peer listeners'}), encoding='utf-8')
     except Exception:
+        # CI historically retained a local file but did not surface it in the
+        # failed job log. Report only node ordinal, state and roster generation:
+        # never peer URLs, identities, certificates, payloads or owner tokens.
         diagnostics = []
-        for node in nodes:
-            try: diagnostics.append({'port':node['port'], 'links':invoke(node,'/federation/connections/status'), 'membership':invoke(node,'/federation/mesh')})
-            except OSError: pass
+        for index, node in enumerate(nodes):
+            record = {'node': index}
+            try:
+                rows = peers(node)
+                record['peer_states'] = {
+                    str(other_index): rows.get(other.get('identity', {}).get('node_id'), {}).get('node_state', 'missing')
+                    for other_index, other in enumerate(nodes) if other is not node
+                }
+                membership = invoke(node, '/federation/mesh')
+                roster = membership.get('last_roster') or {}
+                record['received_generation'] = roster.get('generation')
+                record['mesh_enabled'] = membership.get('enabled')
+            except (OSError, ValueError, KeyError, TypeError):
+                record['status'] = 'unavailable'
+            diagnostics.append(record)
+        print('Mesh convergence evidence (redacted): ' + json.dumps(diagnostics), file=sys.stderr)
         (tmp_path / 'failure-status.json').write_text(json.dumps(diagnostics), encoding='utf-8')
         raise
     finally:
