@@ -56,3 +56,42 @@ def test_verified_receipt_rejects_modified_headless_capture(monkeypatch, tmp_pat
     capture.write_bytes(b'tampered-screenshot')
     with pytest.raises(ValueError, match='Headless browser capture'):
         verify_receipt(task, result)
+
+
+@pytest.fixture
+def runtime(tmp_path):
+    from backend.runtime.engine import RuntimeEngine
+    from backend.runtime.tasks import TaskManager
+    from backend.storage.db import Database
+    from backend.storage.repository import TaskRepository
+    instance = RuntimeEngine()
+    instance.tasks = TaskManager(TaskRepository(Database(tmp_path / 'browser-runtime.db')))
+    return instance
+
+
+def test_browser_submission_is_one_attempt_even_if_caller_requests_retries(runtime):
+    task = runtime.submit_task('experimental browser', {
+        'actor': 'owner', 'tool': TOOL, 'max_attempts': 5,
+        'tool_parameters': {
+            'start_url': 'https://example.org',
+            'allowed_hosts': ['example.org'], 'actions': [],
+        },
+    })
+    assert task['max_attempts'] == 1
+    assert task['metadata']['max_attempts'] == 1
+    assert task['metadata']['capability'] == 'computer.control'
+
+
+@pytest.mark.parametrize('remote', [
+    {'offload': True}, {'execution_target': 'remote'},
+])
+def test_experimental_browser_does_not_auto_offload_to_unverified_peer(runtime, remote):
+    with pytest.raises(ValueError, match='local-only'):
+        runtime.submit_task('experimental browser', {
+            'actor': 'owner', 'tool': TOOL,
+            'tool_parameters': {
+                'start_url': 'https://example.org',
+                'allowed_hosts': ['example.org'], 'actions': [],
+            },
+            **remote,
+        })
