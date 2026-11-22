@@ -16,7 +16,7 @@ for (const bad of [
   'https://localhost/', 'https://127.0.0.1/', 'https://example.org:8443/',
   'https://bob:pass@example.org/', 'https://example.org/#password',
   'https://user@example.org/', 'https://*.example.org/',
-  'https://example.org'.repeat(100),
+  'https://example.org/' + 'x'.repeat(2100),
 ]) {
   test('private preview refuses invalid or risky URL ' + bad.slice(0, 40), () => {
     assert.throws(() => privateBrowserPreviewTask(bad), Error)
