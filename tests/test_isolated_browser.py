@@ -1,5 +1,6 @@
 """Fail-closed checks for the optional non-interfering browser computer-use tool."""
 from contextlib import contextmanager
+from pathlib import Path
 import sys
 from types import SimpleNamespace
 
@@ -114,16 +115,31 @@ def test_headless_browser_uses_private_context_and_not_user_input(monkeypatch, t
         def route(self, pattern, fn):
             events.append(('route', pattern))
             blocked = SimpleNamespace(
-                request=SimpleNamespace(url='http://127.0.0.1/'),
+                request=SimpleNamespace(url='http://127.0.0.1/', method='GET'),
                 abort=lambda reason: events.append(('blocked', reason)),
             )
             fn(blocked)
             allowed = SimpleNamespace(
-                request=SimpleNamespace(url='https://example.org/'),
-                fetch=lambda **kw: events.append(('fetch', kw)) or 'response',
+                request=SimpleNamespace(url='https://example.org/', method='GET'),
+                fetch=lambda **kw: events.append(('fetch', kw)) or SimpleNamespace(status=200),
                 fulfill=lambda **kw: events.append(('fulfill', kw)),
             )
             fn(allowed)
+            unsafe_write = SimpleNamespace(
+                request=SimpleNamespace(url='https://example.org/', method='POST'),
+                abort=lambda reason: events.append(('write_blocked', reason)),
+            )
+            fn(unsafe_write)
+            redirect = SimpleNamespace(
+                request=SimpleNamespace(url='https://example.org/', method='GET'),
+                fetch=lambda **kw: SimpleNamespace(status=302),
+                abort=lambda reason: events.append(('redirect_blocked', reason)),
+                fulfill=lambda **kw: events.append(('redirect_fulfilled',)),
+            )
+            fn(redirect)
+        def route_web_socket(self, pattern, fn):
+            events.append(('websocket_route', pattern))
+            fn(SimpleNamespace(close=lambda: events.append(('websocket_blocked',))))
         def new_page(self):
             return self.page
         def on(self, *args):
@@ -160,8 +176,12 @@ def test_headless_browser_uses_private_context_and_not_user_input(monkeypatch, t
         '_receipt_id': 'fake-task',
     })
     assert result['headless'] and result['uses_user_desktop'] is False
-    assert result['capture_sha256'] and __import__('pathlib').Path(result['capture']).parts[:2] == ('data', 'browser-captures')
+    assert result['capture_sha256'] and Path(result['capture']).parts[:2] == ('data', 'browser-captures')
     assert ('blocked', 'blockedbyclient') in events
+    assert ('write_blocked', 'blockedbyclient') in events
+    assert ('redirect_blocked', 'blockedbyclient') in events
+    assert ('redirect_fulfilled',) not in events
+    assert ('websocket_blocked',) in events
     assert ('fetch', {'max_redirects': 0, 'timeout': 5000}) in events
     assert ('click', 'button') in events
     assert ('context_close',) in events and ('browser_close',) in events
