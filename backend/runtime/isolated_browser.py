@@ -103,7 +103,7 @@ def validate_plan(params):
     return normalized, checked
 
 
-def run_isolated_browser(params):
+def run_isolated_browser(params, *, guard=None):
     """Operate a disposable headless browser; never call OS mouse/keyboard APIs.
 
     Feature flag plus owner-configured domains are separate from model arguments.
@@ -116,6 +116,9 @@ def run_isolated_browser(params):
         raise ValueError('The governed task identity is required before any browser action')
     if os.environ.get('KINGDOM_EXPERIMENTAL_ISOLATED_BROWSER') != '1':
         raise PermissionError('Isolated browser preview is disabled until explicitly enabled for testing')
+    if not callable(guard):
+        raise PermissionError('Browser tool requires a trusted execution guard from the governed task')
+    guard()
     try:
         approved = frozenset(validate_host(item) for item in
                              os.environ.get('KINGDOM_BROWSER_ALLOWED_HOSTS', '').split(',') if item)
@@ -162,10 +165,13 @@ def run_isolated_browser(params):
                 context.on('page', lambda popup: popup.close() if popup != page else None)
                 page.set_default_timeout(5000)
                 page.set_default_navigation_timeout(10000)
+                guard()
                 page.goto(params['start_url'], wait_until='domcontentloaded')
                 if not allowed_url(page.url, hosts):
                     raise PermissionError('Browser redirected outside approved domains')
                 for step in actions:
+                    # An owner stop/revocation during the sequence fences each new effect.
+                    guard()
                     operation = step['action']
                     if operation == 'navigate':
                         page.goto(step['url'], wait_until='domcontentloaded')
@@ -177,6 +183,7 @@ def run_isolated_browser(params):
                         page.locator(step['selector']).press(step['key'], timeout=5000)
                     if not allowed_url(page.url, hosts):
                         raise PermissionError('Browser left approved HTTPS domains')
+                guard()
                 directory = Path('data/browser-captures')
                 directory.mkdir(parents=True, exist_ok=True)
                 capture = directory / (hashlib.sha256(receipt_id.encode()).hexdigest() + '.png')
