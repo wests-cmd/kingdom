@@ -137,14 +137,27 @@ def run_isolated_browser(params):
                 java_script_enabled=True, ignore_https_errors=False)
             try:
                 def restrict(route):
-                    if allowed_url(route.request.url, hosts):
-                        # Do not follow unexamined redirects in the routed request.
-                        response = route.fetch(max_redirects=0, timeout=5000)
-                        route.fulfill(response=response)
-                    else:
+                    request = route.request
+                    # A webpage may create requests the model never asked for.
+                    # The preview is read-only at the HTTP layer: block writes.
+                    if not allowed_url(request.url, hosts) or request.method not in {'GET', 'HEAD'}:
                         route.abort('blockedbyclient')
+                        return
+                    # Explicitly reject all redirects rather than following a
+                    # second destination that lacks an independent site grant.
+                    response = route.fetch(max_redirects=0, timeout=5000)
+                    if 300 <= response.status < 400:
+                        route.abort('blockedbyclient')
+                        return
+                    route.fulfill(response=response)
 
                 context.route('**/*', restrict)
+                # BrowserContext.route does NOT cover WebSockets. Do not
+                # launch a page if WebSocket routing is unavailable. This
+                # interception does NOT replace OS-level network filtering.
+                if not callable(getattr(context, 'route_web_socket', None)):
+                    raise RuntimeError('Playwright WebSocket interception is required')
+                context.route_web_socket('**/*', lambda websocket: websocket.close())
                 page = context.new_page()
                 context.on('page', lambda popup: popup.close() if popup != page else None)
                 page.set_default_timeout(5000)
