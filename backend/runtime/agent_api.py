@@ -117,6 +117,14 @@ def browser_readiness():
         blockers.append('Experimental browser mode is disabled')
     if not policy_valid:
         blockers.append('No valid owner-configured browser domains')
+    from backend.api import engine
+    eligible_roles = [role for role in engine.swarm.registry._knights
+                      if {'computer.control', 'network.access'} <=
+                      set(engine.security.nodes.get_node_capabilities(role))
+                      and {'computer.control', 'network.access'} <=
+                      set(engine.swarm.registry.get(role).zero_trust.nodes.get_node_capabilities(role))]
+    if not eligible_roles:
+        blockers.append('No Apprentice has both computer-control and network-access grants')
     if not module_installed:
         blockers.append('Optional Playwright adapter not installed')
     elif not browser_binary_present:
@@ -126,6 +134,7 @@ def browser_readiness():
         'enabled': enabled, 'owner_destination_count': approved_count,
         'adapter_installed': module_installed,
         'headless_browser_binary_present': browser_binary_present,
+        'eligible_apprentices': eligible_roles,
         'public_release_certified': False,
         'scope': 'Availability probe only; OS/network sandbox and real website acceptance are unverified',
     }
