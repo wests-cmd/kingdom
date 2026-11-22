@@ -195,6 +195,55 @@ class KnightRepository:
             ))
             conn.commit()
 
+    def record_heartbeat(self, knight_id, health, observed_at):
+        """Atomic heartbeat; a stale reader must never restore a revoked member.
+
+        Update only heartbeat-related columns, never identity, capabilities,
+        membership authority, or an owner-modified node state.
+        """
+        with self.db.get_connection() as conn:
+            cursor = conn.execute("""
+                UPDATE knights
+                SET last_heartbeat=?,
+                    health=?,
+                    node_state=CASE WHEN node_state IN ('DISCONNECTED','RECONNECTING')
+                                    THEN 'CONNECTED' ELSE node_state END,
+                    status=CASE WHEN status='offline' THEN 'idle' ELSE status END,
+                    updated_at=?
+                WHERE id=?
+                  AND node_state IN ('APPROVED','CONNECTED','DISCONNECTED','RECONNECTING')
+            """, (observed_at, health, observed_at, knight_id))
+            row = conn.execute("SELECT * FROM knights WHERE id=?", (knight_id,)).fetchone() if cursor.rowcount else None
+            conn.commit()
+            return self._row_to_dict(row) if row else None
+
+    def mark_stale_heartbeat(self, knight_id, cutoff, observed_at):
+        """Mark stale only if the *current* persisted row is still approved.
+
+        A previous list_nodes snapshot may predate owner revocation, roster
+        removal, fresh heartbeat or device quarantine. The transaction
+        serializes that check with the conditional state transition.
+        """
+        with self.db.get_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("""
+                SELECT current_task FROM knights
+                WHERE id=? AND node_state IN ('APPROVED','CONNECTED')
+                  AND last_heartbeat < ?
+            """, (knight_id, cutoff)).fetchone()
+            if row is None:
+                conn.commit()
+                return None
+            conn.execute("""
+                UPDATE knights
+                SET node_state='DISCONNECTED', health='unhealthy',
+                    current_task=NULL, updated_at=?
+                WHERE id=? AND node_state IN ('APPROVED','CONNECTED')
+                  AND last_heartbeat < ?
+            """, (observed_at, knight_id, cutoff))
+            conn.commit()
+            return {"id": knight_id, "current_task": row["current_task"]}
+
     def get(self, knight_id):
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
