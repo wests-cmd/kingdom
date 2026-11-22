@@ -62,9 +62,13 @@ def native_tools():
     from backend.runtime.computer_tools import COMPUTER_HANDLERS, TOOL_CAPABILITIES
     for key, handler in COMPUTER_HANDLERS.items():
         tool_id, version = key.split('@')
+        required = [TOOL_CAPABILITIES[key]]
+        if key == 'computer.browser.run@1.0.0':
+            required.append('network.access')
         tools.register_tool(ToolDefinition(tool_id, version, 'kingdom.computer', tool_id,
-            'Owner-granted local computer operation', {}, {}, [TOOL_CAPABILITIES[key]], [],
-            'LOW' if TOOL_CAPABILITIES[key] == 'filesystem.read' else 'HIGH'))
+            'Owner-granted local computer operation', {}, {}, required, [],
+            'LOW' if TOOL_CAPABILITIES[key] == 'filesystem.read' else 'HIGH',
+            idempotent=key != 'computer.browser.run@1.0.0'))
         tools.register_handler(key, handler)
     return tools
 
