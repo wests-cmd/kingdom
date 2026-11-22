@@ -26,6 +26,7 @@ The [repository README](../README.md) provides one-click installer downloads and
 ## Verify and release
 
 - [Current status](PROJECT_STATUS.md): source/release scope and remaining acceptance.
+- [Daily-driver five-milestone ship plan](DAILY_DRIVER_SHIP_PLAN.md): acceptance, noninterference, always-on work and distribution/license gates.
 - [Release process](RELEASE_PROCESS.md), [cluster shipping gates](CLUSTER_SHIPPING_CHECKLIST.md), [coding-worker acceptance](CODING_WORKER_ACCEPTANCE.md).
 - [v1.2.6 notes](releases/v1.2.6.md), [Windows signing](WINDOWS_SIGNING.md), [production definition of done](PRODUCTION_DEFINITION_OF_DONE.md).
 
