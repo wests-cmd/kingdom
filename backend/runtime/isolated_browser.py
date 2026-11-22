@@ -192,21 +192,19 @@ def run_isolated_browser(params, *, guard=None):
                     directory.chmod(0o700)
                 capture = workspace_path('browser-captures/' + hashlib.sha256(receipt_id.encode()).hexdigest() + '.png')
                 screenshot = page.screenshot(full_page=False, timeout=5000)
-                with tempfile.NamedTemporaryFile(dir=directory, suffix='.tmp', delete=False) as temporary:
-                    temporary_path = Path(temporary.name)
-                    try:
+                temporary_path = None
+                try:
+                    with tempfile.NamedTemporaryFile(dir=directory, suffix='.tmp', delete=False) as temporary:
+                        temporary_path = Path(temporary.name)
                         if os.name == 'posix':
                             os.chmod(temporary.name, 0o600)
                         temporary.write(screenshot)
                         temporary.flush()
                         os.fsync(temporary.fileno())
-                    except BaseException:
-                        temporary_path.unlink(missing_ok=True)
-                        raise
-                try:
                     temporary_path.replace(capture)
                 finally:
-                    temporary_path.unlink(missing_ok=True)
+                    if temporary_path is not None:
+                        temporary_path.unlink(missing_ok=True)
                 return {
                     'url': page.url, 'title': page.title()[:300],
                     'text': page.locator('body').inner_text(timeout=5000)[:MAX_TEXT],
