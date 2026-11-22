@@ -156,7 +156,10 @@ def verify_receipt(task, result):
     if tool == 'computer.screenshot@1.0.0':
         if hashlib.sha256(Path(record['output']['path']).read_bytes()).hexdigest() != record['output']['sha256']: raise ValueError('Capture evidence changed')
     if tool == 'computer.browser.run@1.0.0':
-        image = Path(record['output']['capture'])
+        image = Path(record['output']['capture']).resolve()
+        approved_dir = workspace_path('browser-captures')
+        if not image.is_relative_to(approved_dir):
+            raise ValueError('Headless browser capture is outside its workspace')
         if hashlib.sha256(image.read_bytes()).hexdigest() != record['output']['capture_sha256']:
             raise ValueError('Headless browser capture evidence changed')
     return {'state': 'VERIFIED', 'method': 'local_execution_receipt_and_file_evidence',
