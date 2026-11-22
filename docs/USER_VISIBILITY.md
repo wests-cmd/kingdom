@@ -1,6 +1,6 @@
 # Understanding what Kingdom is doing
 
-The plain-language status vocabulary was merged in [PR #180](https://github.com/wests-cmd/kingdom/pull/180). The simplified three-section Home layout is a separate candidate change. **Published v1.2.6 installers do not yet contain either update.** Check the installed release version, not merely GitHub main, before expecting these screens.
+The plain-language status vocabulary was merged in [PR #180](https://github.com/wests-cmd/kingdom/pull/180); the simplified Home layout, task timelines, evidence reports, health panel and in-app notifications were merged in [PR #182](https://github.com/wests-cmd/kingdom/pull/182). These changes are **present in source on `main`**, but are not in the published v1.2.7 installers. The reviewed v1.2.8 release candidate includes them; verify the actually published installer and installed version before expecting the new screens.
 
 ## The beginner Home format
 
