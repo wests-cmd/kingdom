@@ -131,6 +131,9 @@ COMPUTER_HANDLERS['harness.run@1.0.0'] = run_harness
 COMPUTER_HANDLERS['computer.input@1.0.0'] = desktop_input
 TOOL_CAPABILITIES['computer.observe@1.0.0'] = 'computer.observe'
 COMPUTER_HANDLERS['computer.observe@1.0.0'] = desktop_observe
+from backend.runtime.isolated_browser import run_isolated_browser
+TOOL_CAPABILITIES['computer.browser.run@1.0.0'] = 'computer.control'
+COMPUTER_HANDLERS['computer.browser.run@1.0.0'] = run_isolated_browser
 
 
 def receipt(task, output):
@@ -152,5 +155,9 @@ def verify_receipt(task, result):
         if hashlib.sha256(target.read_bytes()).hexdigest() != record['output']['sha256']: raise ValueError('Written file changed after execution')
     if tool == 'computer.screenshot@1.0.0':
         if hashlib.sha256(Path(record['output']['path']).read_bytes()).hexdigest() != record['output']['sha256']: raise ValueError('Capture evidence changed')
+    if tool == 'computer.browser.run@1.0.0':
+        image = Path(record['output']['capture'])
+        if hashlib.sha256(image.read_bytes()).hexdigest() != record['output']['capture_sha256']:
+            raise ValueError('Headless browser capture evidence changed')
     return {'state': 'VERIFIED', 'method': 'local_execution_receipt_and_file_evidence',
             'scope': 'Tool execution verified; application correctness requires its own tests'}
