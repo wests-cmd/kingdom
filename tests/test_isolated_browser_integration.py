@@ -95,3 +95,24 @@ def test_experimental_browser_does_not_auto_offload_to_unverified_peer(runtime, 
             },
             **remote,
         })
+
+
+
+def test_browser_network_permission_is_explicit_revocable_and_never_standalone(runtime):
+    from backend.runtime.workspace_api import ComputerGrant
+    role = next(iter(runtime.swarm.registry._knights))
+    with pytest.raises(ValueError, match='requires a separate computer-control grant'):
+        runtime.grant_computer_tools(role, ['network.access'], persist=False)
+    selected = ComputerGrant.model_validate({
+        'capabilities': ['computer.control', 'network.access'],
+    })
+    saved = runtime.grant_computer_tools(role, selected.capabilities, persist=False)
+    assert set(saved['capabilities']) == {'computer.control', 'network.access'}
+    assert {'computer.control', 'network.access'} <= set(
+        runtime.security.nodes.get_node_capabilities(role))
+    assert {'computer.control', 'network.access'} <= set(
+        runtime.swarm.registry.get(role).zero_trust.nodes.get_node_capabilities(role))
+    # Removing the network grant must revoke it from both execution boundaries.
+    runtime.grant_computer_tools(role, ['computer.control'], persist=False)
+    assert 'network.access' not in runtime.security.nodes.get_node_capabilities(role)
+    assert 'network.access' not in runtime.swarm.registry.get(role).zero_trust.nodes.get_node_capabilities(role)
