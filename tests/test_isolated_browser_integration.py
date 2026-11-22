@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from backend.runtime.agent_sessions import BrowserPlanArgs, TOOLS
-from backend.runtime.computer_tools import TOOL_CAPABILITIES, receipt, verify_receipt
+from backend.runtime.computer_tools import TOOL_CAPABILITIES, receipt, verify_receipt, workspace_path
 from backend.runtime.execution import native_tools
 
 
@@ -43,7 +43,7 @@ def test_browser_requires_existing_computer_and_network_capabilities():
 
 def test_verified_receipt_rejects_modified_headless_capture(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    capture = Path('data/browser-captures/fake.png')
+    capture = workspace_path('browser-captures/fake.png')
     capture.parent.mkdir(parents=True)
     capture.write_bytes(b'original-screenshot')
     output = {
@@ -116,3 +116,18 @@ def test_browser_network_permission_is_explicit_revocable_and_never_standalone(r
     runtime.grant_computer_tools(role, ['computer.control'], persist=False)
     assert 'network.access' not in runtime.security.nodes.get_node_capabilities(role)
     assert 'network.access' not in runtime.swarm.registry.get(role).zero_trust.nodes.get_node_capabilities(role)
+
+
+
+def test_browser_receipt_rejects_capture_outside_kingdom_workspace(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    outside = tmp_path / 'outside-capture.png'
+    outside.write_bytes(b'secret-image')
+    output = {
+        'capture': str(outside),
+        'capture_sha256': hashlib.sha256(outside.read_bytes()).hexdigest(),
+    }
+    task = {'id': 'outside-task', 'metadata': {'tool': TOOL}}
+    result = {'output': output, **receipt(task, output)}
+    with pytest.raises(ValueError, match='outside its workspace'):
+        verify_receipt(task, result)
