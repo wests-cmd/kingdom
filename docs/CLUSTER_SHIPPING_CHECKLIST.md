@@ -8,6 +8,12 @@ The remote Knight daemon accepts `text.analyze@1.0.0`, `code.python.analyze@1.0.
 
 The Computer cluster page shows persisted task assignments, lease presence, results and verification summaries alongside reported heartbeat, health and CPU/memory load. Current-task fields are reported node state; task records are the assignment evidence. No load report or status badge certifies job completion. The task list shows the latest 20 matching records; Tasks retains the broader history.
 
+## Revocation and stale-heartbeat reliability
+
+Source [PR #183](https://github.com/wests-cmd/kingdom/pull/183) repairs a concrete read/modify/write race: heartbeat or stale-node detection could previously overwrite a later revocation by saving an old whole-row node snapshot. Current SQLite heartbeat and timeout updates now check the node's persisted state and write only relevant health/heartbeat fields, preserving permissions, pinned identity and revoked/quarantined state. Tests cover heartbeat after revocation, stale inventory after revocation, legitimate reconnection, and simultaneous writer threads with independent database connections.
+
+The real three-process mesh test passed with this change, but one older intermediate run ([44950314272](https://github.com/wests-cmd/kingdom/actions/runs/44950314272)) failed waiting for a revoked member's state to propagate to another peer. The fix addresses a plausible race and adds sanitized failure diagnostics; **it has not proven every convergence edge case or physical security outcome**. Keep physical revoke-during-work and denial-of-further-RPC acceptance gates open until observed on installed, independently connected systems.
+
 ## Required release evidence
 
 - [ ] Record tested source revision, platform, installed artifact checksum and configuration without credentials.
