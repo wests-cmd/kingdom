@@ -27,8 +27,8 @@ class RequestInput(BaseModel):
     mode:Literal['auto','quick','agent']='auto'
     model_profile:str=Field(default='auto',min_length=1,max_length=100)
     allow_process:bool=False
-    required_tools:list[Literal['workspace_read','workspace_list','workspace_write','process_run','desktop_observe','desktop_input']]=Field(default_factory=list,max_length=4)
-    tool_sequence:list[Literal['workspace_read','workspace_list','workspace_write','process_run','desktop_observe','desktop_input']]=Field(default_factory=list,max_length=8)
+    required_tools:list[Literal['workspace_read','workspace_list','workspace_write','process_run','desktop_observe','desktop_input','browser_run']]=Field(default_factory=list,max_length=4)
+    tool_sequence:list[Literal['workspace_read','workspace_list','workspace_write','process_run','desktop_observe','desktop_input','browser_run']]=Field(default_factory=list,max_length=8)
     tool_protocol:Literal['native','structured']='native'
     tool_paths:list[str]=Field(default_factory=list,max_length=8)
     review_instructions:str=Field(default='',max_length=2000)
