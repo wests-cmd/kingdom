@@ -11,6 +11,7 @@ import ipaddress
 import os
 from pathlib import Path
 import re
+import tempfile
 from urllib.parse import urlsplit
 
 MAX_ACTIONS = 8
@@ -184,11 +185,28 @@ def run_isolated_browser(params, *, guard=None):
                     if not allowed_url(page.url, hosts):
                         raise PermissionError('Browser left approved HTTPS domains')
                 guard()
-                directory = Path('data/browser-captures')
-                directory.mkdir(parents=True, exist_ok=True)
-                capture = directory / (hashlib.sha256(receipt_id.encode()).hexdigest() + '.png')
+                from backend.runtime.computer_tools import workspace_path
+                directory = workspace_path('browser-captures')
+                directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+                if os.name == 'posix':
+                    directory.chmod(0o700)
+                capture = workspace_path('browser-captures/' + hashlib.sha256(receipt_id.encode()).hexdigest() + '.png')
                 screenshot = page.screenshot(full_page=False, timeout=5000)
-                capture.write_bytes(screenshot)
+                with tempfile.NamedTemporaryFile(dir=directory, suffix='.tmp', delete=False) as temporary:
+                    temporary_path = Path(temporary.name)
+                    try:
+                        if os.name == 'posix':
+                            os.chmod(temporary.name, 0o600)
+                        temporary.write(screenshot)
+                        temporary.flush()
+                        os.fsync(temporary.fileno())
+                    except BaseException:
+                        temporary_path.unlink(missing_ok=True)
+                        raise
+                try:
+                    temporary_path.replace(capture)
+                finally:
+                    temporary_path.unlink(missing_ok=True)
                 return {
                     'url': page.url, 'title': page.title()[:300],
                     'text': page.locator('body').inner_text(timeout=5000)[:MAX_TEXT],
