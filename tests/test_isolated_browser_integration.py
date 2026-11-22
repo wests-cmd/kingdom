@@ -153,3 +153,27 @@ def test_browser_placement_requires_both_grants_and_never_uses_control_only_work
     task['metadata']['requested_knight'] = roles[0]
     with pytest.raises(PermissionError, match='lacks required computer-tool grants'):
         asyncio.run(runtime.swarm.execute(task))
+
+
+
+def test_direct_browser_tool_without_controller_guard_fails_before_running(tmp_path, monkeypatch):
+    from backend.runtime.execution import execute_request
+    monkeypatch.chdir(tmp_path)
+    task = {'id': 'direct-call', 'prompt': 'Preview',
+            'metadata': {'tool': TOOL, 'tool_parameters': {
+                'start_url': 'https://example.org', 'allowed_hosts': ['example.org'], 'actions': [],
+            }}}
+    with pytest.raises(PermissionError, match='live authoritative task guard'):
+        execute_request(task, ['computer.control', 'network.access'])
+
+
+def test_revoked_or_stale_browser_guard_denies_before_any_browser_launch(monkeypatch):
+    from backend.runtime.isolated_browser import run_isolated_browser
+    monkeypatch.setenv('KINGDOM_EXPERIMENTAL_ISOLATED_BROWSER', '1')
+    monkeypatch.setenv('KINGDOM_BROWSER_ALLOWED_HOSTS', 'example.org')
+    def denied():
+        raise PermissionError('Execution task is stopped or stale')
+    with pytest.raises(PermissionError, match='stopped or stale'):
+        run_isolated_browser({'start_url': 'https://example.org',
+                              'allowed_hosts': ['example.org'], 'actions': [],
+                              '_receipt_id': 'expired'}, guard=denied)
