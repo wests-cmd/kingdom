@@ -131,3 +131,25 @@ def test_browser_receipt_rejects_capture_outside_kingdom_workspace(monkeypatch, 
     result = {'output': output, **receipt(task, output)}
     with pytest.raises(ValueError, match='outside its workspace'):
         verify_receipt(task, result)
+
+
+
+def test_browser_placement_requires_both_grants_and_never_uses_control_only_worker(runtime, monkeypatch):
+    import asyncio
+    roles = list(runtime.swarm.registry._knights)
+    assert len(roles) >= 2
+    for role in roles:
+        runtime.grant_computer_tools(role, [], persist=False)
+    runtime.grant_computer_tools(roles[0], ['computer.control'], persist=False)
+    runtime.grant_computer_tools(roles[1], ['computer.control', 'network.access'], persist=False)
+    async def fake_run(name, prompt, task):
+        return {'knight': name, 'verification': {'state': 'VERIFIED'}}
+    monkeypatch.setattr(runtime.swarm, '_run', fake_run)
+    task = {'id': 'placement-test', 'prompt': 'Read approved page',
+            'metadata': {'tool': TOOL}}
+    result = asyncio.run(runtime.swarm.execute(task))
+    assert result['plan']['subtasks'][0]['knight'] == roles[1]
+    assert result['results'][0]['knight'] == roles[1]
+    task['metadata']['requested_knight'] = roles[0]
+    with pytest.raises(PermissionError, match='lacks required computer-tool grants'):
+        asyncio.run(runtime.swarm.execute(task))
