@@ -90,16 +90,23 @@ def test_federation_heartbeat_signs_measured_load_with_inventory(monkeypatch):
     assert not local.verify_signature(public, message.get_canonical_bytes(), signature)
 
 
-def test_new_unavailable_sample_clears_previously_idle_load(monkeypatch):
-    import copy
-    from backend.cluster.node_registry import node_registry, NodeInfo
+def test_new_unavailable_sample_clears_previously_idle_load(tmp_path, monkeypatch):
+    from backend.cluster import heartbeat
+    from backend.cluster.node_registry import NodeInfo, NodeRegistry
     from backend.cluster.heartbeat import HeartbeatManager
+    from backend.storage.db import Database
+    from backend.storage.repository import KnightRepository
+
+    repo = KnightRepository(Database(tmp_path / 'load.db'))
+    registry = NodeRegistry(repository=repo)
     stored = NodeInfo(node_id='peer', node_state_val='CONNECTED', last_heartbeat=1,
         public_identity={'node_type': 'commander'}, granted_capabilities=['text.analyze@1.0.0'],
         connection_metadata={'load_metrics': {'cpu_percent': 1, 'memory_percent': 1}}).to_dict()
-    monkeypatch.setattr(node_registry.repo, 'get', lambda _: copy.deepcopy(stored))
-    monkeypatch.setattr(node_registry.repo, 'save', lambda data: stored.update(copy.deepcopy(data)))
-    monkeypatch.setattr('backend.cluster.heartbeat.time.time', lambda: 100)
+    repo.save(stored)
+    monkeypatch.setattr(heartbeat, 'node_registry', registry)
+    monkeypatch.setattr(heartbeat.time, 'time', lambda: 100)
     assert HeartbeatManager().ping('peer', load_metrics={})['success']
-    assert stored['last_heartbeat'] == 100
-    assert stored['connection_metadata']['load_metrics'] == {}
+    updated = repo.get('peer')
+    assert updated['last_heartbeat'] == 100
+    assert updated['connection_metadata']['load_metrics'] == {}
+    assert updated['granted_capabilities'] == ['text.analyze@1.0.0']
