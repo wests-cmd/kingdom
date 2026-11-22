@@ -72,7 +72,7 @@ def test_browser_can_only_use_server_owner_approved_hosts(monkeypatch):
     with pytest.raises(PermissionError, match='not approved'):
         run_isolated_browser({'start_url': 'https://different.org',
                               'allowed_hosts': ['different.org'],
-                              'actions': [], '_receipt_id': 'test'})
+                              'actions': [], '_receipt_id': 'test'}, guard=lambda: None)
 
 
 def test_headless_browser_uses_private_context_and_not_user_input(monkeypatch, tmp_path):
