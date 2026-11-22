@@ -959,3 +959,67 @@ input[type=color] { width:56px; height:40px; padding:4px!important; cursor:point
 .swarm-controls form>fieldset { grid-column:1/-1; }
 .swarm-controls form :is(input:not([type=checkbox]),select) { width:100%; box-sizing:border-box; }
 .swarm-controls h4 { margin-top:22px; }
+
+
+/* Beginner Home: simple, inspectable and responsive; no animated status graphics. */
+.home-control-center { display:grid; gap:18px; min-width:0; }
+.home-control-center .panel { min-width:0; }
+.home-welcome { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; }
+.home-welcome .muted { max-width:64ch; }
+.home-overview { display:grid; gap:10px; }
+.home-overview .section-heading, .home-work-section .section-heading { flex-wrap:wrap; gap:12px; align-items:start; }
+.home-headline { font-size:17px; line-height:1.4; }
+.home-summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:8px 0; }
+.home-summary-grid .card { display:grid; gap:4px; min-width:0; padding:12px; }
+.home-summary-grid .card-value { font-size:22px; }
+.home-work-section { min-width:0; }
+.home-task-list { padding:0; list-style:none; margin:14px 0 0; display:grid; gap:10px; }
+.home-task-row { border:1px solid var(--surface-border); border-radius:8px; padding:14px; display:grid; gap:6px; min-width:0; }
+.home-task-row p { margin:0; overflow-wrap:anywhere; }
+.home-task-title, .home-task-footer { display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+.home-task-title strong { font-size:14px; }
+.home-task-footer { margin-top:4px; }
+.home-task-title .status-chip { max-width:100%; white-space:normal; }
+.home-attention-message { border-left:3px solid var(--accent-orange); padding:14px; background:var(--input-bg); margin:10px 0; display:grid; justify-items:start; gap:8px; }
+.home-attention-message p { margin:0; }
+.home-advanced { display:grid; gap:16px; margin-top:16px; }
+@media(max-width:1100px) { .home-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:540px) {
+ .home-summary-grid { grid-template-columns:1fr; }
+ .home-task-footer button { width:100%; }
+ .home-control-center .action-row { display:flex; flex-wrap:wrap; }
+}
+:root[data-large-display=true] .home-summary-grid { grid-template-columns:1fr; }
+
+
+/* Expandable task evidence: timeline shows only persisted event metadata. */
+.task-insights {margin-top:12px;border-top:1px solid var(--surface-border);padding-top:12px;min-width:0;}
+.task-insights summary {cursor:pointer;font-weight:600;}
+.task-insights-panel {display:grid;gap:16px;margin-top:14px;max-width:100%;}
+.task-insights-panel>section {min-width:0;overflow-wrap:anywhere;}
+.task-insights-panel .section-heading {display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.task-insights-panel h4 {margin:0 0 8px;}
+.task-insights-panel ul {padding-left:20px;}
+.task-timeline {margin:12px 0;padding:0 0 0 22px;display:grid;gap:12px;}
+.task-timeline li {padding-left:8px;min-width:0;}
+.task-timeline time {display:block;color:var(--text-muted);font-size:12px;}
+.task-timeline p {margin:4px 0 0;}
+/* Recorded event notification center: no animation or OS notifications. */
+.notification-center .section-heading {flex-wrap:wrap;gap:12px;align-items:center;}
+.notification-center .action-row {flex-wrap:wrap;}
+.notification-list {list-style:none;margin:12px 0 0;padding:0;display:grid;gap:8px;}
+.notification-list li {min-width:0;border:1px solid var(--surface-border);border-radius:8px;padding:12px;}
+.notification-list li.notice-new {border-left:3px solid var(--accent-orange);}
+.notification-list .home-task-title {display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+.notification-list p {margin:6px 0;overflow-wrap:anywhere;}
+/* Health values use unambiguous units and stack on compact displays. */
+.health-panel {display:grid;gap:12px;margin-top:14px;min-width:0;}
+.health-panel .section-heading {flex-wrap:wrap;}
+.health-panel .home-summary-grid {grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));}
+.health-provider-status {border:1px solid var(--surface-border);border-radius:8px;padding:12px;}
+.health-provider-status p {margin:4px 0;}
+@media(max-width:540px) {
+ .notification-list .home-task-title,.task-insights-panel .section-heading {display:grid;gap:8px;}
+ .notification-list button,.task-insights-panel button {width:100%;}
+ .health-panel .home-summary-grid {grid-template-columns:1fr;}
+}

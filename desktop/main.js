@@ -367,6 +367,48 @@ async function runReleaseSmoke(reportPath) {
   const verifiedTask = await until(() => mainWindow.webContents.executeJavaScript("fetch('/tasks').then(r => r.json()).then(tasks => tasks.find(t => t.prompt === 'native release verification' && t.status === 'completed'))"), 'real verified native task');
   if (verifiedTask.result.results[0].outcome.output.words !== 3 || verifiedTask.result.results[0].verification.state !== 'VERIFIED') throw new Error('Native task outcome verification failed');
   report.taskExecuted = {taskId: verifiedTask.id, words: 3, verification: 'VERIFIED'};
+  // Exercise the actual packaged visibility experience, not only the API schema.
+  report.userVisibility = await mainWindow.webContents.executeJavaScript(`(async () => {
+    const id = ${JSON.stringify(verifiedTask.id)};
+    const timelineResponse = await fetch('/tasks/'+encodeURIComponent(id)+'/timeline');
+    if (!timelineResponse.ok) throw new Error('Owner task timeline unavailable');
+    const timeline = await timelineResponse.json();
+    if (timeline.task_id !== id || !Array.isArray(timeline.events) || !timeline.events.length) {
+      throw new Error('Native task did not persist indexed timeline events');
+    }
+    if (timeline.events.some(event => Object.keys(event).some(key => !['event_id','event_type','timestamp'].includes(key)))) {
+      throw new Error('Timeline leaked fields outside event metadata');
+    }
+    const noticesResponse = await fetch('/notifications?limit=10');
+    if (!noticesResponse.ok) throw new Error('Owner notification history unavailable');
+    const notices = await noticesResponse.json();
+    if (!Array.isArray(notices) || notices.some(event =>
+      Object.keys(event).some(key => !['event_id','event_type','timestamp','task_id'].includes(key)))) {
+      throw new Error('Notifications leaked event payloads');
+    }
+    return {persistedTaskTimeline:true,sanitizedNotifications:true,linkedEvents:timeline.events.length};
+  })()`);
+  await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('.task-insights summary'))"), 'task timeline control');
+  await mainWindow.webContents.executeJavaScript("document.querySelector('.task-insights summary').click()");
+  await until(() => mainWindow.webContents.executeJavaScript(
+    "Boolean(document.querySelector('.task-insights-panel')) && document.body.textContent.includes('What changed? Evidence report')"
+  ), 'expanded timeline and evidence report');
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e=>['Home','Dashboard'].includes(e.textContent)).click()");
+  await until(() => mainWindow.webContents.executeJavaScript(
+    "document.body.textContent.includes('Needs your attention') && document.body.textContent.includes('Working now') && document.body.textContent.includes('Recently finished') && document.body.textContent.includes('Notifications')"
+  ), 'beginner Home status sections');
+  await mainWindow.webContents.executeJavaScript(
+    "Array.from(document.querySelectorAll('button')).find(e=>e.textContent==='Computers & model health').click()");
+  await until(() => mainWindow.webContents.executeJavaScript(
+    "Boolean(document.querySelector('.health-panel')) && document.body.textContent.includes('CPU cores on this host')"
+  ), 'computer and model health panel');
+  report.userVisibility.homeSections = true;
+  report.userVisibility.healthPanel = true;
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e=>e.textContent==='Tasks').click()");
+  await until(() => mainWindow.webContents.executeJavaScript(
+    'Boolean(document.querySelector(\'textarea[aria-label="Task description"]\'))'
+  ), 'task form restored after visibility check');
+
   report.missionWorkspace = await mainWindow.webContents.executeJavaScript(`(async () => {
     async function request(url, method='GET', body=null) {
       const response=await fetch(url,{method,headers:{'X-Kingdom-Request':'1','Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
