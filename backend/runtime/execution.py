@@ -101,6 +101,11 @@ def execute_request(task, capabilities, *, execution_guard=None):
             params = {**params, '_task_context': {key: task.get(key) for key in ('id', 'lease_id', 'fencing_token')}}
             params['_task_context']['task_id'] = params['_task_context'].pop('id')
         tools = native_tools()
+        if tool == 'computer.browser.run@1.0.0':
+            if not callable(execution_guard):
+                raise PermissionError('Browser control requires a live authoritative task guard')
+            from backend.runtime.isolated_browser import run_isolated_browser
+            tools.register_handler(tool, lambda parameters: run_isolated_browser(parameters, guard=execution_guard))
         admit()
         output = tools.execute(tool, params, list(capabilities), [])
         return {"kind": "native_tool", "tool": tool, "output": output,
