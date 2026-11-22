@@ -111,6 +111,9 @@ def run_isolated_browser(params):
     DNS-rebinding tests are required before releasing unattended internet control.
     """
     hosts, actions = validate_plan(params)
+    receipt_id = params.get('_receipt_id')
+    if not isinstance(receipt_id, str) or not 1 <= len(receipt_id) <= 128:
+        raise ValueError('The governed task identity is required before any browser action')
     if os.environ.get('KINGDOM_EXPERIMENTAL_ISOLATED_BROWSER') != '1':
         raise PermissionError('Isolated browser preview is disabled until explicitly enabled for testing')
     try:
@@ -161,9 +164,6 @@ def run_isolated_browser(params):
                         page.locator(step['selector']).press(step['key'], timeout=5000)
                     if not allowed_url(page.url, hosts):
                         raise PermissionError('Browser left approved HTTPS domains')
-                receipt_id = params.get('_receipt_id')
-                if not isinstance(receipt_id, str) or len(receipt_id) > 128:
-                    raise ValueError('The governed task identity is required')
                 directory = Path('data/browser-captures')
                 directory.mkdir(parents=True, exist_ok=True)
                 capture = directory / (hashlib.sha256(receipt_id.encode()).hexdigest() + '.png')
