@@ -177,7 +177,8 @@ def test_headless_browser_uses_private_context_and_not_user_input(monkeypatch, t
     }, guard=lambda: events.append(('task_guard',)))
     assert events.count(('task_guard',)) >= 3
     assert result['headless'] and result['uses_user_desktop'] is False
-    assert result['capture_sha256'] and Path(result['capture']).parts[:2] == ('data', 'browser-captures')
+    assert result['capture_sha256'] and Path(result['capture']).parent.name == 'browser-captures'
+    assert Path(result['capture']).is_file()
     assert ('blocked', 'blockedbyclient') in events
     assert ('write_blocked', 'blockedbyclient') in events
     assert ('redirect_blocked', 'blockedbyclient') in events
