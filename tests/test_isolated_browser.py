@@ -165,3 +165,11 @@ def test_headless_browser_uses_private_context_and_not_user_input(monkeypatch, t
     assert ('fetch', {'max_redirects': 0, 'timeout': 5000}) in events
     assert ('click', 'button') in events
     assert ('context_close',) in events and ('browser_close',) in events
+
+
+def test_governed_receipt_identity_is_required_before_effects(monkeypatch):
+    monkeypatch.setenv('KINGDOM_EXPERIMENTAL_ISOLATED_BROWSER', '1')
+    monkeypatch.setenv('KINGDOM_BROWSER_ALLOWED_HOSTS', 'example.org')
+    with pytest.raises(ValueError, match='governed task identity'):
+        run_isolated_browser({'start_url': 'https://example.org',
+                              'allowed_hosts': ['example.org'], 'actions': []})
