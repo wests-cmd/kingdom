@@ -105,9 +105,11 @@ def browser_readiness():
             pass
     module_installed = importlib.util.find_spec('playwright') is not None
     browser_binary_present = False
+    websocket_interception_available = False
     if module_installed:
         try:
-            from playwright.sync_api import sync_playwright
+            from playwright.sync_api import sync_playwright, BrowserContext
+            websocket_interception_available = callable(getattr(BrowserContext, 'route_web_socket', None))
             with sync_playwright() as playwright:
                 browser_binary_present = Path(playwright.chromium.executable_path).is_file()
         except Exception:
@@ -129,11 +131,14 @@ def browser_readiness():
         blockers.append('Optional Playwright adapter not installed')
     elif not browser_binary_present:
         blockers.append('Headless Chromium executable unavailable')
+    if module_installed and not websocket_interception_available:
+        blockers.append('Playwright WebSocket interception unavailable; update the optional adapter')
     return {
         'ready_for_disposable_testing': not blockers, 'blockers': blockers,
         'enabled': enabled, 'owner_destination_count': approved_count,
         'adapter_installed': module_installed,
         'headless_browser_binary_present': browser_binary_present,
+        'websocket_interception_available': websocket_interception_available,
         'eligible_apprentices': eligible_roles,
         'public_release_certified': False,
         'scope': 'Availability probe only; OS/network sandbox and real website acceptance are unverified',
