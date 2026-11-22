@@ -64,7 +64,7 @@ class ProfileRequest(BaseModel):
 
 
 class ComputerGrant(BaseModel):
-    capabilities: list[Literal['filesystem.read', 'filesystem.write', 'process.execute', 'computer.observe', 'computer.control']] = Field(max_length=5)
+    capabilities: list[Literal['filesystem.read', 'filesystem.write', 'process.execute', 'computer.observe', 'computer.control', 'network.access']] = Field(max_length=6)
 
 
 class ChatRequest(BaseModel):
@@ -118,9 +118,9 @@ async def model_chat(ident: str, request: ChatRequest):
 def computer_tools():
     from backend.api import engine
     from backend.runtime.computer_tools import TOOL_CAPABILITIES
-    return {'tools': TOOL_CAPABILITIES, 'apprentices': [{'role': name, 'capabilities': list(engine.security.nodes.get_node_capabilities(name) & set(TOOL_CAPABILITIES.values()))}
+    return {'tools': TOOL_CAPABILITIES, 'apprentices': [{'role': name, 'capabilities': sorted(engine.security.nodes.get_node_capabilities(name) & (set(TOOL_CAPABILITIES.values()) | {'network.access'}))}
             for name in engine.swarm.registry._knights],
-            'notice': 'File tools stay within the Kingdom workspace. Process tools run on the host and require exact human approval. Desktop capture needs an interactive desktop; headless servers cannot capture one.'}
+            'notice': 'File tools stay within the workspace. Host process and foreground desktop input can affect your computer. Experimental browser network access is a separate privileged grant and is still disabled by default; this is not an OS sandbox.'}
 
 
 @router.put('/apprentices/{role}/tools')
