@@ -244,6 +244,11 @@ class RuntimeEngine:
             meta = {**meta, 'capability':'compute', 'max_attempts':1}
         if meta.get('tool') in TOOL_CAPABILITIES:
             if meta.get('subtasks'): raise ValueError('Computer operations must be one exact reviewed task')
+            if meta.get('tool') == 'computer.browser.run@1.0.0':
+                if meta.get('offload') or meta.get('execution_target') == 'remote':
+                    raise ValueError('Experimental browser actions are local-only until remote isolation is verified')
+                # A browser click can have irreversible effects; never auto-retry.
+                meta = {**meta, 'max_attempts': 1}
             meta = {**meta, 'capability': TOOL_CAPABILITIES[meta['tool']]}
         if meta.get('tool') == 'build.run@1.0.0':
             from backend.runtime.remote_build import BuildSpec
