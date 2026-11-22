@@ -39,6 +39,9 @@ jobs:
         run: |
           npm --prefix frontend ci
           npm --prefix frontend run build
+      - name: Fail-fast private-browser security contracts (not live OS isolation)
+        run: |
+          python3 -m pytest -q tests/test_isolated_browser.py tests/test_isolated_browser_integration.py tests/test_browser_readiness.py
       - name: Run Backend Unit Tests & Distributed Process E2E Suite
         run: |
           python3 -m pytest
