@@ -11,6 +11,7 @@ import {workerLabel} from '../components/common/presentation'
 import {taskStatusInfo,taskCounts} from '../components/common/userStatus'
 import MissionEditor from '../components/MissionEditor'
 import DesktopActions from '../components/DesktopActions'
+import PrivateBrowserPreview from '../components/PrivateBrowserPreview'
 import ParallelChats from '../components/ParallelChats'
 import WorkBacklogPanel from '../components/WorkBacklogPanel'
 import WorkProgrammePanel from '../components/WorkProgrammePanel'
@@ -194,6 +195,7 @@ export default function Tasks() {
 
       {error && <p role="alert">{error}</p>}
       <details><summary>Import a prepared mission</summary><p>Use an existing plan without spending a model request on planning. Import creates a draft; review and approve it before execution.</p><textarea aria-label="Prepared mission JSON" rows={10} value={importPlan} onChange={e=>setImportPlan(e.target.value)} style={{width:'100%',minWidth:0}}/><button disabled={submitting||!importPlan.trim()} onClick={async()=>{setSubmitting(true);setError('');try{const parsed=JSON.parse(importPlan);const {data}=await api.post('/missions',parsed.plan?parsed:{plan:parsed});setMission(data);setPlanText(JSON.stringify(data.plan,null,2));setImportPlan('');refreshMissions()}catch(e){setError(e.response?.data?.detail||'Provide a valid mission plan.')}finally{setSubmitting(false)}}}>Import as draft</button></details>
+      <PrivateBrowserPreview onQueued={loadTasks}/>
       <DesktopActions onQueued={loadTasks}/>
 
       {mission && <section className="panel"><h3>Review and edit the mission</h3><p>Add or remove steps, requirements and deliverables before approving. No plan executes just because it was generated.</p><MissionEditor value={planText} onChange={setPlanText}/><details><summary>Advanced plan format</summary><textarea aria-label="Mission plan" rows={16} style={{width:'100%',minHeight:300}} value={planText} onChange={e=>setPlanText(e.target.value)}/></details><button disabled={submitting} onClick={savePlan}>Save edited plan</button></section>}
