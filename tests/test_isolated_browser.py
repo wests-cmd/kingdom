@@ -160,7 +160,7 @@ def test_headless_browser_uses_private_context_and_not_user_input(monkeypatch, t
         '_receipt_id': 'fake-task',
     })
     assert result['headless'] and result['uses_user_desktop'] is False
-    assert result['capture_sha256'] and result['capture'].startswith('data/browser-captures/')
+    assert result['capture_sha256'] and __import__('pathlib').Path(result['capture']).parts[:2] == ('data', 'browser-captures')
     assert ('blocked', 'blockedbyclient') in events
     assert ('fetch', {'max_redirects': 0, 'timeout': 5000}) in events
     assert ('click', 'button') in events
