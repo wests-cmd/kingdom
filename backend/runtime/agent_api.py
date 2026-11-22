@@ -84,6 +84,53 @@ def desktop_readiness():
             'foreground_available':foreground is not None,
             'apprentices':grants,'scope':'Interactive Windows desktop only. Select the exact foreground window; actual observation/action/read-back must still be verified. No tools or privileges were granted by this check.'}
 
+@router.get('/browser-readiness')
+def browser_readiness():
+    """Owner-only test readiness; never confuse a browser binary with sandbox certification."""
+    import importlib.util
+    import os
+    from pathlib import Path
+    from backend.runtime.isolated_browser import validate_host
+
+    enabled = os.environ.get('KINGDOM_EXPERIMENTAL_ISOLATED_BROWSER') == '1'
+    configured = os.environ.get('KINGDOM_BROWSER_ALLOWED_HOSTS', '')
+    policy_valid = False
+    approved_count = 0
+    if configured:
+        try:
+            parsed = [validate_host(item) for item in configured.split(',')]
+            policy_valid = len(set(parsed)) == len(parsed)
+            approved_count = len(parsed) if policy_valid else 0
+        except ValueError:
+            pass
+    module_installed = importlib.util.find_spec('playwright') is not None
+    browser_binary_present = False
+    if module_installed:
+        try:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as playwright:
+                browser_binary_present = Path(playwright.chromium.executable_path).is_file()
+        except Exception:
+            pass
+    blockers = []
+    if not enabled:
+        blockers.append('Experimental browser mode is disabled')
+    if not policy_valid:
+        blockers.append('No valid owner-configured browser domains')
+    if not module_installed:
+        blockers.append('Optional Playwright adapter not installed')
+    elif not browser_binary_present:
+        blockers.append('Headless Chromium executable unavailable')
+    return {
+        'ready_for_disposable_testing': not blockers, 'blockers': blockers,
+        'enabled': enabled, 'owner_destination_count': approved_count,
+        'adapter_installed': module_installed,
+        'headless_browser_binary_present': browser_binary_present,
+        'public_release_certified': False,
+        'scope': 'Availability probe only; OS/network sandbox and real website acceptance are unverified',
+    }
+
+
 @router.post('/{ident}/review-feedback')
 def review_feedback(ident: str, request: ReviewFeedback):
     try:return service().review_feedback(ident,request.message,request.expected_updated_at)
