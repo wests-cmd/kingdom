@@ -236,6 +236,13 @@ class TaskManager:
         return deepcopy(task)
 
     @synchronized
+    def stop_running_browser(self, task_id: str) -> dict[str, Any]:
+        """Stop only the currently active browser job; retain review evidence."""
+        stopped = self.repo.stop_running_browser(task_id)
+        self._tasks[task_id] = stopped
+        return deepcopy(stopped)
+
+    @synchronized
     def cancel(self, task_id: str) -> dict[str, Any]:
         task = self._tasks.get(task_id)
         if task is None:
