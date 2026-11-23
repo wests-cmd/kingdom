@@ -12,11 +12,12 @@ import os
 from pathlib import Path
 import re
 import tempfile
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit, parse_qsl
 
 MAX_ACTIONS = 8
 MAX_HOSTS = 4
 MAX_TEXT = 6000
+SENSITIVE_QUERY_PARTS = ('token', 'secret', 'password', 'api_key', 'apikey', 'credential', 'authorization', 'sessionid')
 MIN_AVAILABLE_MEMORY_BYTES = 768 * 1024 * 1024
 _ALLOWED_KEYS = {'Enter', 'Tab', 'Escape', 'Backspace', 'ArrowDown', 'ArrowUp'}
 _HOST = re.compile(r'^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$', re.ASCII)
@@ -49,10 +50,15 @@ def allowed_url(value, hosts):
         return False
     try:
         parsed = urlsplit(value)
+        credential_params = any(
+            any(part in key.lower() for part in SENSITIVE_QUERY_PARTS)
+            for key, _value in parse_qsl(parsed.query, keep_blank_values=True)
+        )
         return (parsed.scheme == 'https' and parsed.hostname in hosts and
                 (parsed.port is None or parsed.port == 443) and
                 not parsed.username and not parsed.password and
-                not parsed.fragment and parsed.hostname is not None)
+                not parsed.fragment and parsed.hostname is not None and
+                not credential_params)
     except (ValueError, TypeError):
         return False
 
@@ -227,9 +233,16 @@ def run_isolated_browser(params, *, guard=None):
                 finally:
                     if temporary_path is not None:
                         temporary_path.unlink(missing_ok=True)
+                from backend.security.credential_broker import CredentialBroker
+                scrub = CredentialBroker().sanitize_payload_for_llm
+                visible_url = urlsplit(page.url)
+                # Never persist query-string values from untrusted websites in
+                # receipts or model tool context; they may contain session data.
+                safe_url = urlunsplit((visible_url.scheme, visible_url.netloc,
+                                       visible_url.path, '', ''))
                 return {
-                    'url': page.url, 'title': page.title()[:300],
-                    'text': page.locator('body').inner_text(timeout=5000)[:MAX_TEXT],
+                    'url': safe_url, 'title': scrub(page.title()[:300]),
+                    'text': scrub(page.locator('body').inner_text(timeout=5000)[:MAX_TEXT]),
                     'actions_completed': len(actions), 'headless': True,
                     'uses_user_desktop': False, 'approved_hosts': sorted(hosts),
                     'capture': str(capture),
