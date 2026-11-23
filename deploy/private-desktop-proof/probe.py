@@ -15,6 +15,7 @@ from PIL import Image
 
 EXPECTED = "kingdom-private-control-ok"
 PROOF = Path("/tmp/private-desktop-confirmation.txt")
+TARGET = Path("/tmp/private-desktop-target.json")
 CAPTURE = Path("/tmp/private-desktop.png")
 
 
@@ -49,14 +50,30 @@ def select_private_window():
     raise RuntimeError("The native Tk app did not present a private X11 window")
 
 
+def target_coordinates():
+    deadline = time.monotonic() + 9
+    while time.monotonic() < deadline:
+        if TARGET.exists():
+            value = json.loads(TARGET.read_text(encoding="utf-8"))
+            x, y = value.get("x"), value.get("y")
+            if type(x) is int and type(y) is int and 0 <= x < 800 and 0 <= y < 600:
+                return str(x), str(y)
+            raise RuntimeError("The private Tk input target is outside the Xvfb display")
+        time.sleep(0.1)
+    raise RuntimeError("The native Tk entry was never mapped to the private display")
+
+
 def main():
     if os.geteuid() == 0 or os.environ.get("DISPLAY") != ":99":
         raise RuntimeError("Refusing root or any non-private display")
     prove_no_outbound_network()
 
-    window = select_private_window()
-    # X11 input travels only through DISPLAY=:99 inside the container.
-    command("xdotool", "windowfocus", "--sync", window)
+    select_private_window()
+    x, y = target_coordinates()
+    # The test issues genuine XTEST mouse and keyboard events. The X server
+    # and Tk fixture both live in the restricted container, not on the host.
+    command("xdotool", "mousemove", "--sync", x, y)
+    command("xdotool", "click", "1")
     command("xdotool", "type", "--clearmodifiers", "--delay", "8", EXPECTED)
     command("xdotool", "key", "Return")
 
