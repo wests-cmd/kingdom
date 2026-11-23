@@ -31,6 +31,17 @@ export default function Tasks() {
   const [error, setError] = useState("")
 
   const [submitting, setSubmitting] = useState(false)
+  const [stoppingBrowser, setStoppingBrowser] = useState('')
+  const stopPrivateBrowser = async id => {
+    setStoppingBrowser(id)
+    setError('')
+    try {
+      await api.post(`/tasks/${encodeURIComponent(id)}/stop-private-browser`)
+      await loadTasks()
+    } catch (reason) {
+      setError(reason.response?.data?.detail || 'Unable to stop this private browser task. Use emergency stop if immediate fleet-wide containment is required.')
+    } finally { setStoppingBrowser('') }
+  }
 
   const [developerView,setDeveloperView] = useState(false)
 
@@ -230,6 +241,12 @@ export default function Tasks() {
 
               {t.assigned_knight && <p className="muted">Worker: {workerLabel(t.assigned_knight)}</p>}
 
+              {t.metadata?.tool === 'computer.browser.run@1.0.0' && ['queued', 'waiting_approval', 'running', 'leased'].includes(String(t.status || '').toLowerCase()) && <div className="action-row">
+                <button type="button" disabled={!!stoppingBrowser} onClick={() => stopPrivateBrowser(t.id)}>
+                  {stoppingBrowser === t.id ? 'Stopping private browser…' : 'Stop private browser task'}
+                </button>
+                <p className="muted">Stops the next governed browser operation and holds running work for review. It cannot undo a request already sent to a website.</p>
+              </div>}
               {t.result && <TaskResult result={t.result} taskId={t.id}/>}
               <TaskInsights task={t}/>
               {String(t.status || '').toLowerCase() === 'completed' && !t.result && <p role="alert">Kingdom recorded completion, but this view has no result to show. Do not treat this as verified work.</p>}
