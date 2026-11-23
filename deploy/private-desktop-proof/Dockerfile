@@ -10,7 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-tk python3-pil \
-      xvfb xdotool x11-utils x11-apps fonts-dejavu-core \
+      xvfb xdotool x11-utils x11-apps netpbm fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 10001 --create-home --shell /usr/sbin/nologin kingdom-demo \
     && install -d -m 0755 /opt/kingdom
