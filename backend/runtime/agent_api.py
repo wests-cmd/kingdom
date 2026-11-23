@@ -143,6 +143,7 @@ def browser_readiness():
     return {
         'ready_for_disposable_testing': not blockers, 'blockers': blockers,
         'enabled': enabled, 'owner_destination_count': approved_count,
+        'experimental_interaction_enabled': os.environ.get('KINGDOM_EXPERIMENTAL_BROWSER_INTERACTION') == '1',
         'adapter_installed': module_installed,
         'headless_browser_binary_present': browser_binary_present,
         'websocket_interception_available': websocket_interception_available,
