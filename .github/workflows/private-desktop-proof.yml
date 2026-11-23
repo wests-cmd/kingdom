@@ -34,6 +34,7 @@ jobs:
           docker inspect --format '{{json .HostConfig}}' "$cid" > evidence/host-config.json
           docker start -a "$cid" | tee evidence/worker-report.log
           docker cp "$cid:/tmp/private-desktop.png" evidence/private-desktop.png
+          docker cp "$cid:/tmp/private-desktop-confirmation.txt" evidence/input-confirmation.txt
           python3 scripts/verify_private_desktop_evidence.py evidence
 
       - name: Retain disposable evidence even when a real GUI test fails
