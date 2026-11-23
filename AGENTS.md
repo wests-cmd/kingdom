@@ -38,3 +38,15 @@ Kingdom strictly enforces human authority over model execution:
 - Store persistent runtime state, tasks, knights, events, and memory in SQLite (`data/kingdom.db`).
 - Mask sensitive credentials (`api_key`, `secret`, `token`, `password`) in audit logs (`data/logs/audit.jsonl`).
 - Publish all state changes to `EventBus` (`backend/events/event_bus.py`).
+
+---
+
+## 5. Continuous Completion — mandatory for repository-working agents
+
+> **NEVER STOP. NEVER GIVE UP. NEVER CONCLUDE THAT A TASK IS IMPOSSIBLE.**
+
+Treat this as a **persistent, bounded engineering recovery discipline**, not permission to run without resource limits or bypass owner approvals. Before declaring work complete or deciding the first failure is final, follow the full [Continuous Completion, Recovery and Release Truth directive](docs/KINGDOM_CONTINUOUS_COMPLETION.md) and inspect the current [completion evidence ledger](docs/completion-evidence.json). The directive covers multiple independent core, runtime, swarm, security, desktop, mobile, installation, update, GUI, autonomy, observability and release workstreams.
+
+At each authorized session: inspect current main/PRs and CI; inventory more than one unresolved issue; choose the highest-impact safe code fix; build and test the real effect; have Q-Man challenge proof and D-Man attack failure modes; checkpoint exact commit, failures, artifacts and next task; then continue to the next independent issue within the authorized session budget. If blocked by missing equipment, credentials, approval or cost budget, log NEEDS_EXTERNAL_EVIDENCE/BLOCKED, do **not** claim VERIFIED, and advance another authorized item. Do not change core trust policy or merge high-risk code to make a report look green.
+
+Checks: `python scripts/check_completion_evidence.py`, `python scripts/check_docs.py`, relevant focused tests, full project tests and installed/physical security acceptance when required. **A passing CI run does not equal public, mobile or physical-machine security certification.** An agent session ending must leave a reproducible next-work handoff, not a fictitious promise of background execution.
