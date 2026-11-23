@@ -128,3 +128,11 @@ def test_invalid_date_and_status_rejected(ledger):
 
 def test_ledger_path_is_project_owned():
     assert DEFAULT_LEDGER.relative_to(Path(__file__).resolve().parents[1]).as_posix() == "docs/completion-evidence.json"
+
+
+def test_agent_handoff_points_to_directive():
+    root = Path(__file__).resolve().parents[1]
+    agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+    assert "docs/KINGDOM_CONTINUOUS_COMPLETION.md" in agents
+    assert "docs/completion-evidence.json" in agents
+    assert "NEVER STOP. NEVER GIVE UP. NEVER CONCLUDE THAT A TASK IS IMPOSSIBLE." in agents
