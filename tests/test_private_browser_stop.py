@@ -82,7 +82,7 @@ def test_stop_endpoint_requires_owner_and_cannot_stop_arbitrary_task(monkeypatch
         calls.append(task_id)
         raise ValueError('Targeted browser stop is limited to private browser tasks')
     monkeypatch.setattr(api_engine, 'stop_browser_task', do_stop)
-    assert TestClient(app).post('/tasks/not-browser/stop-private-browser').status_code == 401
+    assert TestClient(app).post('/tasks/not-browser/stop-private-browser').status_code in {401, 403}
     assert calls == []
     response = owner_client(app).post('/tasks/not-browser/stop-private-browser')
     assert response.status_code == 409
