@@ -80,15 +80,18 @@ def main():
     deadline = time.monotonic() + 8
     while time.monotonic() < deadline and not PROOF.exists():
         time.sleep(0.12)
-    if not PROOF.exists() or PROOF.read_text(encoding="utf-8") != EXPECTED:
-        raise RuntimeError("The app did not receive and verify actual private-display input")
-
-    command("xwd", "-root", "-silent", "-display", ":99",
-            "-out", "/tmp/private-desktop.xwd")
-    with Image.open("/tmp/private-desktop.xwd") as image:
-        if image.size != (800, 600):
-            raise RuntimeError("Private Xvfb screenshot dimensions do not match")
-        image.convert("RGB").save(CAPTURE, format="PNG")
+    try:
+        if not PROOF.exists() or PROOF.read_text(encoding="utf-8") != EXPECTED:
+            raise RuntimeError("The app did not receive and verify actual private-display input")
+    finally:
+        # Capture the private desktop on either success or a failed GUI event.
+        # A red test still retains visual evidence, never host screenshots.
+        command("xwd", "-root", "-silent", "-display", ":99",
+                "-out", "/tmp/private-desktop.xwd")
+        with Image.open("/tmp/private-desktop.xwd") as image:
+            if image.size != (800, 600):
+                raise RuntimeError("Private Xvfb screenshot dimensions do not match")
+            image.convert("RGB").save(CAPTURE, format="PNG")
 
     data = CAPTURE.read_bytes()
     print(json.dumps({
