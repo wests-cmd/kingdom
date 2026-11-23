@@ -1,0 +1,46 @@
+name: Private desktop isolation proof (offline Linux)
+
+on:
+  pull_request:
+    paths:
+      - "deploy/private-desktop-proof/**"
+      - "scripts/verify_private_desktop_evidence.py"
+      - ".github/workflows/private-desktop-proof.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  disposable-x11:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build a disposable private X11 GUI fixture
+        run: docker build --file deploy/private-desktop-proof/Dockerfile --tag kingdom-private-desktop-proof deploy/private-desktop-proof
+
+      - name: Exercise real private desktop input with no host display or network
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          cid=$(docker create --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --pids-limit 64 --memory 512m --cpus 0.5 \
+            --tmpfs /tmp:rw,nosuid,nodev,size=96m,mode=1777 \
+            --user 10001:10001 kingdom-private-desktop-proof)
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          docker inspect --format '{{json .HostConfig}}' "$cid" > evidence/host-config.json
+          docker start -a "$cid" | tee evidence/worker-report.log
+          docker cp "$cid:/tmp/private-desktop.png" evidence/private-desktop.png
+          python3 scripts/verify_private_desktop_evidence.py evidence
+
+      - name: Retain disposable evidence even when a real GUI test fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: private-desktop-offline-proof
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 7
