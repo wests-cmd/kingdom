@@ -10,6 +10,10 @@ export function privateBrowserPreviewTask(value) {
       (parsed.port && parsed.port !== '443') || parsed.hash || !parsed.hostname.includes('.')) {
     throw new Error('Choose an HTTPS website without embedded credentials or a fragment.');
   }
+  const sensitiveQueryParts = ['token', 'secret', 'password', 'api_key', 'apikey', 'credential', 'authorization', 'sessionid'];
+  if ([...parsed.searchParams.keys()].some(key => sensitiveQueryParts.some(part => key.toLowerCase().includes(part)))) {
+    throw new Error('Do not place passwords, account tokens or credentials in website links.');
+  }
   const hostname = parsed.hostname.toLowerCase();
   if (hostname === 'localhost' || hostname.endsWith('.localhost') ||
       /^\d+(?:\.\d+){3}$/.test(hostname) || hostname.includes('*')) {
