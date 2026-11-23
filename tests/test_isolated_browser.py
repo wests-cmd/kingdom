@@ -76,6 +76,7 @@ def test_browser_can_only_use_server_owner_approved_hosts(monkeypatch):
 
 
 def test_headless_browser_uses_private_context_and_not_user_input(monkeypatch, tmp_path):
+    monkeypatch.setenv('KINGDOM_EXPERIMENTAL_BROWSER_INTERACTION', '1')
     monkeypatch.setenv('KINGDOM_EXPERIMENTAL_ISOLATED_BROWSER', '1')
     monkeypatch.setenv('KINGDOM_BROWSER_ALLOWED_HOSTS', 'example.org')
     monkeypatch.chdir(tmp_path)
@@ -234,3 +235,16 @@ def test_low_available_ram_blocks_browser_before_launch(monkeypatch):
 ])
 def test_browser_refuses_credentials_in_query_parameters(url):
     assert not allowed_url(url, {'example.org'})
+
+
+
+def test_interactive_browser_actions_are_disabled_by_default(monkeypatch):
+    monkeypatch.setenv('KINGDOM_EXPERIMENTAL_ISOLATED_BROWSER', '1')
+    monkeypatch.setenv('KINGDOM_BROWSER_ALLOWED_HOSTS', 'example.org')
+    monkeypatch.delenv('KINGDOM_EXPERIMENTAL_BROWSER_INTERACTION', raising=False)
+    with pytest.raises(PermissionError, match='disabled for read-only preview'):
+        run_isolated_browser({
+            'start_url': 'https://example.org',
+            'allowed_hosts': ['example.org'], '_receipt_id': 'read-only',
+            'actions': [{'action': 'click', 'selector': 'button'}],
+        }, guard=lambda: None)
