@@ -142,6 +142,8 @@ def run_isolated_browser(params, *, guard=None):
         raise PermissionError('Isolated browser preview is disabled until explicitly enabled for testing')
     if not callable(guard):
         raise PermissionError('Browser tool requires a trusted execution guard from the governed task')
+    if any(step['action'] in {'click', 'fill', 'press'} for step in actions) and os.environ.get('KINGDOM_EXPERIMENTAL_BROWSER_INTERACTION') != '1':
+        raise PermissionError('Interactive browser actions are disabled for read-only preview')
     guard()
     try:
         approved = frozenset(validate_host(item) for item in
