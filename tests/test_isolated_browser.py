@@ -91,7 +91,7 @@ def test_headless_browser_uses_private_context_and_not_user_input(monkeypatch, t
         def press(self, key, **kw):
             events.append(('press', self.selector, key))
         def inner_text(self, **kw):
-            return 'mock visible page'
+            return 'mock visible page ghp_SECRET_OAUTH_TOKEN_999'
 
     class Page:
         url = 'https://example.org/'
@@ -177,6 +177,8 @@ def test_headless_browser_uses_private_context_and_not_user_input(monkeypatch, t
     }, guard=lambda: events.append(('task_guard',)))
     assert events.count(('task_guard',)) >= 3
     assert result['headless'] and result['uses_user_desktop'] is False
+    assert 'ghp_SECRET_OAUTH_TOKEN_999' not in result['text']
+    assert '[REDACTED_BEARER_TOKEN]' in result['text']
     assert result['capture_sha256'] and Path(result['capture']).parent.name == 'browser-captures'
     assert Path(result['capture']).is_file()
     assert ('blocked', 'blockedbyclient') in events
@@ -221,3 +223,14 @@ def test_low_available_ram_blocks_browser_before_launch(monkeypatch):
             'start_url': 'https://example.org/', 'allowed_hosts': ['example.org'],
             'actions': [], '_receipt_id': 'low-ram',
         }, guard=lambda: None)
+
+
+
+@pytest.mark.parametrize('url', [
+    'https://example.org/?token=test-secret',
+    'https://example.org/?access_token=test-secret',
+    'https://example.org/?api_key=publicly-exposed',
+    'https://example.org/?PASSWORD=unused',
+])
+def test_browser_refuses_credentials_in_query_parameters(url):
+    assert not allowed_url(url, {'example.org'})
