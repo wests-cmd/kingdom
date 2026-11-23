@@ -18,6 +18,7 @@ def evidence(tmp_path):
         "Tmpfs": {"/tmp": "rw"}, "PidMode": "", "IpcMode": "private",
     }
     (tmp_path / "host-config.json").write_text(json.dumps(config), encoding="utf-8")
+    (tmp_path / "input-confirmation.txt").write_text("kingdom-private-control-ok", encoding="utf-8")
     capture = tmp_path / "private-desktop.png"
     Image.new("RGB", (800, 600)).save(capture, "PNG")
     report = {
@@ -71,4 +72,11 @@ def test_verifier_denies_invented_native_input(evidence):
     report["native_gui_input"] = "simulated"
     target.write_text(json.dumps(report) + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="Real private X11"):
+        verify(evidence)
+
+
+
+def test_verifier_denies_missing_native_ui_confirmation(evidence):
+    (evidence / "input-confirmation.txt").write_text("model-says-done", encoding="utf-8")
+    with pytest.raises(ValueError, match="did not persist"):
         verify(evidence)
