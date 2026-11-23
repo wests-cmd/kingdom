@@ -35,7 +35,9 @@ The new computer.browser.run@1.0.0 adapter works within Kingdom's existing nativ
 - Requires KINGDOM_BROWSER_ALLOWED_HOSTS to list exact owner-approved HTTPS destinations; model arguments cannot extend those destinations.
 - Runs a fresh nonpersistent headless Chromium context, blocks service workers and downloads, and does not send host cursor/keyboard input.
 - Supports at most eight bounded navigate/click/fill/press actions. No arbitrary JavaScript, localhost, local file URL, wildcard host, or unreviewed browser profile.
-- Saves limited rendered evidence and a screenshot whose digest is checked by the existing independent receipt verifier.
+- Saves limited rendered evidence and a screenshot whose digest is checked by the existing independent receipt verifier. The authenticated owner can download that private-only screenshot from the saved task result; tampered captures and paths outside the workspace are denied.
+- A dedicated **Stop private browser task** control cancels queued work or atomically fences running/leased work, revokes the task lease and marks it RECOVERY_REQUIRED. It does **not** undo requests already sent to websites; the owner reviews them before a new attempt.
+- Before Chromium launch the runtime requires at least 768 MiB available RAM. Low-memory workers report an actionable readiness blocker rather than launching a memory-heavy process over the user's active desktop.
 - Does **not** certify actual external business effects or independent website correctness.
 
 Playwright is an optional development dependency: install Playwright plus its Chromium browser *only for disposable testing*. It is NOT automatically bundled in the current end-user installers. Domain validation and browser interception alone do not prevent every network escape, including DNS rebinding, WebSockets, and browser protocol handlers. Production requires enforced network and OS isolation before enabling this feature for nontechnical users.
