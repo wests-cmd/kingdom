@@ -303,6 +303,31 @@ class RuntimeEngine:
         self.events.publish("task.cancelled", task)
         return task
 
+    def stop_browser_task(self, task_id: str) -> dict[str, Any]:
+        """Owner-reviewed, targeted stop; irreversible external actions may need review."""
+        with self.dispatch_lock:
+            task = self.tasks.get(task_id)
+            if task is None:
+                raise KeyError(task_id)
+            if task.get('metadata', {}).get('tool') != 'computer.browser.run@1.0.0':
+                raise ValueError('Targeted browser stop is limited to private browser tasks')
+            status = task['status'].lower()
+            if status in {'queued', 'waiting_approval'}:
+                return self.cancel_task(task_id)
+            if status not in {'running', 'leased'}:
+                raise ValueError('Task cannot be stopped from its current state')
+            # Match lease and task database for an atomic fence across both.
+            from backend.cluster.task_leasing import task_lease_manager
+            leases = getattr(self, 'lease_manager', task_lease_manager)
+            if leases.db.db_path.resolve() != self.tasks.repo.db.db_path.resolve():
+                raise ValueError('Task stop requires authoritative task and lease database')
+            stopped = self.tasks.stop_running_browser(task_id)
+            self.events.publish('task.recovery_required', {
+                'id': stopped['id'], 'status': stopped['status'],
+                'reason': 'Owner stopped private browser; review in-flight effects',
+            })
+            return stopped
+
     async def _process_next_task(self) -> None:
         # Modes affect polling cadence, not authority or capability grants.
         self.scheduler._interval_seconds = {"persistent": 0.1, "burst": 0.02, "adaptive": 0.1 if self.tasks.counts().get("queued", 0) else 0.5}.get(STATE["mode"], 0.1)
