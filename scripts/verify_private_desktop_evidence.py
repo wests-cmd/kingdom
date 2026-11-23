@@ -38,6 +38,9 @@ def verify(directory):
     if host.get("PidMode") == "host" or host.get("IpcMode") == "host":
         raise ValueError("Worker must not share host process or IPC namespaces")
 
+    accepted_input = (directory / "input-confirmation.txt").read_text(encoding="utf-8")
+    if accepted_input != "kingdom-private-control-ok":
+        raise ValueError("The native Tk fixture did not persist the required X11 input")
     lines = (directory / "worker-report.log").read_text(encoding="utf-8").splitlines()
     report = json.loads(next(line for line in reversed(lines) if line.strip()))
     if (report.get("result") != "PASS" or report.get("display") != ":99"
