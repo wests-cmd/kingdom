@@ -88,7 +88,13 @@ def main():
         # A red test still retains visual evidence, never host screenshots.
         command("xwd", "-root", "-silent", "-display", ":99",
                 "-out", "/tmp/private-desktop.xwd")
-        with Image.open("/tmp/private-desktop.xwd") as image:
+        # Debian's Pillow cannot necessarily decode XWD directly. Convert
+        # the real X11 capture to PNM with netpbm before reading pixels.
+        with open("/tmp/private-desktop.xwd", "rb") as raw_xwd:
+            with open("/tmp/private-desktop.ppm", "wb") as converted:
+                subprocess.run(["xwdtopnm"], stdin=raw_xwd, stdout=converted,
+                               check=True, timeout=8)
+        with Image.open("/tmp/private-desktop.ppm") as image:
             if image.size != (800, 600):
                 raise RuntimeError("Private Xvfb screenshot dimensions do not match")
             image.convert("RGB").save(CAPTURE, format="PNG")
