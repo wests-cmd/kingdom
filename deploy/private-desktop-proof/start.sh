@@ -7,6 +7,10 @@ if [ "$DISPLAY" != ":99" ]; then
   exit 40
 fi
 
+# Xvfb cannot create the X11 socket parent as a non-root UID; make it
+# inside the private tmpfs (never use the host's X11 socket directory).
+mkdir -p /tmp/.X11-unix
+chmod 1777 /tmp/.X11-unix
 Xvfb :99 -screen 0 800x600x24 -nolisten tcp -noreset -ac &
 server_pid=$!
 app_pid=""
