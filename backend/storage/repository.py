@@ -108,6 +108,36 @@ class TaskRepository:
             conn.commit()
             return self._row_to_dict(row)
 
+    def stop_running_browser(self, task_id):
+        """Atomically fence one running private-browser task and revoke its leases.
+
+        This records requested cessation, not a guarantee that an already sent
+        HTTP request or external action was rolled back.
+        """
+        with self.db.get_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('SELECT * FROM tasks WHERE id=?', (task_id,)).fetchone()
+            if row is None:
+                raise KeyError(task_id)
+            metadata = json.loads(row['metadata_json'] or '{}')
+            if metadata.get('tool') != 'computer.browser.run@1.0.0':
+                raise ValueError('Only a private browser task supports this targeted stop')
+            if row['status'].lower() not in {'running', 'leased'}:
+                raise ValueError('Browser job must be running or leased to request a targeted stop')
+            now = time.time()
+            updated = conn.execute("""
+                UPDATE tasks SET status='RECOVERY_REQUIRED',cancellation_requested=1,
+                    error='Owner stopped private browser; review any in-flight web effects before restarting',
+                    version=version+1,updated_at=?
+                WHERE id=? AND version=? AND lower(status) IN ('running','leased')
+                """, (now, task_id, row['version']))
+            if updated.rowcount != 1:
+                raise ValueError('Browser task changed; refresh before requesting stop')
+            conn.execute('UPDATE leases SET revoked=1 WHERE task_id=? AND revoked=0', (task_id,))
+            saved = conn.execute('SELECT * FROM tasks WHERE id=?', (task_id,)).fetchone()
+            conn.commit()
+            return self._row_to_dict(saved)
+
     def _row_to_dict(self, row):
         keys = row.keys()
         return {
