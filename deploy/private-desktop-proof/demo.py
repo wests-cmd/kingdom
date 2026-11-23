@@ -3,10 +3,12 @@
 This deliberately contains no network code, file browser or command launcher.
 """
 from pathlib import Path
+import json
 import tkinter as tk
 
 EXPECTED = "kingdom-private-control-ok"
 PROOF = Path("/tmp/private-desktop-confirmation.txt")
+TARGET = Path("/tmp/private-desktop-target.json")
 
 root = tk.Tk()
 root.title("Kingdom Private Desktop Proof")
@@ -38,5 +40,22 @@ def confirm(_event=None):
 
 entry.bind("<Return>", confirm)
 tk.Button(root, text="Confirm private input", command=confirm).pack(pady=8)
-root.after(250, entry.focus_force)
+
+
+def publish_target():
+    # This disposable fixture provides the entry field's geometry to the
+    # test driver. The driver must STILL perform actual X11 pointer/keyboard
+    # events; this does not claim screenshot-based generic UI perception.
+    root.update_idletasks()
+    if not entry.winfo_ismapped():
+        root.after(75, publish_target)
+        return
+    target = {
+        "x": entry.winfo_rootx() + entry.winfo_width() // 2,
+        "y": entry.winfo_rooty() + entry.winfo_height() // 2,
+    }
+    TARGET.write_text(json.dumps(target), encoding="utf-8")
+
+
+root.after(100, publish_target)
 root.mainloop()
