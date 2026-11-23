@@ -115,6 +115,13 @@ def browser_readiness():
         except Exception:
             pass
     blockers = []
+    from backend.runtime.isolated_browser import ensure_browser_memory_budget
+    memory_ok = False
+    try:
+        ensure_browser_memory_budget()
+        memory_ok = True
+    except RuntimeError:
+        blockers.append('Insufficient or unverified RAM headroom (768 MiB needed before browser launch)')
     if not enabled:
         blockers.append('Experimental browser mode is disabled')
     if not policy_valid:
@@ -139,6 +146,7 @@ def browser_readiness():
         'adapter_installed': module_installed,
         'headless_browser_binary_present': browser_binary_present,
         'websocket_interception_available': websocket_interception_available,
+        'sufficient_memory_headroom': memory_ok,
         'eligible_apprentices': eligible_roles,
         'public_release_certified': False,
         'scope': 'Availability probe only; OS/network sandbox and real website acceptance are unverified',
