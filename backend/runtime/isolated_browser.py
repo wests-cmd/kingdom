@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 MAX_ACTIONS = 8
 MAX_HOSTS = 4
 MAX_TEXT = 6000
+MIN_AVAILABLE_MEMORY_BYTES = 768 * 1024 * 1024
 _ALLOWED_KEYS = {'Enter', 'Tab', 'Escape', 'Backspace', 'ArrowDown', 'ArrowUp'}
 _HOST = re.compile(r'^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$', re.ASCII)
 
@@ -104,6 +105,22 @@ def validate_plan(params):
     return normalized, checked
 
 
+def ensure_browser_memory_budget():
+    """Do not start Chromium when it would starve the owner's desktop.
+
+    This is admission only; OS process isolation/limits remain mandatory for
+    certified unattended use.
+    """
+    try:
+        import psutil
+        available = psutil.virtual_memory().available
+    except Exception as error:
+        raise RuntimeError('Cannot verify safe browser memory headroom') from error
+    if not isinstance(available, int) or available < MIN_AVAILABLE_MEMORY_BYTES:
+        raise RuntimeError('Insufficient free RAM for a private browser; use an approved larger worker')
+    return available
+
+
 def run_isolated_browser(params, *, guard=None):
     """Operate a disposable headless browser; never call OS mouse/keyboard APIs.
 
@@ -127,6 +144,7 @@ def run_isolated_browser(params, *, guard=None):
         raise PermissionError('Invalid server browser destination policy') from error
     if not approved or not hosts.issubset(approved):
         raise PermissionError('Browser destination is not approved by the owner configuration')
+    ensure_browser_memory_budget()
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as error:
