@@ -207,3 +207,17 @@ def test_browser_denies_preview_without_trusted_task_guard(monkeypatch):
             'allowed_hosts': ['example.org'], 'actions': [],
             '_receipt_id': 'untrusted-task',
         })
+
+
+
+def test_low_available_ram_blocks_browser_before_launch(monkeypatch):
+    import psutil
+    monkeypatch.setenv('KINGDOM_EXPERIMENTAL_ISOLATED_BROWSER', '1')
+    monkeypatch.setenv('KINGDOM_BROWSER_ALLOWED_HOSTS', 'example.org')
+    monkeypatch.setattr(psutil, 'virtual_memory',
+                        lambda: SimpleNamespace(available=512 * 1024 * 1024))
+    with pytest.raises(RuntimeError, match='Insufficient free RAM'):
+        run_isolated_browser({
+            'start_url': 'https://example.org/', 'allowed_hosts': ['example.org'],
+            'actions': [], '_receipt_id': 'low-ram',
+        }, guard=lambda: None)
