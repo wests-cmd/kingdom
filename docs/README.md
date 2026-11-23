@@ -20,6 +20,7 @@ The [repository README](../README.md) provides one-click installer downloads and
 - [Adaptive cluster design](ADAPTIVE_CLUSTER_CORE.md) and [coordination workspace](COORDINATION_WORKSPACE.md).
 - [Portable skills](PORTABLE_SKILLS.md), [Discord skill-map boundary](DISCORD_SKILLMAPS.md), [optional integrations](OPTIONAL_INTEGRATION_REVIEW.md).
 - [Project test jobs](PROJECT_TEST_JOBS.md), [remote builds](REMOTE_BUILDS.md), [computer tools](KINGDOM_COMPUTER_USE.md).
+- [Disposable private Linux desktop proof](PRIVATE_DESKTOP_PROOF.md): **offline test fixture only**, not integrated unattended GUI control.
 - [Teams and access](SWARM_TEAMS_AND_ACCESS.md), [work visibility](WORK_VISIBILITY.md).
 
 ## Verify and release
