@@ -141,6 +141,10 @@ def run_isolated_browser(params, *, guard=None):
                 java_script_enabled=True, ignore_https_errors=False)
             try:
                 def restrict(route):
+                    # Check every outbound request, including dynamic requests
+                    # a page schedules after the initial navigation. A stopped
+                    # job must not initiate another network fetch.
+                    guard()
                     request = route.request
                     # A webpage may create requests the model never asked for.
                     # The preview is read-only at the HTTP layer: block writes.
