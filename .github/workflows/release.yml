@@ -127,6 +127,7 @@ jobs:
       - name: Validate version and run tests against built web assets
         run: |
           python scripts/validate_version.py --tag "$RELEASE_TAG"
+          node --test desktop/launcher.test.js
           python -m pytest --maxfail=1
       - name: Build native frozen backend
         run: python scripts/build_native_backend.py
