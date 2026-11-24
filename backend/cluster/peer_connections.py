@@ -122,9 +122,23 @@ class PeerConnections:
                         self.retry.pop(node_id, None)
                     except asyncio.CancelledError:
                         raise
-                    except Exception:
-                        # Do not expose URLs, credentials or exception bodies.
-                        state = 'retrying'
+                    except Exception as error:
+                        # Back off only the route that actually failed. A change
+                        # while the call was in flight must not delay the new route.
+                        current = await asyncio.to_thread(self.registry.get_node, node_id)
+                        if (not current or current.node_state not in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}
+                                or current.public_identity != pinned
+                                or (current.connection_metadata or {}).get('kingdom_endpoint') != address):
+                            self.status.pop(node_id, None)
+                            self.retry.pop(node_id, None)
+                            return
+                        if self._expired(current):
+                            self.status[node_id] = 'membership_expired'
+                            return
+                        # A refusal is not a network failure. Never grant work or
+                        # switch routes on this basis; allow later owner approval.
+                        state = ('authorization_held' if getattr(error, 'status_code', None)
+                                 in {400, 401, 403, 409, 422} else 'retrying')
                         failures = min(self.retry.get(node_id, (0, 0))[0] + 1, 4)
                         self.retry[node_id] = (failures, self.clock() + min(self.interval * 2 ** (failures - 1), 120))
                 if self.status.get(node_id) != state:
