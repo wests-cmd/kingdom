@@ -16,11 +16,17 @@ def peer(ident, state='APPROVED', endpoint=True):
                            granted_capabilities=[])
 
 
+def verified(ident):
+    return {'peer': ident, 'connected': True, 'mutual_identity_accepted': True}
+
+
 class ConnectionsTests(unittest.IsolatedAsyncioTestCase):
     async def test_unavailable_authority_does_not_delay_existing_peer_heartbeat(self):
         blocked, connected = asyncio.Event(), asyncio.Event()
         async def refresh(): await blocked.wait()
-        async def reconnect(ident): connected.set()
+        async def reconnect(ident):
+            connected.set()
+            return verified(ident)
         node = peer('one')
         runner = module.PeerConnections(SimpleNamespace(list_nodes=lambda: [node], get_node=lambda _: node),
             reconnect, SimpleNamespace(publish=lambda *args: None), refresh=refresh)
@@ -38,6 +44,7 @@ class ConnectionsTests(unittest.IsolatedAsyncioTestCase):
             calls.append(ident)
             if ident == 'slow': await blocked.wait()
             elif calls.count('healthy') >= 3: repeated.set()
+            return verified(ident)
         runner = module.PeerConnections(SimpleNamespace(list_nodes=lambda: list(nodes.values()), get_node=nodes.get),
             reconnect, SimpleNamespace(publish=lambda *args: None), interval=.01)
         await runner.start()
@@ -50,7 +57,9 @@ class ConnectionsTests(unittest.IsolatedAsyncioTestCase):
     async def test_new_approved_peer_is_seen_without_restart_and_revocation_stops_it(self):
         nodes = {'one': peer('one')}
         calls, events = [], []
-        async def reconnect(ident): calls.append(ident)
+        async def reconnect(ident):
+            calls.append(ident)
+            return verified(ident)
         registry = SimpleNamespace(list_nodes=lambda: list(nodes.values()), get_node=nodes.get)
         runner = module.PeerConnections(registry, reconnect, SimpleNamespace(publish=lambda *args: events.append(args)))
         await runner.tick()
@@ -80,6 +89,7 @@ class ConnectionsTests(unittest.IsolatedAsyncioTestCase):
         async def reconnect(ident):
             calls.append(ident)
             if len(calls) == 1: raise OSError('offline')
+            return verified(ident)
         runner = module.PeerConnections(SimpleNamespace(list_nodes=lambda: [node], get_node=lambda _: node), reconnect,
                                         SimpleNamespace(publish=lambda *args: None), clock=lambda: now[0])
         await runner.tick()
@@ -104,6 +114,7 @@ class ConnectionsTests(unittest.IsolatedAsyncioTestCase):
         async def reconnect(ident):
             calls.append(ident)
             if len(calls) >= 3: repeated.set()
+            return verified(ident)
         async def work(ident):
             started.set()
             try: await asyncio.Event().wait()
@@ -120,7 +131,9 @@ class ConnectionsTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_revocation_during_network_call_never_claims_verified(self):
         node = peer('one')
-        async def reconnect(ident): node.node_state = 'REVOKED'
+        async def reconnect(ident):
+            node.node_state = 'REVOKED'
+            return verified(ident)
         runner = module.PeerConnections(SimpleNamespace(list_nodes=lambda: [node], get_node=lambda _: node), reconnect,
             SimpleNamespace(publish=lambda *args: None))
         await runner.tick()
@@ -145,7 +158,7 @@ class ConnectionsTests(unittest.IsolatedAsyncioTestCase):
     async def test_queued_analysis_revalidates_expired_membership_before_start(self):
         nodes = {ident: peer(ident, 'CONNECTED') for ident in ('one', 'two', 'three')}
         calls, release, occupied = [], asyncio.Event(), asyncio.Event()
-        async def reconnect(ident): pass
+        async def reconnect(ident): return verified(ident)
         async def work(ident):
             calls.append(ident)
             if len(calls) == 2: occupied.set()
@@ -160,6 +173,51 @@ class ConnectionsTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(.02)
             self.assertEqual(calls, ['one', 'two'])
         finally:
+            await runner.stop()
+
+
+    async def test_unverified_reconnect_result_does_not_start_work(self):
+        node = peer('one', 'CONNECTED')
+        calls = []
+        async def reconnect(ident): return {'peer': ident, 'connected': True}
+        async def work(ident): calls.append(ident)
+        runner = module.PeerConnections(SimpleNamespace(list_nodes=lambda: [node], get_node=lambda _: node),
+            reconnect, SimpleNamespace(publish=lambda *args: None), work=work)
+        try:
+            await runner.tick()
+            self.assertEqual(runner.status['one'], 'retrying')
+            self.assertEqual(calls, [])
+        finally:
+            await runner.stop()
+
+    async def test_changed_endpoint_resets_backoff_immediately(self):
+        node = peer('one')
+        calls = []
+        async def reconnect(ident):
+            calls.append(node.connection_metadata['kingdom_endpoint'])
+            if len(calls) == 1: raise OSError('offline')
+            return verified(ident)
+        runner = module.PeerConnections(SimpleNamespace(list_nodes=lambda: [node], get_node=lambda _: node),
+            reconnect, SimpleNamespace(publish=lambda *args: None), clock=lambda: 0)
+        try:
+            await runner.tick()
+            self.assertEqual(runner.status['one'], 'retrying')
+            node.connection_metadata['kingdom_endpoint'] = 'https://new-peer'
+            await runner.tick()
+            self.assertEqual(calls, ['https://peer', 'https://new-peer'])
+            self.assertEqual(runner.status['one'], 'verified')
+        finally:
+            await runner.stop()
+
+    async def test_invalid_membership_expiration_fails_closed(self):
+        for deadline in (True, 'later', float('nan'), float('inf'), 0):
+            node = peer('one')
+            node.connection_metadata['membership_expires_at'] = deadline
+            async def reconnect(ident): self.fail('Expired or malformed membership attempted')
+            runner = module.PeerConnections(SimpleNamespace(list_nodes=lambda: [node], get_node=lambda _: node),
+                reconnect, SimpleNamespace(publish=lambda *args: None))
+            await runner.tick()
+            self.assertEqual(runner.status['one'], 'membership_expired')
             await runner.stop()
 
 
