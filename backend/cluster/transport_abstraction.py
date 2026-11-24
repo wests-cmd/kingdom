@@ -1,5 +1,13 @@
+"""Legacy transport names retained for compatibility, not operational routes.
+
+Real peer exchanges go through federation_api and the signed RPC verifier.
+An unimplemented transport must never report delivery or attempt an unapproved
+network route. A route adapter may be enabled only after real authenticated
+round-trip and failure tests exist.
+"""
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Dict, Any
+
 
 class NodeTransport(ABC):
     @abstractmethod
@@ -15,46 +23,29 @@ class NodeTransport(ABC):
         pass
 
 
-class LocalLANTransport(NodeTransport):
-    def connect(self, endpoint: str) -> bool:
-        self.endpoint = endpoint
-        return True
+class UnavailableTransport(NodeTransport):
+    """Fail closed without opening sockets, invoking tools or fabricating receipts."""
 
-    def send_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
-        return {"status": "delivered", "transport": "LAN", "endpoint": getattr(self, "endpoint", "local")}
-
-    def disconnect(self) -> bool:
-        return True
-
-
-class DirectWANTransport(NodeTransport):
-    def connect(self, endpoint: str) -> bool:
-        self.endpoint = endpoint
-        return True
-
-    def send_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
-        return {"status": "delivered", "transport": "DirectWAN", "endpoint": getattr(self, "endpoint", "direct")}
-
-    def disconnect(self) -> bool:
-        return True
-
-
-class OverlayTailscaleTransport(NodeTransport):
-    def __init__(self):
-        try:
-            from backend.integrations.tailscale.connector import TailscaleConnector
-            self.connector = TailscaleConnector()
-        except ImportError:
-            self.connector = None
+    transport = "unavailable"
 
     def connect(self, endpoint: str) -> bool:
-        if self.connector:
-            res = self.connector.connect()
-            return res.get("connected", False)
         return False
 
     def send_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
-        return {"status": "delivered", "transport": "TailscaleOverlay"}
+        return {"status": "not_sent", "transport": self.transport,
+                "reason": "authenticated_transport_not_implemented"}
 
     def disconnect(self) -> bool:
-        return True
+        return True  # No connection or external process was opened.
+
+
+class LocalLANTransport(UnavailableTransport):
+    transport = "LAN"
+
+
+class DirectWANTransport(UnavailableTransport):
+    transport = "DirectWAN"
+
+
+class OverlayTailscaleTransport(UnavailableTransport):
+    transport = "TailscaleOverlay"
