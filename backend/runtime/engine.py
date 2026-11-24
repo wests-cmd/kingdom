@@ -410,8 +410,14 @@ class RuntimeEngine:
                     with self.dispatch_lock:
                         current = self.tasks.get(task['id'])
                         if current and current['status'] == 'queued':
+                            current_meta = current.get('metadata', {})
+                            if (not current_meta.get('offload') or current_meta.get('group_id')
+                                    or current_meta.get('execution_target') != 'remote'
+                                    or current.get('assigned_knight') != task.get('assigned_knight')):
+                                continue
                             recovered = self.tasks.transition_task(task['id'], 'queued', {'assigned_knight': None,
-                                'metadata': {**meta, 'execution_target': 'local', 'offload_reason': 'Offload computer unavailable before dispatch; retained locally'}})
+                                'metadata': {**current_meta, 'assigned_knight': None, 'execution_target': 'local',
+                                             'offload_reason': 'Offload computer unavailable before dispatch; retained locally'}})
                             self.events.publish('task.offload_fallback', recovered)
         for task in self.tasks.list("leased"):
             node = node_registry.get_node(task.get("assigned_knight"))
