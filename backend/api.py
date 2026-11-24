@@ -633,6 +633,17 @@ def cancel_task(task_id: str):
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+@router.post("/tasks/{task_id}/stop-private-browser")
+def stop_private_browser(task_id: str):
+    """Authenticated owner may fence a single browser job without stopping Kingdom."""
+    try:
+        return engine.stop_browser_task(task_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Browser task not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @router.get("/events")
 def event_history(limit: int = Query(default=50, ge=1, le=200), event_type: str | None = None):
     events = engine.events.history(200 if event_type else limit)

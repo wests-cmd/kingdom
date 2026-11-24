@@ -21,21 +21,33 @@ def task_artifact(task_id: str):
     if not task or task['status'].lower() != 'completed': raise HTTPException(404, 'Completed artifact not found')
     try:
         outcome = task['result']['results'][0]['outcome']
-        if outcome['tool'] not in {'workspace.write@1.0.0', 'workspace.package@1.0.0', 'computer.screenshot@1.0.0'}:
+        if outcome['tool'] not in {'workspace.write@1.0.0', 'workspace.package@1.0.0', 'computer.screenshot@1.0.0', 'computer.browser.run@1.0.0'}:
             raise ValueError('This task has no downloadable file')
         if len(task['result']['results']) != 1 or task['metadata'].get('subtasks'):
             raise ValueError('Download requires a single reviewed file operation')
         execution_task = {**task, 'id': task['id'] + ':' + hashlib.sha256(task['prompt'].encode()).hexdigest()}
         verify_receipt(execution_task, outcome)
-        path = outcome['output']['path']
-        if outcome['tool'] == 'computer.screenshot@1.0.0':
-            from pathlib import Path
-            target = Path(path).resolve()
-            if not target.is_relative_to(workspace_path('captures')): raise ValueError('Invalid capture location')
-        else: target = workspace_path(path)
-        if target.stat().st_size > 24*1024*1024 or hashlib.sha256(target.read_bytes()).hexdigest() != outcome['output']['sha256']:
+        from pathlib import Path
+        if outcome['tool'] == 'computer.browser.run@1.0.0':
+            # An authenticated owner may inspect ONLY the private session's
+            # independently verified capture, never an arbitrary output path.
+            target = Path(outcome['output']['capture']).resolve()
+            if not target.is_relative_to(workspace_path('browser-captures')):
+                raise ValueError('Invalid private browser capture location')
+            expected_hash = outcome['output']['capture_sha256']
+            media_type = 'image/png'
+        else:
+            path = outcome['output']['path']
+            if outcome['tool'] == 'computer.screenshot@1.0.0':
+                target = Path(path).resolve()
+                if not target.is_relative_to(workspace_path('captures')): raise ValueError('Invalid capture location')
+            else:
+                target = workspace_path(path)
+            expected_hash = outcome['output']['sha256']
+            media_type = 'application/octet-stream'
+        if target.stat().st_size > 24*1024*1024 or hashlib.sha256(target.read_bytes()).hexdigest() != expected_hash:
             raise ValueError('Artifact no longer matches execution evidence')
-        return FileResponse(target, media_type='application/octet-stream', filename=target.name)
+        return FileResponse(target, media_type=media_type, filename=target.name)
     except (ValueError, KeyError, OSError) as error:
         raise HTTPException(409, 'Artifact unavailable or changed since verification') from error
 
@@ -64,7 +76,7 @@ class ProfileRequest(BaseModel):
 
 
 class ComputerGrant(BaseModel):
-    capabilities: list[Literal['filesystem.read', 'filesystem.write', 'process.execute', 'computer.observe', 'computer.control']] = Field(max_length=5)
+    capabilities: list[Literal['filesystem.read', 'filesystem.write', 'process.execute', 'computer.observe', 'computer.control', 'network.access']] = Field(max_length=6)
 
 
 class ChatRequest(BaseModel):
@@ -118,9 +130,9 @@ async def model_chat(ident: str, request: ChatRequest):
 def computer_tools():
     from backend.api import engine
     from backend.runtime.computer_tools import TOOL_CAPABILITIES
-    return {'tools': TOOL_CAPABILITIES, 'apprentices': [{'role': name, 'capabilities': list(engine.security.nodes.get_node_capabilities(name) & set(TOOL_CAPABILITIES.values()))}
+    return {'tools': TOOL_CAPABILITIES, 'apprentices': [{'role': name, 'capabilities': sorted(engine.security.nodes.get_node_capabilities(name) & (set(TOOL_CAPABILITIES.values()) | {'network.access'}))}
             for name in engine.swarm.registry._knights],
-            'notice': 'File tools stay within the Kingdom workspace. Process tools run on the host and require exact human approval. Desktop capture needs an interactive desktop; headless servers cannot capture one.'}
+            'notice': 'File tools stay within the workspace. Host process and foreground desktop input can affect your computer. Experimental browser network access is a separate privileged grant and is still disabled by default; this is not an OS sandbox.'}
 
 
 @router.put('/apprentices/{role}/tools')

@@ -33,15 +33,23 @@ class SwarmManager:
         assignments = [self._balancer.select_knight(subtask, list(self.registry._knights)) for subtask in subtasks]
         requested = task["metadata"].get("requested_knight")
         from backend.runtime.computer_tools import TOOL_CAPABILITIES
-        required = TOOL_CAPABILITIES.get(task['metadata'].get('tool'))
-        if required and not requested:
-            eligible = [name for name, apprentice in self.registry._knights.items() if required in apprentice.zero_trust.nodes.get_node_capabilities(name)
-                        and required in self.security.nodes.get_node_capabilities(name)]
-            if not eligible: raise PermissionError('No Apprentice has the required computer-tool grant')
+        tool = task['metadata'].get('tool')
+        required = TOOL_CAPABILITIES.get(tool)
+        required_caps = {required} if required else set()
+        if tool == 'computer.browser.run@1.0.0':
+            required_caps.add('network.access')
+        def has_grants(name):
+            apprentice = self.registry._knights[name]
+            return required_caps <= apprentice.zero_trust.nodes.get_node_capabilities(name) and required_caps <= self.security.nodes.get_node_capabilities(name)
+        if required_caps and not requested:
+            eligible = [name for name in self.registry._knights if has_grants(name)]
+            if not eligible: raise PermissionError('No Apprentice has all required computer-tool grants')
             assignments = [eligible[0]] * len(subtasks)
         if requested:
             if requested not in self.registry._knights:
                 raise ValueError("Requested worker is not available")
+            if required_caps and not has_grants(requested):
+                raise PermissionError('Requested Apprentice lacks required computer-tool grants')
             assignments = [requested] * len(subtasks)
         plan = {
             "task_id": task["id"],

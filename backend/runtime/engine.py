@@ -81,11 +81,14 @@ class RuntimeEngine:
         import json, time
         from backend.storage.db import db
         from backend.runtime.computer_tools import TOOL_CAPABILITIES
-        if role not in self.swarm.registry._knights or not isinstance(capabilities, list) or not set(capabilities) <= set(TOOL_CAPABILITIES.values()):
+        permitted = set(TOOL_CAPABILITIES.values()) | {'network.access'}
+        if role not in self.swarm.registry._knights or not isinstance(capabilities, list) or not set(capabilities) <= permitted:
             raise ValueError('Choose an installed Apprentice and supported computer capabilities')
+        if 'network.access' in capabilities and 'computer.control' not in capabilities:
+            raise ValueError('Experimental browser network access requires a separate computer-control grant')
         for security in (self.security, self.swarm.registry.get(role).zero_trust):
             current = security.nodes.get_node_capabilities(role)
-            security.nodes.update_node_capabilities(role, (current - set(TOOL_CAPABILITIES.values())) | set(capabilities))
+            security.nodes.update_node_capabilities(role, (current - permitted) | set(capabilities))
         if persist:
             with db.get_connection() as conn:
                 row = conn.execute("SELECT value_json FROM runtime_state WHERE key='computer_worker_grants'").fetchone()
@@ -244,6 +247,11 @@ class RuntimeEngine:
             meta = {**meta, 'capability':'compute', 'max_attempts':1}
         if meta.get('tool') in TOOL_CAPABILITIES:
             if meta.get('subtasks'): raise ValueError('Computer operations must be one exact reviewed task')
+            if meta.get('tool') == 'computer.browser.run@1.0.0':
+                if meta.get('offload') or meta.get('execution_target') == 'remote':
+                    raise ValueError('Experimental browser actions are local-only until remote isolation is verified')
+                # A browser click can have irreversible effects; never auto-retry.
+                meta = {**meta, 'max_attempts': 1}
             meta = {**meta, 'capability': TOOL_CAPABILITIES[meta['tool']]}
         if meta.get('tool') == 'build.run@1.0.0':
             from backend.runtime.remote_build import BuildSpec
@@ -294,6 +302,31 @@ class RuntimeEngine:
                 pass  # A decided request cannot execute a cancelled task.
         self.events.publish("task.cancelled", task)
         return task
+
+    def stop_browser_task(self, task_id: str) -> dict[str, Any]:
+        """Owner-reviewed, targeted stop; irreversible external actions may need review."""
+        with self.dispatch_lock:
+            task = self.tasks.get(task_id)
+            if task is None:
+                raise KeyError(task_id)
+            if task.get('metadata', {}).get('tool') != 'computer.browser.run@1.0.0':
+                raise ValueError('Targeted browser stop is limited to private browser tasks')
+            status = task['status'].lower()
+            if status in {'queued', 'waiting_approval'}:
+                return self.cancel_task(task_id)
+            if status not in {'running', 'leased'}:
+                raise ValueError('Task cannot be stopped from its current state')
+            # Match lease and task database for an atomic fence across both.
+            from backend.cluster.task_leasing import task_lease_manager
+            leases = getattr(self, 'lease_manager', task_lease_manager)
+            if leases.db.db_path.resolve() != self.tasks.repo.db.db_path.resolve():
+                raise ValueError('Task stop requires authoritative task and lease database')
+            stopped = self.tasks.stop_running_browser(task_id)
+            self.events.publish('task.recovery_required', {
+                'id': stopped['id'], 'status': stopped['status'],
+                'reason': 'Owner stopped private browser; review in-flight effects',
+            })
+            return stopped
 
     async def _process_next_task(self) -> None:
         # Modes affect polling cadence, not authority or capability grants.
