@@ -147,17 +147,24 @@ def test_recent_change_on_old_agent_is_not_lost_to_creation_order(tmp_path):
     assert 'PRIVATE OBJECTIVE' not in json.dumps(value)
     conn.close()
 
-def test_accepted_heartbeat_carries_only_validated_job_metadata_without_grants(monkeypatch):
-    import copy
-    from backend.cluster.node_registry import node_registry, NodeInfo
+def test_accepted_heartbeat_carries_only_validated_job_metadata_without_grants(tmp_path, monkeypatch):
+    from backend.cluster import heartbeat
+    from backend.cluster.node_registry import NodeInfo, NodeRegistry
     from backend.cluster.heartbeat import HeartbeatManager
-    stored=NodeInfo(node_id='peer',node_state_val='DISCONNECTED',last_heartbeat=1,granted_capabilities=['compute']).to_dict()
-    monkeypatch.setattr(node_registry.repo,'get',lambda ident:copy.deepcopy(stored))
-    monkeypatch.setattr(node_registry.repo,'save',lambda data:stored.update(copy.deepcopy(data)))
-    monkeypatch.setattr('backend.cluster.heartbeat.time.time',lambda:100)
-    report={'version':1,'apprentices':[],'activity':activity()}
-    assert HeartbeatManager().ping('peer',apprentice_inventory=report)['success']
-    assert stored['granted_capabilities']==['compute']
-    result=aggregate_inventories([], [stored],now=101)
-    assert result['remote_jobs'][0]['scoped_id']=='peer/task/task-1'
-    assert result['remote_jobs'][0]['provenance']=='signed_peer_report'
+    from backend.storage.db import Database
+    from backend.storage.repository import KnightRepository
+
+    repo = KnightRepository(Database(tmp_path / 'fleet.db'))
+    registry = NodeRegistry(repository=repo)
+    stored = NodeInfo(node_id='peer', node_state_val='DISCONNECTED',
+                      last_heartbeat=1, granted_capabilities=['compute']).to_dict()
+    repo.save(stored)
+    monkeypatch.setattr(heartbeat, 'node_registry', registry)
+    monkeypatch.setattr(heartbeat.time, 'time', lambda: 100)
+    report = {'version': 1, 'apprentices': [], 'activity': activity()}
+    assert HeartbeatManager().ping('peer', apprentice_inventory=report)['success']
+    updated = repo.get('peer')
+    assert updated['granted_capabilities'] == ['compute']
+    result = aggregate_inventories([], [updated], now=101)
+    assert result['remote_jobs'][0]['scoped_id'] == 'peer/task/task-1'
+    assert result['remote_jobs'][0]['provenance'] == 'signed_peer_report'

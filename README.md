@@ -4,12 +4,14 @@
 
 **Choose your computer and click its installer.** This is the complete native desktop app; you do **not** need to clone the repository, install Python/Node/Docker, or choose **Code → Download ZIP**.
 
-| Computer | Download Kingdom v1.2.6 |
+| Computer | Download Kingdom v1.2.7 (published) |
 | --- | --- |
-| Windows 64-bit (Intel/AMD) | **[Download Windows installer (.exe)](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/Kingdom-Setup-1.2.6.exe)** |
-| Intel Mac (not Apple Silicon) | **[Download macOS installer (.dmg)](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/Kingdom-1.2.6.dmg)** |
-| Linux 64-bit (Intel/AMD) | **[Download Linux AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/Kingdom-1.2.6.AppImage)** |
-| Debian/Ubuntu 64-bit | **[Download Debian package (.deb)](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/kingdom-desktop_1.2.6_amd64.deb)** |
+| Windows 64-bit (Intel/AMD) | **[Download Windows installer (.exe)](https://github.com/wests-cmd/kingdom/releases/download/v1.2.7/Kingdom-Setup-1.2.7.exe)** |
+| Intel Mac (not Apple Silicon) | **[Download macOS installer (.dmg)](https://github.com/wests-cmd/kingdom/releases/download/v1.2.7/Kingdom-1.2.7.dmg)** |
+| Linux 64-bit (Intel/AMD) | **[Download Linux AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.2.7/Kingdom-1.2.7.AppImage)** |
+| Debian/Ubuntu 64-bit | **[Download Debian package (.deb)](https://github.com/wests-cmd/kingdom/releases/download/v1.2.7/kingdom-desktop_1.2.7_amd64.deb)** |
+
+**Source vs installed app:** The new [Home/task timeline/health/notifications interface](docs/USER_VISIBILITY.md) and the atomic [mesh revocation hardening](docs/releases/v1.2.8.md) are on `main` but are **not in the published v1.2.7 installers**. They are included in the reviewed v1.2.8 release candidate; until a [new published release](https://github.com/wests-cmd/kingdom/releases/latest) appears, the v1.2.7 links below remain the verified downloads. A source merge never changes an already installed copy.
 
 **After downloading:** open the package, follow your operating system's normal install steps, then launch **Kingdom**. Follow guided setup, choose a profile, select **Runtime → Start Runtime**, and try **Tasks → Analyze text**. That first built-in task does not need an external AI model. Check its status and result.
 
@@ -31,12 +33,11 @@ plan → place → execute → verify → remember → adapt. A connected comput
 AI answer is not proof that a task completed.
 
 **Current stable native downloads:** [Latest published Kingdom release](https://github.com/wests-cmd/kingdom/releases/latest).
-The pinned installer links below point to v1.2.6; if a newer release is shown
+The pinned installer links above point to v1.2.7; if a newer release is shown
 above, use its assets and matching SHA-256 checksums. Source branches and
 installed applications can differ.
 
-**Security status:** v1.2.6 adds a source/installer dependency compromise gate
-and retains native dependency audits. These checks do not establish physical
+**Security status:** v1.2.7 includes the prior compromise gate and final Docker-image dependency audit. These checks do not establish physical
 multi-computer security acceptance or OS signing. See [open security acceptance](https://github.com/wests-cmd/kingdom/issues/172).
 
 <img src="frontend/public/branding/kingdom-icon.png" alt="Kingdom crowned K" width="72">
@@ -45,7 +46,7 @@ multi-computer security acceptance or OS signing. See [open security acceptance]
 
 The **four matching, one-click downloads are at the top of this README**. Open the selected package; native releases include the backend runtime. Do not download the source ZIP or a backend-only executable when you want the desktop app.
 
-For integrity checks, use the [v1.2.6 SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/SHA256SUMS) and [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.2.6/release-manifest.json). The macOS package targets **Intel**; Windows/macOS are unsigned, and the Mac package is not notarized. These packages are not ARM64 or mobile releases. If app-control blocks the install, do not bypass protections: see [beginner troubleshooting](docs/GETTING_STARTED_VIDEO.md) or [report a problem](https://github.com/wests-cmd/kingdom/issues).
+For integrity checks, use the [v1.2.7 SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.2.7/SHA256SUMS) and [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.2.7/release-manifest.json). The macOS package targets **Intel**; Windows/macOS are unsigned, and the Mac package is not notarized. These packages are not ARM64 or mobile releases. If app-control blocks the install, do not bypass protections: see [beginner troubleshooting](docs/GETTING_STARTED_VIDEO.md) or [report a problem](https://github.com/wests-cmd/kingdom/issues).
 
 You can test built-in text analysis without a model. For model-generated answers, configure and test a supported provider under **Routing**. An optional local opening passcode starts disabled; pairing and owner access require separate authorization. [Mission guide](docs/MISSION_WORKSPACE.md).
 

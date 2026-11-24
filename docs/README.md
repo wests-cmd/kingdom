@@ -27,7 +27,7 @@ The [repository README](../README.md) provides one-click installer downloads and
 - [Continuous completion directive](KINGDOM_CONTINUOUS_COMPLETION.md) and [evidence ledger](completion-evidence.json): prioritized multi-workstream repairs, approval boundaries, proof and next-task handoffs.
 - [Current status](PROJECT_STATUS.md): source/release scope and remaining acceptance.
 - [Release process](RELEASE_PROCESS.md), [cluster shipping gates](CLUSTER_SHIPPING_CHECKLIST.md), [coding-worker acceptance](CODING_WORKER_ACCEPTANCE.md).
-- [v1.2.6 notes](releases/v1.2.6.md), [Windows signing](WINDOWS_SIGNING.md), [production definition of done](PRODUCTION_DEFINITION_OF_DONE.md).
+- [v1.2.8 candidate notes](releases/v1.2.8.md), [published v1.2.7 notes](releases/v1.2.7.md), [v1.2.6 history](releases/v1.2.6.md), [Windows signing](WINDOWS_SIGNING.md), [production definition of done](PRODUCTION_DEFINITION_OF_DONE.md).
 
 ## Plans and history
 

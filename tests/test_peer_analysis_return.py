@@ -244,6 +244,31 @@ def test_signed_rpc_return_is_independently_accepted_without_worker_outbound_rpc
         connection_metadata={'native_analysis_return': True}) for ident in (controller_id, worker_id)}
     registry = SimpleNamespace(get_node=nodes.get)
     monkeypatch.setattr(node_registry, 'get_node', nodes.get)
+    # This scenario tests signed RPC / native result recovery, not the SQLite
+    # heartbeat transaction (covered separately by real-database regressions).
+    # Mock only the atomic repository boundary, never skip the RPC verifier.
+    def memory_heartbeat(node_id, *, now, health, load_metrics=None,
+                         apprentice_inventory=None, native_analysis_return=None):
+        node = nodes.get(node_id)
+        if node is None:
+            return None
+        if node.node_state not in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}:
+            return {'accepted': False, 'node_state': node.node_state}
+        previous = node.node_state
+        node.last_heartbeat, node.health = now, health
+        metadata = dict(node.connection_metadata or {})
+        if load_metrics is not None:
+            metadata['load_metrics'] = load_metrics
+        if apprentice_inventory is not None:
+            metadata['apprentice_inventory'] = {'received_at': now, 'report': apprentice_inventory}
+        if native_analysis_return is not None:
+            metadata['native_analysis_return'] = native_analysis_return
+        node.connection_metadata = metadata
+        node.node_state_val = 'CONNECTED'
+        return {'accepted': True, 'previous_state': previous,
+                'node_state': 'CONNECTED', 'transitioned': previous != 'CONNECTED'}
+
+    monkeypatch.setattr(node_registry.repo, 'refresh_heartbeat', memory_heartbeat)
     monkeypatch.setattr('backend.cluster.local_load.local_load_metrics', lambda: {
         'cpu_percent': 10, 'memory_percent': 10,
         'power': {'status': 'no_battery', 'plugged': None, 'battery_percent': None}})
