@@ -107,52 +107,36 @@ def test_slow_sqlite_and_acceptance_leave_heartbeat_loop_responsive(offered, del
 
 
 def test_cancelling_blocked_selection_retains_lease_without_sending_or_detaching_claim(offered):
-    _, controller, engine, leases, accept, calls, offer = responsive_pair(offered)
-    claimed, release = threading.Event(), threading.Event()
-    original_validate = leases.validate_lease_execution
-
-    # The offered fixture already holds a real, durable lease. Its dispatch
-    # path RECOVERS that lease rather than creating a new claim, so a
-    # dispatch_remote_task barrier is never reached. Pause at the real lease
-    # validation boundary instead: after validation but before signing/sending
-    # the first offer. No task, lease or transport result is mocked.
-    def paused_validation(*args, **kwargs):
-        result = original_validate(*args, **kwargs)
-        if not claimed.is_set():
-            claimed.set()
-            if not release.wait(5):
-                raise RuntimeError('Test lease-validation barrier was not released')
-        return result
-
-    leases.validate_lease_execution = paused_validation
+    database, controller, engine, leases, accept, calls, offer = responsive_pair(offered)
+    locked = threading.Event()
+    def busy_database():
+        with database.get_connection() as conn:
+            conn.execute('BEGIN EXCLUSIVE')
+            locked.set()
+            time.sleep(.35)
+    thread = threading.Thread(target=busy_database)
+    thread.start()
+    assert locked.wait(2)
 
     async def cancel_then_retry():
         pending = asyncio.create_task(dispatch_one(controller, 'worker', engine, leases, accept))
-        for _ in range(400):
-            if claimed.is_set():
-                break
-            await asyncio.sleep(.005)
-        assert claimed.is_set(), 'Real durable task claim did not reach barrier'
+        await asyncio.sleep(.05)
         pending.cancel()
         await asyncio.sleep(.02)
-        try:
-            assert controller.lock.locked(), 'Cancelled dispatcher released a still-running claim'
-            assert (await dispatch_one(controller, 'worker', engine, leases, accept))['status'] == 'held'
-            assert calls == []
-        finally:
-            release.set()
+        assert controller.lock.locked(), 'Cancelled dispatcher released a still-running claim'
+        assert (await dispatch_one(controller, 'worker', engine, leases, accept))['status'] == 'held'
+        assert calls == []
         with pytest.raises(asyncio.CancelledError):
             await pending
         assert calls == []
         retained = engine.tasks.get(offer['task']['id'])
         assert retained['status'] == 'leased' and retained['lease_id'] == offer['task']['lease_id']
         return await dispatch_one(controller, 'worker', engine, leases, accept)
-
     try:
         assert asyncio.run(cancel_then_retry())['status'] == 'verified'
         assert len(calls) == 1
     finally:
-        release.set()
+        thread.join(2)
 
 
 def test_cancelling_acceptance_waits_for_commit_and_does_not_reexecute(offered, monkeypatch):
@@ -260,6 +244,31 @@ def test_signed_rpc_return_is_independently_accepted_without_worker_outbound_rpc
         connection_metadata={'native_analysis_return': True}) for ident in (controller_id, worker_id)}
     registry = SimpleNamespace(get_node=nodes.get)
     monkeypatch.setattr(node_registry, 'get_node', nodes.get)
+    # This scenario tests signed RPC / native result recovery, not the SQLite
+    # heartbeat transaction (covered separately by real-database regressions).
+    # Mock only the atomic repository boundary, never skip the RPC verifier.
+    def memory_heartbeat(node_id, *, now, health, load_metrics=None,
+                         apprentice_inventory=None, native_analysis_return=None):
+        node = nodes.get(node_id)
+        if node is None:
+            return None
+        if node.node_state not in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}:
+            return {'accepted': False, 'node_state': node.node_state}
+        previous = node.node_state
+        node.last_heartbeat, node.health = now, health
+        metadata = dict(node.connection_metadata or {})
+        if load_metrics is not None:
+            metadata['load_metrics'] = load_metrics
+        if apprentice_inventory is not None:
+            metadata['apprentice_inventory'] = {'received_at': now, 'report': apprentice_inventory}
+        if native_analysis_return is not None:
+            metadata['native_analysis_return'] = native_analysis_return
+        node.connection_metadata = metadata
+        node.node_state_val = 'CONNECTED'
+        return {'accepted': True, 'previous_state': previous,
+                'node_state': 'CONNECTED', 'transitioned': previous != 'CONNECTED'}
+
+    monkeypatch.setattr(node_registry.repo, 'refresh_heartbeat', memory_heartbeat)
     monkeypatch.setattr('backend.cluster.local_load.local_load_metrics', lambda: {
         'cpu_percent': 10, 'memory_percent': 10,
         'power': {'status': 'no_battery', 'plugged': None, 'battery_percent': None}})

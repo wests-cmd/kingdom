@@ -377,3 +377,60 @@ def test_invalid_required_tool_route_or_options_rejected_before_insertion(tmp_pa
         service.create(data)
     assert service.list(data['session_scope'], data['project_scope']) == []
     assert models.calls == agents.created == 0
+
+
+def test_agent_receives_only_prior_completed_turns_in_exact_scope(tmp_path):
+    import json
+    service, _, agents = setup(tmp_path)
+    def saved(key, prompt, project='projects/a', session='chat', completed=True):
+        data = body()
+        data.update(idempotency_key=key, prompt=prompt, project_scope=project,
+                    session_scope=session, mode='quick')
+        state = service.create(data)
+        if completed:
+            service.update(state['id'], {'status':'completed', 'answer':'answer '+prompt})
+        return state
+    prior = saved('prior', 'prior architecture')
+    saved('other-project', 'private project', project='projects/b')
+    saved('other-chat', 'private chat', session='other')
+    saved('pending', 'unfinished turn', completed=False)
+    data = body()
+    data.update(idempotency_key='agent', prompt='implement the previous design', mode='agent')
+    current = service.create(data)
+    saved('later', 'future turn')
+    received = []
+    original = agents.create
+    def capture(objective, profile, **kwargs):
+        received.append((objective, profile, kwargs))
+        return original(objective, profile, **kwargs)
+    agents.create = capture
+    asyncio.run(service.run(current['id']))
+    objective, profile, options = received[0]
+    assert objective == data['prompt']
+    assert profile == data['model_profile']
+    assert options['allow_process'] is False
+    assert options['use_owner_memory'] is False
+    assert json.loads(options['conversation_context']) == [
+        {'request_id':prior['id'], 'question':'prior architecture', 'answer':'answer prior architecture'}]
+
+
+def test_agent_history_is_bounded_and_chronological(tmp_path):
+    import json
+    service, _, _ = setup(tmp_path)
+    for index in range(8):
+        data = body()
+        data.update(idempotency_key=str(index), prompt='prompt '+str(index)+'雪'*800)
+        state = service.create(data)
+        service.update(state['id'], {'status':'completed','answer':'answer '+str(index)+'a'*1000})
+    data = body()
+    data.update(idempotency_key='current', prompt='next task')
+    current = service.create(data)
+    context = service.agent_conversation_context(current)
+    assert context is None or len(context) <= 4000
+    # A smaller newest completed turn must be included without crossing scope.
+    service.update(current['id'], {'status':'completed','answer':'short answer'})
+    data.update(idempotency_key='next')
+    next_state = service.create(data)
+    turns = json.loads(service.agent_conversation_context(next_state))
+    assert turns[-1]['request_id'] == current['id']
+    assert len(service.agent_conversation_context(next_state)) <= 4000

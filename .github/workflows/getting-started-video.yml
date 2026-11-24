@@ -1,18 +1,27 @@
 name: Build getting-started video
+
 on:
   push:
     branches:
       - main
-      - integration/kingdom-cohesion-20261119
+      - 'docs/quickstart-video-*'
+    paths:
+      - scripts/build_getting_started_video.py
+      - .github/workflows/getting-started-video.yml
+  pull_request:
+    branches: [main]
     paths:
       - scripts/build_getting_started_video.py
       - .github/workflows/getting-started-video.yml
   workflow_dispatch:
+
 permissions:
   contents: write
+
 concurrency:
-  group: kingdom-getting-started-video
-  cancel-in-progress: false
+  group: kingdom-getting-started-video-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   render:
     runs-on: ubuntu-latest
@@ -21,20 +30,33 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: ${{ github.event_name == 'push' && startsWith(github.ref_name, 'docs/quickstart-video-') }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install rendering dependencies
+      - name: Install reproducible rendering dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg espeak
-          python -m pip install Pillow
+          python -m pip install 'Pillow==12.3.0'
       - name: Build narrated MP4 and animated preview
         run: python scripts/build_getting_started_video.py --output-dir docs/media
-      - name: Check documentation after rendering
+      - name: Verify documentation after rendering
         run: python scripts/check_docs.py
-      - name: Commit media assets onto the same branch
+      - name: Upload reviewable tutorial media
+        uses: actions/upload-artifact@v4
+        with:
+          name: kingdom-getting-started-video
+          path: |
+            docs/media/kingdom-getting-started.mp4
+            docs/media/kingdom-getting-started-preview.gif
+          if-no-files-found: error
+          retention-days: 14
+      # Never commit from main: that could change the release's exact-source
+      # SHA while native installer publication is still in progress.
+      # The PR branch carries media together with its reviewed source.
+      - name: Commit rendered media to the documentation branch
+        if: ${{ github.event_name == 'push' && startsWith(github.ref_name, 'docs/quickstart-video-') }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -42,6 +64,17 @@ jobs:
           if git diff --cached --quiet; then
             echo "Video is already current."
           else
-            git commit -m "docs: publish narrated Kingdom getting-started video"
-            git push origin "HEAD:$GITHUB_REF_NAME"
+            git commit -m "docs: publish reviewed v1.2.6 narrated tutorial media"
+            # A README edit may have arrived after this render checked out
+            # the branch. Rebase the media-only commit onto the new tip
+            # rather than force-pushing or dropping the updated docs.
+            for attempt in 1 2 3; do
+              git fetch origin "$GITHUB_REF_NAME"
+              git rebase "origin/$GITHUB_REF_NAME"
+              if git push origin "HEAD:$GITHUB_REF_NAME"; then
+                exit 0
+              fi
+            done
+            echo "Documentation branch moved repeatedly; leaving media unmerged for review."
+            exit 1
           fi

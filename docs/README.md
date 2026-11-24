@@ -1,12 +1,13 @@
 # Kingdom documentation
 
 This index organizes the existing project without moving its executable files.
-The [repository README](../README.md) is the install/start entry point.
+The [repository README](../README.md) provides one-click installer downloads and the latest illustrated installation video. [Follow the v1.2.6 transcript](GETTING_STARTED_VIDEO.md) for a first built-in task that needs no model.
 
 ## Start and operate
 
 - [Operations and configuration](OPERATIONS.md): local state, ports, authentication, recovery and updates.
 - [Mission workspace](MISSION_WORKSPACE.md): tasks, attachments and reviewed work.
+- [Understand Kingdom's status](USER_VISIBILITY.md): clear meanings for waiting/running/completed, stale information, approval requests, and verification evidence.
 - [Runtime controls](runtime-controls.md), [model connections](MODEL_OFFLOADING.md), [knowledge](KNOWLEDGE.md).
 - [Planning help and retained lessons](PLANNING_HELP.md): optional ChatGPT advice, local reuse, cancellation and verified training exports.
 - [Device pairing](device-connections.md), [vault/device layout](VAULT_AND_DEVICE_LAYOUT.md), [container enrollment](docker-cluster.md).
@@ -23,9 +24,10 @@ The [repository README](../README.md) is the install/start entry point.
 
 ## Verify and release
 
+- [Continuous completion directive](KINGDOM_CONTINUOUS_COMPLETION.md) and [evidence ledger](completion-evidence.json): prioritized multi-workstream repairs, approval boundaries, proof and next-task handoffs.
 - [Current status](PROJECT_STATUS.md): source/release scope and remaining acceptance.
 - [Release process](RELEASE_PROCESS.md), [cluster shipping gates](CLUSTER_SHIPPING_CHECKLIST.md), [coding-worker acceptance](CODING_WORKER_ACCEPTANCE.md).
-- [v1.2.4 notes](releases/v1.2.4.md), [Windows signing](WINDOWS_SIGNING.md), [production definition of done](PRODUCTION_DEFINITION_OF_DONE.md).
+- [v1.2.8 candidate notes](releases/v1.2.8.md), [published v1.2.7 notes](releases/v1.2.7.md), [v1.2.6 history](releases/v1.2.6.md), [Windows signing](WINDOWS_SIGNING.md), [production definition of done](PRODUCTION_DEFINITION_OF_DONE.md).
 
 ## Plans and history
 

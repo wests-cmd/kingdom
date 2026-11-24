@@ -12,6 +12,16 @@ proves a worker completed an assignment. The Runtime start/stop controls and
 autonomy level are distinct; inspect Tasks, programmes, dependencies and retained
 receipts rather than infer work from a connected badge.
 
+## User visibility and mesh revocation after the next reviewed release
+
+The merged user-facing Home, task timeline, verified-change receipts, in-app notifications and optional host/model-health view are described in [user visibility](USER_VISIBILITY.md). They appear in a native install only when that **installed version** contains the change; v1.2.7 does not. Do not infer a computer was updated from a main-branch commit or a control-panel badge.
+
+New task events are indexed by task identity for the owner-only timeline; preexisting events without the index may not appear. Notification records are filtered by type and omit payload contents; viewed state is local to the open page, not a persistent cross-device acknowledgement. Health data is sourced from host and signed inventory reports, not independently measured Kingdom-process resource consumption.
+
+Mesh members can be revoked by the owner. [PR #183](https://github.com/wests-cmd/kingdom/pull/183) and the v1.2.8 candidate also protect the **signed-RPC heartbeat** and degraded-health paths, making these SQLite writes conditional on the **current persisted approval state**: a late heartbeat must not restore a revoked or quarantined member. Three-computer CI tested join, restart and revocation; [run 44979802578](https://github.com/wests-cmd/kingdom/actions/runs/44979802578) passed 2,004 backend tests and 5 skipped, while [native run 44979802576](https://github.com/wests-cmd/kingdom/actions/runs/44979802576) passed on Windows, Linux and Intel macOS.
+
+When investigating unexpected mesh convergence or security state, inspect the exact node statuses, roster generation, transport and identity-bound RPC evidence. The test emits a **redacted** per-node state/roster summary on failure; do not expose certificates, owner tokens or full event payloads. Never work around failure by clearing device trust or silently reapproving nodes. The physical commissioning checklist remains [not accepted](https://github.com/wests-cmd/kingdom/issues/172).
+
 ## Configuration and state
 
 | Setting/path | Purpose |
@@ -42,15 +52,11 @@ verification; a private tailnet address alone cannot receive those callbacks.
 ## Backup, recovery and updates
 
 Back up the actual database, required keys/configuration and external vault
-using an application-consistent procedure before upgrades. Kingdom's SQLite database uses **WAL journal mode** to allow status readers
-and approved revocation/audit writers to work concurrently. The `-wal` and
-`-shm` sidecar files are transient operational state, not disposable junk.
-Never copy or replace just the live `.db` file while the application is running:
-that can omit committed but uncheckpointed changes. Use SQLite's online backup
-API for a consistent snapshot, or stop all writers and checkpoint/verify the
-database before a file-level backup. An untested copied database is not a
-verified restore. Preserve owner keys, grants, revocations and audit state during
-rollback. Retain the previous artifact
+using an application-consistent procedure before upgrades. SQLite WAL can retain
+committed writes in the `-wal` sidecar. Use SQLite's online backup API for a
+consistent database snapshot, or stop all writers, checkpoint and verify before
+a file-level backup. Never copy only the main database file during active writes.
+Verify restored identities, grants, revocations and audit records. Retain the previous artifact
 and verify a restore in an isolated environment before claiming disaster recovery.
 
 Windows v1.2.1+ uses Settings → Desktop updates; macOS/Linux use their matching

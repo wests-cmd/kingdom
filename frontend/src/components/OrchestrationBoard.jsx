@@ -16,7 +16,7 @@ export default function OrchestrationBoard() {
   finally {setBusy('')}
  }
  return <section className="panel orchestration-board" aria-label="Kingdom orchestration">
-  <div className="section-heading"><div><h2>Kingdom at work</h2><p className="muted">What is running, who is doing it, and what needs attention.</p></div><span className="sync-note">{updated ? `Updated ${updated.toLocaleTimeString()}` : 'Connecting…'}</span></div>
+  <div className="section-heading"><div><h2>Kingdom at work</h2><p className="muted">What is running, who is doing it, and what needs attention. A <strong>Knight</strong> is an approved computer; an <strong>Apprentice</strong> is a software worker on a computer. They are not the same as a model connection.</p></div><span className="sync-note">{updated ? `Updated ${updated.toLocaleTimeString()}` : 'Connecting…'}</span></div>
   {(error || actionError) && <p role="alert" className="notice error">{actionError || error} Last visible data may be out of date.</p>}
   <div className="orchestration-counts">
    <div><strong>{data ? data.counts.knights : '—'}</strong><span>Connected Knight computers</span><small>This controller + {data?.counts.connected_peers ?? '—'} current peers</small><small>{data?.counts.paired_knights ?? '—'} paired peers shown · {data?.counts.unavailable_peers ?? '—'} offline or without a current report</small></div>
@@ -34,8 +34,9 @@ export default function OrchestrationBoard() {
   {!data ? <p>Loading recorded work…</p> : !visible.length ? <p>No requests in this view. Queued work is not running work.</p> : <div className="orchestration-jobs">{visible.map(job=><article key={job.id} className="orchestration-job">
    <div className="job-heading"><strong>{job.project || 'Unscoped project'}</strong><span className="status-chip">{label(job.display_status || job.status)}</span></div>
    <p>{job.objective}</p>
-   <dl className="job-facts"><div><dt>Knight / computer</dt><dd>{job.computer || 'Not recorded'}</dd></div><div><dt>Apprentice / executor</dt><dd>{job.assigned_workers.join(', ') || 'Not assigned yet'}</dd></div><div><dt>Model</dt><dd>{job.model || label(job.model_profile)}</dd></div><div><dt>Execution evidence</dt><dd>{job.verified_tools} verified tools / {job.tool_count} requested</dd></div></dl>
-   {job.reason && <p className="job-blocker"><strong>Needs attention:</strong> {job.reason}</p>}
+   <dl className="job-facts"><div><dt>Knight / computer</dt><dd>{job.computer || 'Not recorded'}</dd></div><div><dt>Apprentice / executor</dt><dd>{job.assigned_workers.join(', ') || 'Not assigned yet'}</dd></div><div><dt>Model</dt><dd>{job.model || label(job.model_profile)}</dd></div><div><dt>Verified task receipts</dt><dd>{job.verified_tools}</dd></div><div><dt>Model tool calls reported</dt><dd>{job.tool_count}</dd></div></dl>
+   <p className="muted"><strong>What the status means:</strong> {job.status==='completed' ? 'The response is recorded as completed. That does not establish that an external change or independent test succeeded.' : job.status==='running' ? 'Kingdom reports ongoing work. The result is not yet confirmed.' : job.status==='waiting_review' ? 'The previous run was interrupted or needs review before continuing.' : job.status==='queued'||job.status==='ready' ? 'The request is saved, but it has not started running.' : 'Review the recorded status; this summary is not a proof of completion.'}</p>
+   {job.reason && <p className="job-blocker"><strong>Why Kingdom needs attention:</strong> {job.reason}</p>}
    {job.completion_scope && <p className="muted">{job.completion_scope}</p>}
    {['queued','ready'].includes(job.status) && <button disabled={!!busy || !!data.background.active_request_ids.length} onClick={()=>start(job.id)}>{busy===job.id?'Starting…':'Start bounded background work'}</button>}
    <details><summary>Request details</summary><p>Request {job.id} · {label(job.status)}. Permissions and review gates remain in force. Server interruptions require checkpoint review.</p></details>

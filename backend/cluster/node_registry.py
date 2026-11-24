@@ -347,20 +347,26 @@ class NodeRegistry:
         return self.repo.list_all()
 
     def heartbeat(self, node_id: str, health: str = "healthy") -> Optional[Dict[str, Any]]:
+        # The repository performs a conditional SQL update. An old snapshot
+        # cannot overwrite a concurrent owner revocation or a newer roster.
+        if hasattr(self.repo, "record_heartbeat"):
+            node = self.repo.record_heartbeat(node_id, health, time.time())
+            if node:
+                event_bus.publish("cluster.heartbeat", node, source="node_registry")
+            return node
+        # Custom in-memory repositories remain supported for unit tests.
         node = self.repo.get(node_id)
-        if not node:
+        if not node or node.get("node_state") not in {
+            NodeState.APPROVED.value, NodeState.CONNECTED.value,
+            NodeState.DISCONNECTED.value, NodeState.RECONNECTING.value,
+        }:
             return None
-
-        now = time.time()
-        node["last_heartbeat"] = now
+        node["last_heartbeat"] = time.time()
         node["health"] = health
-
         if node.get("node_state") in [NodeState.DISCONNECTED.value, NodeState.RECONNECTING.value]:
             node["node_state"] = NodeState.CONNECTED.value
-
         if node.get("status") == "offline":
             node["status"] = "idle"
-
         self.repo.save(node)
         event_bus.publish("cluster.heartbeat", node, source="node_registry")
         return node
@@ -368,22 +374,32 @@ class NodeRegistry:
     def check_stale_heartbeats(self, timeout_seconds: float = 60.0):
         now = time.time()
         nodes = self.repo.list_all()
-        for k in nodes:
-            state = k.get("node_state", NodeState.CONNECTED.value)
-            if state in [NodeState.CONNECTED.value, NodeState.APPROVED.value]:
-                if (now - k.get("last_heartbeat", 0)) > timeout_seconds:
-                    k["node_state"] = NodeState.DISCONNECTED.value
-                    k["health"] = "unhealthy"
-
-                    active_task_id = k.get("current_task")
-                    if active_task_id:
-                        k["current_task"] = None
-                        event_bus.publish("cluster.task_reassignment_required", {
-                            "node_id": k["id"],
-                            "task_id": active_task_id
-                        }, source="node_registry")
-
-                    self.repo.save(k)
-                    event_bus.publish("cluster.node_disconnected", k, source="node_registry")
+        for node in nodes:
+            state = node.get("node_state", NodeState.CONNECTED.value)
+            if state not in [NodeState.CONNECTED.value, NodeState.APPROVED.value]:
+                continue
+            if now - node.get("last_heartbeat", 0) <= timeout_seconds:
+                continue
+            if hasattr(self.repo, "mark_stale_heartbeat"):
+                changed = self.repo.mark_stale_heartbeat(node["id"], now - timeout_seconds, now)
+                if not changed:
+                    continue
+                active_task_id = changed.get("current_task")
+                recorded = self.repo.get(node["id"])
+            else:
+                # Only custom non-SQL test repositories use the old in-memory
+                # fallback. Installed SQLite nodes always get atomic fencing.
+                node["node_state"] = NodeState.DISCONNECTED.value
+                node["health"] = "unhealthy"
+                active_task_id = node.get("current_task")
+                node["current_task"] = None
+                self.repo.save(node)
+                recorded = node
+            if active_task_id:
+                event_bus.publish("cluster.task_reassignment_required", {
+                    "node_id": node["id"],
+                    "task_id": active_task_id
+                }, source="node_registry")
+            event_bus.publish("cluster.node_disconnected", recorded, source="node_registry")
 
 node_registry = NodeRegistry()

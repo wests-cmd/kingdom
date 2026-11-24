@@ -1,12 +1,29 @@
 # Kingdom
 
+## Install Kingdom — no terminal needed
+
+**Choose your computer and click its installer.** This is the complete native desktop app; you do **not** need to clone the repository, install Python/Node/Docker, or choose **Code → Download ZIP**.
+
+| Computer | Download Kingdom v1.2.7 (published) |
+| --- | --- |
+| Windows 64-bit (Intel/AMD) | **[Download Windows installer (.exe)](https://github.com/wests-cmd/kingdom/releases/download/v1.2.7/Kingdom-Setup-1.2.7.exe)** |
+| Intel Mac (not Apple Silicon) | **[Download macOS installer (.dmg)](https://github.com/wests-cmd/kingdom/releases/download/v1.2.7/Kingdom-1.2.7.dmg)** |
+| Linux 64-bit (Intel/AMD) | **[Download Linux AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.2.7/Kingdom-1.2.7.AppImage)** |
+| Debian/Ubuntu 64-bit | **[Download Debian package (.deb)](https://github.com/wests-cmd/kingdom/releases/download/v1.2.7/kingdom-desktop_1.2.7_amd64.deb)** |
+
+**Source vs installed app:** The new [Home/task timeline/health/notifications interface](docs/USER_VISIBILITY.md) and the atomic [mesh revocation hardening](docs/releases/v1.2.8.md) are on `main` but are **not in the published v1.2.7 installers**. They are included in the reviewed v1.2.8 release candidate; until a [new published release](https://github.com/wests-cmd/kingdom/releases/latest) appears, the v1.2.7 links below remain the verified downloads. A source merge never changes an already installed copy.
+
+**After downloading:** open the package, follow your operating system's normal install steps, then launch **Kingdom**. Follow guided setup, choose a profile, select **Runtime → Start Runtime**, and try **Tasks → Analyze text**. That first built-in task does not need an external AI model. Check its status and result.
+
+These Windows/macOS packages are **unsigned**, and macOS is **not notarized**. Respect your operating system's security warnings; do not turn off security protections to force installation. Apple Silicon, Android APK and iOS IPA release packages are not supplied. [See all current release assets](https://github.com/wests-cmd/kingdom/releases/latest) and [troubleshooting steps](docs/GETTING_STARTED_VIDEO.md).
+
 ## Watch: Download and use Kingdom (beginner video)
 
 [![Kingdom getting started: from GitHub to your first task](https://raw.githubusercontent.com/wests-cmd/kingdom/main/docs/media/kingdom-getting-started-preview.gif)](https://github.com/wests-cmd/kingdom/blob/main/docs/media/kingdom-getting-started.mp4)
 
-**[Play the getting-started tutorial (video with narration)](https://github.com/wests-cmd/kingdom/blob/main/docs/media/kingdom-getting-started.mp4)** · [Read the step-by-step transcript](docs/GETTING_STARTED_VIDEO.md)
+**[Watch the illustrated v1.2.6 install-and-first-task video (with narration)](https://github.com/wests-cmd/kingdom/blob/main/docs/media/kingdom-getting-started.mp4)** · [Read the step-by-step transcript](docs/GETTING_STARTED_VIDEO.md)
 
-Start right here on the Kingdom GitHub page. The video shows where to click to get the published native installer, how to launch the app, configure a model when needed, start Runtime, run **Tasks → Analyze text**, and check the result. It uses illustrated screens for **v1.2.4**, not a live app recording. The [current release](https://github.com/wests-cmd/kingdom/releases/latest) and your OS security protections remain authoritative; the v1.2.4 packages are unsigned.
+Start right here on the Kingdom GitHub page. The video shows where to click to get the published native installer, how to launch the app, configure a model when needed, start Runtime, run **Tasks → Analyze text**, and check the result. It uses illustrated v1.2.6 screens, not a live GitHub or app recording. The [current release](https://github.com/wests-cmd/kingdom/releases/latest) and your OS security protections remain authoritative; native Windows/macOS packages are unsigned.
 
 ## Overview
 
@@ -15,39 +32,23 @@ governed tasks, shared knowledge and approved Knight computers. Its direction is
 plan → place → execute → verify → remember → adapt. A connected computer or an
 AI answer is not proof that a task completed.
 
-**Published native release: [v1.2.4](https://github.com/wests-cmd/kingdom/releases/tag/v1.2.4)**
-(release listing checked October 27, 2026). Source branches and locally patched
-installations can differ; see [project status](docs/PROJECT_STATUS.md).
+**Current stable native downloads:** [Latest published Kingdom release](https://github.com/wests-cmd/kingdom/releases/latest).
+The pinned installer links above point to v1.2.7; if a newer release is shown
+above, use its assets and matching SHA-256 checksums. Source branches and
+installed applications can differ.
 
-**Security update status:** source now pins a patched desktop dependency set,
-but the existing v1.2.4 download files have not been replaced. A new reviewed,
-versioned release is required to deliver that change. See the
-[source-versus-installed security note](docs/PROJECT_STATUS.md#desktop-dependency-security-update).
+**Security status:** v1.2.7 includes the prior compromise gate and final Docker-image dependency audit. These checks do not establish physical
+multi-computer security acceptance or OS signing. See [open security acceptance](https://github.com/wests-cmd/kingdom/issues/172).
 
 <img src="frontend/public/branding/kingdom-icon.png" alt="Kingdom crowned K" width="72">
 
 ### Install the desktop app
 
-Choose one matching installer; native packages include their runtime.
+The **four matching, one-click downloads are at the top of this README**. Open the selected package; native releases include the backend runtime. Do not download the source ZIP or a backend-only executable when you want the desktop app.
 
-| Computer | Published v1.2.4 download |
-| --- | --- |
-| Windows Intel/AMD 64-bit | [Kingdom-Setup-1.2.4.exe](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/Kingdom-Setup-1.2.4.exe) |
-| macOS Intel | [Kingdom-1.2.4.dmg](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/Kingdom-1.2.4.dmg) |
-| Linux Intel/AMD 64-bit | [Kingdom-1.2.4.AppImage](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/Kingdom-1.2.4.AppImage) |
-| Debian/Ubuntu amd64 | [kingdom-desktop_1.2.4_amd64.deb](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/kingdom-desktop_1.2.4_amd64.deb) |
+For integrity checks, use the [v1.2.7 SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.2.7/SHA256SUMS) and [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.2.7/release-manifest.json). The macOS package targets **Intel**; Windows/macOS are unsigned, and the Mac package is not notarized. These packages are not ARM64 or mobile releases. If app-control blocks the install, do not bypass protections: see [beginner troubleshooting](docs/GETTING_STARTED_VIDEO.md) or [report a problem](https://github.com/wests-cmd/kingdom/issues).
 
-Check [SHA256SUMS](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/SHA256SUMS)
-and the [release manifest](https://github.com/wests-cmd/kingdom/releases/download/v1.2.4/release-manifest.json).
-Windows/macOS packages are unsigned; macOS is not notarized. Native ARM64,
-Android and iOS release installers are not supplied by this release. Operating
-system protections remain in force. The [browser app](docs/FREE_WEB_APP.md) is a
-separate option that needs a running reachable server.
-
-Open the app, complete setup, choose a profile, start Runtime, then submit
-**Tasks → Analyze text** and inspect its actual result. AI generation needs a
-configured provider. An optional opening passcode starts disabled; remote access
-still needs its own authentication. [Mission guide](docs/MISSION_WORKSPACE.md).
+You can test built-in text analysis without a model. For model-generated answers, configure and test a supported provider under **Routing**. An optional local opening passcode starts disabled; pairing and owner access require separate authorization. [Mission guide](docs/MISSION_WORKSPACE.md).
 
 ## Project map
 

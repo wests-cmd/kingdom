@@ -22,20 +22,20 @@ class Database:
 
     def get_connection(self):
         conn = sqlite3.connect(self.db_path, timeout=5.0, factory=ClosingConnection)
-        conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            conn.execute("PRAGMA synchronous=FULL")
+            conn.row_factory = sqlite3.Row
+            return conn
+        except Exception:
+            conn.close()
+            raise
 
     def init_db(self):
         with self.get_connection() as conn:
-            # WAL permits revocation/audit writes to commit while status and
-            # mesh readers hold a snapshot. Keep FULL synchronous durability
-            # for authority and security evidence; do not hide lock failures.
+            # WAL keeps readers from blocking durable authority writes.
             mode = conn.execute("PRAGMA journal_mode=WAL").fetchone()[0]
             if mode.lower() != "wal":
-                raise RuntimeError(
-                    "Kingdom requires a local SQLite database with WAL support; "
-                    f"journal mode is {mode!r}"
-                )
+                raise RuntimeError("Kingdom requires a local SQLite database with WAL support")
             cursor = conn.cursor()
 
             # Tasks table

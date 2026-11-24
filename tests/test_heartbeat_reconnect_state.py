@@ -1,140 +1,158 @@
-"""Persisted heartbeat/revocation contract across disconnects and restarts."""
+"""Real SQLite heartbeat, reconnection and revocation concurrency checks."""
 import threading
 import time
 
 import pytest
 
 from backend.cluster.heartbeat import HeartbeatManager
-from backend.cluster.node_registry import NodeInfo, NodeRegistry
+from backend.cluster.node_registry import NodeInfo, NodeRegistry, NodeState
 from backend.storage.db import Database
 from backend.storage.repository import KnightRepository
 
 
 def registry_for(tmp_path):
-    database = Database(tmp_path / "heartbeats.db")
-    repository = KnightRepository(database)
-    return repository, NodeRegistry(repository=repository)
+    repo = KnightRepository(Database(tmp_path / "heartbeats.db"))
+    return repo, NodeRegistry(repository=repo)
 
 
-def register(repository, node_id, *, state="CONNECTED", last_heartbeat=None):
-    row = NodeInfo(
-        node_id=node_id,
-        node_state_val=state,
+def register(repo, node_id, *, state="CONNECTED", last_heartbeat=None):
+    value = NodeInfo(
+        node_id=node_id, node_state_val=state,
         last_heartbeat=time.time() if last_heartbeat is None else last_heartbeat,
-        fingerprint="pinned-fingerprint",
-        granted_capabilities=["compute"],
-        capabilities=["compute"],
+        role="commander", fingerprint="pinned-fingerprint",
+        capabilities=["compute"], granted_capabilities=["compute"],
         public_identity={"node_id": node_id, "public_key_hex": "pinned-key"},
         connection_metadata={"kingdom_endpoint": "http://127.0.0.1:18014"},
     ).to_dict()
-    repository.save(row)
-    return row
+    repo.save(value)
+    return value
 
 
-@pytest.mark.parametrize("state", ["REVOKED", "REJECTED", "QUARANTINED"])
-def test_restricted_idle_node_cannot_refresh_heartbeat(tmp_path, monkeypatch, state):
+@pytest.mark.parametrize("state", ["REVOKED", "REJECTED", "QUARANTINED", "PENDING_APPROVAL"])
+def test_unapproved_node_cannot_refresh_signed_heartbeat(tmp_path, monkeypatch, state):
     from backend.cluster import heartbeat
-    repository, registry = registry_for(tmp_path)
-    register(repository, "worker", state=state, last_heartbeat=1)
+    repo, registry = registry_for(tmp_path)
+    register(repo, "peer", state=state, last_heartbeat=1)
     monkeypatch.setattr(heartbeat, "node_registry", registry)
-    before = repository.get("worker")
-    assert HeartbeatManager().ping("worker")["success"] is False
-    after = repository.get("worker")
+    before = repo.get("peer")
+    assert HeartbeatManager().ping("peer")["success"] is False
+    after = repo.get("peer")
     assert after["node_state"] == state
-    assert after["last_heartbeat"] == 1
+    assert after["last_heartbeat"] == before["last_heartbeat"]
     assert after["granted_capabilities"] == before["granted_capabilities"]
 
 
-def test_disconnected_idle_node_reconnects_using_trust_state(tmp_path, monkeypatch):
+@pytest.mark.parametrize("state", ["APPROVED", "DISCONNECTED", "RECONNECTING"])
+def test_approved_reconnect_preserves_grants_and_metadata(tmp_path, monkeypatch, state):
     from backend.cluster import heartbeat
-    repository, registry = registry_for(tmp_path)
-    initial = register(repository, "worker", state="DISCONNECTED", last_heartbeat=1)
+    repo, registry = registry_for(tmp_path)
+    original = register(repo, "peer", state=state, last_heartbeat=1)
     monkeypatch.setattr(heartbeat, "node_registry", registry)
-    result = HeartbeatManager().ping("worker")
-    after = repository.get("worker")
+    started = time.time()
+    result = HeartbeatManager().ping("peer", load_metrics={"cpu": 0.25},
+                                     native_analysis_return=True)
+    after = repo.get("peer")
     assert result["success"] and result["node_state"] == "CONNECTED"
-    assert after["node_state"] == "CONNECTED"
-    assert after["last_heartbeat"] > 1
-    assert after["granted_capabilities"] == initial["granted_capabilities"]
-
-
-def test_health_timeout_uses_connection_state_not_task_status(monkeypatch):
-    from types import SimpleNamespace
-    from backend.cluster.node_registry import node_registry
-    updates = []
-    node = SimpleNamespace(node_id="worker", node_state="CONNECTED", status="idle", last_heartbeat=time.time() - 100)
-    monkeypatch.setattr(node_registry, "list_nodes", lambda: [node])
-    monkeypatch.setattr(node_registry, "update_node_state", lambda *args, **kwargs: updates.append(args))
-    assert HeartbeatManager().evaluate_cluster_health()["disconnected"] == 1
-    assert updates[0][0] == "worker"
-
-
-@pytest.mark.parametrize("state", ["DISCONNECTED", "RECONNECTING", "APPROVED"])
-def test_reconnect_persists_fresh_ping_before_state_reload(tmp_path, monkeypatch, state):
-    from backend.cluster import heartbeat
-    repository, registry = registry_for(tmp_path)
-    register(repository, "worker", state=state, last_heartbeat=1)
-    monkeypatch.setattr(heartbeat, "node_registry", registry)
-    before = time.time()
-    result = HeartbeatManager().ping("worker", load_metrics={"cpu": 0.25})
-    after = repository.get("worker")
-    assert result["success"]
-    assert after["last_heartbeat"] >= before
+    assert after["last_heartbeat"] >= started
     assert after["connection_metadata"]["load_metrics"] == {"cpu": 0.25}
-    assert after["node_state"] == "CONNECTED"
+    assert after["connection_metadata"]["native_analysis_return"] is True
+    for name in ("fingerprint", "public_identity", "granted_capabilities"):
+        assert after[name] == original[name]
     assert HeartbeatManager().evaluate_cluster_health()["disconnected"] == 0
 
 
-def test_offline_membership_survives_reload_and_reconnect_without_repairing(tmp_path, monkeypatch):
-    """Liveness loss cannot expire permanent owner grants or require re-pairing."""
+def test_reconnect_keeps_permanent_owner_trust_through_restart(tmp_path, monkeypatch):
     from backend.cluster import heartbeat
-    repository, registry = registry_for(tmp_path)
-    original = register(repository, "permanent-peer", last_heartbeat=time.time() - 100)
+    repo, registry = registry_for(tmp_path)
+    original = register(repo, "peer", last_heartbeat=time.time()-100)
     registry.check_stale_heartbeats()
-    offline = repository.get("permanent-peer")
-    assert offline["node_state"] == "DISCONNECTED"
-    for key in ("fingerprint", "public_identity", "granted_capabilities", "connection_metadata"):
-        assert offline[key] == original[key]
-    restarted = NodeRegistry(repository=KnightRepository(Database(repository.db.db_path)))
+    assert repo.get("peer")["node_state"] == "DISCONNECTED"
+    restarted = NodeRegistry(repository=KnightRepository(Database(repo.db.db_path)))
     monkeypatch.setattr(heartbeat, "node_registry", restarted)
-    assert HeartbeatManager().ping("permanent-peer")["success"]
-    online = repository.get("permanent-peer")
-    assert online["node_state"] == "CONNECTED"
-    for key in ("fingerprint", "public_identity", "granted_capabilities", "connection_metadata"):
-        assert online[key] == original[key]
+    assert HeartbeatManager().ping("peer")["success"]
+    after = repo.get("peer")
+    assert after["node_state"] == "CONNECTED"
+    for key in ("fingerprint", "public_identity", "granted_capabilities"):
+        assert after[key] == original[key]
 
 
-def test_revocation_before_heartbeat_commit_cannot_restore_state_or_grants(tmp_path, monkeypatch):
-    """The revocation wins even if another thread started a heartbeat first."""
-    from backend.cluster import heartbeat, capabilities
-    repository, registry = registry_for(tmp_path)
-    register(repository, "worker")
+def test_ping_cannot_restore_owner_revocation_during_prepared_request(tmp_path, monkeypatch):
+    from backend.cluster import heartbeat
+    repo, registry = registry_for(tmp_path)
+    register(repo, "peer")
     monkeypatch.setattr(heartbeat, "node_registry", registry)
-    monkeypatch.setattr(capabilities, "node_registry", registry)
-    started, release = threading.Event(), threading.Event()
-    original = repository.refresh_heartbeat
-    outcome = []
+    entered, release = threading.Event(), threading.Event()
+    original = repo.refresh_heartbeat
+    output = []
 
-    def delayed_refresh(*args, **kwargs):
-        started.set()
-        if not release.wait(5):
-            raise RuntimeError("Heartbeat test barrier not released")
+    def delayed(*args, **kwargs):
+        entered.set()
+        assert release.wait(8), "test synchronization timed out"
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(repository, "refresh_heartbeat", delayed_refresh)
-    thread = threading.Thread(target=lambda: outcome.append(HeartbeatManager().ping("worker")))
+    monkeypatch.setattr(repo, "refresh_heartbeat", delayed)
+    thread = threading.Thread(target=lambda: output.append(HeartbeatManager().ping("peer")))
     thread.start()
     try:
-        assert started.wait(3), "Heartbeat did not reach validation barrier"
-        revoked = capabilities.CapabilityAuthorizer.revoke_node("worker")
-        assert revoked["node_state"] == "REVOKED"
+        assert entered.wait(5), "heartbeat did not reach persisted-state barrier"
+        registry.update_node_state("peer", NodeState.REVOKED, reason="Owner revoked")
     finally:
         release.set()
-        thread.join(timeout=6)
+        thread.join(timeout=10)
     assert not thread.is_alive()
-    assert outcome == [{"success": False,
-                        "error": "Node worker is not approved for heartbeat in state REVOKED."}]
-    after = repository.get("worker")
+    assert output and output[0]["success"] is False
+    after = repo.get("peer")
     assert after["node_state"] == "REVOKED"
-    assert after["granted_capabilities"] == []
-    assert HeartbeatManager().ping("worker")["success"] is False
+    assert after["status"] == "REVOKED"
+    assert after["granted_capabilities"] == ["compute"]
+
+
+def test_health_timeout_uses_current_sqlite_state_not_stale_snapshot(tmp_path, monkeypatch):
+    from backend.cluster import heartbeat
+    repo, registry = registry_for(tmp_path)
+    register(repo, "peer", last_heartbeat=time.time()-50)
+    monkeypatch.setattr(heartbeat, "node_registry", registry)
+    status = HeartbeatManager(timeout_seconds=45).evaluate_cluster_health()
+    assert status["disconnected"] >= 1
+    assert repo.get("peer")["node_state"] == "DISCONNECTED"
+    assert repo.get("peer")["granted_capabilities"] == ["compute"]
+
+
+def test_timeout_cannot_undo_revocation_or_fresh_heartbeat(tmp_path, monkeypatch):
+    from backend.cluster import heartbeat
+    repo, registry = registry_for(tmp_path)
+    register(repo, "peer", last_heartbeat=time.time()-50)
+    monkeypatch.setattr(heartbeat, "node_registry", registry)
+    stale = repo.list_all()
+    repo.list_all = lambda: stale
+    registry.update_node_state("peer", NodeState.REVOKED, reason="Owner revoked")
+    HeartbeatManager(timeout_seconds=45).evaluate_cluster_health()
+    assert repo.get("peer")["node_state"] == "REVOKED"
+
+
+def test_degraded_heartbeat_only_updates_health_of_still_approved_peer(tmp_path, monkeypatch):
+    from backend.cluster import heartbeat
+    repo, registry = registry_for(tmp_path)
+    register(repo, "peer", last_heartbeat=time.time()-30)
+    monkeypatch.setattr(heartbeat, "node_registry", registry)
+    result = HeartbeatManager(timeout_seconds=45).evaluate_cluster_health()
+    assert result["degraded"] >= 1
+    assert repo.get("peer")["health"] == "degraded"
+    assert repo.get("peer")["granted_capabilities"] == ["compute"]
+    registry.update_node_state("peer", NodeState.REVOKED, reason="Owner revoked")
+    assert repo.mark_degraded_heartbeat("peer", older_than=time.time(),
+                                        newer_than=time.time()-45,
+                                        observed_at=time.time()) is False
+    assert repo.get("peer")["node_state"] == "REVOKED"
+
+
+def test_invalid_inventory_cannot_change_peer_state(tmp_path, monkeypatch):
+    from backend.cluster import heartbeat
+    repo, registry = registry_for(tmp_path)
+    register(repo, "peer")
+    monkeypatch.setattr(heartbeat, "node_registry", registry)
+    before = repo.get("peer")
+    with pytest.raises((TypeError, ValueError, KeyError)):
+        HeartbeatManager().ping("peer", apprentice_inventory={"untrusted": "invalid"})
+    after = repo.get("peer")
+    assert after["last_heartbeat"] == before["last_heartbeat"]

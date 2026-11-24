@@ -140,55 +140,6 @@ class KnightRepository:
     def __init__(self, database=None):
         self.db = database or db
 
-    def refresh_heartbeat(
-        self, node_id, *, now, health, load_metrics=None,
-        apprentice_inventory=None, native_analysis_return=None,
-    ):
-        """Atomically refresh liveness without rewriting owner trust or grants.
-
-        The old read/modify/save of an entire Knight could restore a revoked
-        state or capabilities when a heartbeat raced an owner revocation.
-        BEGIN IMMEDIATE serializes this decision against the persisted row.
-        """
-        with self.db.get_connection() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            row = conn.execute(
-                "SELECT node_state,status,connection_metadata_json FROM knights WHERE id=?",
-                (node_id,),
-            ).fetchone()
-            if row is None:
-                return None
-            state = row["node_state"]
-            if state in {"REVOKED", "REJECTED", "QUARANTINED"}:
-                return {"accepted": False, "node_state": state}
-            if apprentice_inventory is not None and state not in {
-                "APPROVED", "CONNECTED", "DISCONNECTED", "RECONNECTING"
-            }:
-                return {"accepted": False, "node_state": state}
-            metadata = json.loads(row["connection_metadata_json"] or "{}")
-            if native_analysis_return is not None:
-                metadata["native_analysis_return"] = native_analysis_return
-            if apprentice_inventory is not None:
-                metadata["apprentice_inventory"] = {
-                    "received_at": now, "report": apprentice_inventory,
-                }
-            if load_metrics is not None:
-                metadata["load_metrics"] = load_metrics
-            connected = state in {"APPROVED", "DISCONNECTED", "RECONNECTING"}
-            new_state = "CONNECTED" if connected else state
-            new_status = "CONNECTED" if connected else row["status"]
-            conn.execute(
-                "UPDATE knights SET node_state=?,status=?,last_heartbeat=?,"
-                "health=?,connection_metadata_json=?,updated_at=? WHERE id=?",
-                (new_state, new_status, now, health,
-                 json.dumps(metadata), now, node_id),
-            )
-            conn.commit()
-            return {
-                "accepted": True, "previous_state": state,
-                "node_state": new_state, "transitioned": connected,
-            }
-
     def save(self, knight):
         knight_id = knight["id"]
         now = time.time()
@@ -243,6 +194,108 @@ class KnightRepository:
                 now
             ))
             conn.commit()
+
+    def refresh_heartbeat(
+        self, node_id, *, now, health, load_metrics=None,
+        apprentice_inventory=None, native_analysis_return=None,
+    ):
+        """Atomically accept a signed peer heartbeat without rewriting trust.
+
+        Current on-disk approval is read under a SQLite write transaction,
+        serializing this update with an owner revocation or roster change.
+        Only liveness and submitted *validated* inventory fields are updated.
+        """
+        allowed = {"APPROVED", "CONNECTED", "DISCONNECTED", "RECONNECTING"}
+        with self.db.get_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT node_state,status,connection_metadata_json FROM knights WHERE id=?",
+                (node_id,),
+            ).fetchone()
+            if row is None:
+                conn.commit()
+                return None
+            state = row["node_state"]
+            if state not in allowed:
+                conn.commit()
+                return {"accepted": False, "node_state": state}
+            metadata = json.loads(row["connection_metadata_json"] or "{}")
+            if native_analysis_return is not None:
+                metadata["native_analysis_return"] = native_analysis_return
+            if apprentice_inventory is not None:
+                metadata["apprentice_inventory"] = {"received_at": now, "report": apprentice_inventory}
+            if load_metrics is not None:
+                metadata["load_metrics"] = load_metrics
+            transitioned = state != "CONNECTED"
+            next_status = "CONNECTED" if transitioned else row["status"]
+            conn.execute("""
+                UPDATE knights SET node_state='CONNECTED', status=?,
+                    last_heartbeat=?, health=?, connection_metadata_json=?, updated_at=?
+                WHERE id=? AND node_state IN ('APPROVED','CONNECTED','DISCONNECTED','RECONNECTING')
+            """, (next_status, now, health, json.dumps(metadata), now, node_id))
+            conn.commit()
+            return {"accepted": True, "previous_state": state,
+                    "node_state": "CONNECTED", "transitioned": transitioned}
+
+    def mark_degraded_heartbeat(self, node_id, *, older_than, newer_than, observed_at):
+        """Mark only a *still-current approved* row degraded, never a revoked one."""
+        with self.db.get_connection() as conn:
+            result = conn.execute("""
+                UPDATE knights SET health='degraded',updated_at=?
+                WHERE id=? AND node_state IN ('APPROVED','CONNECTED')
+                  AND last_heartbeat > ? AND last_heartbeat < ?
+            """, (observed_at, node_id, newer_than, older_than))
+            conn.commit()
+            return result.rowcount > 0
+
+    def record_heartbeat(self, knight_id, health, observed_at):
+        """Atomic heartbeat; a stale reader must never restore a revoked member.
+
+        Update only heartbeat-related columns, never identity, capabilities,
+        membership authority, or an owner-modified node state.
+        """
+        with self.db.get_connection() as conn:
+            cursor = conn.execute("""
+                UPDATE knights
+                SET last_heartbeat=?,
+                    health=?,
+                    node_state=CASE WHEN node_state IN ('DISCONNECTED','RECONNECTING')
+                                    THEN 'CONNECTED' ELSE node_state END,
+                    status=CASE WHEN status='offline' THEN 'idle' ELSE status END,
+                    updated_at=?
+                WHERE id=?
+                  AND node_state IN ('APPROVED','CONNECTED','DISCONNECTED','RECONNECTING')
+            """, (observed_at, health, observed_at, knight_id))
+            row = conn.execute("SELECT * FROM knights WHERE id=?", (knight_id,)).fetchone() if cursor.rowcount else None
+            conn.commit()
+            return self._row_to_dict(row) if row else None
+
+    def mark_stale_heartbeat(self, knight_id, cutoff, observed_at):
+        """Mark stale only if the *current* persisted row is still approved.
+
+        A previous list_nodes snapshot may predate owner revocation, roster
+        removal, fresh heartbeat or device quarantine. The transaction
+        serializes that check with the conditional state transition.
+        """
+        with self.db.get_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("""
+                SELECT current_task FROM knights
+                WHERE id=? AND node_state IN ('APPROVED','CONNECTED')
+                  AND last_heartbeat < ?
+            """, (knight_id, cutoff)).fetchone()
+            if row is None:
+                conn.commit()
+                return None
+            conn.execute("""
+                UPDATE knights
+                SET node_state='DISCONNECTED', health='unhealthy',
+                    current_task=NULL, updated_at=?
+                WHERE id=? AND node_state IN ('APPROVED','CONNECTED')
+                  AND last_heartbeat < ?
+            """, (observed_at, knight_id, cutoff))
+            conn.commit()
+            return {"id": knight_id, "current_task": row["current_task"]}
 
     def get(self, knight_id):
         with self.db.get_connection() as conn:

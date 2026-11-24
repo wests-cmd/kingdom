@@ -1,5 +1,9 @@
 # Preparing a native stable release
 
+## Current preparation checkpoint
+
+The v1.2.7 release was published before merged user-visibility and mesh-heartbeat patches in PRs #180, #182 and #183. Prepare **v1.2.8** as a new versioned, reviewed native release, never by overwriting the v1.2.7 tag/assets. The candidate synchronizes backend, frontend, desktop, mobile-source metadata and compatibility and includes [v1.2.8 notes](releases/v1.2.8.md). Native publication requires the candidate's exact-source Windows/Intel macOS/Linux installer tests and artifact hashes. Mobile source metadata is not an APK/IPA release, and no tag is considered published merely because the source is merged.
+
 The canonical version is the literal `STATE['version']` in backend/state.py.
 Native CI resolves it once, validates the four package versions and three lockfile
 root versions, and requires reviewed version-specific release notes. All platform

@@ -29,6 +29,14 @@ class EventBus:
         payload = data or {}
         if isinstance(data, dict) and "payload" in data and len(data) == 1:
             payload = data["payload"]
+        # Core runtime task.* publishers pass a task dictionary as data.
+        # Bind its exact identity to the indexed event column so task timelines
+        # can retrieve durable events without searching arbitrary payloads.
+        if task_id is None and event_type.startswith("task.") and isinstance(payload, dict):
+            candidate = payload.get("id") or payload.get("task_id")
+            if isinstance(candidate, str) and 0 < len(candidate) <= 128:
+                task_id = candidate
+
 
         event = {
             "id": event_id,
@@ -88,6 +96,7 @@ class EventBus:
 
     def get_events(self, task_id: str | None = None, event_type: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
         try:
+            from backend.storage.repository import event_repo
             db_events = event_repo.query(task_id=task_id, event_type=event_type, limit=limit)
             if db_events:
                 return db_events

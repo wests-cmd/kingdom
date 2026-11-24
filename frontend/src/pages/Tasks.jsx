@@ -5,8 +5,10 @@ import api from "../api"
 import useLiveData from "../hooks/useLiveData"
 
 import TaskResult, {DebugDetails, scrubText} from '../components/common/TaskResult'
+import TaskInsights from '../components/TaskInsights'
 
 import {workerLabel} from '../components/common/presentation'
+import {taskStatusInfo,taskCounts} from '../components/common/userStatus'
 import MissionEditor from '../components/MissionEditor'
 import DesktopActions from '../components/DesktopActions'
 import ParallelChats from '../components/ParallelChats'
@@ -19,6 +21,7 @@ export default function Tasks() {
   const {data: taskData, error: loadError, refresh: loadTasks} = useLiveData("/tasks", 3000)
 
   const tasks = taskData || []
+  const counts = taskCounts(tasks)
 
   const [taskMode, setTaskMode] = useState("mission")
 
@@ -139,12 +142,16 @@ export default function Tasks() {
 
     <div>
 
-      <WorkProgrammePanel/>
-      <ProblemGuide/>
-      <WorkBacklogPanel/>
       <h2>Task Management</h2>
 
-      <p className="muted" style={{marginBottom:20}}>Submit work, inspect verified results, or cancel tasks that have not started.</p>
+      <p className="muted" style={{marginBottom:20}}>See what has been saved, what is running, what needs your decision, and what actually finished. Submitting a request does not mean its outcome is verified.</p>
+      <details><summary>Advanced work tracking and problem reports</summary>
+        <p className="muted">Optional: inspect scheduled programmes, recorded problems and longer-running work. For a simple first task, use the form below.</p>
+        <WorkProgrammePanel/>
+        <ProblemGuide/>
+        <WorkBacklogPanel/>
+      </details>
+      <details><summary>Understand how Kingdom handles your work</summary><ol><li><strong>Saved:</strong> the task enters a queue.</li><li><strong>Assigned or running:</strong> an approved worker may be executing; there is no completed result yet.</li><li><strong>Waiting for approval:</strong> you review the exact action before it proceeds.</li><li><strong>Completed:</strong> inspect the result and verification evidence. A completed model response alone does not prove external actions succeeded.</li><li><strong>Failed or recovery needed:</strong> read the recorded error and decide whether to retry or revise the request.</li></ol></details>
 
       {loadError && <p role="alert">{loadError}</p>}
 
@@ -193,11 +200,12 @@ export default function Tasks() {
 
       <section><h3>Missions</h3>{(missions||[]).map(item=><article className="task-record" key={item.id}><h4>{item.plan.title}</h4><p>{item.status.replaceAll('_',' ')} · revision {item.version}</p><p>Deliverables: {item.plan.deliverables.join('; ')}</p>{item.plan.missing_requirements.map((r,i)=><p role="status" key={i}>Needed: {r}</p>)}<ol>{item.plan.steps.map(step=><li key={step.id}>{step.title} · {step.kind} · {item.steps[step.id]?.status||'not started'}<small> — {step.acceptance}</small></li>)}</ol>{item.placement_wait&&<p role="status">{item.placement_wait.reason} · {item.placement_wait.computer_id}</p>}{item.failure&&<p role="alert">{item.failure}</p>}{item.status==='draft'&&<button disabled={submitting||item.plan.missing_requirements.length>0} onClick={()=>missionAction(item,'approve')}>Approve this plan and start</button>}{['approved','running'].includes(item.status)&&<><button disabled={submitting} onClick={()=>missionAction(item,'advance')}>Continue next ready step</button><button disabled={submitting} onClick={()=>missionAction(item,'cancel')}>Cancel mission</button></>}{item.report?.length>0&&<details><summary>Completion report and why</summary>{item.report.map(r=><p key={r.task_id}>{r.step}: {r.why} · evidence task {r.task_id}</p>)}</details>}</article>)}</section>
 
-      <h4>Active & Historical Tasks ({tasks.length})</h4>
+      <h4>Recorded tasks ({tasks.length})</h4>
+      {taskData && <p className="muted">Recorded: {counts.queued} waiting to start · {counts.running} assigned/running · {counts.approvals} waiting for approval · {counts.recovery} blocked/recovery · {counts.completed} completed · {counts.failed} failed. This is not an estimate of time remaining.</p>}
 
       <label><input type="checkbox" checked={developerView} onChange={event => setDeveloperView(event.target.checked)}/>Show developer diagnostics for these owner-authorized tasks</label>
 
-      {taskData === null ? <p>Loading tasks…</p> : tasks.length === 0 ? <p style={{ color: "var(--text-muted)" }}>No tasks submitted yet.</p> : (
+      {taskData === null ? <p>Loading tasks…</p> : tasks.length === 0 ? <p style={{ color: "var(--text-muted)" }}>{loadError ? 'No current task records available; last refresh failed.' : 'No tasks submitted yet.'}</p> : (
 
         <ul style={{ listStyle: "none", padding: 0 }}>
 
@@ -205,7 +213,12 @@ export default function Tasks() {
 
             <li key={t.id} className="task-record">
 
-              <div className="task-meta"><span className="status-chip">{t.status}</span><span>{new Date(t.created_at).toLocaleString()}</span></div>
+              <div className="task-meta"><span className="status-chip">{taskStatusInfo(t.status).label}</span><span>{t.created_at ? new Date(t.created_at).toLocaleString() : 'Time not reported'}</span></div>
+
+              <p><strong>What this means:</strong> {taskStatusInfo(t.status).explanation}</p>
+              <p className="muted"><strong>What to do next:</strong> {taskStatusInfo(t.status).next}</p>
+              {loadError && <p className="muted">This record may be out of date because the last refresh failed.</p>}
+              {t.status && taskStatusInfo(t.status).label === 'Status unavailable' && <p className="muted">Unknown recorded task state. Use developer diagnostics to inspect this task.</p>}
 
               <p className="task-input">{t.metadata?.tool === 'build.run@1.0.0' ? 'Reviewed remote build' : t.metadata?.tool === 'provider.metadata@1.0.0' ? 'Reviewed provider metadata test' : t.metadata?.tool === 'code.python.analyze@1.0.0' ? 'Python syntax analysis' : t.metadata?.tool === 'text.analyze@1.0.0' ? 'Text analysis' : 'Configured model task'}</p>
 
@@ -216,6 +229,8 @@ export default function Tasks() {
               {t.assigned_knight && <p className="muted">Worker: {workerLabel(t.assigned_knight)}</p>}
 
               {t.result && <TaskResult result={t.result} taskId={t.id}/>}
+              <TaskInsights task={t}/>
+              {String(t.status || '').toLowerCase() === 'completed' && !t.result && <p role="alert">Kingdom recorded completion, but this view has no result to show. Do not treat this as verified work.</p>}
 
               {developerView && <DebugDetails value={{id:t.id,metadata:t.metadata,input:t.input,result:t.result,error:t.error}}/>}
 

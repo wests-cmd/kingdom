@@ -115,6 +115,17 @@ def save_endpoint(node_id:str,request:EndpointRequest):
     node_registry.repo.save(node.to_dict())
     return {'peer':node_id,'endpoint':address}
 
+def check_inventory_receipt(proof, node_id, request_id):
+    """Bind the signed reply to this heartbeat before the RPC handler applies it."""
+    if (not isinstance(proof, dict)
+            or proof.get('sender_id') != node_id
+            or proof.get('msg_type') != 'inventory_snapshot'
+            or not isinstance(proof.get('payload'), dict)
+            or proof['payload'].get('node_id') != node_id
+            or proof['payload'].get('request_id') != request_id):
+        raise ValueError('Peer returned an unexpected inventory proof')
+
+
 @router.post('/{node_id}/reconnect')
 async def reconnect(node_id:str):
     node=node_registry.get_node(node_id)
@@ -136,9 +147,10 @@ async def reconnect(node_id:str):
         if result.get('inventory_proof'):
             from backend.api import handle_cluster_rpc, RPCMessageRequest
             proof = result['inventory_proof']
-            if proof.get('sender_id') != node_id or proof.get('msg_type') != 'inventory_snapshot':
-                raise ValueError('Peer returned an unexpected inventory proof')
-            handle_cluster_rpc(RPCMessageRequest.model_validate(result['inventory_proof']))
+            check_inventory_receipt(proof, node_id, message['msg_id'])
+            # The existing handler verifies the signature, target, replay ledger
+            # and current authorization before updating heartbeat state.
+            handle_cluster_rpc(RPCMessageRequest.model_validate(proof))
         else: raise ValueError('Peer did not return a signed inventory proof')
         return {'peer':node_id,'connected':True,'mutual_identity_accepted':True}
     except (ValueError,KeyError) as e:raise HTTPException(409,str(e)) from e

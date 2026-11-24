@@ -48,6 +48,28 @@ class RequestService:
             except (ValueError, OSError):
                 event_bus.publish('request.vault_sync_required', {'id': state['id'], 'project': project})
 
+    def previous_turns(self, state):
+        """Read preceding completed turns from this exact conversation and project."""
+        with self.db.get_connection() as conn:
+            rows = conn.execute("""SELECT state_json FROM conversation_requests
+                WHERE session_scope=? AND project_scope=?
+                AND rowid < (SELECT rowid FROM conversation_requests WHERE id=?)
+                ORDER BY rowid DESC LIMIT 12""",
+                (state['session_scope'], state['project_scope'], state['id'])).fetchall()
+        return [previous for row in rows if (previous := json.loads(row[0]))['status'] == 'completed']
+
+    def agent_conversation_context(self, state):
+        """Bound historical data separately from the current authorized objective."""
+        turns = []
+        for previous in self.previous_turns(state):
+            turn = {'request_id': previous['id'], 'question': previous['prompt'][:1000],
+                    'answer': previous.get('answer', '')[:1000]}
+            candidate = [turn] + turns
+            if len(json.dumps(candidate)) > 4000:
+                break
+            turns = candidate
+        return json.dumps(turns) if turns else None
+
     def messages(self, state):
         """Resume one conversation and retrieve only this project's note scope."""
         from backend.models.profiles import ModelProfiles
@@ -68,18 +90,13 @@ class RequestService:
             return len(json.dumps(messages)) <= budget
         if not fits([current]):
             raise AgentRejection('context_budget_exceeded')
-        with self.db.get_connection() as conn:
-            rows = conn.execute('SELECT state_json FROM conversation_requests WHERE session_scope=? AND project_scope=? ORDER BY rowid DESC LIMIT 12',
-                                (state['session_scope'], state['project_scope'])).fetchall()
         messages = []
-        for row in rows:
-            previous = json.loads(row[0])
-            if previous['id'] != state['id'] and previous['status'] == 'completed':
-                pair = [{'role': 'user', 'content': previous['prompt'][:4000]},
-                        {'role': 'assistant', 'content': previous.get('answer', '')[:4000]}]
-                if not fits(pair + messages + [current]):
-                    break
-                messages = pair + messages
+        for previous in self.previous_turns(state):
+            pair = [{'role': 'user', 'content': previous['prompt'][:4000]},
+                    {'role': 'assistant', 'content': previous.get('answer', '')[:4000]}]
+            if not fits(pair + messages + [current]):
+                break
+            messages = pair + messages
         references = configured_vault(self.db).search(project_identity(state['project_scope']), state['prompt'])[:3]
         if references:
             notes = []
@@ -231,6 +248,9 @@ class RequestService:
                     if state.get('tool_sequence'):desktop_options['tool_sequence']=state['tool_sequence']
                     if state.get('tool_protocol')=='structured':desktop_options['tool_protocol']='structured'
                     if state.get('tool_paths'):desktop_options['tool_paths']=state['tool_paths']
+                    context = await asyncio.to_thread(self.agent_conversation_context, state)
+                    if context:
+                        desktop_options['conversation_context'] = context
                     agent=await asyncio.to_thread(self.agents.create,objective,state['model_profile'],workspace=state['project_scope'],allow_process=state['allow_process'],use_owner_memory=False,required_tools=required_tools,**desktop_options)
                     state=await asyncio.to_thread(self.update,ident,{'agent_session_id':agent['id']},expected={'running'})
                     if state is None:

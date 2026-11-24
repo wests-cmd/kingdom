@@ -22,7 +22,6 @@ def test_three_backend_automatic_mesh(tmp_path):
     token = secrets.token_urlsafe(48)
     nodes = []
     certificates = []
-    phase = 'initial_mesh_convergence'
 
     def invoke(node, path, body=None, method=None):
         req = urllib.request.Request(node['url'] + path, method=method or ('POST' if body is not None else 'GET'),
@@ -130,7 +129,6 @@ def test_three_backend_automatic_mesh(tmp_path):
             invoke(authority, '/nodes/' + node['identity']['node_id'] + '/approve', {'granted_capabilities': []})
         # No per-pair setup or manual sync/reconnect calls.
         wait_for(connected)
-        phase = 'restart_and_revocation'
         for node in nodes:
             for other in nodes:
                 if other is not node:
@@ -140,7 +138,6 @@ def test_three_backend_automatic_mesh(tmp_path):
         stop(newcomer); start(newcomer)
         assert newcomer['identity'] == old_identity
         wait_for(connected)
-        phase = 'post_restart_convergence'
         invoke(authority, '/nodes/' + newcomer['identity']['node_id'] + '/revoke', {})
         wait_for(lambda: peers(nodes[1]).get(newcomer['identity']['node_id'], {}).get('node_state') == 'REVOKED')
         # Native signed RPC must reject the removed member on another Knight.
@@ -154,52 +151,27 @@ def test_three_backend_automatic_mesh(tmp_path):
             'automatic_pairs': 3, 'directions': 6, 'restart': True, 'revocation': True, 'new_grants': 0,
             'transport':'HTTPS through real restricted peer listeners'}), encoding='utf-8')
     except Exception:
-        # Preserve real backend and listener evidence from this disposable
-        # fixture. The normal pytest tmp directory is not included in CI
-        # artifacts, so otherwise a transient failure cannot be diagnosed.
-        evidence = Path(__file__).resolve().parents[1] / 'evidence' / 'mesh-live'
-        evidence.mkdir(parents=True, exist_ok=True)
+        # CI historically retained a local file but did not surface it in the
+        # failed job log. Report only node ordinal, state and roster generation:
+        # never peer URLs, identities, certificates, payloads or owner tokens.
         diagnostics = []
-        for node in nodes:
-            state = {'port': node['port'],
-                     'process_exit': node['process'].poll() if node.get('process') else None,
-                     'listener_exit': node['listener'].poll() if node.get('listener') else None}
-            for path in ('/federation/connections/status', '/federation/mesh'):
-                try:
-                    state[path] = invoke(node, path)
-                except Exception as exc:
-                    state[path] = {'error_type': type(exc).__name__}
-            # Record the authoritative node states, not just a successful
-            # outgoing HTTPS probe. A verified transport is not necessarily a
-            # CONNECTED registry record after restart or a stale heartbeat.
+        for index, node in enumerate(nodes):
+            record = {'node': index}
             try:
                 rows = peers(node)
-                state['peers'] = {
-                    ident: {
-                        'node_state': row.get('node_state'),
-                        'health': row.get('health'),
-                        'heartbeat_age_seconds': (
-                            round(time.time() - row['last_heartbeat'], 2)
-                            if isinstance(row.get('last_heartbeat'), (int, float)) else None
-                        ),
-                    }
-                    for ident, row in rows.items()
-                    if ident in {n['identity']['node_id'] for n in nodes if n.get('identity')}
+                record['peer_states'] = {
+                    str(other_index): rows.get(other.get('identity', {}).get('node_id'), {}).get('node_state', 'missing')
+                    for other_index, other in enumerate(nodes) if other is not node
                 }
-            except Exception as exc:
-                state['peers'] = {'error_type': type(exc).__name__}
-            state['phase'] = phase
-            diagnostics.append(state)
-            for name in ('server.log', 'listener.log'):
-                source_log = node['dir'] / name
-                if not source_log.is_file():
-                    continue
-                safe = source_log.read_text(encoding='utf-8', errors='replace')[-100000:]
-                safe = safe.replace(token, '<REDACTED_OWNER_TOKEN>')
-                (evidence / (str(node['port']) + '-' + name)).write_text(safe, encoding='utf-8')
-        safe_status = json.dumps(diagnostics).replace(token, '<REDACTED_OWNER_TOKEN>')
-        (tmp_path / 'failure-status.json').write_text(safe_status, encoding='utf-8')
-        (evidence / 'failure-status.json').write_text(safe_status, encoding='utf-8')
+                membership = invoke(node, '/federation/mesh')
+                roster = membership.get('last_roster') or {}
+                record['received_generation'] = roster.get('generation')
+                record['mesh_enabled'] = membership.get('enabled')
+            except (OSError, ValueError, KeyError, TypeError):
+                record['status'] = 'unavailable'
+            diagnostics.append(record)
+        print('Mesh convergence evidence (redacted): ' + json.dumps(diagnostics), file=sys.stderr)
+        (tmp_path / 'failure-status.json').write_text(json.dumps(diagnostics), encoding='utf-8')
         raise
     finally:
         for node in nodes:
