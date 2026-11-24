@@ -21,21 +21,21 @@ def verify(directory):
         raise ValueError("Desktop worker root filesystem must be read-only")
     if host.get("Privileged") is not False:
         raise ValueError("Privileged desktop worker refused")
-    if "ALL" not in (host.get("CapDrop") or []):
+    if "ALL" not in (host.get("CapDrop") or []) or host.get("CapAdd"):
         raise ValueError("Linux capabilities must all be dropped")
     if "no-new-privileges" not in (host.get("SecurityOpt") or []):
         raise ValueError("Worker must not be able to gain privilege")
     if host.get("Binds") or host.get("Mounts"):
         raise ValueError("The private demo must have no host bind or additional mount")
-    if (host.get("PidsLimit") or 999) > 64:
+    if type(host.get("PidsLimit")) is not int or not 0 < host["PidsLimit"] <= 64:
         raise ValueError("Unbounded worker process count")
     if not 0 < (host.get("Memory") or 0) <= 512 * 1024 * 1024:
         raise ValueError("Worker has no bounded memory limit")
     if not 0 < (host.get("NanoCpus") or 0) <= 500_000_000:
         raise ValueError("Worker has no bounded CPU allocation")
-    if "/tmp" not in (host.get("Tmpfs") or {}):
+    if set(host.get("Tmpfs") or {}) != {"/tmp"}:
         raise ValueError("Offline worker needs an in-container private temporary filesystem")
-    if host.get("PidMode") == "host" or host.get("IpcMode") == "host":
+    if any(host.get(key) == "host" for key in ("PidMode", "IpcMode", "UTSMode", "UsernsMode")):
         raise ValueError("Worker must not share host process or IPC namespaces")
 
     accepted_input = (directory / "input-confirmation.txt").read_text(encoding="utf-8")
