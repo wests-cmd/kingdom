@@ -221,4 +221,41 @@ class ConnectionsTests(unittest.IsolatedAsyncioTestCase):
             await runner.stop()
 
 
+    async def test_authorization_refusal_is_held_without_dispatch(self):
+        node = peer('one', 'CONNECTED')
+        work_calls = []
+        class Denied(Exception):
+            status_code = 403
+        async def reconnect(ident): raise Denied('secret diagnostic')
+        async def work(ident): work_calls.append(ident)
+        runner = module.PeerConnections(SimpleNamespace(list_nodes=lambda: [node], get_node=lambda _: node),
+            reconnect, SimpleNamespace(publish=lambda *args: None), work=work)
+        try:
+            await runner.tick()
+            self.assertEqual(runner.status['one'], 'authorization_held')
+            self.assertEqual(work_calls, [])
+        finally:
+            await runner.stop()
+
+    async def test_failed_old_route_cannot_delay_new_route(self):
+        node = peer('one')
+        calls = []
+        async def reconnect(ident):
+            calls.append(node.connection_metadata['kingdom_endpoint'])
+            if len(calls) == 1:
+                node.connection_metadata['kingdom_endpoint'] = 'https://new-peer'
+                raise OSError('old route failed')
+            return verified(ident)
+        runner = module.PeerConnections(SimpleNamespace(list_nodes=lambda: [node], get_node=lambda _: node),
+            reconnect, SimpleNamespace(publish=lambda *args: None), clock=lambda: 0)
+        try:
+            await runner.tick()
+            self.assertNotIn('one', runner.retry)
+            await runner.tick()
+            self.assertEqual(calls, ['https://peer', 'https://new-peer'])
+            self.assertEqual(runner.status['one'], 'verified')
+        finally:
+            await runner.stop()
+
+
 if __name__ == '__main__': unittest.main()
