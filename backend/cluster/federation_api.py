@@ -142,6 +142,11 @@ async def reconnect(node_id:str):
         else: raise ValueError('Peer did not return a signed inventory proof')
         return {'peer':node_id,'connected':True,'mutual_identity_accepted':True}
     except (ValueError,KeyError) as e:raise HTTPException(409,str(e)) from e
+    except httpx.HTTPStatusError as e:
+        # Remote trust refusal must not be mistaken for a failed network route.
+        if e.response.status_code in {400,401,403,409,422}:
+            raise HTTPException(409,'Peer rejected identity or connection configuration') from e
+        raise HTTPException(502,'Peer connection failed; identity and grants retained for retry') from e
     except httpx.HTTPError as e:raise HTTPException(502,'Peer connection failed; identity and grants retained for retry') from e
 
 
