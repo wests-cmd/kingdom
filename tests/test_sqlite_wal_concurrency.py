@@ -82,3 +82,29 @@ def test_journal_mode_persists_across_database_reopen(tmp_path):
         assert conn.execute(
             "SELECT value_json FROM runtime_state WHERE key='durability'"
         ).fetchone()[0] == '{"ok":true}'
+
+
+def test_online_backup_retains_committed_wal_authority_state(tmp_path):
+    import sqlite3
+    database = Database(tmp_path / "source.sqlite")
+    with database.get_connection() as reader:
+        reader.execute("BEGIN")
+        reader.execute("SELECT COUNT(*) FROM runtime_state").fetchone()
+        with database.get_connection() as writer:
+            assert writer.execute("PRAGMA synchronous").fetchone()[0] == 2
+            writer.execute("INSERT INTO runtime_state(key,value_json,updated_at) VALUES(?,?,?)",
+                           ("revocation:backup-test", '{"state":"revoked"}', 1.0))
+            writer.commit()
+        # A read transaction pins the WAL; a new source connection must include
+        # the committed state even before the pinned snapshot is released.
+        assert (tmp_path / "source.sqlite-wal").exists()
+        destination = sqlite3.connect(tmp_path / "backup.sqlite")
+        try:
+            with database.get_connection() as source:
+                source.backup(destination)
+            assert destination.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            assert destination.execute("SELECT value_json FROM runtime_state WHERE key=?",
+                                       ("revocation:backup-test",)).fetchone()[0] == '{"state":"revoked"}'
+        finally:
+            destination.close()
+        reader.rollback()
