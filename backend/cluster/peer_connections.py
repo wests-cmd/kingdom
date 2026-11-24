@@ -94,8 +94,7 @@ class PeerConnections:
                 if not node or node.node_state not in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}:
                     self.status.pop(node_id, None)
                     return
-                deadline = (node.connection_metadata or {}).get('membership_expires_at')
-                if deadline is not None and deadline <= time.time():
+                if self._expired(node):
                     self.status[node_id] = 'membership_expired'
                     return
                 if not (node.connection_metadata or {}).get('kingdom_endpoint'):
