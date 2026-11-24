@@ -32,15 +32,29 @@ jobs:
             --user 10001:10001 kingdom-private-desktop-proof)
           trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
           docker inspect --format '{{json .HostConfig}}' "$cid" > evidence/host-config.json
-          set +e
-          docker start -a "$cid" 2>&1 | tee evidence/worker-report.log
-          worker_rc=${PIPESTATUS[0]}
-          set -e
-          # Collect the private display even for a real red GUI run. There is
-          # no host display, home, credential or Docker socket mount.
-          docker cp "$cid:/tmp/private-desktop.png" evidence/private-desktop.png || true
-          docker cp "$cid:/tmp/private-desktop-confirmation.txt" evidence/input-confirmation.txt || true
-          if [ "$worker_rc" -ne 0 ]; then exit "$worker_rc"; fi
+          docker start "$cid" >/dev/null
+          # Wait for the actual probe result, not a simulated success. Collect
+          # while tmpfs is mounted; the fixture exits after acknowledgement.
+          ready=0
+          for attempt in $(seq 1 180); do
+            if docker exec "$cid" test -f /tmp/proof-status; then ready=1; break; fi
+            if [ "$(docker inspect --format '{{.State.Running}}' "$cid")" != true ]; then break; fi
+            sleep 0.5
+          done
+          if [ "$ready" -ne 1 ]; then
+            docker logs "$cid" > evidence/worker-report.log 2>&1
+            exit 1
+          fi
+          worker_rc=$(docker exec "$cid" cat /tmp/proof-status)
+          docker logs "$cid" > evidence/worker-report.log 2>&1
+          collected=0
+          docker exec "$cid" cat /tmp/private-desktop.png > evidence/private-desktop.png || collected=1
+          docker exec "$cid" cat /tmp/private-desktop-confirmation.txt > evidence/input-confirmation.txt || collected=1
+          docker exec "$cid" touch /tmp/proof-collected
+          actual_rc=$(timeout 15s docker wait "$cid")
+          test "$worker_rc" = "$actual_rc"
+          test "$actual_rc" = 0
+          test "$collected" = 0
           python3 scripts/verify_private_desktop_evidence.py evidence
 
       - name: Retain disposable evidence even when a real GUI test fails
