@@ -15,3 +15,11 @@ test('stale, future and disconnected reports cannot imply a current connection',
 test('temporary membership expiry takes precedence over the last report', () => {
   assert.equal(peerConnectionLabel('membership_expired', {node_state:'CONNECTED',last_heartbeat:99}, 100), 'Temporary membership ended')
 })
+
+test('past verification never implies a live connection after reports expire', () => {
+  assert.equal(peerConnectionLabel('verified', {node_state:'CONNECTED',last_heartbeat:1}, 100), 'Last exchange verified · awaiting fresh report')
+})
+test('restriction and authorization refusal take precedence over fresh reports', () => {
+  assert.equal(peerConnectionLabel('verified', {node_state:'REVOKED',last_heartbeat:99}, 100), 'Connection blocked · restricted device')
+  assert.equal(peerConnectionLabel('authorization_held', {node_state:'CONNECTED',last_heartbeat:99}, 100), 'Connection held · check trust or configuration')
+})
