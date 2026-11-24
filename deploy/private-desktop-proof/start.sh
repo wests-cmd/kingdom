@@ -35,4 +35,17 @@ fi
 
 python3 -B /opt/kingdom/demo.py &
 app_pid=$!
-python3 -B /opt/kingdom/probe.py
+# A tmpfs disappears when the container exits. Keep this private process
+# alive only long enough for the trusted CI runner to retrieve evidence.
+rc=0
+python3 -B /opt/kingdom/probe.py || rc=$?
+printf '%s\n' "$rc" > /tmp/proof-status.pending
+mv /tmp/proof-status.pending /tmp/proof-status
+i=0
+while [ "$i" -lt 600 ]; do
+  if [ -f /tmp/proof-collected ]; then exit "$rc"; fi
+  i=$((i + 1))
+  sleep 0.1
+done
+echo "Evidence collection timed out" >&2
+exit 42
