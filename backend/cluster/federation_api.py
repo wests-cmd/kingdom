@@ -111,8 +111,8 @@ def save_endpoint(node_id:str,request:EndpointRequest):
     if not node or (node.public_identity or {}).get('node_type')!='commander':raise HTTPException(404,'Paired Kingdom not found')
     try:address=endpoint(request.endpoint)
     except ValueError as e:raise HTTPException(400,str(e)) from e
-    node.connection_metadata={**(node.connection_metadata or {}),'kingdom_endpoint':address}
-    node_registry.repo.save(node.to_dict())
+    if node_registry.repo.set_peer_endpoint(node_id, node.public_identity, address) is None:
+        raise HTTPException(409,'Peer identity or current approval changed; route was not saved')
     return {'peer':node_id,'endpoint':address}
 
 @router.post('/{node_id}/reconnect')
