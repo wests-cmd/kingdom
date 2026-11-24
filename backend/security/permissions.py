@@ -118,8 +118,16 @@ class PermissionManager:
         if not required_capability or not isinstance(required_capability, str):
             return False
 
-        granted = set(actor.get("capabilities", []))
+        # Legacy helper: only well-formed local actor snapshots may be evaluated.
+        # A network caller's claims are NOT proof of identity or authorization;
+        # those must be bound by the separate authenticated ZeroTrust boundary.
+        raw_grants = actor.get("capabilities", [])
         role = actor.get("role", "guest")
+        if not isinstance(role, str) or not isinstance(raw_grants, (list, tuple, set, frozenset)):
+            return False
+        if any(not isinstance(cap, str) or not cap for cap in raw_grants):
+            return False
+        granted = set(raw_grants)
 
         # Strict isolation check for Experimental role:
         # Experimental privileges are strictly scoped to designated experimental hosts (e.g. Laptop 2)
@@ -134,7 +142,12 @@ class PermissionManager:
                 # Deny experimental escalation if node is not an authorized experimental host
                 role = "observe"
 
-        granted.update(self.get_role_capabilities(role))
+        role_caps = self.get_role_capabilities(role)
+        if not isinstance(role_caps, (list, tuple, set, frozenset)):
+            return False
+        if any(not isinstance(cap, str) or not cap for cap in role_caps):
+            return False
+        granted.update(role_caps)
 
         if "*" in granted or "system.admin" in granted:
             return True

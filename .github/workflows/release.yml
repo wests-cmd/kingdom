@@ -41,6 +41,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Reject fabricated completion evidence before packaging
+        run: python scripts/check_completion_evidence.py
       - id: release
         run: python scripts/validate_version.py --release-identity >> "$GITHUB_OUTPUT"
 
@@ -125,6 +127,7 @@ jobs:
       - name: Validate version and run tests against built web assets
         run: |
           python scripts/validate_version.py --tag "$RELEASE_TAG"
+          node --test desktop/launcher.test.js
           python -m pytest --maxfail=1
       - name: Build native frozen backend
         run: python scripts/build_native_backend.py

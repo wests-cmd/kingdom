@@ -1,4 +1,3 @@
-import copy
 import pytest
 from backend.cluster.apprentice_inventory import aggregate_inventories, validate_inventory
 
@@ -53,13 +52,24 @@ def test_report_does_not_import_permissions_or_nested_inventory():
     assert validate_inventory(data)==report('coder')
 
 
-def test_signed_report_metadata_survives_reconnect_without_changing_grants(monkeypatch):
-    from backend.cluster.node_registry import node_registry, NodeInfo
+def test_signed_report_metadata_survives_reconnect_without_changing_grants(tmp_path, monkeypatch):
+    from backend.cluster import heartbeat
+    from backend.cluster.node_registry import NodeRegistry, NodeInfo
     from backend.cluster.heartbeat import HeartbeatManager
-    stored=NodeInfo(node_id='peer',node_state_val='DISCONNECTED',last_heartbeat=1,granted_capabilities=['compute']).to_dict()
-    monkeypatch.setattr(node_registry.repo,'get',lambda ident:copy.deepcopy(stored))
-    monkeypatch.setattr(node_registry.repo,'save',lambda data:stored.update(copy.deepcopy(data)))
-    monkeypatch.setattr('backend.cluster.heartbeat.time.time',lambda:100)
-    assert HeartbeatManager().ping('peer',apprentice_inventory=report('coder'))['success']
-    assert stored['granted_capabilities']==['compute']
-    assert aggregate_inventories([], [stored], now=101)['total_current']==1
+    from backend.storage.db import Database
+    from backend.storage.repository import KnightRepository
+
+    repo = KnightRepository(Database(tmp_path / 'inventory-reconnect.db'))
+    registry = NodeRegistry(repository=repo)
+    stored = NodeInfo(node_id='peer', node_state_val='DISCONNECTED',
+                      last_heartbeat=1, granted_capabilities=['compute'],
+                      fingerprint='pinned-peer').to_dict()
+    repo.save(stored)
+    monkeypatch.setattr(heartbeat, 'node_registry', registry)
+    monkeypatch.setattr('backend.cluster.heartbeat.time.time', lambda: 100)
+    assert HeartbeatManager().ping('peer', apprentice_inventory=report('coder'))['success']
+    after = repo.get('peer')
+    assert after['node_state'] == 'CONNECTED'
+    assert after['granted_capabilities'] == ['compute']
+    assert after['fingerprint'] == 'pinned-peer'
+    assert aggregate_inventories([], [after], now=101)['total_current'] == 1

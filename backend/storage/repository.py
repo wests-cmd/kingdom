@@ -195,6 +195,59 @@ class KnightRepository:
             ))
             conn.commit()
 
+    def refresh_heartbeat(
+        self, node_id, *, now, health, load_metrics=None,
+        apprentice_inventory=None, native_analysis_return=None,
+    ):
+        """Atomically accept a signed peer heartbeat without rewriting trust.
+
+        Current on-disk approval is read under a SQLite write transaction,
+        serializing this update with an owner revocation or roster change.
+        Only liveness and submitted *validated* inventory fields are updated.
+        """
+        allowed = {"APPROVED", "CONNECTED", "DISCONNECTED", "RECONNECTING"}
+        with self.db.get_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT node_state,status,connection_metadata_json FROM knights WHERE id=?",
+                (node_id,),
+            ).fetchone()
+            if row is None:
+                conn.commit()
+                return None
+            state = row["node_state"]
+            if state not in allowed:
+                conn.commit()
+                return {"accepted": False, "node_state": state}
+            metadata = json.loads(row["connection_metadata_json"] or "{}")
+            if native_analysis_return is not None:
+                metadata["native_analysis_return"] = native_analysis_return
+            if apprentice_inventory is not None:
+                metadata["apprentice_inventory"] = {"received_at": now, "report": apprentice_inventory}
+            if load_metrics is not None:
+                metadata["load_metrics"] = load_metrics
+            transitioned = state != "CONNECTED"
+            next_status = "CONNECTED" if transitioned else row["status"]
+            conn.execute("""
+                UPDATE knights SET node_state='CONNECTED', status=?,
+                    last_heartbeat=?, health=?, connection_metadata_json=?, updated_at=?
+                WHERE id=? AND node_state IN ('APPROVED','CONNECTED','DISCONNECTED','RECONNECTING')
+            """, (next_status, now, health, json.dumps(metadata), now, node_id))
+            conn.commit()
+            return {"accepted": True, "previous_state": state,
+                    "node_state": "CONNECTED", "transitioned": transitioned}
+
+    def mark_degraded_heartbeat(self, node_id, *, older_than, newer_than, observed_at):
+        """Mark only a *still-current approved* row degraded, never a revoked one."""
+        with self.db.get_connection() as conn:
+            result = conn.execute("""
+                UPDATE knights SET health='degraded',updated_at=?
+                WHERE id=? AND node_state IN ('APPROVED','CONNECTED')
+                  AND last_heartbeat > ? AND last_heartbeat < ?
+            """, (observed_at, node_id, newer_than, older_than))
+            conn.commit()
+            return result.rowcount > 0
+
     def set_peer_endpoint(self, knight_id, expected_identity, endpoint):
         """Update only the route of the currently approved, pinned peer.
 
