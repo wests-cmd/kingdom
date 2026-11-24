@@ -157,6 +157,29 @@ class TaskManager:
         return deepcopy(changed)
 
     @synchronized
+    def assign_queued_group_task(self, task_id, expected_version, group_id, target):
+        """Change only a still-queued, same-version group task; never rewind execution."""
+        task = self.repo.get(task_id)
+        if (not task or task["status"].lower() != "queued"
+                or task["version"] != expected_version
+                or task.get("cancellation_requested")
+                or task.get("metadata", {}).get("group_id") != group_id
+                or not group_id
+                or task.get("metadata", {}).get("tool") not in {
+                    "text.analyze@1.0.0", "code.python.analyze@1.0.0"}):
+            raise ValueError("Queued group task changed; refresh before assignment")
+        changed = deepcopy(task)
+        changed["assigned_knight"] = target
+        changed["metadata"] = {**task["metadata"], "assigned_knight": target,
+                               "execution_target": "remote"}
+        changed["version"] = task["version"] + 1
+        self.repo.save(changed, expected_version=expected_version)
+        self._tasks[task_id] = changed
+        if task_id not in self._queue:
+            self._queue.append(task_id)
+        return deepcopy(changed)
+
+    @synchronized
     def claim_next(self) -> dict[str, Any] | None:
         for _ in range(len(self._queue)):
             task_id = self._queue.popleft()
