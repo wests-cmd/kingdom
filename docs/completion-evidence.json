@@ -1,0 +1,251 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-11-22",
+  "release_classification": "source-candidate",
+  "description": "Open source-level workstreams and independent installed security gates. No row is certified solely by source tests.",
+  "items": [
+    {
+      "id": "SEC-01",
+      "area": "installed-security",
+      "title": "Malicious dependency filesystem and network isolation",
+      "priority": "P0",
+      "status": "NOT_TESTED",
+      "source": "https://github.com/wests-cmd/kingdom/issues/172",
+      "acceptance": "Prove simulated malicious startup/postinstall code cannot read owner secrets or cloud metadata on disposable installed worker",
+      "dependencies": [],
+      "evidence": []
+    },
+    {
+      "id": "SEC-02",
+      "area": "installed-security",
+      "title": "Untrusted Git tool isolation",
+      "priority": "P0",
+      "status": "NOT_TESTED",
+      "source": "https://github.com/wests-cmd/kingdom/issues/172",
+      "acceptance": "Prove hostile hooks/filters/config do not escape the restricted executor or acquire host credentials",
+      "dependencies": [],
+      "evidence": []
+    },
+    {
+      "id": "SEC-03",
+      "area": "installed-security",
+      "title": "No Knight self-approval",
+      "priority": "P0",
+      "status": "NOT_TESTED",
+      "source": "https://github.com/wests-cmd/kingdom/issues/172",
+      "acceptance": "Prove actual effect-producing APIs reject Knight-originated forged roles, grants, scope and approvals",
+      "dependencies": [],
+      "evidence": []
+    },
+    {
+      "id": "SEC-04",
+      "area": "installed-security",
+      "title": "Signed RPC replay resistance",
+      "priority": "P0",
+      "status": "NOT_TESTED",
+      "source": "https://github.com/wests-cmd/kingdom/issues/172",
+      "acceptance": "Prove duplicate, stale epoch, wrong audience and replay messages fail across controller and worker restarts",
+      "dependencies": [],
+      "evidence": []
+    },
+    {
+      "id": "SEC-05",
+      "area": "installed-security",
+      "title": "Revocation persistence",
+      "priority": "P0",
+      "status": "NOT_TESTED",
+      "source": "https://github.com/wests-cmd/kingdom/issues/172",
+      "acceptance": "Prove a revoked worker cannot reconnect or re-enroll across restart, snapshot restore and peer sync",
+      "dependencies": [],
+      "evidence": []
+    },
+    {
+      "id": "SEC-06",
+      "area": "installed-security",
+      "title": "Network destination policy",
+      "priority": "P0",
+      "status": "NOT_TESTED",
+      "source": "https://github.com/wests-cmd/kingdom/issues/172",
+      "acceptance": "Prove loopback/private/link-local/metadata/IPv6/redirect/rebinding destinations are rejected by OS and tool policy",
+      "dependencies": [],
+      "evidence": []
+    },
+    {
+      "id": "SEC-07",
+      "area": "installed-security",
+      "title": "Independent monitor and audit integrity",
+      "priority": "P0",
+      "status": "NOT_TESTED",
+      "source": "https://github.com/wests-cmd/kingdom/issues/172",
+      "acceptance": "Prove worker cannot alter logs, trust root or audit state; verify fail closed on monitor or disk failure",
+      "dependencies": [],
+      "evidence": []
+    },
+    {
+      "id": "SEC-08",
+      "area": "installed-security",
+      "title": "Rollback cannot restore old authority",
+      "priority": "P0",
+      "status": "NOT_TESTED",
+      "source": "https://github.com/wests-cmd/kingdom/issues/172",
+      "acceptance": "Prove interrupted updates and rollback cannot resurrect revoked keys, approvals or stale leases",
+      "dependencies": [],
+      "evidence": []
+    },
+    {
+      "id": "CORE-01",
+      "area": "release-completion",
+      "title": "Authenticated durable task-to-Knight execution receipts",
+      "priority": "P0",
+      "status": "IN_PROGRESS",
+      "source": "https://github.com/wests-cmd/kingdom/issues/188",
+      "acceptance": "On actual installer complete governed task including real tool effect, verified receipt and persistent audit across reboot",
+      "dependencies": [],
+      "evidence": []
+    },
+    {
+      "id": "RUNTIME-01",
+      "area": "release-completion",
+      "title": "Always-on restart, model selection and cross-Knight recovery",
+      "priority": "P0",
+      "status": "IN_PROGRESS",
+      "source": "https://github.com/wests-cmd/kingdom/issues/187",
+      "acceptance": "Installed supervisor survives reboot, replays durable queue correctly, selects available model, and safely hands failed task to independently authorized Knight",
+      "dependencies": [
+        "CORE-01"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "GUI-01",
+      "area": "release-completion",
+      "title": "Noninterfering private native desktop worker",
+      "priority": "P0",
+      "status": "CANDIDATE",
+      "source": "https://github.com/wests-cmd/kingdom/pull/189",
+      "acceptance": "Actual bounded native GUI tool operates in independent isolated session with no host input theft and per-effect authorization",
+      "dependencies": [
+        "SEC-03",
+        "SEC-06"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "BROWSER-01",
+      "area": "release-completion",
+      "title": "Bounded browser automation with OS isolation",
+      "priority": "P0",
+      "status": "CANDIDATE",
+      "source": "https://github.com/wests-cmd/kingdom/pull/185",
+      "acceptance": "Real installed browser task respects owner authorization and OS-enforced egress/folder/process isolation including hostile-page cases",
+      "dependencies": [
+        "SEC-03",
+        "SEC-06"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "DB-01",
+      "area": "release-completion",
+      "title": "SQLite contention and revocation race independent reproduction",
+      "priority": "P0",
+      "status": "CANDIDATE",
+      "source": "https://github.com/wests-cmd/kingdom/pull/176",
+      "acceptance": "On native Windows and Linux, reproduce earlier timeout and show durable revocation under concurrent read/write and reconnect; offline restore remains valid",
+      "dependencies": [
+        "SEC-05"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "REL-01",
+      "area": "release-completion",
+      "title": "Clean-machine install, release and upgrade/rollback",
+      "priority": "P1",
+      "status": "IN_PROGRESS",
+      "source": "https://github.com/wests-cmd/kingdom/issues/188",
+      "acceptance": "Download published matching installers and prove first launch, updated version, preserved data/authority, rollback and exit cleanup on supported OS",
+      "dependencies": [
+        "SEC-08"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "DOC-01",
+      "area": "release-completion",
+      "title": "Exact published one-click links and truthful marketing",
+      "priority": "P1",
+      "status": "CANDIDATE",
+      "source": "https://github.com/wests-cmd/kingdom/pull/190",
+      "acceptance": "Every beginner download resolves to published matching installer asset and hash; video labeled illustrated and version differences disclosed",
+      "dependencies": [],
+      "evidence": []
+    },
+    {
+      "id": "PERF-01",
+      "area": "release-completion",
+      "title": "Fifteen real user journeys and resource benchmarks",
+      "priority": "P1",
+      "status": "NOT_TESTED",
+      "source": "https://github.com/wests-cmd/kingdom/issues/181",
+      "acceptance": "Run measured beginner/advanced journeys, cold start, RAM, CPU, I/O and user recovery on representative supported machines",
+      "dependencies": [
+        "REL-01"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "MESH-01",
+      "area": "release-completion",
+      "title": "Three-node Windows native socket timeout diagnosis",
+      "priority": "P1",
+      "status": "IN_PROGRESS",
+      "source": "https://github.com/wests-cmd/kingdom/issues/169",
+      "acceptance": "Repeat genuine network-process test and attribute timeout to demonstrated cause, then prove deterministic recovery",
+      "dependencies": [
+        "DB-01"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "UX-01",
+      "area": "release-completion",
+      "title": "Desktop launch diagnostics and fast truthful readiness",
+      "priority": "P2",
+      "status": "CANDIDATE",
+      "source": "https://github.com/wests-cmd/kingdom/pull/179",
+      "acceptance": "On exact native artifact show readiness only after 200 response and reduced polling overhead without shortening total deadline",
+      "dependencies": [
+        "REL-01"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "MOBILE-01",
+      "area": "release-completion",
+      "title": "Small native Android and iOS companion release",
+      "priority": "P2",
+      "status": "BLOCKED",
+      "source": "https://github.com/wests-cmd/kingdom/issues/188",
+      "acceptance": "Provide signed or properly installable real phone packages only after platform compliance, permission and isolated connection tests; explicitly mark unpublished until then",
+      "dependencies": [
+        "SEC-05"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "REL-02",
+      "area": "release-completion",
+      "title": "Release candidate v1.2.8 end-to-end certification",
+      "priority": "P1",
+      "status": "CANDIDATE",
+      "source": "https://github.com/wests-cmd/kingdom/pull/184",
+      "acceptance": "Exact-head platform CI, staged artifacts, immutable tags and signed-heartbeat revocation regression validated before publication",
+      "dependencies": [
+        "DB-01",
+        "REL-01"
+      ],
+      "evidence": []
+    }
+  ]
+}

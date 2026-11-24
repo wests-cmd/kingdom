@@ -41,6 +41,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Reject fabricated completion evidence before packaging
+        run: python scripts/check_completion_evidence.py
       - id: release
         run: python scripts/validate_version.py --release-identity >> "$GITHUB_OUTPUT"
 
