@@ -6,6 +6,7 @@ The [repository README](../README.md) provides one-click installer downloads and
 ## Start and operate
 
 - [Operations and configuration](OPERATIONS.md): local state, ports, authentication, recovery and updates.
+- [Assistant capabilities](ASSISTANT_CAPABILITIES.md): harness jobs, bounded vision, learning and delegation.
 - [Quick Kingdom](QUICK_KINGDOM.md): compact desktop assistant, instant commands and scoped shortcuts.
 - [Mission workspace](MISSION_WORKSPACE.md): tasks, attachments and reviewed work.
 - [Understand Kingdom's status](USER_VISIBILITY.md): clear meanings for waiting/running/completed, stale information, approval requests, and verification evidence.
