@@ -359,6 +359,27 @@ async function runReleaseSmoke(reportPath) {
     const retained=await mainWindow.webContents.executeJavaScript("fetch('/requests?session_scope=native-quick-smoke&project_scope=projects%2Fnative-quick-smoke').then(r=>r.json())");
     if(retained.length!==1 || retained[0].route!=='status' || retained[0].status!=='completed' || retained[0].evidence[0].type!=='runtime_status') throw new Error('Compact request was not shared with main conversation');
     report.quickAssistant={sharedRequest:retained[0].id,deterministic:true,ownerAuthenticated:true};
+    // Real packaged renderer crop workflow using generated non-sensitive pixels.
+    // This tests local image handling, not OS screen-sharing consent or vision inference.
+    await view.executeJavaScript(`(async()=>{
+      const picker=document.querySelector('input[accept="image/png,image/jpeg,image/webp"]');
+      if(!picker)throw Error('Screen region picker missing');
+      picker.closest('details').open=true;
+      const sample=document.createElement('canvas');sample.width=80;sample.height=60;
+      const ctx=sample.getContext('2d');ctx.fillStyle='red';ctx.fillRect(0,0,80,60);
+      const blob=await new Promise(resolve=>sample.toBlob(resolve,'image/png'));
+      const files=new DataTransfer();files.items.add(new File([blob],'fixture.png',{type:'image/png'}));
+      picker.files=files.files;picker.dispatchEvent(new Event('change',{bubbles:true}));
+    })()`);
+    await until(()=>view.executeJavaScript("Boolean(document.querySelector('canvas[aria-label]'))"),'reviewed region canvas');
+    await view.executeJavaScript("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Preview marked region').click()");
+    await until(()=>view.executeJavaScript("Boolean(document.querySelector('img[alt=\\\"Reviewed region crop\\\"]')?.src.startsWith('data:image/jpeg;base64,'))"),'bounded crop preview');
+    await view.executeJavaScript("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Attach reviewed crop').click()");
+    await until(()=>view.executeJavaScript("document.body.textContent.includes('Reviewed crop attached')"),'explicit crop attachment');
+    const unchanged=await mainWindow.webContents.executeJavaScript("fetch('/requests?session_scope=native-quick-smoke&project_scope=projects%2Fnative-quick-smoke').then(r=>r.json()).then(rows=>rows.length===1)");
+    if(!unchanged)throw Error('Preview submitted a request without Send');
+    report.quickAssistant.reviewedCrop={fixture:true,attached:true,submittedWithoutSend:false};
+
   } finally {
     quick.stop();
     await mainWindow.webContents.executeJavaScript("localStorage.removeItem('kingdom-conversation-scope');localStorage.removeItem('kingdom-conversation-project')");
