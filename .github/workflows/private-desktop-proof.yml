@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "deploy/private-desktop-proof/**"
+      - "backend/runtime/private_x11_input.py"
       - "scripts/verify_private_desktop_evidence.py"
       - ".github/workflows/private-desktop-proof.yml"
   workflow_dispatch:
@@ -18,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build a disposable private X11 GUI fixture
-        run: docker build --file deploy/private-desktop-proof/Dockerfile --tag kingdom-private-desktop-proof deploy/private-desktop-proof
+        run: docker build --file deploy/private-desktop-proof/Dockerfile --tag kingdom-private-desktop-proof .
 
       - name: Exercise real private desktop input with no host display or network
         shell: bash
