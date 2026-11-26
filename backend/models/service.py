@@ -178,6 +178,9 @@ class ModelService:
                 raise ValueError('Configure a non-Codex chat model for planning')
         async with capacity.acquire(candidates, server_profiles=configured) as selected:
             profile = profiles.get(selected['id'], credential=True)
+            if '_kingdom_profile_revision' in request and (
+                    profile.get('updated_at')!=request['_kingdom_profile_revision'] or profile.get('disabled')):
+                raise ValueError('The approved model connection changed; review a new request')
             import json
             if planner and ('codex' in profile['model'].casefold() or 'codex' in profile['id'].casefold()):
                 raise ValueError('Planner model changed; select a non-Codex chat connection')
