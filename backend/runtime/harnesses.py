@@ -61,10 +61,12 @@ class HarnessService:
         self.engine.events.publish('harness.saved', {'id': ident, 'revision': data['revision']})
         return {'id': ident, **data}
 
-    def submit(self, ident, prompt, cwd='.'):
+    def submit(self, ident, prompt, cwd='.', *, expected_revision=None, request_id=None):
         from backend.runtime.computer_tools import workspace_path
         profile = self.get(ident)
         if not profile: raise ValueError('Harness connection not found')
+        if expected_revision is not None and profile['revision'] != expected_revision:
+            raise ValueError('Harness changed since request creation; review a new request')
         if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 4000 or '\x00' in prompt:
             raise ValueError('Describe the job in 1–4000 characters')
         config = validate_config(HarnessConfig.model_validate({key: value for key, value in profile.items() if key not in {'id', 'revision'}}))
@@ -74,7 +76,8 @@ class HarnessService:
         return self.engine.submit_task(prompt, metadata={'actor': 'owner', 'tool': 'harness.run@1.0.0',
             'harness_id': ident, 'harness_revision': profile['revision'],
             'tool_parameters': {'argv': argv, 'cwd': cwd, 'timeout_seconds': config.timeout_seconds, 'environment': config.environment},
-            'required_capabilities': ['process.execute'], 'source': 'owner_harness_connection'})
+            'required_capabilities': ['process.execute'], 'source': 'owner_harness_connection',
+            **({'project_scope': cwd, 'conversation_request_id': request_id} if request_id else {})})
 
 def run_harness(params):
     from backend.runtime.computer_tools import run_process
