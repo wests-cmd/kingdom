@@ -161,3 +161,39 @@ async def start_background(ident: str,options:BackgroundOptions|None=None):
     try: return background.start(ident,**(options or BackgroundOptions()).model_dump())
     except KeyError: raise HTTPException(404, 'Request not found')
     except ValueError as error: raise HTTPException(409, str(error)) from error
+
+
+@router.get('/{ident}/progress')
+def governed_progress(ident:str):
+    from backend.events.event_bus import event_bus
+    try:state=service().get(ident)
+    except KeyError as error:raise HTTPException(404,'Request not found') from error
+    task_id=state.get('governed_task_id')
+    if not task_id:return {'task_id':None,'status':state['status'],'progress':[]}
+    task=service().engine.tasks.repo.get(task_id)
+    events=event_bus.get_events(task_id=task_id,event_type='task.harness_progress',limit=12)
+    progress=[]
+    for event in events:
+        data=event.get('data') or event.get('payload') or {}
+        if type(data.get('bytes')) is int and type(data.get('elapsed_seconds')) in (int,float):
+            progress.append({'bytes':data['bytes'],'elapsed_seconds':data['elapsed_seconds'],'timestamp':event.get('timestamp')})
+    return {'task_id':task_id,'status':task['status'] if task else 'missing','progress':progress}
+
+
+@router.post('/{ident}/review-harness-proposals',status_code=201)
+def review_harness_proposals(ident:str):
+    from backend.runtime.harness_protocol import proposal_plan
+    current=service()
+    try:
+        state=current.get(ident)
+        if state['status']!='completed' or state['route']!='harness':raise ValueError('No completed harness')
+        task=current.engine.tasks.repo.get(state['governed_task_id'])
+        if not task or task.get('status')!='completed' or task.get('metadata',{}).get('conversation_request_id')!=ident:
+            raise ValueError('Harness task changed')
+        items=(task.get('result') or {}).get('results',[])
+        if len(items)!=1 or items[0].get('verification',{}).get('state')!='VERIFIED':raise ValueError('Missing receipt')
+        outcome=items[0]['outcome']
+        if outcome.get('tool')!='harness.run@1.0.0' or outcome['output'].get('exit_code')!=0:raise ValueError('Missing successful harness result')
+        plan=proposal_plan(outcome['output']['structured']['proposals'])
+        return current.engine.missions.create(plan)
+    except (KeyError,TypeError,ValueError) as error:raise HTTPException(409,'No verified supported harness proposal; no work was dispatched') from error
