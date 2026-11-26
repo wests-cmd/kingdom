@@ -355,8 +355,11 @@ class RequestService:
                         output=outcome.get('output',{})
                         if route=='harness' and outcome.get('tool')=='harness.run@1.0.0' and output.get('exit_code')==0:
                             status='completed'
-                            answer='Harness process completed; changes require independent review.\n'+str(output.get('output',''))[:16000]
+                            answer='Harness process completed; changes require independent review.\n'+str(output.get('structured',{}).get('answer',output.get('output','')))[:16000]
                             evidence[0]['verified_execution']=True
+                            if output.get('structured'):
+                                evidence.append({'type':'harness_proposals','proposals':output['structured']['proposals'],
+                                    'events':output['structured']['events'],'verified_execution':False})
                 return await asyncio.to_thread(self.update,ident,{'status':status,'answer':answer,'evidence':evidence},expected={'running'}) or await asyncio.to_thread(self.get,ident)
             elif route=='agent':
                 if not state['agent_session_id']:
