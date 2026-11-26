@@ -6,6 +6,7 @@ FROM debian:bookworm-slim
 ENV DEBIAN_FRONTEND=noninteractive \
     HOME=/tmp \
     DISPLAY=:99 \
+    KINGDOM_PRIVATE_X11_INPUT=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -15,8 +16,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && useradd --uid 10001 --create-home --shell /usr/sbin/nologin kingdom-demo \
     && install -d -m 0755 /opt/kingdom
 
-COPY --chmod=0755 start.sh /opt/kingdom/start.sh
-COPY --chmod=0644 demo.py probe.py /opt/kingdom/
+COPY --chmod=0755 deploy/private-desktop-proof/start.sh /opt/kingdom/start.sh
+COPY --chmod=0644 deploy/private-desktop-proof/demo.py deploy/private-desktop-proof/probe.py /opt/kingdom/
+COPY --chmod=0644 backend/runtime/private_x11_input.py /opt/kingdom/private_x11_input.py
 
 USER 10001:10001
 WORKDIR /opt/kingdom
