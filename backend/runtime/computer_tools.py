@@ -15,9 +15,10 @@ TOOL_CAPABILITIES = {'workspace.read@1.0.0': 'filesystem.read', 'workspace.write
 TOOL_CAPABILITIES['computer.input@1.0.0'] = 'computer.control'
 
 
-def workspace_path(name='.'):
+def workspace_path(name='.', *, create_root=True):
     root = Path(os.environ.get('KINGDOM_WORKSPACE', 'data/workspace')).resolve()
-    root.mkdir(parents=True, exist_ok=True)
+    if create_root:
+        root.mkdir(parents=True, exist_ok=True)
     relative = Path(name)
     if relative.is_absolute() or ':' in str(name) or '..' in relative.parts:
         raise ValueError('Use a relative path within the Kingdom workspace')
@@ -49,13 +50,19 @@ def list_files(params):
             for entry in sorted(target.iterdir())[:1000] if not entry.is_symlink()]}
 
 
-def run_process(params, *, max_timeout=120, environment=None, progress=None):
+def run_process(params, *, max_timeout=120, environment=None, progress=None, create_cwd=False):
     argv = params.get('argv')
     if not isinstance(argv, list) or not 1 <= len(argv) <= 40 or not all(isinstance(x, str) and 0 < len(x) <= 4000 and '\x00' not in x for x in argv):
         raise ValueError('Supply an argument list, never a shell command string')
     timeout = params.get('timeout_seconds', 60)
     if type(timeout) is not int or not 1 <= timeout <= max_timeout: raise ValueError(f'Process timeout must be 1–{max_timeout} seconds')
-    cwd = workspace_path(params.get('cwd', '.'))
+    cwd = workspace_path(params.get('cwd', '.'), create_root=not create_cwd)
+    if create_cwd:
+        # Only the admitted harness executor requests directory creation. The
+        # submitted task is a side-effect-free description, not an approval.
+        cwd.mkdir(parents=True, exist_ok=True)
+        if workspace_path(params.get('cwd', '.'), create_root=False) != cwd:
+            raise ValueError('Harness working directory changed during preparation')
     env = {key: os.environ[key] for key in ('PATH', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'LANG') if key in os.environ}
     env['PYTHONIOENCODING'] = 'utf-8'
     if environment: env.update(environment)

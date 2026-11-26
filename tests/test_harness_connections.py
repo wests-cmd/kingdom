@@ -48,3 +48,30 @@ def test_new_tools_remain_high_risk():
     assert TOOL_CAPABILITIES['harness.run@1.0.0']=='process.execute'
     tools=native_tools()
     assert tools is not None
+
+
+def test_harness_submission_never_creates_workspace_until_execution(tmp_path,monkeypatch):
+    root=tmp_path/'new-workspace'
+    monkeypatch.setenv('KINGDOM_WORKSPACE',str(root))
+    service=HarnessService(engine(),Database(tmp_path/'profiles.db'))
+    service.save('python',HarnessConfig(name='Fixture',argv=[sys.executable,'-c','import os;print(os.getcwd())','{prompt}']))
+    task=service.submit('python','literal input','projects/new')
+    assert not root.exists(), 'Unapproved admission changed the filesystem'
+    params=task['metadata']['tool_parameters']
+    with pytest.raises(ValueError):
+        run_harness({**params,'timeout_seconds':0})
+    assert not root.exists(), 'Invalid execution created a working directory'
+    output=run_harness(params)
+    assert output['exit_code']==0
+    assert (root/'projects'/'new').is_dir()
+    assert str(root/'projects'/'new') in output['output']
+
+
+def test_structured_harness_real_subprocess_creates_only_bounded_proposals(tmp_path,monkeypatch):
+    import json
+    monkeypatch.setenv('KINGDOM_WORKSPACE',str(tmp_path/'workspace'))
+    events=[{'type':'progress','message':'Working'},{'type':'proposal','tool':'text.analyze@1.0.0','text':'literal input'},{'type':'answer','text':'Review this'}]
+    program='import json; events='+repr(events)+'; [print(json.dumps(e)) for e in events]'
+    result=run_harness({'argv':[sys.executable,'-c',program],'cwd':'projects/fixture','timeout_seconds':5,'output_protocol':'kingdom_jsonl'})
+    assert result['exit_code']==0 and result['structured']['answer']=='Review this'
+    assert result['structured']['proposals']==[events[1]]

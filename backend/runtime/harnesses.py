@@ -72,8 +72,7 @@ class HarnessService:
         if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 4000 or '\x00' in prompt:
             raise ValueError('Describe the job in 1–4000 characters')
         config = validate_config(HarnessConfig.model_validate({key: value for key, value in profile.items() if key not in {'id', 'revision'}}))
-        work = workspace_path(cwd)
-        work.mkdir(parents=True, exist_ok=True)
+        work = workspace_path(cwd, create_root=False)
         argv = [prompt if arg == '{prompt}' else str(work) if arg == '{workspace}' else arg for arg in config.argv]
         return self.engine.submit_task(prompt, metadata={'actor': 'owner', 'tool': 'harness.run@1.0.0',
             'harness_id': ident, 'harness_revision': profile['revision'],
@@ -95,7 +94,7 @@ def run_harness(params):
             event_bus.publish('task.harness_progress',{'bytes':byte_count,'elapsed_seconds':round(elapsed,2)},
                 task_id=params['_receipt_id'],source='harness')
         options['progress']=progress
-    result = run_process(params, max_timeout=1800, environment={**inherited, **environment},**options)
+    result = run_process(params, max_timeout=1800, environment={**inherited, **environment}, create_cwd=True, **options)
     if protocol=='kingdom_jsonl' and result['exit_code']==0:
         if result.get('output_truncated'):raise ValueError('Structured output exceeded retained budget')
         from backend.runtime.harness_protocol import decode
