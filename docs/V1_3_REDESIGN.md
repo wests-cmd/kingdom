@@ -14,3 +14,7 @@ Definition of done: a single durable objective lifecycle, one existing identity 
 8. Commission physical devices, signed installers and mobile packages where credentials/platforms permit. Issue #172 is not closed by unit tests.
 
 Every slice must retain existing regressions and add its own tests. The model matrix is permanent from v1.3.0 onward; report real small, medium and large evidence separately from fixture tests. Source correctness is not installed production certification.
+
+### Conversation admission consolidation (incremental)
+
+Commander drafts, delegated tasks, harness tasks and agent sessions now share a durable compare-and-swap admission checkpoint in RequestService. A stale running snapshot cannot claim a second admission; an existing intent without a linked child is held for review rather than replayed. The checkpoint confers no permission. Existing child services remain responsible for authorization and execution. Direct non-conversation entry points and independent physical/model acceptance remain outside this slice. Regression tests cover all four routes, competing claims, cancellation and retained children; CI evidence is required before accepting the slice.

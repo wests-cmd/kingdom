@@ -60,3 +60,44 @@ def test_stale_resume_cannot_acquire_a_changed_checkpoint(tmp_path):
     changed=service.update(saved["id"],{"status":"waiting_review","recovery_hold":True})
     assert service.update(saved["id"],{"status":"running"},expected={"waiting_review"},expected_updated_at=saved["updated_at"]) is None
     assert service.get(saved["id"])==changed
+
+
+@pytest.mark.parametrize("route,field", [
+    ("agent", "agent_session_id"), ("commander", "governed_mission_id"),
+    ("harness", "governed_task_id"), ("delegate", "governed_task_id"),
+])
+def test_shared_admission_claim_is_single_use(tmp_path, route, field):
+    from concurrent.futures import ThreadPoolExecutor
+    service, models, agents = setup(tmp_path)
+    saved = service.create(dict(body(), mode="agent"))
+    running = service.update(saved["id"], {"route": route, "status": "running"})
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        claims = list(pool.map(service.begin_child_admission, [running, running]))
+    assert sum(claim is not None for claim in claims) == 1
+    claimed = service.get(saved["id"])
+    assert claimed["governed_submission_started"] and claimed["status"] == "running"
+    assert not claimed.get(field)
+    assert service.begin_child_admission(claimed) is None
+    held = service.get(saved["id"])
+    assert held["status"] == "waiting_review"
+    assert "interrupted" in held["answer"]
+    assert models.calls == agents.created == agents.runs == 0
+
+
+def test_shared_admission_cannot_claim_cancelled_checkpoint(tmp_path):
+    service, _, _ = setup(tmp_path)
+    saved = service.create(dict(body(), mode="agent"))
+    running = service.update(saved["id"], {"status": "running"})
+    service.cancel(saved["id"])
+    assert service.begin_child_admission(running) is None
+    assert service.get(saved["id"])["status"] == "cancelled"
+    assert not service.get(saved["id"]).get("governed_submission_started")
+
+
+def test_shared_admission_refuses_existing_child(tmp_path):
+    service, _, _ = setup(tmp_path)
+    saved = service.create(dict(body(), mode="agent"))
+    running = service.update(saved["id"], {"status": "running", "agent_session_id": "retained"})
+    with pytest.raises(ValueError, match="Existing child"):
+        service.begin_child_admission(running)
+    assert service.get(saved["id"]) == running
