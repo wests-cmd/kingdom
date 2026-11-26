@@ -74,4 +74,4 @@ def test_structured_harness_real_subprocess_creates_only_bounded_proposals(tmp_p
     program='import json; events='+repr(events)+'; [print(json.dumps(e)) for e in events]'
     result=run_harness({'argv':[sys.executable,'-c',program],'cwd':'projects/fixture','timeout_seconds':5,'output_protocol':'kingdom_jsonl'})
     assert result['exit_code']==0 and result['structured']['answer']=='Review this'
-    assert result['structured']['proposals']==[events[1]]
+    assert result['structured']['proposals']==[{'tool':events[1]['tool'],'text':events[1]['text']}]
