@@ -207,9 +207,14 @@ class TaskManager:
         return deepcopy(claimed)
 
     @synchronized
-    def claim_remote_atomically(self, task_id, node_id, capability, leases):
+    def claim_remote_atomically(self, task_id, node_id, capability, leases, expected_version=None):
         task = self.repo.get(task_id)
         if not task:
+            return None
+        if expected_version is not None and task['version'] != expected_version:
+            return None
+        assigned=task.get('assigned_knight') or task.get('metadata',{}).get('assigned_knight')
+        if assigned and assigned != node_id:
             return None
         lease = leases.issue_and_claim(task_id, node_id, capability, task["version"])
         if not lease:
