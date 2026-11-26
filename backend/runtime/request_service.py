@@ -254,13 +254,14 @@ class RequestService:
                 work = [json.loads(row[0]) for row in rows]
         return tasks, work
 
-    def update(self, ident, change, expected=None):
+    def update(self, ident, change, expected=None, *, expected_updated_at=None):
         with self.db.get_connection() as conn:
             conn.execute('BEGIN IMMEDIATE')
             row=conn.execute('SELECT state_json FROM conversation_requests WHERE id=?',(ident,)).fetchone()
             if not row: raise KeyError(ident)
             state=json.loads(row[0])
             if expected is not None and state['status'] not in expected: return None
+            if expected_updated_at is not None and state['updated_at']!=expected_updated_at:return None
             state.update(change,updated_at=time.time())
             conn.execute('UPDATE conversation_requests SET state_json=? WHERE id=?',(json.dumps(state),ident))
             conn.commit()
@@ -279,7 +280,7 @@ class RequestService:
         elif resume_recovered:
             raise ValueError('No recovered request awaiting review')
         if saved['status'] in {'completed','cancelled','failed','running'}: return saved
-        state=await asyncio.to_thread(self.update,ident,{'status':'running',**({'recovery_hold':False} if resume_recovered else {})},expected={'queued','waiting_review','ready'})
+        state=await asyncio.to_thread(self.update,ident,{'status':'running',**({'recovery_hold':False} if resume_recovered else {})},expected={'queued','waiting_review','ready'},expected_updated_at=saved['updated_at'])
         if state is None:return await asyncio.to_thread(self.get,ident)
         try:
             route=state['route']

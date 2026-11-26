@@ -2,7 +2,7 @@
 import asyncio
 import json
 import pytest
-from tests.test_request_bridge import _harness_fixture,body,setup
+from test_request_bridge import _harness_fixture,body,setup
 from backend.runtime.request_origin import request_origin
 from backend.runtime.request_recovery import reconcile_interrupted_requests
 
@@ -52,3 +52,11 @@ def test_interrupted_agent_recovers_exact_session_but_never_auto_runs(tmp_path,m
     assert models.calls==agents.created==agents.runs==0
     assert service.cancel(saved["id"])["status"]=="cancelled"
     assert agents.cancelled==["child"]
+
+
+def test_stale_resume_cannot_acquire_a_changed_checkpoint(tmp_path):
+    service,_,_=setup(tmp_path)
+    saved=service.create(dict(body(),mode="agent"))
+    changed=service.update(saved["id"],{"status":"waiting_review","recovery_hold":True})
+    assert service.update(saved["id"],{"status":"running"},expected={"waiting_review"},expected_updated_at=saved["updated_at"]) is None
+    assert service.get(saved["id"])==changed

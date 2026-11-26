@@ -178,3 +178,14 @@ def test_claimed_task_not_stranded_if_running_event_fails():
         assert fail_records[0]["status"] == "failed"
 
     asyncio.run(run())
+
+
+def test_request_reconciliation_precedes_scheduler_and_all_runners():
+    async def run():
+        seen=[]
+        supervisor=RuntimeServiceSupervisor(FakeEngine(seen),{"runner":FakeRunner("runner",seen)},
+                                             startup_reconcile=lambda:seen.append("reconcile"))
+        await supervisor.start()
+        assert seen==["reconcile","engine:start","start:runner"]
+        await supervisor.stop()
+    asyncio.run(run())
