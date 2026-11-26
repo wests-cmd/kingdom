@@ -1,7 +1,7 @@
 """Owner-authenticated request bridge; clients share scope and idempotency keys."""
 import asyncio
 from typing import Literal
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, ConfigDict
 from backend.security.http_auth import require_owner
 router=APIRouter(prefix='/requests',dependencies=[Depends(require_owner)])
@@ -86,6 +86,27 @@ class LearnShortcutInput(BaseModel):
 def learn_shortcut(body:LearnShortcutInput):
     try:return service().learn_shortcut(body.request_id,body.session_scope,body.project_scope,body.name)
     except (KeyError,ValueError) as error:raise HTTPException(409,'Choose a completed, verified instant request in this conversation') from error
+
+
+@router.get('/voice/local')
+def local_voice_status():
+    from backend.runtime.local_transcription import configured
+    return {'configured':configured() is not None,'format':'16 kHz mono 16-bit PCM WAV','max_seconds':60}
+
+
+@router.post('/voice/local')
+async def local_voice(request:Request):
+    from backend.runtime.local_transcription import MAX_WAV,transcribe
+    if request.headers.get('content-type','').split(';')[0] not in {'audio/wav','audio/x-wav','application/octet-stream'}:
+        raise HTTPException(415,'Choose a WAV recording')
+    data=bytearray()
+    async for chunk in request.stream():
+        if len(data)+len(chunk)>MAX_WAV:
+            raise HTTPException(413,'Recording exceeds 2 MiB')
+        data.extend(chunk)
+    try:return await asyncio.to_thread(transcribe,bytes(data))
+    except ValueError as error:raise HTTPException(400,str(error)) from error
+    except Exception as error:raise HTTPException(503,'Local transcription unavailable; check the configured engine and model') from error
 
 
 @router.get('/{ident}')
