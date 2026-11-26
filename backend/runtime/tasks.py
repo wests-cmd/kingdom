@@ -174,10 +174,11 @@ class TaskManager:
                                "execution_target": "remote"}
         changed["version"] = task["version"] + 1
         self.repo.save(changed, expected_version=expected_version)
-        self._tasks[task_id] = changed
+        saved = self.repo.get(task_id)
+        self._tasks[task_id] = saved
         if task_id not in self._queue:
             self._queue.append(task_id)
-        return deepcopy(changed)
+        return deepcopy(saved)
 
     @synchronized
     def claim_next(self) -> dict[str, Any] | None:
