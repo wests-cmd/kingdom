@@ -37,7 +37,7 @@ export default function UnifiedConversation({compact=false}){
  {error&&<p role="alert">{error}</p>}
  <ConversationVoice onTranscript={setPrompt} answer={current?.answer||''} disabled={busy}/>
  <RequestShortcuts project={project} onDraft={value=>{setMode('auto');setPrompt(value);setKey(crypto.randomUUID())}} disabled={busy}/>
- <form onSubmit={submit}>
+ <form onSubmit={submit} aria-label="Kingdom conversation composer">
  <details><summary>Advanced routing and workspace</summary>
  <label>Project scope / workspace<input required value={project} disabled={busy} onChange={e=>{setProject(e.target.value);setSelected(null);setKey(crypto.randomUUID())}}/></label>
  <label>Request route<select value={mode} disabled={busy} onChange={e=>setMode(e.target.value)}><option value="auto">Automatic · deterministic first, then question or action</option><option value="quick">Quick model · text only</option><option value="agent">Agent work · workspace tools</option></select></label>
@@ -47,7 +47,7 @@ export default function UnifiedConversation({compact=false}){
  {mode==='agent'&&<label><input type="checkbox" checked={allowProcess} onChange={e=>setAllowProcess(e.target.checked)}/>Offer process tools, subject to existing grants and autonomy approvals</label>}
  {mode==='agent'&&<details><summary>Let Kingdom use a Windows app</summary><p>Kingdom itself can observe, click, type and check the result in the exact foreground window you choose. Existing desktop grants still apply. Work runs on your Kingdom server while this page is closed.</p><label>Exact foreground window title<input maxLength={500} disabled={busy} value={desktopWindow} onChange={e=>setDesktopWindow(e.target.value)} placeholder="Leave empty to keep computer use off"/></label><label>What visible text proves it worked?<input maxLength={2000} disabled={busy} value={desktopExpected} onChange={e=>setDesktopExpected(e.target.value)} placeholder="Optional exact text Kingdom must actually observe"/></label></details>}
  </details>
- <label>Your message<textarea required rows={4} maxLength={24000} disabled={busy} value={prompt} onChange={e=>setPrompt(e.target.value)} /></label>
+ <label>Your message<textarea aria-label="Your message" required rows={compact?3:4} maxLength={24000} disabled={busy} value={prompt} onChange={e=>setPrompt(e.target.value)} /></label>
  <button disabled={busy||!prompt.trim()}>{busy?'Working…':'Send'}</button>
  </form>
  <details><summary>Reconnect another front door</summary><label>Conversation scope<input value={scope} disabled={busy} onChange={e=>{setScope(e.target.value);setSelected(null);setKey(crypto.randomUUID())}}/></label><p>Use the same conversation scope, project scope and idempotency key in another authenticated client to reconnect to the same request without duplicating work.</p></details>
