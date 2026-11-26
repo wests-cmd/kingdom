@@ -7,6 +7,7 @@ import Swarm from "./pages/Swarm"
 import Runtime from "./pages/Runtime"
 import Tasks from "./pages/Tasks"
 import Workbench from "./pages/Workbench"
+import UnifiedConversation from './components/UnifiedConversation'
 import Preparation from "./pages/Preparation"
 import Automations from "./pages/Automations"
 import AIMap from "./pages/AIMap"
@@ -36,10 +37,10 @@ import {loadInterfaceMode,saveInterfaceMode,pageForMode} from './interfaceMode'
 export default function App() {
   const [hash, setHash] = useState(window.location.hash)
   useEffect(() => { const change = () => setHash(window.location.hash); window.addEventListener('hashchange', change); return () => window.removeEventListener('hashchange', change) }, [])
-  return <AppearanceProvider>{hash.startsWith('#/connect') ? <ConnectDevice /> : <OwnerApp />}</AppearanceProvider>
+  return <AppearanceProvider>{hash.startsWith('#/connect') ? <ConnectDevice /> : <OwnerApp quick={hash==='#/quick'} />}</AppearanceProvider>
 }
 
-function OwnerApp() {
+function OwnerApp({quick=false}) {
   const [currentPage, setCurrentPage] = useState("Dashboard")
   const [interfaceMode,setInterfaceMode] = useState(()=>{try{return loadInterfaceMode(window.localStorage)}catch{return 'easy'}})
   const [modeSaved,setModeSaved] = useState(true)
@@ -135,6 +136,9 @@ function OwnerApp() {
     <details><summary>Administrator access</summary><form onSubmit={e=>{e.preventDefault();setAccessCode(accessCode);connect()}}>
       <label>Owner access code <input type="password" autoComplete="off" value={accessCode} onChange={e=>setCode(e.target.value)} /></label><button type="submit">Connect</button>
     </form></details>{error && <p role="alert">{error}</p>}</main>
+  if (quick) return <main className="content" id="main-content" tabIndex={-1} style={{padding:12,maxWidth:'100%',overflowWrap:'anywhere'}}>
+    <UnifiedConversation compact />
+  </main>
   return (
     <div className="layout" data-interface-mode={interfaceMode} data-page={currentPage.toLowerCase()}>
       <a className="skip-link" href="#main-content">Skip to main content</a>
