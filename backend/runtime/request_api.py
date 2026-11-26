@@ -71,6 +71,20 @@ def remove_shortcut(name:str,project_scope:str=Query(min_length=1,max_length=200
     return {'removed':service().shortcuts.remove(project_scope,name)}
 
 
+class LearnShortcutInput(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    name:str=Field(min_length=1,max_length=40)
+    request_id:str=Field(min_length=1,max_length=100)
+    session_scope:str=Field(min_length=1,max_length=100)
+    project_scope:str=Field(min_length=1,max_length=200)
+
+
+@router.post('/shortcuts/learn')
+def learn_shortcut(body:LearnShortcutInput):
+    try:return service().learn_shortcut(body.request_id,body.session_scope,body.project_scope,body.name)
+    except (KeyError,ValueError) as error:raise HTTPException(409,'Choose a completed, verified instant request in this conversation') from error
+
+
 @router.get('/{ident}')
 def get(ident:str):
     try:return service().get(ident)
