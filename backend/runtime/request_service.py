@@ -155,12 +155,21 @@ class RequestService:
         if body.get('desktop_window_title'):
             if route=='quick':raise ValueError('Desktop control requires the agent route')
             route='agent'
+        if body.get('harness_id') and route != 'harness':
+            raise ValueError('Harness selection requires the explicit harness route')
+        if body['mode'] == 'harness':
+            if route != 'harness' or not body.get('harness_id') or not body.get('allow_process'):
+                raise ValueError('Choose a harness and explicitly enable process work without agent tool stages')
+            if len(body['prompt']) > 4000 or not body['prompt'].strip():
+                raise ValueError('Harness requests require 1–4000 characters')
+        if body.get('fallback_profile') and (route != 'quick' or body['model_profile'] in {'auto',body['fallback_profile']} or body['model_profile'].startswith('pool:')):
+            raise ValueError('Choose distinct explicit primary and fallback profiles in text-only mode')
         with self.db.get_connection() as conn:
             conn.execute('BEGIN IMMEDIATE')
             old=conn.execute('SELECT state_json FROM conversation_requests WHERE session_scope=? AND project_scope=? AND idem=?',(body['session_scope'],body['project_scope'],body['idempotency_key'])).fetchone()
             if old:
                 existing=json.loads(old[0])
-                if any(existing.get(key,{'tool_sequence':[],'tool_protocol':'native','tool_paths':[]}.get(key))!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
+                if any(existing.get(key,{'tool_sequence':[],'tool_protocol':'native','tool_paths':[],'harness_id':None,'fallback_profile':None}.get(key))!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
                 return existing
             if route == 'auto':
                 instant = resolve(body['prompt'], body['project_scope'], self.shortcuts)
@@ -168,6 +177,21 @@ class RequestService:
                 elif priority_question(text): route = 'priorities'
                 elif re.match(r'^(?:please\s+)?(?:inspect|implement|edit|modify|fix|refactor|build|run tests|test the|create a file|write a file)\b', text): route='agent'
                 else: route='quick'
+            if route == 'harness':
+                from backend.runtime.harnesses import HarnessService
+                # Read using this transaction rather than creating tables while holding a writer lock.
+                if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='harness_profiles'").fetchone():
+                    raise ValueError('Harness connection not found')
+                row=conn.execute('SELECT config_json FROM harness_profiles WHERE id=?',(body['harness_id'],)).fetchone()
+                if not row: raise ValueError('Harness connection not found')
+                state['harness_revision']=json.loads(row[0])['revision']
+            if body.get('fallback_profile'):
+                rows=conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='model_profiles'").fetchone()
+                if not rows: raise ValueError('Configure both model profiles first')
+                for ident in (body['model_profile'],body['fallback_profile']):
+                    row=conn.execute('SELECT config_json FROM model_profiles WHERE id=?',(ident,)).fetchone()
+                    if not row or json.loads(row[0]).get('disabled'):
+                        raise ValueError('Both model profiles must be configured and enabled')
             state['route']=route
             conn.execute('INSERT INTO conversation_requests VALUES(?,?,?,?,?)',(state['id'],body['session_scope'],body['project_scope'],body['idempotency_key'],json.dumps(state)))
             conn.commit()
@@ -253,6 +277,32 @@ class RequestService:
                 names=await asyncio.to_thread(configured_names)
                 answer=('Configured harness connections: '+', '.join(names)+'. Configuration is not proof of availability or authorization.') if names else 'No harness connections configured. Use Tools & model lab to connect a supported CLI.'
                 evidence=[{'type':'harness_catalog','ids':names,'verified_execution':False}]
+            elif route=='harness':
+                from backend.runtime.harnesses import HarnessService
+                task_id=state.get('harness_task_id')
+                if not task_id:
+                    task=await asyncio.to_thread(HarnessService(self.engine,self.db).submit,
+                        state['harness_id'],state['prompt'],state['project_scope'],
+                        expected_revision=state['harness_revision'],request_id=ident)
+                    task_id=task['id']
+                    linked=await asyncio.to_thread(self.update,ident,{'harness_task_id':task_id},expected={'running'})
+                    if linked is None:
+                        await asyncio.to_thread(self.engine.cancel_task,task_id)
+                        return await asyncio.to_thread(self.get,ident)
+                task=await asyncio.to_thread(self.engine.tasks.repo.get,task_id)
+                status='waiting_review'
+                answer='Harness job saved. Inspect its task and approval status; Continue reads its retained result without submitting another job.'
+                evidence=[{'type':'harness_task','id':task_id,'status':task['status'] if task else 'missing','verified_execution':False}]
+                if task and task['status'].lower() in {'completed','succeeded'}:
+                    results=(task.get('result') or {}).get('results',[])
+                    if len(results)==1 and results[0].get('verification',{}).get('state')=='VERIFIED':
+                        outcome=results[0].get('outcome',{})
+                        output=outcome.get('output',{})
+                        if outcome.get('tool')=='harness.run@1.0.0' and output.get('exit_code')==0:
+                            status='completed'
+                            answer='Harness process completed; changes require independent review.\n'+str(output.get('output',''))[:16000]
+                            evidence[0]['verified_execution']=True
+                return await asyncio.to_thread(self.update,ident,{'status':status,'answer':answer,'evidence':evidence},expected={'running'}) or await asyncio.to_thread(self.get,ident)
             elif route=='agent':
                 if not state['agent_session_id']:
                     objective = state['prompt']
@@ -290,9 +340,21 @@ class RequestService:
                 from backend.runtime.agent_activity import AgentRejection
                 choice = payload['choices'][0]
                 answer = choice['message'].get('content')
-                if choice.get('finish_reason') == 'length' or not isinstance(answer, str) or not answer.strip():
+                incomplete=choice.get('finish_reason') == 'length' or not isinstance(answer, str) or not answer.strip()
+                if incomplete and state.get('fallback_profile'):
+                    primary=state['model_profile']
+                    fallback=state['fallback_profile']
+                    if (await asyncio.to_thread(self.get,ident))['status']!='running':
+                        return await asyncio.to_thread(self.get,ident)
+                    messages=await asyncio.to_thread(self.messages,{**state,'model_profile':fallback})
+                    payload=await self.models.chat(fallback,{'messages':messages,'stream':False})
+                    choice=payload['choices'][0]
+                    answer=choice['message'].get('content')
+                    incomplete=choice.get('finish_reason')=='length' or not isinstance(answer,str) or not answer.strip()
+                    evidence.append({'type':'model_escalation','from':primary,'to':fallback,'reason':'incomplete_text_response'})
+                if incomplete:
                     raise AgentRejection('model_output_incomplete')
-                evidence=[{'type':'model_response','profile':payload.get('kingdom_profile',state['model_profile']),'model':payload.get('model'),'usage':payload.get('usage',{}),'verified_execution':False}]
+                evidence.append({'type':'model_response','profile':payload.get('kingdom_profile',state['model_profile']),'model':payload.get('model'),'usage':payload.get('usage',{}),'verified_execution':False})
             return await asyncio.to_thread(self.update,ident,{'status':'completed','answer':answer,'evidence':evidence},expected={'running'}) or await asyncio.to_thread(self.get,ident)
         except Exception as error:
             # Provider exception messages can contain credentials or request bodies.
@@ -310,4 +372,5 @@ class RequestService:
     def cancel(self, ident):
         state=self.update(ident,{'status':'cancelled'},expected={'queued','running','waiting_review','ready'})
         if state and state.get('agent_session_id'):self.agents.cancel(state['agent_session_id'])
+        if state and state.get('harness_task_id'):self.engine.cancel_task(state['harness_task_id'])
         return state or self.get(ident)
