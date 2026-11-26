@@ -1,7 +1,7 @@
 {
   "name": "kingdom-mobile",
   "private": true,
-  "version": "1.2.11",
+  "version": "1.3.0",
   "description": "Kingdom Bounded Mobile Interface & Gateway",
   "main": "index.js",
   "scripts": {
