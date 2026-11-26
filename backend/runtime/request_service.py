@@ -155,6 +155,9 @@ class RequestService:
         if body.get('desktop_window_title'):
             if route=='quick':raise ValueError('Desktop control requires the agent route')
             route='agent'
+        if body.get('group_id') or body.get('target_knight') or body['mode']=='delegate':
+            if route!='delegate' or not body.get('group_id') or not body.get('target_knight') or body.get('allow_process') or len(body['prompt'])>16000:
+                raise ValueError('Choose a group and a member Knight for bounded text analysis, without process tools')
         if body.get('screen_region') is not None:
             from backend.runtime.screen_region import validate_region
             validate_region(body['screen_region'])
@@ -174,7 +177,7 @@ class RequestService:
             old=conn.execute('SELECT state_json FROM conversation_requests WHERE session_scope=? AND project_scope=? AND idem=?',(body['session_scope'],body['project_scope'],body['idempotency_key'])).fetchone()
             if old:
                 existing=json.loads(old[0])
-                if any(existing.get(key,{'tool_sequence':[],'tool_protocol':'native','tool_paths':[],'harness_id':None,'fallback_profile':None,'screen_region':None}.get(key))!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
+                if any(existing.get(key,{'tool_sequence':[],'tool_protocol':'native','tool_paths':[],'harness_id':None,'fallback_profile':None,'screen_region':None,'group_id':None,'target_knight':None}.get(key))!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
                 return existing
             if route == 'auto':
                 instant = resolve(body['prompt'], body['project_scope'], self.shortcuts)
@@ -294,35 +297,54 @@ class RequestService:
                 names=await asyncio.to_thread(configured_names)
                 answer=('Configured harness connections: '+', '.join(names)+'. Configuration is not proof of availability or authorization.') if names else 'No harness connections configured. Use Tools & model lab to connect a supported CLI.'
                 evidence=[{'type':'harness_catalog','ids':names,'verified_execution':False}]
-            elif route=='harness':
+            elif route in {'harness','delegate'}:
                 from backend.runtime.harnesses import HarnessService
-                task_id=state.get('harness_task_id')
+                task_id=state.get('governed_task_id')
                 if not task_id:
                     # Persist admission intent before submitting a process task.
                     # A crash in this interval is uncertain; never submit again.
-                    if state.get('harness_submission_started'):
+                    if state.get('governed_submission_started'):
                         return await asyncio.to_thread(self.update,ident,{
-                            'status':'waiting_review','answer':'Harness submission interrupted; inspect task records for this request before retrying.'},expected={'running'}) or await asyncio.to_thread(self.get,ident)
-                    admitted=await asyncio.to_thread(self.update,ident,{'harness_submission_started':True},expected={'running'})
+                            'status':'waiting_review','answer':'Job submission interrupted; inspect task records for this request before retrying.'},expected={'running'}) or await asyncio.to_thread(self.get,ident)
+                    admitted=await asyncio.to_thread(self.update,ident,{'governed_submission_started':True},expected={'running'})
                     if admitted is None:return await asyncio.to_thread(self.get,ident)
-                    task=await asyncio.to_thread(HarnessService(self.engine,self.db).submit,
-                        state['harness_id'],state['prompt'],state['project_scope'],
-                        expected_revision=state['harness_revision'],request_id=ident)
+                    if route=='delegate':
+                        from backend.cluster.hierarchy_api import hierarchy
+                        # This is the existing local group authority only. A shared
+                        # organization must be resolved by its own controller.
+                        from backend.cluster.shared_groups import configured
+                        if configured().authority():
+                            raise ValueError('Shared group delegation requires its authority controller')
+                        await asyncio.to_thread(hierarchy.authorize_assignment,'owner',state['group_id'],state['target_knight'])
+                        task=await asyncio.to_thread(self.engine.submit_task,state['prompt'],metadata={
+                            'actor':'owner','tool':'text.analyze@1.0.0','capability':'compute',
+                            'execution_target':'remote','assigned_knight':state['target_knight'],
+                            'group_id':state['group_id'],'project_scope':state['project_scope'],
+                            'conversation_request_id':ident,'tool_parameters':{'text':state['prompt']}})
+                    else:
+                        task=await asyncio.to_thread(HarnessService(self.engine,self.db).submit,
+                            state['harness_id'],state['prompt'],state['project_scope'],
+                            expected_revision=state['harness_revision'],request_id=ident)
                     task_id=task['id']
-                    linked=await asyncio.to_thread(self.update,ident,{'harness_task_id':task_id},expected={'running'})
+                    linked=await asyncio.to_thread(self.update,ident,{'governed_task_id':task_id},expected={'running'})
                     if linked is None:
                         await asyncio.to_thread(self.engine.cancel_task,task_id)
                         return await asyncio.to_thread(self.get,ident)
                 task=await asyncio.to_thread(self.engine.tasks.repo.get,task_id)
                 status='waiting_review'
-                answer='Harness job saved. Inspect its task and approval status; Continue reads its retained result without submitting another job.'
-                evidence=[{'type':'harness_task','id':task_id,'status':task['status'] if task else 'missing','verified_execution':False}]
+                answer='Governed job saved. Inspect its task and approval status; Continue reads its retained result without submitting another job.'
+                evidence=[{'type':'delegated_task' if route=='delegate' else 'harness_task','id':task_id,'status':task['status'] if task else 'missing','verified_execution':False}]
                 if task and task['status'].lower() in {'completed','succeeded'}:
-                    results=(task.get('result') or {}).get('results',[])
+                    retained=task.get('result') or {}
+                    if route=='delegate' and retained.get('verification',{}).get('state')=='VERIFIED' and retained.get('executed_by')==state['target_knight']:
+                        status='completed'
+                        answer='Controller-verified remote analysis: '+json.dumps(retained.get('output',{}))[:16000]
+                        evidence[0]['verified_execution']=True
+                    results=retained.get('results',[])
                     if len(results)==1 and results[0].get('verification',{}).get('state')=='VERIFIED':
                         outcome=results[0].get('outcome',{})
                         output=outcome.get('output',{})
-                        if outcome.get('tool')=='harness.run@1.0.0' and output.get('exit_code')==0:
+                        if route=='harness' and outcome.get('tool')=='harness.run@1.0.0' and output.get('exit_code')==0:
                             status='completed'
                             answer='Harness process completed; changes require independent review.\n'+str(output.get('output',''))[:16000]
                             evidence[0]['verified_execution']=True
@@ -401,5 +423,5 @@ class RequestService:
     def cancel(self, ident):
         state=self.update(ident,{'status':'cancelled'},expected={'queued','running','waiting_review','ready'})
         if state and state.get('agent_session_id'):self.agents.cancel(state['agent_session_id'])
-        if state and state.get('harness_task_id'):self.engine.cancel_task(state['harness_task_id'])
+        if state and state.get('governed_task_id'):self.engine.cancel_task(state['governed_task_id'])
         return state or self.get(ident)
