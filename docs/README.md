@@ -19,6 +19,8 @@ The [repository README](../README.md) provides one-click installer downloads and
 
 ## Develop and integrate
 
+- [Unified work projection](UNIFIED_WORK_PROJECTION.md): bounded owner-only work snapshot and migration boundary.
+
 - [Architecture](ARCHITECTURE.md) and [development](DEVELOPMENT.md).
 - [Adaptive cluster design](ADAPTIVE_CLUSTER_CORE.md) and [coordination workspace](COORDINATION_WORKSPACE.md).
 - [Portable skills](PORTABLE_SKILLS.md), [Discord skill-map boundary](DISCORD_SKILLMAPS.md), [optional integrations](OPTIONAL_INTEGRATION_REVIEW.md).
