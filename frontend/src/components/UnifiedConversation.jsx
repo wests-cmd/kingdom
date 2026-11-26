@@ -6,6 +6,12 @@ import AgentActivity from './AgentActivity'
 import RequestShortcuts from './RequestShortcuts'
 import ScreenRegion from './ScreenRegion'
 
+function GovernedProgress({requestId}){
+ const {data}=useLiveData('/requests/'+encodeURIComponent(requestId)+'/progress',3000)
+ const recent=data?.progress?.[0]
+ return <p role="status">Task: {data?.status||'Checking retained status'}{recent?' · '+recent.bytes+' output bytes · '+recent.elapsed_seconds+' seconds (not completion evidence)':''}</p>
+}
+
 export default function UnifiedConversation({compact=false}){
  const [scope,setScope]=useState(()=>localStorage.getItem('kingdom-conversation-scope')||crypto.randomUUID())
  const [project,setProject]=useState(()=>localStorage.getItem('kingdom-conversation-project')||'projects/default'),[prompt,setPrompt]=useState(''),[mode,setMode]=useState('auto'),[profile,setProfile]=useState('auto'),[allowProcess,setAllowProcess]=useState(false)
@@ -65,7 +71,7 @@ export default function UnifiedConversation({compact=false}){
  </form>
  <details><summary>Reconnect another front door</summary><label>Conversation scope<input value={scope} disabled={busy} onChange={e=>{setScope(e.target.value);setSelected(null);setKey(crypto.randomUUID())}}/></label><p>Use the same conversation scope, project scope and idempotency key in another authenticated client to reconnect to the same request without duplicating work.</p></details>
  <h3>Selected work and evidence</h3>
- {current?.governed_task_id&&<p>Linked task: {current.governed_task_id} · inspect approval and progress under Tasks.</p>}
+ {current?.governed_task_id&&<><p>Linked task: {current.governed_task_id} · inspect approval and progress under Tasks.</p><GovernedProgress key={current.id} requestId={current.id}/></>}
  {current?.agent_session_id&&<AgentActivity jobId={current.agent_session_id}/>}
  {current&&<article><h3>{current.status.replaceAll('_',' ')} · {current.route}</h3><p>{current.prompt}</p><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{current.answer||'No answer recorded yet.'}</pre>{current.error&&<p role="alert">{current.error}</p>}
  <p className="muted">Request {current.id} · model {current.model_profile}{current.agent_session_id?` · agent job ${current.agent_session_id}`:''}</p>
@@ -74,6 +80,7 @@ export default function UnifiedConversation({compact=false}){
  <button disabled={['completed','cancelled','failed'].includes(current.status)} onClick={async()=>{try{await api.post(`/requests/${current.id}/cancel`);refresh()}catch(e){setError(e.message)}}}>Cancel further work</button>
  {current.status==='completed'&&['time','status','priorities','work','help','harnesses'].includes(current.route)&&<div><label>Learn this verified instant command<input maxLength={40} value={learnName} onChange={e=>setLearnName(e.target.value)} placeholder="e.g. focus"/></label><button type="button" disabled={busy||!learnName.trim()} onClick={async()=>{try{await api.post('/requests/shortcuts/learn',{name:learnName,request_id:current.id,session_scope:scope,project_scope:project});setLearnName('');setError('');refresh()}catch(e){setError(e.response?.data?.detail||e.message)}}}>Save from verified result</button></div>}
  {current.screen_region&&current.evidence?.some(e=>e.type==='visual_guidance')&&<div><p>Advisory teaching marks on the retained snapshot. The screen may have changed; no input was sent.</p><div style={{position:'relative',display:'inline-block',maxWidth:'100%'}}><img src={current.screen_region} alt="Reviewed snapshot with suggested teaching marks" style={{display:'block',maxWidth:'100%'}}/>{current.evidence.find(e=>e.type==='visual_guidance').annotations.map((mark,i)=><div key={i} style={{position:'absolute',left:mark.x+'%',top:mark.y+'%',width:mark.w+'%',height:mark.h+'%',border:'2px solid #ff5252',boxSizing:'border-box',pointerEvents:'none'}}><span style={{background:'#220d15',color:'#fff',fontSize:12}}>{i+1}</span></div>)}</div><ol>{current.evidence.find(e=>e.type==='visual_guidance').annotations.map((mark,i)=><li key={i}>{mark.label}</li>)}</ol></div>}
+ {current.route==='harness'&&current.status==='completed'&&current.evidence?.some(e=>e.type==='harness_proposals'&&e.proposals.length>0)&&<button type="button" disabled={busy} onClick={async()=>{try{const {data}=await api.post('/requests/'+current.id+'/review-harness-proposals');setError('Unapproved mission draft '+data.id+' created. Review in Missions before execution.')}catch(e){setError(e.response?.data?.detail||e.message)}}}>Review supported harness proposals as a new mission</button>}
  <details><summary>Progress and evidence</summary><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{JSON.stringify(current.evidence,null,2)}</pre></details></article>}
  </section>
 }
