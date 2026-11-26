@@ -20,7 +20,7 @@ export default function Workbench(){
  const [objective,setObjective]=useState(''),[profile,setProfile]=useState('auto'),[allowProcess,setAllowProcess]=useState(false)
  const [desktopWindow,setDesktopWindow]=useState('')
  const [selected,setSelected]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState('')
- const [connection,setConnection]=useState({id:'',name:'',kind:'custom-cli',argv:'["/absolute/path/to/agent", "{prompt}"]',environment:'{}',timeout_seconds:600})
+ const [connection,setConnection]=useState({id:'',name:'',kind:'custom-cli',argv:'["/absolute/path/to/agent", "{prompt}"]',environment:'{}',timeout_seconds:600,output_protocol:'text'})
  const [harness,setHarness]=useState(''),[job,setJob]=useState(''),[cwd,setCwd]=useState('.'),[task,setTask]=useState(null)
  const perform=async fn=>{setBusy(true);setError('');try{await fn()}catch(e){setError(typeof e.response?.data?.detail==='string'?e.response.data.detail:e.message)}finally{setBusy(false)}}
  const current=(sessions||[]).find(s=>s.id===selected?.id)||selected
@@ -74,6 +74,7 @@ export default function Workbench(){
      <label>Name<input required value={connection.name} onChange={e=>setConnection({...connection,name:e.target.value})}/></label>
      <label>Argument list (JSON)<textarea rows={5} value={connection.argv} onChange={e=>setConnection({...connection,argv:e.target.value})}/></label>
      <label>Configuration paths (JSON)<textarea value={connection.environment} onChange={e=>setConnection({...connection,environment:e.target.value})}/></label>
+     <label>Output format<select value={connection.output_protocol} onChange={e=>setConnection({...connection,output_protocol:e.target.value})}><option value="text">Ordinary CLI output</option><option value="kingdom_jsonl">Kingdom JSON-lines wrapper contract</option></select></label><p className="muted">Only choose JSON-lines for a wrapper implementing the documented Kingdom contract. Provider-native output formats are not automatically compatible. Proposals never execute without review.</p>
      <label>Timeout in seconds<input type="number" min={1} max={1800} value={connection.timeout_seconds} onChange={e=>setConnection({...connection,timeout_seconds:Number(e.target.value)})}/></label><button disabled={busy}>Save connection</button>
     </form>
    </details>
