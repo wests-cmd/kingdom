@@ -178,7 +178,6 @@ class RequestService:
                 elif re.match(r'^(?:please\s+)?(?:inspect|implement|edit|modify|fix|refactor|build|run tests|test the|create a file|write a file)\b', text): route='agent'
                 else: route='quick'
             if route == 'harness':
-                from backend.runtime.harnesses import HarnessService
                 # Read using this transaction rather than creating tables while holding a writer lock.
                 if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='harness_profiles'").fetchone():
                     raise ValueError('Harness connection not found')
@@ -281,6 +280,13 @@ class RequestService:
                 from backend.runtime.harnesses import HarnessService
                 task_id=state.get('harness_task_id')
                 if not task_id:
+                    # Persist admission intent before submitting a process task.
+                    # A crash in this interval is uncertain; never submit again.
+                    if state.get('harness_submission_started'):
+                        return await asyncio.to_thread(self.update,ident,{
+                            'status':'waiting_review','answer':'Harness submission interrupted; inspect task records for this request before retrying.'},expected={'running'}) or await asyncio.to_thread(self.get,ident)
+                    admitted=await asyncio.to_thread(self.update,ident,{'harness_submission_started':True},expected={'running'})
+                    if admitted is None:return await asyncio.to_thread(self.get,ident)
                     task=await asyncio.to_thread(HarnessService(self.engine,self.db).submit,
                         state['harness_id'],state['prompt'],state['project_scope'],
                         expected_revision=state['harness_revision'],request_id=ident)
@@ -347,6 +353,7 @@ class RequestService:
                     if (await asyncio.to_thread(self.get,ident))['status']!='running':
                         return await asyncio.to_thread(self.get,ident)
                     messages=await asyncio.to_thread(self.messages,{**state,'model_profile':fallback})
+                    await asyncio.to_thread(self.update,ident,{'model_escalation_attempt':{'from':primary,'to':fallback,'reason':'incomplete_text_response'}},expected={'running'})
                     payload=await self.models.chat(fallback,{'messages':messages,'stream':False})
                     choice=payload['choices'][0]
                     answer=choice['message'].get('content')
@@ -354,7 +361,7 @@ class RequestService:
                     evidence.append({'type':'model_escalation','from':primary,'to':fallback,'reason':'incomplete_text_response'})
                 if incomplete:
                     raise AgentRejection('model_output_incomplete')
-                evidence.append({'type':'model_response','profile':payload.get('kingdom_profile',state['model_profile']),'model':payload.get('model'),'usage':payload.get('usage',{}),'verified_execution':False})
+                evidence.append({'type':'model_response','profile':payload.get('kingdom_profile',fallback if evidence else state['model_profile']),'model':payload.get('model'),'usage':payload.get('usage',{}),'verified_execution':False})
             return await asyncio.to_thread(self.update,ident,{'status':'completed','answer':answer,'evidence':evidence},expected={'running'}) or await asyncio.to_thread(self.get,ident)
         except Exception as error:
             # Provider exception messages can contain credentials or request bodies.
@@ -366,7 +373,7 @@ class RequestService:
                           else 'Request timed out.' if isinstance(error, TimeoutError)
                           else f'Request failed ({error_class}).')
             details = {'error_code': error.code} if isinstance(error, AgentRejection) else {}
-            await asyncio.to_thread(self.update,ident,{'status':'failed','answer':'Request failed; no automatic model substitution or replay occurred.','error_class':error_class,'error':diagnostic, **details},expected={'running'})
+            await asyncio.to_thread(self.update,ident,{'status':'failed','answer':'Request failed; inspect the saved checkpoint before starting new work.','error_class':error_class,'error':diagnostic, **details},expected={'running'})
             raise
 
     def cancel(self, ident):
