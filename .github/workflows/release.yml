@@ -193,7 +193,8 @@ jobs:
         run: |
           set -euo pipefail
           if python -c 'import os,sys; sys.exit(0 if tuple(map(int,os.environ["RELEASE_VERSION"].split(".")[:2])) >= (1,3) else 1)'; then
-            RUN_ID=$(gh api --method GET "repos/$GH_REPO/actions/workflows/model-matrix-evidence.yml/runs" -f head_sha="$RELEASE_COMMIT" -f event=workflow_dispatch -f status=success --jq '.workflow_runs | map(select(.head_sha == env.RELEASE_COMMIT and .head_branch == "main")) | first | .id // empty')
+            gh api --method GET "repos/$GH_REPO/actions/workflows/model-matrix-evidence.yml/runs" -f head_sha="$RELEASE_COMMIT" -f event=workflow_dispatch -f status=success > model-evidence-runs.json
+            RUN_ID=$(python -c 'import json,os; rows=json.load(open("model-evidence-runs.json"))["workflow_runs"]; print(next((r["id"] for r in rows if r["head_sha"]==os.environ["RELEASE_COMMIT"] and r["head_branch"]=="main" and r["conclusion"]=="success"),""))')
             if [ -z "$RUN_ID" ]; then
               echo "Missing exact-source live small/medium/large model evidence; publication held."
               exit 1
