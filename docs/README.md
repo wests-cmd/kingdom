@@ -37,3 +37,5 @@ Existing dated audits and reports under this directory remain evidence for their
 own revisions/environments; they do not override current source, published
 release manifests or an installation's measured state. An unmerged PR is a
 candidate, and a running service is not assignment-completion evidence.
+
+- [Quick Kingdom](QUICK_KINGDOM.md) — compact desktop assistant, instant commands and scoped shortcuts.
