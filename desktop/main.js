@@ -3,7 +3,7 @@
  * Manages native window creation, guided first-run setup, local FastAPI backend process lifecycle, and IPC bridge.
  */
 
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { startBackend, stopBackend, waitForBackendReady, getOwnerToken } = require('./launcher');
@@ -13,6 +13,7 @@ let mainWindow = null;
 let setupWindow = null;
 const {BackgroundLifecycle} = require('./background');
 let background = null;
+let quickAssistant = null;
 let openingWindow = false;
 
 async function showMainWindow() {
@@ -155,6 +156,7 @@ function setupIpcHandlers() {
       startBackend(PROFILE_PATH);
 
       if (validated.gui) {
+        quickAssistant?.register();
         await createWindow();
       }
 
@@ -229,9 +231,14 @@ if (app) {
   app.whenReady().then(() => {
     if (!primaryInstance) return;
     if (!smokeReport) {
+      const {QuickAssistant} = require('./quick-assistant');
+      quickAssistant = new QuickAssistant({BrowserWindow, globalShortcut,
+        allowed: () => Boolean(loadSavedProfile()?.gui && !setupWindow),
+        ready: waitForBackendReady,
+        origin: () => `http://127.0.0.1:${process.env.PORT || 8000}`});
       background = new BackgroundLifecycle({app, Tray, Menu,
         icon: path.join(app.isPackaged ? process.resourcesPath : __dirname, 'branding', 'kingdom-icon.png'),
-        showWindow: showMainWindow, stopBackend});
+        showWindow: showMainWindow, showQuick: () => quickAssistant.open(), stopBackend});
       background.start();
     }
     setupIpcHandlers();
@@ -243,6 +250,7 @@ if (app) {
       startBackend(PROFILE_PATH);
 
       if (savedProfile.gui) {
+        quickAssistant?.register();
         createWindow();
       } else {
         console.log('[Kingdom Desktop] Running in headless mode (GUI disabled in profile).');
@@ -290,6 +298,7 @@ if (app) {
   });
   let quitting = false;
   app.on('before-quit', (event) => {
+    quickAssistant?.stop();
     if (background) { void background.beforeQuit(event); return; }
     if (quitting) return;
     event.preventDefault();
@@ -330,6 +339,30 @@ async function runReleaseSmoke(reportPath) {
   await until(async () => mainWindow && !mainWindow.webContents.isLoading()
     && mainWindow.webContents.getURL().startsWith('http://127.0.0.1')
     && await mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('#root')?.children.length)"), 'rendered dashboard');
+  // Exercise the actual compact renderer with the same authenticated storage.
+  // Do not register a global OS shortcut on a shared CI desktop.
+  const {QuickAssistant} = require('./quick-assistant');
+  const quick = new QuickAssistant({BrowserWindow, globalShortcut, allowed:()=>true,
+    ready:waitForBackendReady, origin:()=>`http://127.0.0.1:${process.env.PORT || 8000}`});
+  try {
+    await mainWindow.webContents.executeJavaScript("localStorage.setItem('kingdom-conversation-scope','native-quick-smoke');localStorage.setItem('kingdom-conversation-project','projects/native-quick-smoke')");
+    if (!await quick.open()) throw new Error('Compact assistant did not open');
+    const view=quick.window.webContents;
+    await until(()=>view.executeJavaScript("Boolean(document.querySelector('textarea[aria-label=\\\"Your message\\\"]')) && document.body.textContent.includes('native-quick-smoke')"),'authenticated compact assistant');
+    await view.executeJavaScript(`(() => {
+      const field=document.querySelector('textarea[aria-label="Your message"]');
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(field,'/status');
+      field.dispatchEvent(new Event('input',{bubbles:true}));
+    })()`);
+    await view.executeJavaScript("document.querySelector('form[aria-label=\\\"Kingdom conversation composer\\\"]').requestSubmit()");
+    await until(()=>view.executeJavaScript("document.body.textContent.includes('Runtime:') && document.body.textContent.includes('completed')"),'deterministic compact request result');
+    const retained=await mainWindow.webContents.executeJavaScript("fetch('/requests?session_scope=native-quick-smoke&project_scope=projects%2Fnative-quick-smoke').then(r=>r.json())");
+    if(retained.length!==1 || retained[0].route!=='status' || retained[0].status!=='completed' || retained[0].evidence[0].type!=='runtime_status') throw new Error('Compact request was not shared with main conversation');
+    report.quickAssistant={sharedRequest:retained[0].id,deterministic:true,ownerAuthenticated:true};
+  } finally {
+    quick.stop();
+    await mainWindow.webContents.executeJavaScript("localStorage.removeItem('kingdom-conversation-scope');localStorage.removeItem('kingdom-conversation-project')");
+  }
   const apiVersion = await mainWindow.webContents.executeJavaScript("fetch('/api/system/version').then(r => r.json())");
   if (apiVersion.version !== require('./package.json').version) throw new Error('Packaged backend version mismatch');
   await until(() => mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('.badge-online')) && document.body.textContent.includes('Last synchronized at')"), 'realtime connection and dashboard data');

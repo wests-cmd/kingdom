@@ -1,7 +1,7 @@
 /** Window visibility is independent of the owned backend's lifetime. */
 class BackgroundLifecycle {
-  constructor({app, Tray, Menu, icon, showWindow, stopBackend, reportError = console.error}) {
-    Object.assign(this, {app, Tray, Menu, icon, showWindow, stopBackend, reportError});
+  constructor({app, Tray, Menu, icon, showWindow, showQuick, stopBackend, reportError = console.error}) {
+    Object.assign(this, {app, Tray, Menu, icon, showWindow, showQuick, stopBackend, reportError});
     this.tray = null;
     this.quitting = false;
     this.stopped = false;
@@ -13,6 +13,7 @@ class BackgroundLifecycle {
       this.tray.setToolTip('Kingdom — running in the background');
       this.tray.setContextMenu(this.Menu.buildFromTemplate([
         {label: 'Open Kingdom', click: () => this.open()},
+        ...(this.showQuick ? [{label: 'Quick Kingdom (Ctrl/Cmd+Shift+Space)', click: () => Promise.resolve().then(() => this.showQuick()).catch(error => this.reportError('Quick Kingdom unavailable', error))}] : []),
         {label: 'Kingdom keeps working when its window is closed', enabled: false},
         {type: 'separator'},
         {label: 'Quit Kingdom and stop this computer’s server', click: () => this.app.quit()}

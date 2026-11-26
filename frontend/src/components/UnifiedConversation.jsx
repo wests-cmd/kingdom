@@ -3,8 +3,9 @@ import api from '../api'
 import useLiveData from '../hooks/useLiveData'
 import ConversationVoice from './ConversationVoice'
 import AgentActivity from './AgentActivity'
+import RequestShortcuts from './RequestShortcuts'
 
-export default function UnifiedConversation(){
+export default function UnifiedConversation({compact=false}){
  const [scope,setScope]=useState(()=>localStorage.getItem('kingdom-conversation-scope')||crypto.randomUUID())
  const [project,setProject]=useState(()=>localStorage.getItem('kingdom-conversation-project')||'projects/default'),[prompt,setPrompt]=useState(''),[mode,setMode]=useState('auto'),[profile,setProfile]=useState('auto'),[allowProcess,setAllowProcess]=useState(false)
  const [selected,setSelected]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[key,setKey]=useState(()=>crypto.randomUUID())
@@ -19,10 +20,11 @@ export default function UnifiedConversation(){
  const history=(Array.isArray(requests)?requests:[]).filter(item=>item.session_scope===scope&&item.project_scope===project)
  const current=history.find(item=>item.id===selected)||history[0]||null
  const run=async id=>{setBusy(true);setError('');try{await api.post(`/requests/${id}/run`,{},{timeout:620000})}catch(e){setError(e.response?.data?.detail||e.message)}finally{setBusy(false);refresh()}}
- const submit=async event=>{event.preventDefault();setBusy(true);setError('');try{const {data}=await api.post('/requests',{idempotency_key:key,session_scope:scope,project_scope:project,prompt,mode,model_profile:profile,allow_process:allowProcess,desktop_window_title:mode==='agent'?(desktopWindow||null):null,desktop_expected_text:mode==='agent'&&desktopWindow?(desktopExpected||null):null});setSelected(data.id);if(data.route==='agent'){await api.post(`/requests/${data.id}/background`,{max_seconds:backgroundSeconds});await refresh()}else{await refresh();await run(data.id)}setKey(crypto.randomUUID());setPrompt('')}catch(e){setError(e.response?.data?.detail||e.message)}finally{setBusy(false)}}
- return <section className="panel" style={{minWidth:0,overflowWrap:'anywhere'}}><h2>One conversation for questions and work</h2>
- <p>Ask questions or request work here. Saved turns follow this conversation when you switch model connections. Agent work uses the current objective and bounded prior conversation references; tools still require existing grants.</p>
- <section aria-label="Conversation history" style={{maxHeight:520,overflowY:'auto',minWidth:0}}>
+ const submit=async event=>{event.preventDefault();setBusy(true);setError('');try{const {data}=await api.post('/requests',{idempotency_key:key,session_scope:scope,project_scope:project,prompt,mode,model_profile:profile,allow_process:allowProcess,desktop_window_title:mode==='agent'?(desktopWindow||null):null,desktop_expected_text:mode==='agent'&&desktopWindow?(desktopExpected||null):null});setSelected(data.id);setKey(crypto.randomUUID());setPrompt('');if(data.route==='agent'){await api.post(`/requests/${data.id}/background`,{max_seconds:backgroundSeconds});await refresh()}else{await refresh();await run(data.id)}}catch(e){setError(e.response?.data?.detail||e.message)}finally{setBusy(false)}}
+ return <section className="panel" style={{minWidth:0,overflowWrap:'anywhere'}}><h2>{compact?'Quick Kingdom':'One conversation for questions and work'}</h2>
+ <p>{compact?'Ask, review, and send. Closing this window does not stop server-owned background work.':'Ask questions or request work here. Saved turns follow this conversation when you switch model connections. Agent work uses the current objective and bounded prior conversation references; tools still require existing grants.'}</p>
+ <p className="muted">Project: {project} · conversation {scope.slice(0,12)}</p>
+ <section aria-label="Conversation history" style={{maxHeight:compact?220:520,overflowY:'auto',minWidth:0}}>
   {historyError&&<p role="status">History refresh failed. Showing only the last saved information for this conversation.</p>}
   {!history.length&&<p className="muted">{requests===null?'Loading saved conversation…':'Start a conversation with Kingdom.'}</p>}
   {[...history].reverse().map(item=><article key={item.id} className="record-detail" style={{marginBottom:12}}>
@@ -34,7 +36,8 @@ export default function UnifiedConversation(){
  </section>
  {error&&<p role="alert">{error}</p>}
  <ConversationVoice onTranscript={setPrompt} answer={current?.answer||''} disabled={busy}/>
- <form onSubmit={submit}>
+ <RequestShortcuts project={project} onDraft={value=>{setMode('auto');setPrompt(value);setKey(crypto.randomUUID())}} disabled={busy}/>
+ <form onSubmit={submit} aria-label="Kingdom conversation composer">
  <details><summary>Advanced routing and workspace</summary>
  <label>Project scope / workspace<input required value={project} disabled={busy} onChange={e=>{setProject(e.target.value);setSelected(null);setKey(crypto.randomUUID())}}/></label>
  <label>Request route<select value={mode} disabled={busy} onChange={e=>setMode(e.target.value)}><option value="auto">Automatic · deterministic first, then question or action</option><option value="quick">Quick model · text only</option><option value="agent">Agent work · workspace tools</option></select></label>
@@ -44,7 +47,7 @@ export default function UnifiedConversation(){
  {mode==='agent'&&<label><input type="checkbox" checked={allowProcess} onChange={e=>setAllowProcess(e.target.checked)}/>Offer process tools, subject to existing grants and autonomy approvals</label>}
  {mode==='agent'&&<details><summary>Let Kingdom use a Windows app</summary><p>Kingdom itself can observe, click, type and check the result in the exact foreground window you choose. Existing desktop grants still apply. Work runs on your Kingdom server while this page is closed.</p><label>Exact foreground window title<input maxLength={500} disabled={busy} value={desktopWindow} onChange={e=>setDesktopWindow(e.target.value)} placeholder="Leave empty to keep computer use off"/></label><label>What visible text proves it worked?<input maxLength={2000} disabled={busy} value={desktopExpected} onChange={e=>setDesktopExpected(e.target.value)} placeholder="Optional exact text Kingdom must actually observe"/></label></details>}
  </details>
- <label>Your message<textarea required rows={4} maxLength={24000} disabled={busy} value={prompt} onChange={e=>setPrompt(e.target.value)} /></label>
+ <label>Your message<textarea aria-label="Your message" required rows={compact?3:4} maxLength={24000} disabled={busy} value={prompt} onChange={e=>setPrompt(e.target.value)} /></label>
  <button disabled={busy||!prompt.trim()}>{busy?'Working…':'Send'}</button>
  </form>
  <details><summary>Reconnect another front door</summary><label>Conversation scope<input value={scope} disabled={busy} onChange={e=>{setScope(e.target.value);setSelected(null);setKey(crypto.randomUUID())}}/></label><p>Use the same conversation scope, project scope and idempotency key in another authenticated client to reconnect to the same request without duplicating work.</p></details>

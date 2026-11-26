@@ -44,6 +44,31 @@ def create(body:RequestInput):
 def listing(session_scope:str=Query(min_length=1,max_length=100),project_scope:str=Query(min_length=1,max_length=200)):
     return service().list(session_scope,project_scope)
 
+class ShortcutInput(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    project_scope:str=Field(min_length=1,max_length=200)
+    name:str=Field(min_length=1,max_length=40)
+    command:str=Field(min_length=1,max_length=40)
+
+
+# Static routes must precede the generic request identity route.
+@router.get('/shortcuts')
+def shortcuts(project_scope:str=Query(min_length=1,max_length=200)):
+    from backend.runtime.intent_router import COMMANDS
+    return {'commands':COMMANDS,'shortcuts':service().shortcuts.list(project_scope)}
+
+
+@router.put('/shortcuts')
+def save_shortcut(body:ShortcutInput):
+    try:return service().shortcuts.save(body.project_scope,body.name,body.command)
+    except ValueError as error:raise HTTPException(400,str(error)) from error
+
+
+@router.delete('/shortcuts/{name}')
+def remove_shortcut(name:str,project_scope:str=Query(min_length=1,max_length=200)):
+    return {'removed':service().shortcuts.remove(project_scope,name)}
+
+
 @router.get('/{ident}')
 def get(ident:str):
     try:return service().get(ident)
