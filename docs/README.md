@@ -28,6 +28,8 @@ The [repository README](../README.md) provides one-click installer downloads and
 
 ## Verify and release
 
+- [Permanent model-size acceptance](MODEL_MATRIX.md) and [v1.3.0 redesign](V1_3_REDESIGN.md).
+
 - [Continuous completion directive](KINGDOM_CONTINUOUS_COMPLETION.md) and [evidence ledger](completion-evidence.json): prioritized multi-workstream repairs, approval boundaries, proof and next-task handoffs.
 - [Current status](PROJECT_STATUS.md): source/release scope and remaining acceptance.
 - [Release process](RELEASE_PROCESS.md), [cluster shipping gates](CLUSTER_SHIPPING_CHECKLIST.md), [coding-worker acceptance](CODING_WORKER_ACCEPTANCE.md).
