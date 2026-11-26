@@ -71,7 +71,27 @@ def test_public_adapter_is_bounded_and_passes_only_the_selected_title(monkeypatc
     assert seen['argv'][-1]=='--worker'
 
 
-def test_non_windows_reports_unsupported_without_launching(monkeypatch):
+def test_wayland_reports_unsupported_without_launching(monkeypatch):
     monkeypatch.setattr(platform,'system',lambda:'Linux')
+    monkeypatch.setenv('WAYLAND_DISPLAY','wayland-0')
     monkeypatch.setattr(observer.subprocess,'Popen',lambda *_a,**_k:pytest.fail('No process should start'))
-    assert observer.desktop_observe({'window_title':'Test'})['error']=='windows_required'
+    assert observer.desktop_observe({'window_title':'Test'})['error']=='foreground_probe_unavailable'
+
+
+@pytest.mark.parametrize('system,name',[('Linux','_linux_identity'),('Darwin','_mac_identity')])
+def test_optional_identity_adapter_never_claims_accessibility_or_input(monkeypatch,system,name):
+    from backend.runtime import desktop_platforms
+    monkeypatch.setattr(platform,'system',lambda:system)
+    monkeypatch.setattr(desktop_platforms,name,lambda:(42,'Test'))
+    result=observer.desktop_observe({'window_title':'Test'})
+    assert result['ok'] and result['window_handle']==42
+    assert result['controls']==[] and not result['input_supported']
+    assert result['observation_scope']=='foreground_identity_only'
+    assert observer.desktop_observe({'window_title':'Other'})['ok'] is False
+
+
+def test_optional_identity_discards_focus_change(monkeypatch):
+    from backend.runtime import desktop_platforms
+    events=iter([(42,'Test'),(43,'Test')])
+    monkeypatch.setattr(desktop_platforms,'_linux_identity',lambda:next(events))
+    assert desktop_platforms.observe_identity({'window_title':'Test'},'Linux')=={'ok':False,'error':'foreground_changed'}
