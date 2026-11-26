@@ -1,0 +1,54 @@
+name: Review live model matrix evidence
+on:
+  workflow_dispatch:
+    inputs:
+      small:
+        description: Small tier JSON report from exact main checkout
+        required: true
+        type: string
+      medium:
+        description: Medium tier JSON report from exact main checkout
+        required: true
+        type: string
+      large:
+        description: Large tier JSON report from exact main checkout
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  review:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate operator-submitted exact-source live reports
+        env:
+          SMALL_REPORT: ${{ inputs.small }}
+          MEDIUM_REPORT: ${{ inputs.medium }}
+          LARGE_REPORT: ${{ inputs.large }}
+        run: |
+          mkdir -p model-evidence
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          for tier in ("small","medium","large"):
+              raw=os.environ[tier.upper()+"_REPORT"]
+              if len(raw)>16000:
+                  raise ValueError("Report exceeds the synthetic evidence limit")
+              report=json.loads(raw)
+              Path("model-evidence",tier+".json").write_text(json.dumps(report),encoding="utf-8")
+          PY
+          python scripts/model_matrix.py verify model-evidence/small.json model-evidence/medium.json model-evidence/large.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kingdom-live-model-matrix
+          path: model-evidence/*.json
+          if-no-files-found: error
+          retention-days: 30

@@ -39,11 +39,15 @@ async def run(args, report):
         show=await client.post(endpoint+"/api/show",json={"model":args.model})
         show.raise_for_status()
         report["identity"]=model_identity(tags.json(),show.json(),args.model,args.tier)
-    # Run sequentially; never make an inference request if this host is below
-    # a conservative local RAM/VRAM budget. Owner selects an appropriate host.
+    # Conservative CPU-friendly preflight, not a VRAM estimator. Refuse a
+    # host without room for the installed model file plus modest headroom.
     report["host"]={"os":platform.system(),"architecture":platform.machine(),
                     "logical_cpu":os.cpu_count(),"ram_bytes":psutil.virtual_memory().total,
                     "available_ram_before_bytes":psutil.virtual_memory().available}
+    minimum=max(1024**3,report["identity"]["model_bytes"]+512*1024**2)
+    report["host"]["minimum_available_ram_bytes"]=minimum
+    if report["host"]["available_ram_before_bytes"]<minimum:
+        raise ValueError("Insufficient available RAM for this conservative lab preflight")
     report["settings"]={"context_tokens":2048,"output_tokens":128,"timeout_seconds":args.timeout,
                         "parallel":1,"temperature":0}
     # Do not import the default database or credential vault until isolated.
@@ -51,7 +55,7 @@ async def run(args, report):
     with tempfile.TemporaryDirectory(prefix="kingdom-model-lab-") as directory:
         try:
             os.chdir(directory)
-            from backend.storage import db as storage
+            import backend.storage.db as storage
             from backend.models.profiles import ModelProfiles
             from backend.models.service import ModelService
             profile=ModelProfiles(storage.db).save("lab",{"provider":"ollama","endpoint":endpoint,
