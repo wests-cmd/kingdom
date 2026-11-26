@@ -51,3 +51,32 @@ def test_unique_new_identity_and_preserved_existing(tmp_path):
     assert KingdomIdentity.get_or_create(str(tmp_path/'a.json')).fingerprint==a.fingerprint
     with pytest.raises(ValueError,match='different Kingdom'):
         check_identity(a.get_public_identity(),a.get_public_identity(),a)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('remote_status,expected_status', [(401,409),(403,409),(409,409),(503,502)])
+async def test_reconnect_classifies_remote_refusal_without_reporting_success(monkeypatch, remote_status, expected_status):
+    import httpx
+    from fastapi import HTTPException
+    from types import SimpleNamespace
+    from backend.cluster import federation_api, mesh_api
+    local = KingdomIdentity('KG-local')
+    remote = KingdomIdentity('KG-remote')
+    peer = SimpleNamespace(node_state='APPROVED', public_identity=remote.get_public_identity(),
+                           connection_metadata={'kingdom_endpoint':'https://peer.invalid'})
+    monkeypatch.setattr(federation_api, 'node_registry', SimpleNamespace(get_node=lambda _:peer))
+    monkeypatch.setattr(federation_api.KingdomIdentity, 'get_or_create', lambda:local)
+    monkeypatch.setattr(mesh_api, 'mesh_tls', lambda:True)
+    seen = []
+    def reply(request):
+        seen.append(request.method)
+        return httpx.Response(remote_status, json={'detail':'private remote error'})
+    client_type = httpx.AsyncClient
+    def client(**options):
+        return client_type(transport=httpx.MockTransport(reply), **options)
+    monkeypatch.setattr(federation_api.httpx, 'AsyncClient', client)
+    with pytest.raises(HTTPException) as caught:
+        await federation_api.reconnect(remote.node_id)
+    assert caught.value.status_code == expected_status
+    assert 'private remote error' not in str(caught.value.detail)
+    assert seen == ['GET']

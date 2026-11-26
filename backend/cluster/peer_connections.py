@@ -1,5 +1,6 @@
 """Maintain every explicitly approved peer link without granting membership."""
 import asyncio
+import math
 import time
 
 
@@ -18,6 +19,22 @@ class PeerConnections:
         self.work_limit = asyncio.Semaphore(2)
         self.refresh_task = None
         self.retry = {}
+        self.routes = {}
+
+    @staticmethod
+    def _route(node):
+        meta = node.connection_metadata or {}
+        identity = node.public_identity or {}
+        return (identity.get('node_id'), identity.get('fingerprint'),
+                identity.get('public_key_hex'), meta.get('kingdom_endpoint'),
+                meta.get('membership_expires_at'))
+
+    @staticmethod
+    def _expired(node):
+        deadline = (node.connection_metadata or {}).get('membership_expires_at')
+        return deadline is not None and (
+            type(deadline) not in (int, float) or not math.isfinite(deadline)
+            or deadline <= time.time())
 
     async def _refresh(self):
         try:
@@ -30,12 +47,11 @@ class PeerConnections:
     async def _work(self, node_id, pinned, address):
         async with self.work_limit:
             try:
-                node = self.registry.get_node(node_id)
+                node = await asyncio.to_thread(self.registry.get_node, node_id)
                 if (not node or node.node_state != 'CONNECTED' or node.public_identity != pinned
                         or (node.connection_metadata or {}).get('kingdom_endpoint') != address):
                     return
-                deadline = (node.connection_metadata or {}).get('membership_expires_at')
-                if deadline is not None and deadline <= time.time():
+                if self._expired(node):
                     return
                 await asyncio.wait_for(self.work(node_id), timeout=20)
             except asyncio.CancelledError:
@@ -54,6 +70,14 @@ class PeerConnections:
                  and n.node_state in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}}
         self.status = {k: v for k, v in self.status.items() if k in peers}
         self.retry = {k: v for k, v in self.retry.items() if k in peers}
+        routes = {ident: self._route(node) for ident, node in peers.items()}
+        for ident, route in routes.items():
+            if ident in self.routes and route != self.routes[ident]:
+                # An owner-approved route update is not the failing old route.
+                # Keep the original task lease rules; reset only link backoff.
+                self.retry.pop(ident, None)
+                self.status.pop(ident, None)
+        self.routes = routes
         for tasks in (self.connections, self.work_tasks):
             for ident, task in list(tasks.items()):
                 if task.done():
@@ -66,12 +90,11 @@ class PeerConnections:
         async def connect(node_id):
             async with self.limit:
                 # Re-read after waiting: an owner may have revoked this peer.
-                node = self.registry.get_node(node_id)
+                node = await asyncio.to_thread(self.registry.get_node, node_id)
                 if not node or node.node_state not in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}:
                     self.status.pop(node_id, None)
                     return
-                deadline = (node.connection_metadata or {}).get('membership_expires_at')
-                if deadline is not None and deadline <= time.time():
+                if self._expired(node):
                     self.status[node_id] = 'membership_expired'
                     return
                 if not (node.connection_metadata or {}).get('kingdom_endpoint'):
@@ -80,24 +103,41 @@ class PeerConnections:
                     try:
                         pinned = dict(node.public_identity or {})
                         address = node.connection_metadata['kingdom_endpoint']
-                        await asyncio.wait_for(self.reconnect(node_id), timeout=35)
-                        current = self.registry.get_node(node_id)
+                        receipt = await asyncio.wait_for(self.reconnect(node_id), timeout=35)
+                        if (not isinstance(receipt, dict) or receipt.get('peer') != node_id
+                                or receipt.get('connected') is not True
+                                or receipt.get('mutual_identity_accepted') is not True):
+                            raise ValueError('Reconnect did not return verified mutual identity')
+                        current = await asyncio.to_thread(self.registry.get_node, node_id)
                         if (not current or current.node_state not in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}
                                 or current.public_identity != pinned
                                 or (current.connection_metadata or {}).get('kingdom_endpoint') != address):
                             self.status.pop(node_id, None)
                             return
-                        deadline = (current.connection_metadata or {}).get('membership_expires_at')
-                        if deadline is not None and deadline <= time.time():
+                        if self._expired(current):
                             self.status[node_id] = 'membership_expired'
                             return
                         state = 'verified'
                         self.retry.pop(node_id, None)
                     except asyncio.CancelledError:
                         raise
-                    except Exception:
-                        # Do not expose URLs, credentials or exception bodies.
-                        state = 'retrying'
+                    except Exception as error:
+                        # Back off only the route that actually failed. A change
+                        # while the call was in flight must not delay the new route.
+                        current = await asyncio.to_thread(self.registry.get_node, node_id)
+                        if (not current or current.node_state not in {'APPROVED', 'CONNECTED', 'DISCONNECTED', 'RECONNECTING'}
+                                or current.public_identity != pinned
+                                or (current.connection_metadata or {}).get('kingdom_endpoint') != address):
+                            self.status.pop(node_id, None)
+                            self.retry.pop(node_id, None)
+                            return
+                        if self._expired(current):
+                            self.status[node_id] = 'membership_expired'
+                            return
+                        # A refusal is not a network failure. Never grant work or
+                        # switch routes on this basis; allow later owner approval.
+                        state = ('authorization_held' if getattr(error, 'status_code', None)
+                                 in {400, 401, 403, 409, 422} else 'retrying')
                         failures = min(self.retry.get(node_id, (0, 0))[0] + 1, 4)
                         self.retry[node_id] = (failures, self.clock() + min(self.interval * 2 ** (failures - 1), 120))
                 if self.status.get(node_id) != state:
@@ -147,3 +187,6 @@ class PeerConnections:
         self.connections.clear()
         self.work_tasks.clear()
         self.refresh_task = None
+        self.status.clear()
+        self.retry.clear()
+        self.routes.clear()

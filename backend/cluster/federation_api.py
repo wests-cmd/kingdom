@@ -111,8 +111,8 @@ def save_endpoint(node_id:str,request:EndpointRequest):
     if not node or (node.public_identity or {}).get('node_type')!='commander':raise HTTPException(404,'Paired Kingdom not found')
     try:address=endpoint(request.endpoint)
     except ValueError as e:raise HTTPException(400,str(e)) from e
-    node.connection_metadata={**(node.connection_metadata or {}),'kingdom_endpoint':address}
-    node_registry.repo.save(node.to_dict())
+    if node_registry.repo.set_peer_endpoint(node_id, node.public_identity, address) is None:
+        raise HTTPException(409,'Peer identity or current approval changed; route was not saved')
     return {'peer':node_id,'endpoint':address}
 
 def check_inventory_receipt(proof, node_id, request_id):
@@ -154,6 +154,11 @@ async def reconnect(node_id:str):
         else: raise ValueError('Peer did not return a signed inventory proof')
         return {'peer':node_id,'connected':True,'mutual_identity_accepted':True}
     except (ValueError,KeyError) as e:raise HTTPException(409,str(e)) from e
+    except httpx.HTTPStatusError as e:
+        # Remote trust refusal must not be mistaken for a failed network route.
+        if e.response.status_code in {400,401,403,409,422}:
+            raise HTTPException(409,'Peer rejected identity or connection configuration') from e
+        raise HTTPException(502,'Peer connection failed; identity and grants retained for retry') from e
     except httpx.HTTPError as e:raise HTTPException(502,'Peer connection failed; identity and grants retained for retry') from e
 
 

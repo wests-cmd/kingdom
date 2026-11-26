@@ -6,6 +6,7 @@ The [repository README](../README.md) provides one-click installer downloads and
 ## Start and operate
 
 - [Operations and configuration](OPERATIONS.md): local state, ports, authentication, recovery and updates.
+- [Quick Kingdom](QUICK_KINGDOM.md): compact desktop assistant, instant commands and scoped shortcuts.
 - [Mission workspace](MISSION_WORKSPACE.md): tasks, attachments and reviewed work.
 - [Understand Kingdom's status](USER_VISIBILITY.md): clear meanings for waiting/running/completed, stale information, approval requests, and verification evidence.
 - [Runtime controls](runtime-controls.md), [model connections](MODEL_OFFLOADING.md), [knowledge](KNOWLEDGE.md).
@@ -20,6 +21,7 @@ The [repository README](../README.md) provides one-click installer downloads and
 - [Adaptive cluster design](ADAPTIVE_CLUSTER_CORE.md) and [coordination workspace](COORDINATION_WORKSPACE.md).
 - [Portable skills](PORTABLE_SKILLS.md), [Discord skill-map boundary](DISCORD_SKILLMAPS.md), [optional integrations](OPTIONAL_INTEGRATION_REVIEW.md).
 - [Project test jobs](PROJECT_TEST_JOBS.md), [remote builds](REMOTE_BUILDS.md), [computer tools](KINGDOM_COMPUTER_USE.md).
+- [Disposable private Linux desktop proof](PRIVATE_DESKTOP_PROOF.md): **offline test fixture only**, not integrated unattended GUI control.
 - [Teams and access](SWARM_TEAMS_AND_ACCESS.md), [work visibility](WORK_VISIBILITY.md).
 
 ## Verify and release
@@ -37,5 +39,3 @@ Existing dated audits and reports under this directory remain evidence for their
 own revisions/environments; they do not override current source, published
 release manifests or an installation's measured state. An unmerged PR is a
 candidate, and a running service is not assignment-completion evidence.
-
-- [Quick Kingdom](QUICK_KINGDOM.md) — compact desktop assistant, instant commands and scoped shortcuts.
