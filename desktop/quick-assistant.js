@@ -52,7 +52,10 @@ class QuickAssistant {
       });
       window.on('closed', () => { if (this.window === window) this.window = null; });
       await window.loadURL(url);
-      if (this.stopped || window.isDestroyed()) return false;
+      if (this.stopped || window.isDestroyed() || !this.allowed()) {
+        if (!window.isDestroyed()) window.destroy();
+        return false;
+      }
       window.show();
       window.focus();
       return true;
