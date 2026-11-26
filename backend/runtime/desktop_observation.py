@@ -259,6 +259,11 @@ def desktop_observe(params):
     import platform
 
     if platform.system() != "Windows":
+        if platform.system()=="Linux":
+            from backend.runtime.private_x11_input import available,observe
+            if available():
+                try:return observe(params.get("window_title"))
+                except (AttributeError,OSError,RuntimeError,ValueError,subprocess.SubprocessError):return _failure("foreground_probe_unavailable")
         from backend.runtime.desktop_platforms import observe_identity
         return observe_identity(params, platform.system())
 
