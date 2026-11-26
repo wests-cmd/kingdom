@@ -78,6 +78,12 @@ class ModelService:
             if images and not candidate.get('vision'):
                 raise ValueError('Select a vision-capable model profile to inspect image contents')
             candidates = [candidate]
+        measured=False
+        if automatic and request.get('_kingdom_prefer_measured') is True and not has_images and not request.get('tools') and not planner:
+            from backend.models.assistant_benchmark import AssistantBenchmarks, prefer_measured
+            ranked=prefer_measured(candidates,AssistantBenchmarks(db).list())
+            measured=ranked is not candidates
+            candidates=ranked
         async with capacity.acquire(candidates, server_profiles=configured) as selected:
             profile = profiles.get(selected['id'], credential=True)
             result = await self._generate_connection(prompt, profile, images)
@@ -220,6 +226,7 @@ class ModelService:
             if automatic:
                 from backend.models.selection import selection_reason
                 payload['kingdom_selection'] = selection_reason(profile)
+                if measured:payload['kingdom_selection']['reason']='Selected a reachable eligible profile with fresh passing synthetic text benchmark and lowest recorded latency; not a general quality ranking.'
                 from backend.models.decision_selectors import shadow_models
                 payload['kingdom_selection']['decision_selector'] = shadow_models(candidates)
             self._record(payload.get('usage') or {})
