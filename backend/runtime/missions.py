@@ -128,11 +128,16 @@ class MissionService:
         with self.db.get_connection() as conn:
             conn.execute('INSERT INTO missions VALUES(?,?) ON CONFLICT(id) DO UPDATE SET state_json=excluded.state_json', (state['id'], json.dumps(state))); conn.commit()
 
-    def create(self, plan, attachment_ids=None, model_profile=None):
+    def create(self, plan, attachment_ids=None, model_profile=None, *, group_binding=None):
         validate_plan(plan)
         state = {'id': uuid4().hex, 'version': 1, 'status': 'draft', 'plan': plan.model_dump(),
                  'attachment_ids': attachment_ids or [], 'model_profile': model_profile,
                  'created_at': time.time(), 'steps': {}, 'report': [], 'approved_version': None}
+        if group_binding is not None:
+            from backend.runtime.commander import binding,validate_group_plan
+            if binding(group_binding['group_id'])!=group_binding:raise ValueError('Group authority changed')
+            validate_group_plan(plan,group_binding)
+            state['group_id']=group_binding['group_id'];state['group_binding']=group_binding
         self.save(state); self.engine.events.publish('mission.planned', {'id': state['id'], 'steps': len(plan.steps)})
         return state
 
@@ -153,6 +158,10 @@ class MissionService:
             if state['version'] != version or state['status'] not in {'draft', 'needs_review'} or state['steps']:
                 raise ValueError('Only an unexecuted current draft can be edited; create a revised mission after execution')
             validate_plan(plan)
+            if state.get('group_binding'):
+                from backend.runtime.commander import binding,validate_group_plan
+                if binding(state['group_id'])!=state['group_binding']:raise ValueError('Group authority changed')
+                validate_group_plan(plan,state['group_binding'])
             state.update(plan=plan.model_dump(), version=version+1, approved_version=None, status='draft')
             self.save(state); return state
 
@@ -161,6 +170,10 @@ class MissionService:
             state = self.get(ident)
             if state['version'] != version or state['status'] not in {'draft', 'needs_review'}:
                 raise ValueError('Approve the exact current draft')
+            if state.get('group_binding'):
+                from backend.runtime.commander import binding,validate_group_plan
+                if binding(state['group_id'])!=state['group_binding']:raise ValueError('Group authority changed')
+                validate_group_plan(MissionPlan.model_validate(state['plan']),state['group_binding'])
             if state['plan']['missing_requirements']: raise ValueError('Resolve the listed requirements before execution')
             if len(state['plan']['steps']) > self.engine.execution_policy.get()['mission_budget']['max_steps']:
                 raise ValueError('Mission exceeds this autonomy level’s step budget')
@@ -300,6 +313,14 @@ class MissionService:
             self._require_backlog_selection(state, policy, backlog_lease)
             if policy['level'] == 0 or state['status'] not in {'approved', 'running'} or state['approved_version'] != state['version']:
                 return state
+            if state.get('group_binding'):
+                from backend.runtime.commander import binding,validate_group_plan
+                try:
+                    if binding(state['group_id'])!=state['group_binding']:raise ValueError('Group changed')
+                    validate_group_plan(MissionPlan.model_validate(state['plan']),state['group_binding'])
+                except (ValueError,PermissionError):
+                    state.update(status='needs_review',failure='Group authority changed; no new step dispatched')
+                    self.save(state);return state
             from backend.runtime.bounded_function_tests import profile_hash
             from backend.runtime.mission_acceptance import validated_acceptance
             if any(s['kind']=='function_check' and s.get('case_profile_sha256')!=profile_hash(s.get('case_profile')) for s in state['plan']['steps']):
@@ -346,7 +367,7 @@ class MissionService:
             if len(complete) == len(state['plan']['steps']):
                 state.update(status='completed', completed_at=time.time(), completion_scope='Planned operations verified within their retained acceptance contracts.', report=[{'step': step['title'], 'why': step['acceptance'], 'task_id': state['steps'][step['id']].get('task_id'),'external_receipt':state['steps'][step['id']].get('external_receipt')} for step in state['plan']['steps']])
                 from backend.runtime.learned_missions import candidate
-                if not state.get('group_id'):
+                if not state.get('group_id') and getattr(self.engine.tasks,'repo',None) is not None:
                     learned=candidate(state,self.engine.tasks.repo)
                     if learned:state['learned_candidate']=learned
                 self.save(state); self.engine.events.publish('mission.completed', {'id': ident}); return state
@@ -426,6 +447,7 @@ class MissionService:
                             'model_profile': state['model_profile'], 'attachment_ids': state['attachment_ids'] if step.kind == 'model' else [],
                             'max_attempts': 1 + budget['max_retries'] if step.kind in {'model','text_check','python_check','read_file'} else 1,
                             'mission_version':state['version'],'step_id':step.id}
+                if state.get('group_binding'):metadata['group_id']=state['group_id']
                 if tool: metadata.update(tool=tool, tool_parameters=params)
                 if step.kind == 'project_test':
                     metadata.update(project_test=step.project_test.model_dump(), capability='process.execute', max_attempts=1)
