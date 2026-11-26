@@ -24,7 +24,7 @@ class RequestInput(BaseModel):
     session_scope:str=Field(min_length=1,max_length=100)
     project_scope:str=Field(default='projects/default',min_length=1,max_length=200)
     prompt:str=Field(min_length=1,max_length=24000)
-    mode:Literal['auto','quick','agent','harness','delegate']='auto'
+    mode:Literal['auto','quick','agent','harness','delegate','commander']='auto'
     model_profile:str=Field(default='auto',min_length=1,max_length=100)
     allow_process:bool=False
     prefer_benchmarked:bool=False
