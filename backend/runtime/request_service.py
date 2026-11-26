@@ -155,13 +155,6 @@ class RequestService:
         if body.get('desktop_window_title'):
             if route=='quick':raise ValueError('Desktop control requires the agent route')
             route='agent'
-        if route == 'auto':
-            instant = resolve(body['prompt'], body['project_scope'], self.shortcuts)
-            if instant: route = instant
-            elif priority_question(text): route = 'priorities'
-            elif re.match(r'^(?:please\s+)?(?:inspect|implement|edit|modify|fix|refactor|build|run tests|test the|create a file|write a file)\b', text): route='agent'
-            else: route='quick'
-        state['route']=route
         with self.db.get_connection() as conn:
             conn.execute('BEGIN IMMEDIATE')
             old=conn.execute('SELECT state_json FROM conversation_requests WHERE session_scope=? AND project_scope=? AND idem=?',(body['session_scope'],body['project_scope'],body['idempotency_key'])).fetchone()
@@ -169,6 +162,13 @@ class RequestService:
                 existing=json.loads(old[0])
                 if any(existing.get(key,{'tool_sequence':[],'tool_protocol':'native','tool_paths':[]}.get(key))!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
                 return existing
+            if route == 'auto':
+                instant = resolve(body['prompt'], body['project_scope'], self.shortcuts)
+                if instant: route = instant
+                elif priority_question(text): route = 'priorities'
+                elif re.match(r'^(?:please\s+)?(?:inspect|implement|edit|modify|fix|refactor|build|run tests|test the|create a file|write a file)\b', text): route='agent'
+                else: route='quick'
+            state['route']=route
             conn.execute('INSERT INTO conversation_requests VALUES(?,?,?,?,?)',(state['id'],body['session_scope'],body['project_scope'],body['idempotency_key'],json.dumps(state)))
             conn.commit()
         self._event(state)
