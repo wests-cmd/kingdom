@@ -509,6 +509,8 @@ def create_task(request: TaskRequest):
     if request.metadata.get("actor_id", "owner") != "owner" or request.metadata.get("actor", "owner") != "owner":
         raise HTTPException(status_code=403, detail="Task actor must be the authenticated owner")
     metadata = dict(request.metadata)
+    if 'request_origin' in metadata:
+        raise HTTPException(400, 'Internal request lineage cannot be supplied as task metadata')
     if 'project_test' in metadata:
         from backend.runtime.project_tests import validate_metadata
         try:

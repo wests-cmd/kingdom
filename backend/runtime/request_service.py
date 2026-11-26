@@ -267,10 +267,19 @@ class RequestService:
         self._event(state)
         return state
 
-    async def run(self, ident):
+    async def run(self, ident, *, resume_recovered=False):
         saved=await asyncio.to_thread(self.get,ident)
+        if saved.get('recovery_hold'):
+            if not resume_recovered:return saved
+            if saved.get('recovery_result')!='linked':raise ValueError('No unique retained child; do not replay interrupted work')
+            from backend.runtime.request_recovery import find_child
+            with self.db.get_connection() as conn:
+                result,field,child=find_child(conn,saved)
+            if result!='linked' or saved.get(field)!=child:raise ValueError('Retained linkage changed; review the original job')
+        elif resume_recovered:
+            raise ValueError('No recovered request awaiting review')
         if saved['status'] in {'completed','cancelled','failed','running'}: return saved
-        state=await asyncio.to_thread(self.update,ident,{'status':'running'},expected={'queued','waiting_review','ready'})
+        state=await asyncio.to_thread(self.update,ident,{'status':'running',**({'recovery_hold':False} if resume_recovered else {})},expected={'queued','waiting_review','ready'})
         if state is None:return await asyncio.to_thread(self.get,ident)
         try:
             route=state['route']
@@ -354,11 +363,12 @@ class RequestService:
                             'actor':'owner','tool':'text.analyze@1.0.0','capability':'compute',
                             'execution_target':'remote','assigned_knight':state['target_knight'],
                             'group_id':state['group_id'],'project_scope':state['project_scope'],
-                            'conversation_request_id':ident,'tool_parameters':{'text':state['prompt']}})
+                            'conversation_request_id':ident,'request_origin':{'request_id':ident,'project_scope':state['project_scope'],'session_scope':state['session_scope']},'tool_parameters':{'text':state['prompt']}})
                     else:
                         task=await asyncio.to_thread(HarnessService(self.engine,self.db).submit,
                             state['harness_id'],state['prompt'],state['project_scope'],
-                            expected_revision=state['harness_revision'],request_id=ident)
+                            expected_revision=state['harness_revision'],request_id=ident,
+                            origin={'request_id':ident,'project_scope':state['project_scope'],'session_scope':state['session_scope']})
                     task_id=task['id']
                     linked=await asyncio.to_thread(self.update,ident,{'governed_task_id':task_id},expected={'running'})
                     if linked is None:
@@ -388,6 +398,10 @@ class RequestService:
                 return await asyncio.to_thread(self.update,ident,{'status':status,'answer':answer,'evidence':evidence},expected={'running'}) or await asyncio.to_thread(self.get,ident)
             elif route=='agent':
                 if not state['agent_session_id']:
+                    if state.get('governed_submission_started'):
+                        return await asyncio.to_thread(self.update,ident,{'status':'waiting_review','answer':'Agent admission interrupted; inspect retained work before retrying.'},expected={'running'}) or await asyncio.to_thread(self.get,ident)
+                    admitted=await asyncio.to_thread(self.update,ident,{'governed_submission_started':True},expected={'running'})
+                    if admitted is None:return await asyncio.to_thread(self.get,ident)
                     objective = state['prompt']
                     if state.get('review_instructions'):
                         objective += '\n\nReview requirements: ' + state['review_instructions']

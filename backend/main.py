@@ -142,6 +142,7 @@ app.include_router(boss_router)
 boss_runner = WorkProgrammeRunner(boss_service, engine.events.publish, name='boss')
 
 from backend.runtime.service_supervisor import RuntimeServiceSupervisor
+from backend.runtime.request_recovery import reconcile_interrupted_requests
 from backend.runtime.request_api import background as request_background
 from backend.security.http_auth import require_owner
 from fastapi import Depends
@@ -159,6 +160,7 @@ application_supervisor = RuntimeServiceSupervisor(
         "peer_connections": peer_connections,
     },
     shutdown_extra=(request_background,),
+    startup_reconcile=lambda: reconcile_interrupted_requests(knowledge_db),
 )
 
 

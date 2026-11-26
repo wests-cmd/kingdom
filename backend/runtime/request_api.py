@@ -143,6 +143,15 @@ async def run(ident:str):
     except KeyError as error:raise HTTPException(404,'Request or model not found') from error
     except Exception as error:raise HTTPException(502,'Request failed; inspect its saved checkpoint') from error
 
+@router.post('/{ident}/resume-recovered')
+async def resume_recovered(ident:str):
+    try:
+        current=await asyncio.to_thread(service)
+        return await current.run(ident,resume_recovered=True)
+    except KeyError as error:raise HTTPException(404,'Request not found') from error
+    except ValueError as error:raise HTTPException(409,'Recovered linkage needs review; no replacement work admitted') from error
+    except Exception as error:raise HTTPException(502,'Recovered request failed; inspect its saved checkpoint') from error
+
 @router.post('/{ident}/cancel')
 def cancel(ident:str):
     try:return service().cancel(ident)
