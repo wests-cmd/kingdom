@@ -401,7 +401,7 @@ class RuntimeEngine:
                         {"metadata": {**task["metadata"], "approval_id": auth["approval_id"]}})
                     self.events.publish("task.waiting_approval", waiting)
                 return None
-            return self.tasks.claim_remote_atomically(task_id, node_id, capability, leases)
+            return self.tasks.claim_remote_atomically(task_id, node_id, capability, leases, expected_version=task['version'])
 
     def recover_remote_tasks(self):
         from backend.cluster.task_leasing import task_lease_manager
