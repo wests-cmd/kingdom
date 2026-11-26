@@ -158,6 +158,8 @@ class RequestService:
         if body.get('group_id') or body.get('target_knight') or body['mode']=='delegate':
             if route!='delegate' or not body.get('group_id') or not body.get('target_knight') or body.get('allow_process') or len(body['prompt'])>16000:
                 raise ValueError('Choose a group and a member Knight for bounded text analysis, without process tools')
+        if body.get('guide_region') and not body.get('screen_region'):
+            raise ValueError('Guidance requires a reviewed crop')
         if body.get('screen_region') is not None:
             from backend.runtime.screen_region import validate_region
             validate_region(body['screen_region'])
@@ -179,7 +181,7 @@ class RequestService:
             old=conn.execute('SELECT state_json FROM conversation_requests WHERE session_scope=? AND project_scope=? AND idem=?',(body['session_scope'],body['project_scope'],body['idempotency_key'])).fetchone()
             if old:
                 existing=json.loads(old[0])
-                if any(existing.get(key,{'tool_sequence':[],'tool_protocol':'native','tool_paths':[],'harness_id':None,'fallback_profile':None,'screen_region':None,'group_id':None,'target_knight':None,'prefer_benchmarked':False}.get(key))!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
+                if any(existing.get(key,{'tool_sequence':[],'tool_protocol':'native','tool_paths':[],'harness_id':None,'fallback_profile':None,'screen_region':None,'group_id':None,'target_knight':None,'prefer_benchmarked':False,'guide_region':False}.get(key))!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
                 return existing
             if route == 'auto':
                 instant = resolve(body['prompt'], body['project_scope'], self.shortcuts)
@@ -389,8 +391,8 @@ class RequestService:
                 return await asyncio.to_thread(self.update,ident,{'status':status,'answer':answer,'evidence':evidence},expected={'running'}) or await asyncio.to_thread(self.get,ident)
             else:
                 if state.get('screen_region'):
-                    from backend.runtime.screen_region import visual_messages
-                    messages=visual_messages(state['prompt'],state['screen_region'])
+                    from backend.runtime.screen_region import visual_messages,guide_messages
+                    messages=(guide_messages if state.get('guide_region') else visual_messages)(state['prompt'],state['screen_region'])
                 else:
                     messages = await asyncio.to_thread(self.messages, state)
                 options={'messages':messages,'stream':False}
@@ -417,7 +419,12 @@ class RequestService:
                     evidence.append({'type':'model_escalation','from':primary,'to':fallback,'reason':'incomplete_text_response'})
                 if incomplete:
                     raise AgentRejection('model_output_incomplete')
-                evidence.append({'type':'model_response','profile':payload.get('kingdom_profile',fallback if evidence else state['model_profile']),'model':payload.get('model'),'usage':payload.get('usage',{}),'verified_execution':False})
+                if state.get('guide_region'):
+                    from backend.runtime.screen_region import validate_guide
+                    guide=validate_guide(answer)
+                    answer=guide['answer']
+                    evidence.append({'type':'visual_guidance','annotations':guide['annotations'],'verified_execution':False})
+                evidence.append({'type':'model_response','profile':payload.get('kingdom_profile',state.get('fallback_profile') if any(item['type']=='model_escalation' for item in evidence) else state['model_profile']),'model':payload.get('model'),'usage':payload.get('usage',{}),'verified_execution':False})
             return await asyncio.to_thread(self.update,ident,{'status':'completed','answer':answer,'evidence':evidence},expected={'running'}) or await asyncio.to_thread(self.get,ident)
         except Exception as error:
             # Provider exception messages can contain credentials or request bodies.
