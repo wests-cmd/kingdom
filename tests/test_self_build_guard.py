@@ -21,3 +21,30 @@ class Tests(unittest.TestCase):
     def test_stale_commit_blocks(self): self.assertFalse(may_promote(approved=True,tests_passed=True,independent_review_passed=True,emergency_stop=False,base_commit_unchanged=False))
     def test_recovery(self): self.assertEqual(select_recovery_action(3,emergency_stop=False,interrupted=True),'quarantine')
     def test_interrupt(self): self.assertEqual(select_recovery_action(1,emergency_stop=False,interrupted=True),'requeue')
+
+    def test_windows_aliases_and_case_collision(self):
+        for paths in (('backend/file.py:stream',), ('backend/CON.py',),
+                      ('backend/file.py.',), ('backend/A.py', 'backend/a.py')):
+            with self.subTest(paths=paths):
+                self.assertTrue(validate_proposal(proposal(paths=paths)))
+
+    def test_trust_policy_requires_separate_review(self):
+        for path in ('backend/security/permissions.py', 'backend/runtime/policy.py',
+                     'backend/cluster/task_leasing.py', 'backend/runtime/self_build_guard.py'):
+            self.assertIn('Protected trust-policy path requires separate review',
+                          validate_proposal(proposal(paths=(path,))))
+
+    def test_truthy_values_are_not_approval(self):
+        self.assertTrue(validate_proposal(proposal(approved='yes')))
+        self.assertFalse(may_promote(approved='yes',tests_passed=True,
+                                    independent_review_passed=True,emergency_stop=False,
+                                    base_commit_unchanged=True))
+        self.assertFalse(may_promote(approved=True,tests_passed=True,
+                                    independent_review_passed=True,emergency_stop=0,
+                                    base_commit_unchanged=True))
+
+    def test_malformed_proposals_fail_closed(self):
+        for changes in ({'goal':None}, {'base_commit':None}, {'paths':(None,)},
+                        {'max_files':True}, {'test_commands':(' ',)}):
+            with self.subTest(changes=changes):
+                self.assertTrue(validate_proposal(proposal(**changes)))

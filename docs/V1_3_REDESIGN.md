@@ -28,3 +28,12 @@ Admission exception recovery now uses the same read-only child matching as start
 ### Exact task lineage at public admission and projection
 
 Direct public task admission rejects both internal request-origin metadata and standalone conversation request identifiers. The scoped work projection requires full reciprocal request, project and conversation identity for task links, as it already does for mission and agent links. Older records without full lineage remain visible in the owner-wide projection only; explicit conflicting lineage is unresolved in both views. These changes grant no authority and do not migrate or replay old work. Added regression cases for cross-conversation lineage, legacy records and public admission spoofing.
+
+### Five high-priority redesign tracks (incremental)
+
+- Unified execution: exact lineage and durable direct-client admission remain priorities; do not create a second scheduler or authority.
+- Security: verify exact capability, task version, device and approval binding at effect time; protected trust-policy changes require independent review.
+- Distributed scheduling and model integration: model capacity admission now combines candidate and inventory profiles conservatively even when the inventory omits a candidate; malformed capacity bounds are rejected. This is a local inference safeguard, not physical cluster qualification.
+- Autonomous self-building: the proposal guard now rejects malformed truthy authorization flags, unsafe Windows path aliases, case-insensitive duplicates, and protected trust-policy paths. The guard still does not run jobs or prove independent authorization; integration with the existing governed work pipeline remains necessary.
+
+All staged changes require actual regression and release checks before integration acceptance.
