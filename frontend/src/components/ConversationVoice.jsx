@@ -4,12 +4,19 @@ export default function ConversationVoice({onTranscript,answer,disabled=false}) 
  const Recognition=typeof window!=='undefined'&&(window.SpeechRecognition||window.webkitSpeechRecognition)
  const canRead=typeof window!=='undefined'&&Boolean(window.speechSynthesis&&window.SpeechSynthesisUtterance)
  const recognition=useRef(null),generation=useRef(0)
+ const [localOnly,setLocalOnly]=useState(true)
  const [listening,setListening]=useState(false),[draft,setDraft]=useState(''),[notice,setNotice]=useState(''),[reading,setReading]=useState(false)
  useEffect(()=>()=>{generation.current+=1;recognition.current?.abort();if(canRead)window.speechSynthesis.cancel()},[])
- const begin=()=>{
+ const begin=async()=>{
   if(!Recognition||disabled||listening)return
   const serial=++generation.current
   const instance=new Recognition()
+  if(localOnly){
+   if(!('processLocally' in instance)||typeof Recognition.available!=='function'){setNotice('On-device recognition is not supported here. Use typing or explicitly opt into browser speech.');return}
+   try{if(await Recognition.available({langs:[navigator.language||'en-US'],processLocally:true})!=='available'){setNotice('On-device speech language is not installed. No online fallback was used.');return}}catch{setNotice('Could not check offline speech. Nothing was recorded.');return}
+   if(serial!==generation.current)return
+   instance.processLocally=true
+  }
   recognition.current=instance
   instance.continuous=false
   instance.interimResults=false
@@ -35,7 +42,8 @@ export default function ConversationVoice({onTranscript,answer,disabled=false}) 
   setReading(true);window.speechSynthesis.speak(utterance)
  }
  return <details style={{minWidth:0,overflowWrap:'anywhere'}}><summary>Optional voice input and read aloud</summary>
- <p className="muted">Voice input starts only when you click Start microphone. Your browser may send audio or answer text to its speech provider; offline operation is not guaranteed. Typing and reading text remain available.</p>
+ <p className="muted">Voice starts only when requested. On-device mode refuses to start unless the browser reports local recognition available. Read aloud and explicitly enabled online speech can use browser providers.</p>
+ <label><input type="checkbox" checked={localOnly} disabled={disabled||listening} onChange={e=>{generation.current++;setLocalOnly(e.target.checked)}}/>Require on-device speech recognition (no online fallback)</label>
  {!Recognition?<p>Speech recognition is unavailable in this browser. Use the message box.</p>:<div style={{display:'flex',flexWrap:'wrap',gap:8}}>
   <button type="button" disabled={disabled||listening} onClick={begin}>Start microphone</button>
   <button type="button" disabled={!listening} onClick={()=>recognition.current?.stop()}>Stop and review</button>
