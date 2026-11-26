@@ -248,6 +248,36 @@ class KnightRepository:
             conn.commit()
             return result.rowcount > 0
 
+    def set_peer_endpoint(self, knight_id, expected_identity, endpoint):
+        """Update only the route of the currently approved, pinned peer.
+
+        Never save an old full NodeInfo snapshot: it may predate a revocation,
+        grant change, heartbeat or membership update.
+        """
+        with self.db.get_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT * FROM knights WHERE id=?", (knight_id,)).fetchone()
+            if row is None or row["is_local"] or row["node_state"] not in (
+                    "APPROVED", "CONNECTED", "DISCONNECTED", "RECONNECTING"):
+                return None
+            current = self._row_to_dict(row)
+            identity = current["public_identity"]
+            if (not identity or identity.get("node_type") != "commander"
+                    or identity != expected_identity):
+                return None
+            meta = current["connection_metadata"]
+            deadline = meta.get("membership_expires_at")
+            if deadline is not None:
+                import math
+                if (type(deadline) not in (int, float) or not math.isfinite(deadline)
+                        or deadline <= time.time()):
+                    return None
+            meta["kingdom_endpoint"] = endpoint
+            conn.execute("UPDATE knights SET connection_metadata_json=?,updated_at=? WHERE id=?",
+                         (json.dumps(meta), time.time(), knight_id))
+            conn.commit()
+            return endpoint
+
     def record_heartbeat(self, knight_id, health, observed_at):
         """Atomic heartbeat; a stale reader must never restore a revoked member.
 
