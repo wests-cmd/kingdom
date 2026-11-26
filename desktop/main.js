@@ -308,7 +308,7 @@ if (app) {
 }
 
 async function runReleaseSmoke(reportPath) {
-  const deadline = Date.now() + (process.env.KINGDOM_LIVE_MODEL_SMOKE === '1' ? 480000 : 90000);
+  const deadline = Date.now() + (process.env.KINGDOM_LIVE_MODEL_SMOKE === '1' ? 480000 : 120000);
   async function until(check, description) {
     while (Date.now() < deadline) {
       const result = await check();
@@ -437,6 +437,41 @@ async function runReleaseSmoke(reportPath) {
   ), 'computer and model health panel');
   report.userVisibility.homeSections = true;
   report.userVisibility.healthPanel = true;
+  // Native UI acceptance: edit geometry, undo/redo, save and reopen.
+  // Neither team membership nor reporting relationships may change.
+  const mapBefore=await mainWindow.webContents.executeJavaScript("fetch('/hierarchy').then(r=>r.json())");
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e=>e.textContent==='Swarm').click()");
+  await until(()=>mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('[data-map-key=\\\"knight:local\\\"]')) && Array.from(document.querySelectorAll('.command-map button')).some(b=>b.textContent==='Edit layout'&&!b.disabled)"),'native command map and loaded layout');
+  await mainWindow.webContents.executeJavaScript(`(()=>{
+    const map=document.querySelector('.command-map');
+    Array.from(map.querySelectorAll('button')).find(b=>b.textContent==='Edit layout').click();
+    map.querySelector('[data-map-key="knight:local"]').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+  })()`);
+  await until(()=>mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('.command-map-inspector input[type=number]'))"),'keyboard map position inspector');
+  await mainWindow.webContents.executeJavaScript(`(()=>{
+    const input=document.querySelector('.command-map-inspector input[type=number]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'320');
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+  })()`);
+  await until(()=>mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.command-map button')).some(b=>b.textContent==='Undo'&&!b.disabled)"),'layout edit retained');
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.command-map button')).find(b=>b.textContent==='Undo').click()");
+  await until(()=>mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.command-map button')).some(b=>b.textContent==='Redo'&&!b.disabled)"),'layout undo');
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.command-map button')).find(b=>b.textContent==='Redo').click()");
+  await until(()=>mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.command-map button')).some(b=>b.textContent==='Save layout'&&!b.disabled)"),'layout redo');
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.command-map button')).find(b=>b.textContent==='Save layout').click()");
+  const savedMap=await until(()=>mainWindow.webContents.executeJavaScript("fetch('/hierarchy/map-layout/network').then(r=>r.json()).then(data=>data.positions?.['knight:local']?.x===320?data:false)"),'persisted native layout');
+  await until(()=>mainWindow.webContents.executeJavaScript("document.querySelector('.command-map').textContent.includes('Visual layout saved')"),'save confirmation');
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.command-map button')).find(b=>b.textContent==='Team organizer').click()");
+  await until(()=>mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('.command-map button[aria-pressed=true]')?.textContent==='Team organizer')"),'team view');
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.command-map button')).find(b=>b.textContent==='Live work').click()");
+  await until(()=>mainWindow.webContents.executeJavaScript("Boolean(document.querySelector('.command-map button[aria-pressed=true]')?.textContent==='Live work')"),'work view');
+  await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.command-map button')).find(b=>b.textContent==='Network').click()");
+  await until(()=>mainWindow.webContents.executeJavaScript("document.querySelector('[data-map-key=\\\"knight:local\\\"]')?.getAttribute('transform')?.startsWith('translate(320,')"),'saved position restored');
+  const mapAfter=await mainWindow.webContents.executeJavaScript("fetch('/hierarchy').then(r=>r.json())");
+  if(mapBefore.groups_version!==mapAfter.groups_version || mapBefore.topology.version!==mapAfter.topology.version)throw new Error('Visual layout unexpectedly changed organization');
+  report.commandMap={views:3,layoutVersion:savedMap.version,undoRedo:true,positionRestored:true,organizationUnchanged:true};
+  await capture(path.join(path.dirname(reportPath),'command-map.png'));
+
   await mainWindow.webContents.executeJavaScript("Array.from(document.querySelectorAll('.sidebar-item')).find(e=>e.textContent==='Tasks').click()");
   await until(() => mainWindow.webContents.executeJavaScript(
     'Boolean(document.querySelector(\'textarea[aria-label="Task description"]\'))'
