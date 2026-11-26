@@ -1,4 +1,5 @@
 import React, {useState} from 'react'
+import UnifiedWorkOverview from '../components/UnifiedWorkOverview'
 import api from '../api'
 import useLiveData from '../hooks/useLiveData'
 import OrchestrationBoard from '../components/OrchestrationBoard'
@@ -154,6 +155,7 @@ export default function Dashboard({onNavigate,interfaceMode='easy'}) {
       tasks={groups?.finished || []} dataReady={current} onNavigate={onNavigate} finished
       emptyMessage="No completed or cancelled tasks recorded yet."/>
 
+    <UnifiedWorkOverview onNavigate={onNavigate}/>
     <NotificationCenter onNavigate={onNavigate}/>
 
     <section className="panel" aria-label="More information">

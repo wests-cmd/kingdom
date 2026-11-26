@@ -5,7 +5,7 @@ Base: merged v1.2.11. Do not replace the working main release while development 
 Definition of done: a single durable objective lifecycle, one existing identity and authorization authority, one scheduler with recoverable leases, one evidence-backed work projection across front doors, clear team/host distinctions, tested adapter capabilities, and independent verification. Keep Python/FastAPI, React/Electron, SQLite, signed RPC and the existing installer pipeline. Migrate incrementally; no parallel scheduler or new authority service.
 
 1. First vertical slice: permanent model matrix and precise model evidence.
-2. Establish a read-only canonical work projection, then migrate requests/missions/agent/harness dispatch through a shared admission contract using existing repositories.
+2. Read-only canonical work projection implemented in the development candidate (CI pending; see [work projection](UNIFIED_WORK_PROJECTION.md)); then migrate requests/missions/agent/harness dispatch through a shared admission contract using existing repositories.
 3. Bind consequential effects to durable authorization and fencing; require adversarial tests and explicit owner review for trust policy changes.
 4. Consolidate the desktop into Conversation, Command Center, Missions, Knowledge Vault, Connections, Approvals and Settings. Keep graph coordinates separate from authority.
 5. Resource-aware scheduler, recovery and failure receipts across Knight computers; one heavy job by default for constrained hosts.
