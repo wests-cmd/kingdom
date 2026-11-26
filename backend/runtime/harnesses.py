@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 ENVIRONMENT_KEYS = {'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'HERMES_HOME',
@@ -16,6 +17,7 @@ class HarnessConfig(BaseModel):
     argv: list[str] = Field(min_length=2, max_length=40)
     environment: dict[str, str] = Field(default_factory=dict)
     timeout_seconds: int = Field(default=600, ge=1, le=1800)
+    output_protocol: Literal['text','kingdom_jsonl'] = 'text'
 
 def validate_config(config):
     if not Path(config.argv[0]).is_absolute() or not Path(config.argv[0]).is_file():
@@ -75,7 +77,7 @@ class HarnessService:
         argv = [prompt if arg == '{prompt}' else str(work) if arg == '{workspace}' else arg for arg in config.argv]
         return self.engine.submit_task(prompt, metadata={'actor': 'owner', 'tool': 'harness.run@1.0.0',
             'harness_id': ident, 'harness_revision': profile['revision'],
-            'tool_parameters': {'argv': argv, 'cwd': cwd, 'timeout_seconds': config.timeout_seconds, 'environment': config.environment},
+            'tool_parameters': {'argv': argv, 'cwd': cwd, 'timeout_seconds': config.timeout_seconds, 'environment': config.environment, 'output_protocol': config.output_protocol},
             'required_capabilities': ['process.execute'], 'source': 'owner_harness_connection',
             **({'project_scope': cwd, 'conversation_request_id': request_id} if request_id else {})})
 
@@ -84,6 +86,20 @@ def run_harness(params):
     environment = params.get('environment', {})
     validate_environment(environment)
     inherited = {key: os.environ[key] for key in ('HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA') if key in os.environ}
-    result = run_process(params, max_timeout=1800, environment={**inherited, **environment})
+    protocol=params.get('output_protocol','text')
+    if protocol not in {'text','kingdom_jsonl'}:raise ValueError('Unknown harness output protocol')
+    options={}
+    if params.get('_receipt_id'):
+        from backend.events.event_bus import event_bus
+        def progress(byte_count,elapsed):
+            event_bus.publish('task.harness_progress',{'bytes':byte_count,'elapsed_seconds':round(elapsed,2)},
+                task_id=params['_receipt_id'],source='harness')
+        options['progress']=progress
+    result = run_process(params, max_timeout=1800, environment={**inherited, **environment},**options)
+    if protocol=='kingdom_jsonl' and result['exit_code']==0:
+        if result.get('output_truncated'):raise ValueError('Structured output exceeded retained budget')
+        from backend.runtime.harness_protocol import decode
+        result['structured']=decode(result['output'])
+
     return {**result, 'scope': 'External harness host process. Its own tools and credentials remain governed by that harness; working directory is not an OS sandbox.',
             'verification_scope': 'Process exit and captured output only; repository changes require separate tests and review.'}
