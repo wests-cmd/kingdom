@@ -49,7 +49,7 @@ def list_files(params):
             for entry in sorted(target.iterdir())[:1000] if not entry.is_symlink()]}
 
 
-def run_process(params, *, max_timeout=120, environment=None):
+def run_process(params, *, max_timeout=120, environment=None, progress=None):
     argv = params.get('argv')
     if not isinstance(argv, list) or not 1 <= len(argv) <= 40 or not all(isinstance(x, str) and 0 < len(x) <= 4000 and '\x00' not in x for x in argv):
         raise ValueError('Supply an argument list, never a shell command string')
@@ -64,12 +64,23 @@ def run_process(params, *, max_timeout=120, environment=None):
             stdout=output, stderr=subprocess.STDOUT, shell=False,
             start_new_session=os.name != 'nt', **({'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
         try:
-            deadline = time.monotonic() + timeout
+            started = time.monotonic()
+            deadline = started + timeout
+            next_report = started
             while process.poll() is None:
-                if time.monotonic() >= deadline or os.fstat(output.fileno()).st_size > 2_000_000:
+                now = time.monotonic()
+                size = os.fstat(output.fileno()).st_size
+                if progress and now >= next_report:
+                    try:progress(size,now-started)
+                    except Exception:pass  # A diagnostic cannot abandon a running child.
+                    next_report = now + 5
+                if now >= deadline or size > 2_000_000:
                     raise subprocess.TimeoutExpired(argv, timeout)
                 time.sleep(0.05)
             code = process.returncode
+            if progress:
+                try:progress(os.fstat(output.fileno()).st_size,time.monotonic()-started)
+                except Exception:pass
         except subprocess.TimeoutExpired:
             if os.name == 'nt':
                 subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], capture_output=True, timeout=10,
