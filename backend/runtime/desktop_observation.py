@@ -122,8 +122,7 @@ def _observe_worker(params):
     from collections import deque
 
     if platform.system() != "Windows":
-        from backend.runtime.desktop_platforms import observe_identity
-        return observe_identity(params, platform.system())
+        return _failure("windows_required")
 
     try:
         from pywinauto import Desktop
@@ -260,7 +259,8 @@ def desktop_observe(params):
     import platform
 
     if platform.system() != "Windows":
-        return _failure("windows_required")
+        from backend.runtime.desktop_platforms import observe_identity
+        return observe_identity(params, platform.system())
 
     if not isinstance(params, dict):
         return _failure("invalid_parameters")
