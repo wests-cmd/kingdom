@@ -72,3 +72,26 @@ test('parallel opens and quit during readiness cannot create extra windows',asyn
   assert.equal(await pending,false);
   assert.equal(calls.created,0);
 });
+
+test('eligibility lost during renderer load destroys hidden window',async()=>{
+  let allowed=true;
+  const {assistant}=fixture({allowed:()=>allowed});
+  const original=assistant.BrowserWindow.prototype.loadURL;
+  assistant.BrowserWindow.prototype.loadURL=async function(url){
+    await original.call(this,url);
+    allowed=false;
+  };
+  assert.equal(await assistant.open(),false);
+  assert.equal(assistant.window,null);
+});
+test('failed renderer load destroys window and allows retry',async()=>{
+  const {assistant,calls}=fixture();
+  const original=assistant.BrowserWindow.prototype.loadURL;
+  assistant.BrowserWindow.prototype.loadURL=async()=>{throw new Error('load failed')};
+  await assert.rejects(assistant.open(),/load failed/);
+  assert.equal(assistant.window,null);
+  assistant.BrowserWindow.prototype.loadURL=original;
+  assert.equal(await assistant.open(),true);
+  assert.equal(calls.created,2);
+  assistant.stop();
+});
