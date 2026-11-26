@@ -1043,16 +1043,20 @@ def handle_cluster_rpc(request: RPCMessageRequest):
 
     elif msg_type == 'group_task_assign':
         from backend.cluster.hierarchy_api import hierarchy
-        task = engine.tasks.get(payload.get('task_id', ''))
-        if not task or task['status'] != 'queued': raise HTTPException(409, 'Only queued group work can be assigned')
-        if task.get('metadata', {}).get('tool') not in {'text.analyze@1.0.0', 'code.python.analyze@1.0.0'}:
-            raise HTTPException(409, 'Group dispatch currently supports independently verifiable text and syntax tools')
-        group_id = task.get('metadata', {}).get('group_id')
-        try: hierarchy.authorize_assignment(sender_id, group_id, payload.get('target_node'))
-        except PermissionError as error: raise HTTPException(403, str(error)) from error
-        updated = engine.tasks.transition_task(task['id'], 'queued', {'assigned_knight': payload['target_node'],
-            'metadata': {**task['metadata'], 'execution_target': 'remote'}})
-        return {'status': 'ok', 'task_id': updated['id']}
+        with engine.dispatch_lock:
+            task = engine.tasks.repo.get(payload.get('task_id', ''))
+            if not task or task['status'] != 'queued':
+                raise HTTPException(409, 'Only queued group work can be assigned')
+            group_id = task.get('metadata', {}).get('group_id')
+            try:
+                hierarchy.authorize_assignment(sender_id, group_id, payload.get('target_node'))
+            except PermissionError as error:
+                raise HTTPException(403, str(error)) from error
+            try:
+                updated=engine.tasks.assign_queued_group_task(task['id'],task['version'],group_id,payload['target_node'])
+            except ValueError as error:
+                raise HTTPException(409, 'Group task changed or is not eligible for assignment') from error
+        return {'status':'ok','task_id':updated['id']}
 
     elif msg_type == 'native_analysis_execute':
         from backend.cluster.federation_api import configured_analysis_worker
