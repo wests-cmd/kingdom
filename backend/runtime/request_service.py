@@ -193,16 +193,21 @@ class RequestService:
                 if not row: raise ValueError('Harness connection not found')
                 state['harness_revision']=json.loads(row[0])['revision']
             if body.get('fallback_profile'):
+                state['model_profile_revisions']={}
                 rows=conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='model_profiles'").fetchone()
                 if not rows: raise ValueError('Configure both model profiles first')
                 for ident in (body['model_profile'],body['fallback_profile']):
                     row=conn.execute('SELECT config_json FROM model_profiles WHERE id=?',(ident,)).fetchone()
                     if not row or json.loads(row[0]).get('disabled'):
                         raise ValueError('Both model profiles must be configured and enabled')
+                    state['model_profile_revisions'][ident]=json.loads(row[0])['updated_at']
             if body.get('screen_region') is not None:
+                if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='model_profiles'").fetchone():
+                    raise ValueError('Choose an enabled vision-capable connection')
                 row=conn.execute("SELECT config_json FROM model_profiles WHERE id=?",(body['model_profile'],)).fetchone()
                 if not row or json.loads(row[0]).get('vision') is not True or json.loads(row[0]).get('disabled'):
                     raise ValueError('Choose an enabled vision-capable connection')
+                state['model_profile_revisions']={body['model_profile']:json.loads(row[0])['updated_at']}
             state['route']=route
             conn.execute('INSERT INTO conversation_requests VALUES(?,?,?,?,?)',(state['id'],body['session_scope'],body['project_scope'],body['idempotency_key'],json.dumps(state)))
             conn.commit()
@@ -386,7 +391,10 @@ class RequestService:
                     messages=visual_messages(state['prompt'],state['screen_region'])
                 else:
                     messages = await asyncio.to_thread(self.messages, state)
-                payload=await self.models.chat(state['model_profile'],{'messages':messages, 'stream':False})
+                options={'messages':messages,'stream':False}
+                if state.get('model_profile_revisions'):
+                    options['_kingdom_profile_revision']=state['model_profile_revisions'][state['model_profile']]
+                payload=await self.models.chat(state['model_profile'],options)
                 from backend.runtime.agent_activity import AgentRejection
                 choice = payload['choices'][0]
                 answer = choice['message'].get('content')
@@ -397,8 +405,9 @@ class RequestService:
                     if (await asyncio.to_thread(self.get,ident))['status']!='running':
                         return await asyncio.to_thread(self.get,ident)
                     messages=await asyncio.to_thread(self.messages,{**state,'model_profile':fallback})
-                    await asyncio.to_thread(self.update,ident,{'model_escalation_attempt':{'from':primary,'to':fallback,'reason':'incomplete_text_response'}},expected={'running'})
-                    payload=await self.models.chat(fallback,{'messages':messages,'stream':False})
+                    recorded=await asyncio.to_thread(self.update,ident,{'model_escalation_attempt':{'from':primary,'to':fallback,'reason':'incomplete_text_response'}},expected={'running'})
+                    if recorded is None:return await asyncio.to_thread(self.get,ident)
+                    payload=await self.models.chat(fallback,{'messages':messages,'stream':False,'_kingdom_profile_revision':state['model_profile_revisions'][fallback]})
                     choice=payload['choices'][0]
                     answer=choice['message'].get('content')
                     incomplete=choice.get('finish_reason')=='length' or not isinstance(answer,str) or not answer.strip()
