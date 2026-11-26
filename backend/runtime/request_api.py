@@ -27,6 +27,7 @@ class RequestInput(BaseModel):
     mode:Literal['auto','quick','agent','harness','delegate']='auto'
     model_profile:str=Field(default='auto',min_length=1,max_length=100)
     allow_process:bool=False
+    prefer_benchmarked:bool=False
     screen_region:str|None=Field(default=None,max_length=18000)
     group_id:str|None=Field(default=None,min_length=1,max_length=128)
     target_knight:str|None=Field(default=None,min_length=1,max_length=128)
@@ -107,6 +108,25 @@ async def local_voice(request:Request):
     try:return await asyncio.to_thread(transcribe,bytes(data))
     except ValueError as error:raise HTTPException(400,str(error)) from error
     except Exception as error:raise HTTPException(503,'Local transcription unavailable; check the configured engine and model') from error
+
+
+class BenchmarkInput(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    profile:str=Field(min_length=1,max_length=64)
+
+
+@router.get('/benchmarks')
+def benchmarks():
+    from backend.models.assistant_benchmark import AssistantBenchmarks
+    return AssistantBenchmarks(service().db).list()
+
+
+@router.post('/benchmarks')
+async def benchmark(body:BenchmarkInput):
+    from backend.models.assistant_benchmark import AssistantBenchmarks
+    current=service()
+    try:return await AssistantBenchmarks(current.db).run(body.profile,current.models)
+    except Exception as error:raise HTTPException(502,'Benchmark did not complete; previous evidence is retained') from error
 
 
 @router.get('/{ident}')
