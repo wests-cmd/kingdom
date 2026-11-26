@@ -207,6 +207,15 @@ class RequestService:
         with self.db.get_connection() as conn:
             return [json.loads(row[0]) for row in conn.execute('SELECT state_json FROM conversation_requests WHERE session_scope=? AND project_scope=? ORDER BY rowid DESC LIMIT 100',(session_scope,project_scope))]
 
+    def learn_shortcut(self, ident, session, project, name):
+        state=self.get(ident)
+        expected={'time':'controller_clock','status':'runtime_status','priorities':'project_tasks',
+                  'work':'conversation_work','help':'instant_command_catalog','harnesses':'harness_catalog'}
+        if (state['status']!='completed' or state['session_scope']!=session or state['project_scope']!=project
+                or state['route'] not in expected or not any(e.get('type')==expected[state['route']] for e in state['evidence'])):
+            raise ValueError('Only evidence-backed instant commands can be learned')
+        return self.shortcuts.save(project,name,state['route'])
+
     def priority_snapshot(self, project_scope):
         """Read exact-scope saved records; never initialize or advance executors."""
         tasks = [task for task in self.engine.tasks.list()
