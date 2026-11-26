@@ -1,4 +1,4 @@
-# Quick Kingdom (source candidate)
+# Quick Kingdom (v1.2.9 source candidate)
 
 This is an independently implemented interaction pattern inspired by [Atticus](https://github.com/SaarthurR/atticus-mac/tree/2239807b857abb82302c785afd34e7799257186c), MIT © 2026 SaarthurR. No Atticus source, assets, telemetry or shell replay has been copied.
 
