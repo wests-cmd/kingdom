@@ -106,37 +106,41 @@ def test_slow_sqlite_and_acceptance_leave_heartbeat_loop_responsive(offered, del
         for thread in threads: thread.join(2)
 
 
-def test_cancelling_blocked_selection_retains_lease_without_sending_or_detaching_claim(offered):
+def test_cancelling_blocked_selection_retains_lease_without_sending_or_detaching_claim(offered, monkeypatch):
+    from backend.cluster import peer_analysis_return
     database, controller, engine, leases, accept, calls, offer = responsive_pair(offered)
-    locked = threading.Event()
-    def busy_database():
-        with database.get_connection() as conn:
-            conn.execute('BEGIN EXCLUSIVE')
-            locked.set()
-            time.sleep(.35)
-    thread = threading.Thread(target=busy_database)
-    thread.start()
-    assert locked.wait(2)
+    entered, release = threading.Event(), threading.Event()
+    original = peer_analysis_return._prepare_offer
+
+    def blocked(*args):
+        entered.set()
+        if not release.wait(5):
+            raise AssertionError('Test did not release selection')
+        return original(*args)
+
+    monkeypatch.setattr(peer_analysis_return, '_prepare_offer', blocked)
 
     async def cancel_then_retry():
         pending = asyncio.create_task(dispatch_one(controller, 'worker', engine, leases, accept))
-        await asyncio.sleep(.05)
-        pending.cancel()
-        await asyncio.sleep(.02)
-        assert controller.lock.locked(), 'Cancelled dispatcher released a still-running claim'
-        assert (await dispatch_one(controller, 'worker', engine, leases, accept))['status'] == 'held'
-        assert calls == []
+        try:
+            assert await asyncio.to_thread(entered.wait, 3)
+            pending.cancel()
+            # Under WAL, an exclusive writer no longer blocks a snapshot reader.
+            # This explicit barrier proves the cancellation race in either mode.
+            await asyncio.sleep(0)
+            assert controller.lock.locked(), 'Cancelled dispatcher released a still-running claim'
+            assert (await dispatch_one(controller, 'worker', engine, leases, accept))['status'] == 'held'
+            assert calls == []
+        finally:
+            release.set()
         with pytest.raises(asyncio.CancelledError):
             await pending
         assert calls == []
         retained = engine.tasks.get(offer['task']['id'])
         assert retained['status'] == 'leased' and retained['lease_id'] == offer['task']['lease_id']
         return await dispatch_one(controller, 'worker', engine, leases, accept)
-    try:
-        assert asyncio.run(cancel_then_retry())['status'] == 'verified'
-        assert len(calls) == 1
-    finally:
-        thread.join(2)
+    assert asyncio.run(cancel_then_retry())['status'] == 'verified'
+    assert len(calls) == 1
 
 
 def test_cancelling_acceptance_waits_for_commit_and_does_not_reexecute(offered, monkeypatch):
