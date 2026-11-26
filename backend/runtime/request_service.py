@@ -237,13 +237,13 @@ class RequestService:
                           {'type':'project_work_list','project_scope':state['project_scope'],'work_ids':[item['id'] for item in work]}]
             elif route=='help':
                 aliases=await asyncio.to_thread(self.shortcuts.list,state['project_scope'])
-                answer='Instant commands (no model needed):\\n'+'\\n'.join('/'+key+' — '+label for key,label in COMMANDS.items())
-                if aliases: answer+='\\nProject shortcuts:\\n'+'\\n'.join('/'+row['name']+' → /'+row['command'] for row in aliases)
+                answer='Instant commands (no model needed):\n'+'\n'.join('/'+key+' — '+label for key,label in COMMANDS.items())
+                if aliases: answer+='\nProject shortcuts:\n'+'\n'.join('/'+row['name']+' → /'+row['command'] for row in aliases)
                 evidence=[{'type':'instant_command_catalog','commands':list(COMMANDS),'shortcuts':aliases}]
             elif route=='work':
                 rows=await asyncio.to_thread(self.list,state['session_scope'],state['project_scope'])
                 rows=[row for row in rows if row['id']!=ident][:10]
-                answer='Recent saved conversation work:\\n'+'\\n'.join(row['status']+': '+row['prompt'][:120] for row in rows) if rows else 'No other requests in this conversation.'
+                answer='Recent saved conversation work:\n'+'\n'.join(row['status']+': '+row['prompt'][:120] for row in rows) if rows else 'No other requests in this conversation.'
                 evidence=[{'type':'conversation_work','request_ids':[row['id'] for row in rows]}]
             elif route=='harnesses':
                 def configured_names():
