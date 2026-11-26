@@ -25,9 +25,15 @@ class ModelCapacity:
             with self._lock:
                 # Profiles sharing a server also share its most conservative limit.
                 limits = {}
-                for profile in server_profiles or profiles:
+                # Include candidates even if the inventory snapshot is incomplete.
+                # A missing inventory entry must not crash routing or increase a
+                # candidate's declared concurrency allowance.
+                for profile in [*profiles, *(server_profiles or [])]:
                     key = self._key(profile)
-                    limits[key] = min(limits.get(key, 4), profile.get('max_parallel', 1))
+                    limit = profile.get('max_parallel', 1)
+                    if type(limit) is not int or not 1 <= limit <= 4:
+                        raise ValueError('Invalid model server concurrency limit')
+                    limits[key] = min(limits.get(key, 4), limit)
                 choices = []
                 for offset in range(len(profiles)):
                     profile = profiles[(self._turn + offset) % len(profiles)]
