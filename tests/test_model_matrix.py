@@ -49,3 +49,8 @@ def test_release_records_reject_missing_mock_failed_and_stale_tiers():
     with pytest.raises(ValueError):verify_reports(changed,"a"*40,"1.3.0")
     changed=deepcopy(rows);changed[2]["identity"]["digest"]=changed[0]["identity"]["digest"]
     with pytest.raises(ValueError):verify_reports(changed,"a"*40,"1.3.0")
+
+
+def test_duplicate_json_keys_are_not_accepted():
+    payload={"kingdom_profile":"lab","choices":[{"finish_reason":"stop","message":{"content":'{"status":"wrong","status":"ready","count":3}'}}]}
+    assert not grade("json",{"status":"ready","count":3},payload,"lab")

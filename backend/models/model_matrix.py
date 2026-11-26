@@ -2,7 +2,6 @@
 
 No model output is executed. This module grants no tools or permissions.
 """
-import hashlib
 import json
 import math
 import re
@@ -59,7 +58,13 @@ def grade(case_id, expected, payload, profile):
         return False
     if case_id == "json":
         try:
-            value=json.loads(answer)
+            def unique_pairs(pairs):
+                result={}
+                for key,value in pairs:
+                    if key in result:raise ValueError("Duplicate JSON key")
+                    result[key]=value
+                return result
+            value=json.loads(answer,object_pairs_hook=unique_pairs)
             return type(value) is dict and set(value)==set(expected) and type(value["count"]) is int and value==expected
         except (ValueError, TypeError, KeyError):
             return False
@@ -89,8 +94,8 @@ def verify_reports(reports, commit, version):
         for case in cases:
             latency=case.get("elapsed_ms")
             if (case.get("passed") is not True or type(latency) not in (int,float)
-                    or not math.isfinite(latency) or latency<0
-                    or type(case.get("completion_tokens")) is not int or case["completion_tokens"]<=0):
+                    or not math.isfinite(latency) or latency<=0
+                    or type(case.get("completion_tokens")) is not int or not 1<=case["completion_tokens"]<=128):
                 raise ValueError("Failed or unmeasured inference case")
     if len(digests)!=3:
         raise ValueError("Three distinct model digests required")

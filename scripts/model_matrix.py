@@ -36,6 +36,10 @@ async def run(args, report):
     async with httpx.AsyncClient(timeout=20,trust_env=False,follow_redirects=False) as client:
         tags=await client.get(endpoint+"/api/tags")
         tags.raise_for_status()
+        # Reject absent tags before asking the server to resolve model metadata.
+        inventory=tags.json()
+        if not any(item.get("name")==args.model or item.get("model")==args.model for item in inventory.get("models",[])):
+            raise ValueError("Exact installed model tag required")
         show=await client.post(endpoint+"/api/show",json={"model":args.model})
         show.raise_for_status()
         report["identity"]=model_identity(tags.json(),show.json(),args.model,args.tier)
@@ -111,6 +115,8 @@ def main():
     if not 1<=args.port<=65535 or not 30<=args.timeout<=600 or not args.model or len(args.model)>200:
         parser.error("Invalid port, timeout or model tag")
     path=args.output.resolve()
+    if path.is_relative_to(ROOT) or path.exists():
+        parser.error("Choose a new report path outside the source checkout")
     # Do not allow the local model HTTP request to use a configured proxy.
     os.environ["NO_PROXY"]="127.0.0.1,localhost,::1"
     os.environ["no_proxy"]=os.environ["NO_PROXY"]
@@ -119,6 +125,8 @@ def main():
             "observed_at":datetime.now(timezone.utc).isoformat()}
     try:
         asyncio.run(run(args,report))
+        if source_revision()!=(commit,version):
+            raise ValueError("Source revision changed during the lab")
     except Exception as error:
         report["status"]="failed" if report["cases"] else "not_tested"
         report["error_type"]=type(error).__name__
