@@ -149,6 +149,11 @@ class TaskManager:
         changed["version"] = task.get("version", 1) + 1
         if updates:
             changed.update(updates)
+            # An explicit release/reassignment must update both routing fields.
+            # Never retain a previous worker in metadata after clearing the task.
+            if "assigned_knight" in updates:
+                changed["metadata"] = {**changed.get("metadata", {}),
+                                       "assigned_knight": updates["assigned_knight"]}
 
         self.repo.save(changed, expected_version=task["version"])
         self._tasks[task_id] = changed
