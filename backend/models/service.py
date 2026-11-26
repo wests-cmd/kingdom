@@ -78,12 +78,6 @@ class ModelService:
             if images and not candidate.get('vision'):
                 raise ValueError('Select a vision-capable model profile to inspect image contents')
             candidates = [candidate]
-        measured=False
-        if automatic and request.get('_kingdom_prefer_measured') is True and not has_images and not request.get('tools') and not planner:
-            from backend.models.assistant_benchmark import AssistantBenchmarks, prefer_measured
-            ranked=prefer_measured(candidates,AssistantBenchmarks(db).list())
-            measured=ranked is not candidates
-            candidates=ranked
         async with capacity.acquire(candidates, server_profiles=configured) as selected:
             profile = profiles.get(selected['id'], credential=True)
             result = await self._generate_connection(prompt, profile, images)
@@ -182,6 +176,12 @@ class ModelService:
                           and 'codex' not in p['id'].casefold()]
             if not candidates:
                 raise ValueError('Configure a non-Codex chat model for planning')
+        measured=False
+        if automatic and request.get('_kingdom_prefer_measured') is True and not has_images and not request.get('tools') and not planner:
+            from backend.models.assistant_benchmark import AssistantBenchmarks, prefer_measured
+            ranked=prefer_measured(candidates,AssistantBenchmarks(db).list())
+            measured=ranked is not candidates
+            candidates=ranked
         async with capacity.acquire(candidates, server_profiles=configured) as selected:
             profile = profiles.get(selected['id'], credential=True)
             if '_kingdom_profile_revision' in request and (
