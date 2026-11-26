@@ -18,3 +18,7 @@ Every slice must retain existing regressions and add its own tests. The model ma
 ### Conversation admission consolidation (incremental)
 
 Commander drafts, delegated tasks, harness tasks and agent sessions now share a durable compare-and-swap admission checkpoint in RequestService. A stale running snapshot cannot claim a second admission; an existing intent without a linked child is held for review rather than replayed. The checkpoint confers no permission. Existing child services remain responsible for authorization and execution. Direct non-conversation entry points and independent physical/model acceptance remain outside this slice. Regression tests cover all four routes, competing claims, cancellation and retained children; CI evidence is required before accepting the slice.
+
+### Durable task admission across dispatchers
+
+All new tasks use an insert-only repository operation instead of a creation-time upsert. The deterministic mission/agent step identifier now resolves collisions from persisted state, even when a second dispatcher has a stale cache. A conflicting prompt or reviewed operation/parent binding is rejected; existing terminal results, cancellation, lease and version data are never replaced by task creation. The scheduler and existing authorization service are unchanged. Regression coverage uses independent TaskManager instances sharing a real temporary WAL database. This does not yet provide idempotency keys for all external HTTP entry points or prove multi-host failover.

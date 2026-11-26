@@ -281,7 +281,8 @@ class RuntimeEngine:
             raise ValueError(f"Task rejected by security firewall: {exc}") from exc
 
         task = self.tasks.create(prompt, meta)
-        self.events.publish("task.queued", task)
+        if task["status"].lower() == "queued":
+            self.events.publish("task.queued", task)
         return task
 
     def cancel_task(self, task_id: str) -> dict[str, Any]:

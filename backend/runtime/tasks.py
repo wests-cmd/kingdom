@@ -82,7 +82,6 @@ class TaskManager:
         if metadata.get('_mission_step_key'):
             from uuid import uuid5, NAMESPACE_URL
             task_id = str(uuid5(NAMESPACE_URL, 'kingdom-mission:' + metadata['_mission_step_key']))
-            if task_id in self._tasks: return deepcopy(self._tasks[task_id])
         else:
             task_id = str(uuid4())
         task = {
@@ -105,9 +104,28 @@ class TaskManager:
             "version": 1,
             "fencing_token": 0
         }
-        self.repo.save(task)
+        if not self.repo.save(task, create_only=True):
+            # Another dispatcher may have created, leased, completed or
+            # cancelled the deterministic task since this cache was loaded.
+            # Never overwrite or re-admit it, even if the local cache is stale.
+            retained = self.repo.get(task_id)
+            if not metadata.get('_mission_step_key') or not retained:
+                raise ValueError("Task admission identity collision")
+            original = retained["metadata"]
+            # Routing and approval state may legitimately change after admission.
+            # The operation and reviewed parent identity must not.
+            bindings = ("_mission_step_key", "mission_id", "mission_version",
+                        "step_id", "agent_session_id", "actor", "actor_id",
+                        "tool", "tool_parameters", "model_profile",
+                        "project_scope", "group_id", "attachment_ids",
+                        "project_test", "max_attempts")
+            if (retained["prompt"] != prompt or
+                    any(original.get(key) != metadata.get(key) for key in bindings)):
+                raise ValueError("Retained task admission conflicts with requested operation")
+            task = retained
         self._tasks[task_id] = task
-        self._queue.append(task_id)
+        if task["status"].lower() == "queued" and task_id not in self._queue:
+            self._queue.append(task_id)
         return deepcopy(task)
 
     @synchronized
