@@ -67,3 +67,7 @@ state, renew expired permissions, widen grants or bypass OS controls to turn a
 held task green. See [runtime controls](runtime-controls.md),
 [automation handover](automation-handover.md), [release gates](CLUSTER_SHIPPING_CHECKLIST.md)
 and [project status](PROJECT_STATUS.md).
+
+
+### SQLite WAL and backups
+Kingdom uses a local SQLite database in WAL mode with FULL synchronous durability and a bounded five-second lock wait. Keep database, WAL and shared-memory files on the same local filesystem. Use SQLite's online backup API for consistent live backups; do not copy just the main database file while the service is running. Verify restoration and integrity before replacing the active store. Network-share filesystems without reliable WAL locking are unsupported.
