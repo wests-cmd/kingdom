@@ -434,3 +434,79 @@ def test_agent_history_is_bounded_and_chronological(tmp_path):
     turns = json.loads(service.agent_conversation_context(next_state))
     assert turns[-1]['request_id'] == current['id']
     assert len(service.agent_conversation_context(next_state)) <= 4000
+
+
+@pytest.mark.parametrize("command,route", [("/help","help"),("/work","work"),("/harnesses","harnesses"),
+    ("/time","time"),("/status","status"),("/priorities","priorities")])
+def test_instant_commands_use_existing_request_bridge_without_model(tmp_path, command, route):
+    service, models, agents = setup(tmp_path)
+    data = body()
+    data["prompt"] = command
+    request = service.create(data)
+    assert request["route"] == route
+    result = asyncio.run(service.run(request["id"]))
+    assert result["status"] == "completed" and result["evidence"]
+    assert models.calls == agents.created == 0
+    if route == "help":
+        assert "\n/status" in result["answer"]
+
+
+def test_shortcut_is_scoped_and_request_identity_survives_edit_and_removal(tmp_path):
+    service, models, agents = setup(tmp_path)
+    service.shortcuts.save("projects/a","focus","status")
+    data = body()
+    data["prompt"] = "/focus"
+    saved = service.create(data)
+    assert saved["route"] == "status"
+    service.shortcuts.save("projects/a","focus","time")
+    service.shortcuts.remove("projects/a","focus")
+    restarted = RequestService(service.db, service.engine, models, agents)
+    assert restarted.create(data)["id"] == saved["id"]
+    assert asyncio.run(restarted.run(saved["id"]))["route"] == "status"
+    other = dict(data, project_scope="projects/b")
+    with pytest.raises(ValueError, match="Unknown instant"):
+        restarted.create(other)
+    assert models.calls == agents.created == 0
+
+
+@pytest.mark.parametrize("name,command", [("status","time"),("hello;rm","status"),("a","process.run"),
+    ("a","/status"),("a","status; shutdown")])
+def test_shortcut_refuses_reserved_names_and_executable_payloads(tmp_path,name,command):
+    service, _, _ = setup(tmp_path)
+    with pytest.raises(ValueError):
+        service.shortcuts.save("projects/a",name,command)
+
+
+def test_recent_work_never_crosses_project_or_conversation(tmp_path):
+    service, models, agents = setup(tmp_path)
+    for key, session, project, prompt in [
+        ("one","chat","projects/a","visible task"),
+        ("two","elsewhere","projects/a","secret chat"),
+        ("three","chat","projects/b","secret project")]:
+        service.create(dict(body(),idempotency_key=key,session_scope=session,project_scope=project,prompt=prompt))
+    saved = service.create(dict(body(),prompt="/work"))
+    result = asyncio.run(service.run(saved["id"]))
+    assert "visible task" in result["answer"]
+    assert "secret" not in result["answer"]
+    assert len(result["evidence"][0]["request_ids"]) == 1
+    assert models.calls == agents.created == 0
+
+
+def test_harness_catalog_does_not_expose_configured_arguments_or_credentials(tmp_path):
+    service, models, agents = setup(tmp_path)
+    with service.db.get_connection() as conn:
+        conn.execute("CREATE TABLE harness_profiles(id TEXT PRIMARY KEY,config_json TEXT NOT NULL)")
+        conn.execute("INSERT INTO harness_profiles VALUES(?,?)",("configured-cli",'{"argv":["private-arg"]}'))
+        conn.commit()
+    result = asyncio.run(service.run(service.create(dict(body(),prompt="/harnesses"))["id"]))
+    assert "configured-cli" in result["answer"]
+    assert "private-arg" not in str(result)
+    assert result["evidence"][0]["verified_execution"] is False
+    assert models.calls == agents.created == 0
+
+
+def test_unknown_slash_does_not_reach_agent_or_model(tmp_path):
+    service, models, agents = setup(tmp_path)
+    with pytest.raises(ValueError,match="Unknown instant"):
+        service.create(dict(body(),prompt="/delete everything"))
+    assert models.calls == agents.created == 0
