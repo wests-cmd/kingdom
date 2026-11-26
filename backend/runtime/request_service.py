@@ -170,6 +170,8 @@ class RequestService:
                 raise ValueError('Choose a harness and explicitly enable process work without agent tool stages')
             if len(body['prompt']) > 4000 or not body['prompt'].strip():
                 raise ValueError('Harness requests require 1–4000 characters')
+        if body.get('prefer_benchmarked') and (route!='quick' or body['model_profile']!='auto' or body.get('screen_region') or body.get('fallback_profile') or body.get('allow_process')):
+            raise ValueError('Measured routing is available for automatic text-only questions')
         if body.get('fallback_profile') and (route != 'quick' or body['model_profile'] in {'auto',body['fallback_profile']} or body['model_profile'].startswith('pool:')):
             raise ValueError('Choose distinct explicit primary and fallback profiles in text-only mode')
         with self.db.get_connection() as conn:
@@ -177,7 +179,7 @@ class RequestService:
             old=conn.execute('SELECT state_json FROM conversation_requests WHERE session_scope=? AND project_scope=? AND idem=?',(body['session_scope'],body['project_scope'],body['idempotency_key'])).fetchone()
             if old:
                 existing=json.loads(old[0])
-                if any(existing.get(key,{'tool_sequence':[],'tool_protocol':'native','tool_paths':[],'harness_id':None,'fallback_profile':None,'screen_region':None,'group_id':None,'target_knight':None}.get(key))!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
+                if any(existing.get(key,{'tool_sequence':[],'tool_protocol':'native','tool_paths':[],'harness_id':None,'fallback_profile':None,'screen_region':None,'group_id':None,'target_knight':None,'prefer_benchmarked':False}.get(key))!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
                 return existing
             if route == 'auto':
                 instant = resolve(body['prompt'], body['project_scope'], self.shortcuts)
@@ -392,6 +394,7 @@ class RequestService:
                 else:
                     messages = await asyncio.to_thread(self.messages, state)
                 options={'messages':messages,'stream':False}
+                if state.get('prefer_benchmarked'):options['_kingdom_prefer_measured']=True
                 if state.get('model_profile_revisions'):
                     options['_kingdom_profile_revision']=state['model_profile_revisions'][state['model_profile']]
                 payload=await self.models.chat(state['model_profile'],options)
