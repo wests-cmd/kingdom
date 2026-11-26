@@ -29,6 +29,7 @@ class RequestInput(BaseModel):
     allow_process:bool=False
     prefer_benchmarked:bool=False
     screen_region:str|None=Field(default=None,max_length=18000)
+    guide_region:bool=False
     group_id:str|None=Field(default=None,min_length=1,max_length=128)
     target_knight:str|None=Field(default=None,min_length=1,max_length=128)
     harness_id:str|None=Field(default=None,max_length=64,pattern=r'^[a-z][a-z0-9_-]{0,63}$')
