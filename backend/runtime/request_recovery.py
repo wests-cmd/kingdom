@@ -58,6 +58,19 @@ def find_child(conn,state):
     return ("linked",field,row["id"]) if valid else ("conflicting",field,None)
 
 
+def interrupted_admission_patch(conn, state):
+    """Recover only linkage; a missing or conflicting child remains held."""
+    result, field, child = find_child(conn, state)
+    return {
+        **({field: child} if result == "linked" else {}),
+        "status": "waiting_review", "recovery_hold": True,
+        "recovery_result": result,
+        "answer": ("Recovered existing work linkage. Review the retained job before explicitly continuing."
+                   if result == "linked" else
+                   "Interrupted request held for review. No uniquely matching retained child was confirmed. No automatic replay."),
+    }
+
+
 def reconcile_interrupted_requests(database):
     """Idempotent, batched startup transition; no task states are written."""
     counts={}
@@ -69,7 +82,7 @@ def reconcile_interrupted_requests(database):
             rows=conn.execute("""SELECT id,project_scope,session_scope,state_json FROM conversation_requests
                 WHERE CASE WHEN json_valid(state_json) THEN
                  json_extract(state_json,'$.status')='running' OR
-                 (json_extract(state_json,'$.status')='waiting_review'
+                 (json_extract(state_json,'$.status') IN ('waiting_review','failed')
                   AND json_extract(state_json,'$.governed_submission_started')=1
                   AND COALESCE(json_extract(state_json,'$.recovery_hold'),0)=0
                   AND json_extract(state_json,'$.governed_task_id') IS NULL
@@ -83,14 +96,9 @@ def reconcile_interrupted_requests(database):
                         or state.get("session_scope")!=row["session_scope"]):
                     # Fail closed on contradictory stored scope, without exposing content.
                     raise ValueError("Interrupted request identity or scope mismatch")
-                result,field,child=find_child(conn,state)
-                if result=="linked":
-                    state[field]=child
-                state.update(status="waiting_review",recovery_hold=True,
-                             recovery_result=result,updated_at=time.time(),
-                             answer=("Recovered existing work linkage. Review the retained job before explicitly continuing."
-                                     if result=="linked" else
-                                     "Interrupted request held for review. No uniquely matching retained child was confirmed. No automatic replay."))
+                change = interrupted_admission_patch(conn, state)
+                state.update(change, updated_at=time.time())
                 conn.execute("UPDATE conversation_requests SET state_json=? WHERE id=?",(json.dumps(state),row["id"]))
+                result = change["recovery_result"]
                 counts[result]=counts.get(result,0)+1
             conn.commit()

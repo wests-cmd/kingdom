@@ -101,3 +101,44 @@ def test_shared_admission_refuses_existing_child(tmp_path):
     with pytest.raises(ValueError, match="Existing child"):
         service.begin_child_admission(running)
     assert service.get(saved["id"]) == running
+
+
+def test_submission_error_after_persistence_holds_and_links_live_request(tmp_path, monkeypatch):
+    service, harness, models, agents = _harness_fixture(tmp_path, monkeypatch)
+    request = service.create(dict(body(), mode="harness", harness_id="example",
+                                  allow_process=True, prompt="literal"))
+    submit = service.engine.submit_task
+
+    def save_then_raise(prompt, metadata=None):
+        submit(prompt, metadata)
+        raise RuntimeError("simulated notification failure after commit")
+
+    service.engine.submit_task = save_then_raise
+    with pytest.raises(RuntimeError):
+        asyncio.run(service.run(request["id"]))
+    held = service.get(request["id"])
+    assert held["status"] == "waiting_review" and held["recovery_hold"]
+    assert held["recovery_result"] == "linked"
+    assert held["error_class"] == "RuntimeError"
+    assert len(service.engine.tasks.list()) == 1
+    assert asyncio.run(service.run(request["id"]))["recovery_hold"]
+    continued = asyncio.run(service.run(request["id"], resume_recovered=True))
+    assert continued["governed_task_id"] == held["governed_task_id"]
+    assert len(service.engine.tasks.list()) == 1
+    assert models.calls == agents.created == 0
+
+
+def test_startup_recovers_legacy_failed_unlinked_admission(tmp_path, monkeypatch):
+    service, harness, models, agents = _harness_fixture(tmp_path, monkeypatch)
+    request = service.create(dict(body(), mode="harness", harness_id="example",
+                                  allow_process=True, prompt="literal"))
+    running = service.update(request["id"], {"status": "running", "governed_submission_started": True})
+    task = harness.submit("example", running["prompt"], running["project_scope"],
+                          expected_revision=running["harness_revision"],
+                          request_id=running["id"], origin=request_origin(running))
+    service.update(request["id"], {"status": "failed"})
+    assert reconcile_interrupted_requests(service.db) == {"linked": 1}
+    held = service.get(request["id"])
+    assert held["governed_task_id"] == task["id"] and held["recovery_hold"]
+    assert reconcile_interrupted_requests(service.db) == {}
+    assert models.calls == agents.created == 0

@@ -291,6 +291,24 @@ class RequestService:
         return self.update(state['id'], {'governed_submission_started': True},
                            expected={'running'}, expected_updated_at=state['updated_at'])
 
+    def record_request_failure(self, ident, diagnostic):
+        """Preserve an uncertain admission even when the controller stays up."""
+        from backend.runtime.request_recovery import CHILDREN, interrupted_admission_patch
+        state = self.get(ident)
+        if state["status"] != "running":
+            return state
+        change = {"status": "failed",
+                  "answer": "Request failed; inspect the saved checkpoint before starting new work.",
+                  **diagnostic}
+        route = state["route"]
+        if route in CHILDREN and state.get("governed_submission_started"):
+            _, field = CHILDREN[route]
+            if not state.get(field):
+                with self.db.get_connection() as conn:
+                    change.update(interrupted_admission_patch(conn, state))
+        return self.update(ident, change, expected={"running"},
+                           expected_updated_at=state["updated_at"])
+
     async def run(self, ident, *, resume_recovered=False):
         saved=await asyncio.to_thread(self.get,ident)
         if saved.get('recovery_hold'):
@@ -497,7 +515,8 @@ class RequestService:
                           else 'Request timed out.' if isinstance(error, TimeoutError)
                           else f'Request failed ({error_class}).')
             details = {'error_code': error.code} if isinstance(error, AgentRejection) else {}
-            await asyncio.to_thread(self.update,ident,{'status':'failed','answer':'Request failed; inspect the saved checkpoint before starting new work.','error_class':error_class,'error':diagnostic, **details},expected={'running'})
+            await asyncio.to_thread(self.record_request_failure, ident,
+                                    {'error_class':error_class,'error':diagnostic, **details})
             raise
 
     def cancel(self, ident):
