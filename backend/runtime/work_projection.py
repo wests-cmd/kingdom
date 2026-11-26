@@ -141,7 +141,9 @@ def project_work(database, *, project_scope=None, session_scope=None, limit=MAX_
             if data.get("governed_task_id"):
                 link(key,"task",data["governed_task_id"],lambda child:
                      mapping(child.get("metadata")).get("conversation_request_id")==row["id"]
-                     and mapping(child.get("metadata")).get("project_scope")==data.get("project_scope"))
+                     and mapping(child.get("metadata")).get("project_scope")==data.get("project_scope")
+                     and (mapping(child.get("metadata")).get("request_origin")==request_origin(data)
+                          or (project_scope is None and "request_origin" not in mapping(child.get("metadata")))))
             if data.get("governed_mission_id"):
                 link(key,"mission",data["governed_mission_id"],lambda child:
                      child.get("request_origin")==request_origin(data) or (project_scope is None and "request_origin" not in child))

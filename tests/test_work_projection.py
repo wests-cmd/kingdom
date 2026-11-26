@@ -52,7 +52,8 @@ def test_exact_scope_and_reciprocal_links(database):
     save(database,"request","r",project_scope="a",session_scope="s",governed_task_id="t")
     save(database,"request","other",project_scope="ab",session_scope="s",governed_task_id="x")
     save(database,"request","different-session",project_scope="a",session_scope="ss")
-    save(database,"task","t",status="completed",metadata={"project_scope":"a","conversation_request_id":"r"})
+    save(database,"task","t",status="completed",metadata={"project_scope":"a","conversation_request_id":"r",
+         "request_origin":{"request_id":"r","project_scope":"a","session_scope":"s"}})
     save(database,"task","x",metadata={"project_scope":"ab","conversation_request_id":"other"})
     save(database,"task","fake",metadata={"project_scope":"a","conversation_request_id":"r"})
     scoped=project_work(database,project_scope="a",session_scope="s")
@@ -131,3 +132,34 @@ def test_lineage_must_match_running_saved_request(database):
         row["status"]="cancelled"
         conn.execute("UPDATE conversation_requests SET state_json=? WHERE id='r'",(json.dumps(row),))
     with pytest.raises(ValueError):validate_origin(database,origin,"agent")
+
+
+@pytest.mark.parametrize("origin", [None, {"request_id":"r","project_scope":"a","session_scope":"other"}])
+def test_scoped_task_link_requires_full_origin(database, origin):
+    save(database,"request","r",project_scope="a",session_scope="s",governed_task_id="t")
+    metadata={"project_scope":"a","conversation_request_id":"r"}
+    if origin is not None:
+        metadata["request_origin"]=origin
+    save(database,"task","t",metadata=metadata)
+    root=project_work(database,project_scope="a",session_scope="s")["items"][0]
+    assert root["children"]==[] and root["unresolved_links"]==1
+    owner=project_work(database)
+    if origin is None:
+        assert owner["items"][0]["children"][0]["id"]=="t"
+    else:
+        assert len(owner["items"])==2
+
+
+@pytest.mark.parametrize("field,value", [
+    ("conversation_request_id","forged"),
+    ("request_origin",{"request_id":"forged","project_scope":"a","session_scope":"s"}),
+])
+def test_public_task_admission_rejects_internal_lineage(field,value):
+    from unittest.mock import patch
+    from fastapi import HTTPException
+    from backend.api import TaskRequest, create_task
+    with patch("backend.api.engine.submit_task") as submit:
+        with pytest.raises(HTTPException) as exc:
+            create_task(TaskRequest(prompt="ordinary work",metadata={field:value}))
+        assert exc.value.status_code==400
+        submit.assert_not_called()
