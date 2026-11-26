@@ -106,3 +106,9 @@ def advance(ident: str):
 def cancel(ident: str):
     try: return engine.missions.cancel(ident)
     except (KeyError, ValueError) as error: raise HTTPException(409, str(error)) from error
+
+
+@router.post('/{ident}/replay-candidate',status_code=201)
+def replay_candidate(ident:str):
+    try:return engine.missions.replay_candidate(ident)
+    except (KeyError,ValueError) as error:raise HTTPException(409,'No current verified reusable workflow') from error
