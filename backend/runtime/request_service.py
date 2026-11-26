@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 from uuid import uuid4
 from backend.events.event_bus import event_bus
+from backend.runtime.intent_router import COMMANDS, ShortcutStore, resolve
 
 
 def priority_question(text):
@@ -20,6 +21,7 @@ def priority_question(text):
 class RequestService:
     def __init__(self, database, engine, models, agents):
         self.db, self.engine, self.models, self.agents = database, engine, models, agents
+        self.shortcuts = ShortcutStore(database)
         with self.db.get_connection() as conn:
             conn.execute('CREATE TABLE IF NOT EXISTS conversation_requests(id TEXT PRIMARY KEY, session_scope TEXT NOT NULL, project_scope TEXT NOT NULL, idem TEXT NOT NULL, state_json TEXT NOT NULL, UNIQUE(session_scope,project_scope,idem))')
             conn.commit()
@@ -154,10 +156,9 @@ class RequestService:
             if route=='quick':raise ValueError('Desktop control requires the agent route')
             route='agent'
         if route == 'auto':
-            if text in {'what time is it','time','what is the current time'}: route='time'
-            elif text in {'status','system status','runtime status','what is the status',
-                          'what is the runtime status','what is the system status'}: route='status'
-            elif priority_question(text): route='priorities'
+            instant = resolve(body['prompt'], body['project_scope'], self.shortcuts)
+            if instant: route = instant
+            elif priority_question(text): route = 'priorities'
             elif re.match(r'^(?:please\s+)?(?:inspect|implement|edit|modify|fix|refactor|build|run tests|test the|create a file|write a file)\b', text): route='agent'
             else: route='quick'
         state['route']=route
@@ -234,6 +235,24 @@ class RequestService:
                           + '\nPlanning notes and saved status are not proof of completed work.') if lines else 'No unfinished tasks or work-list items recorded for this exact project scope. Select the intended project scope to inspect another list.'
                 evidence=[{'type':'project_tasks','task_ids':[task['id'] for task in tasks]},
                           {'type':'project_work_list','project_scope':state['project_scope'],'work_ids':[item['id'] for item in work]}]
+            elif route=='help':
+                aliases=await asyncio.to_thread(self.shortcuts.list,state['project_scope'])
+                answer='Instant commands (no model needed):\\n'+'\\n'.join('/'+key+' — '+label for key,label in COMMANDS.items())
+                if aliases: answer+='\\nProject shortcuts:\\n'+'\\n'.join('/'+row['name']+' → /'+row['command'] for row in aliases)
+                evidence=[{'type':'instant_command_catalog','commands':list(COMMANDS),'shortcuts':aliases}]
+            elif route=='work':
+                rows=await asyncio.to_thread(self.list,state['session_scope'],state['project_scope'])
+                rows=[row for row in rows if row['id']!=ident][:10]
+                answer='Recent saved conversation work:\\n'+'\\n'.join(row['status']+': '+row['prompt'][:120] for row in rows) if rows else 'No other requests in this conversation.'
+                evidence=[{'type':'conversation_work','request_ids':[row['id'] for row in rows]}]
+            elif route=='harnesses':
+                def configured_names():
+                    with self.db.get_connection() as conn:
+                        if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='harness_profiles'").fetchone(): return []
+                        return [row[0] for row in conn.execute("SELECT id FROM harness_profiles ORDER BY id LIMIT 50")]
+                names=await asyncio.to_thread(configured_names)
+                answer=('Configured harness connections: '+', '.join(names)+'. Configuration is not proof of availability or authorization.') if names else 'No harness connections configured. Use Tools & model lab to connect a supported CLI.'
+                evidence=[{'type':'harness_catalog','ids':names,'verified_execution':False}]
             elif route=='agent':
                 if not state['agent_session_id']:
                     objective = state['prompt']
