@@ -1,14 +1,16 @@
 import React,{useEffect,useRef,useState} from 'react'
+import api from '../api'
 
 export default function ConversationVoice({onTranscript,answer,disabled=false}) {
  const Recognition=typeof window!=='undefined'&&(window.SpeechRecognition||window.webkitSpeechRecognition)
  const canRead=typeof window!=='undefined'&&Boolean(window.speechSynthesis&&window.SpeechSynthesisUtterance)
  const recognition=useRef(null),generation=useRef(0)
  const [localOnly,setLocalOnly]=useState(true)
+ const [transcribing,setTranscribing]=useState(false)
  const [listening,setListening]=useState(false),[draft,setDraft]=useState(''),[notice,setNotice]=useState(''),[reading,setReading]=useState(false)
  useEffect(()=>()=>{generation.current+=1;recognition.current?.abort();if(canRead)window.speechSynthesis.cancel()},[])
  const begin=async()=>{
-  if(!Recognition||disabled||listening)return
+  if(!Recognition||disabled||listening||transcribing)return
   const serial=++generation.current
   const instance=new Recognition()
   if(localOnly){
@@ -32,6 +34,17 @@ export default function ConversationVoice({onTranscript,answer,disabled=false}) 
   instance.onend=()=>{if(serial===generation.current)setListening(false)}
   try{instance.start();setListening(true)}catch{setListening(false);setNotice('The browser could not start voice input. Type your message instead.')}
  }
+ const uploadLocal=async event=>{
+  const file=event.target.files?.[0];event.target.value=''
+  if(!file||disabled||listening||transcribing)return
+  if(file.size>2097152){setNotice('Choose a WAV recording up to 2 MiB.');return}
+  const serial=++generation.current
+  setTranscribing(true);setDraft('');setNotice('Transcribing on the Kingdom server using its configured local engine.')
+  try{const {data}=await api.post('/requests/voice/local',file,{headers:{'Content-Type':'audio/wav'},timeout:130000})
+   if(serial===generation.current){setDraft(data.text);setNotice('Local transcript ready. Review before using it.')}
+  }catch{if(serial===generation.current)setNotice('Local transcription unavailable. No online speech fallback was used.')}
+  finally{setTranscribing(false)}
+ }
  const discard=()=>{generation.current+=1;recognition.current?.abort();recognition.current=null;setListening(false);setDraft('');setNotice('Voice input discarded. Nothing was sent.')}
  const read=()=>{
   if(!canRead||!answer)return
@@ -43,7 +56,8 @@ export default function ConversationVoice({onTranscript,answer,disabled=false}) 
  }
  return <details style={{minWidth:0,overflowWrap:'anywhere'}}><summary>Optional voice input and read aloud</summary>
  <p className="muted">Voice starts only when requested. On-device mode refuses to start unless the browser reports local recognition available. Read aloud and explicitly enabled online speech can use browser providers.</p>
- <label><input type="checkbox" checked={localOnly} disabled={disabled||listening} onChange={e=>{generation.current++;setLocalOnly(e.target.checked)}}/>Require on-device speech recognition (no online fallback)</label>
+ <label>Transcribe a WAV recording locally on this Kingdom server<input type="file" accept=".wav,audio/wav" disabled={disabled||listening||transcribing} onChange={uploadLocal}/></label><p className="muted">Requires a configured local whisper.cpp engine and small model. Mono 16 kHz, 16-bit WAV, up to 60 seconds. No model download or network provider fallback.</p>
+ <label><input type="checkbox" checked={localOnly} disabled={disabled||listening||transcribing} onChange={e=>{generation.current++;setLocalOnly(e.target.checked)}}/>Require on-device speech recognition (no online fallback)</label>
  {!Recognition?<p>Speech recognition is unavailable in this browser. Use the message box.</p>:<div style={{display:'flex',flexWrap:'wrap',gap:8}}>
   <button type="button" disabled={disabled||listening} onClick={begin}>Start microphone</button>
   <button type="button" disabled={!listening} onClick={()=>recognition.current?.stop()}>Stop and review</button>
