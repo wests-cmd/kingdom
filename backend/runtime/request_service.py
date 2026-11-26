@@ -317,7 +317,8 @@ class RequestService:
                     admitted=await asyncio.to_thread(self.update,ident,{'governed_submission_started':True},expected={'running'})
                     if admitted is None:return await asyncio.to_thread(self.get,ident)
                     from backend.runtime.commander import draft
-                    mission=await draft(state['prompt'],state['model_profile'],state['group_id'],self.models,self.engine.missions)
+                    from backend.runtime.request_origin import request_origin
+                    mission=await draft(state['prompt'],state['model_profile'],state['group_id'],self.models,self.engine.missions,origin=request_origin(state))
                     mission_id=mission['id']
                     linked=await asyncio.to_thread(self.update,ident,{'governed_mission_id':mission_id},expected={'running'})
                     if linked is None:
@@ -402,7 +403,8 @@ class RequestService:
                     context = await asyncio.to_thread(self.agent_conversation_context, state)
                     if context:
                         desktop_options['conversation_context'] = context
-                    agent=await asyncio.to_thread(self.agents.create,objective,state['model_profile'],workspace=state['project_scope'],allow_process=state['allow_process'],use_owner_memory=False,required_tools=required_tools,**desktop_options)
+                    from backend.runtime.request_origin import request_origin
+                    agent=await asyncio.to_thread(self.agents.create,objective,state['model_profile'],workspace=state['project_scope'],allow_process=state['allow_process'],use_owner_memory=False,required_tools=required_tools,origin=request_origin(state),**desktop_options)
                     state=await asyncio.to_thread(self.update,ident,{'agent_session_id':agent['id']},expected={'running'})
                     if state is None:
                         await asyncio.to_thread(self.agents.cancel,agent['id'])

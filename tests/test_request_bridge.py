@@ -338,6 +338,7 @@ def test_request_preserves_required_coding_evidence_in_native_session(tmp_path, 
     assert native['model_profile'] == 'explicit-model'
     assert native['allow_process'] is False
     assert native['workspace'] == 'projects/a'
+    assert native['request_origin']=={'request_id':saved['id'],'project_scope':data['project_scope'],'session_scope':data['session_scope']}
     assert native['tool_count'] == 0
 
 def test_request_input_accepts_only_known_required_tools():

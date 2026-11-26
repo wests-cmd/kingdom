@@ -101,3 +101,33 @@ def test_missing_lazy_tables_are_empty_not_created(tmp_path):
     assert project_work(db)["items"]==[]
     with db.get_connection() as conn:
         assert conn.execute("SELECT name FROM sqlite_master WHERE name='conversation_requests'").fetchone() is None
+
+
+def test_new_reciprocal_mission_lineage_is_scoped_and_conflicting_origin_is_not(database):
+    origin={"request_id":"r","project_scope":"a","session_scope":"s"}
+    save(database,"request","r",project_scope="a",session_scope="s",governed_mission_id="m")
+    save(database,"mission","m",version=1,request_origin=origin,steps={"x":{"task_id":"t"}})
+    save(database,"task","t",metadata={"mission_id":"m","mission_version":1,"step_id":"x"})
+    root=project_work(database,project_scope="a",session_scope="s")["items"][0]
+    assert root["children"][0]["id"]=="m" and root["children"][0]["children"][0]["id"]=="t"
+    with database.get_connection() as conn:
+        row=json.loads(conn.execute("SELECT state_json FROM missions WHERE id='m'").fetchone()[0])
+        row["request_origin"]["session_scope"]="another"
+        conn.execute("UPDATE missions SET state_json=? WHERE id='m'",(json.dumps(row),))
+    root=project_work(database,project_scope="a",session_scope="s")["items"][0]
+    assert root["children"]==[] and root["unresolved_links"]==1
+
+
+def test_lineage_must_match_running_saved_request(database):
+    from backend.runtime.request_origin import validate_origin
+    origin={"request_id":"r","project_scope":"a","session_scope":"s"}
+    save(database,"request","r",project_scope="a",session_scope="s",route="agent",status="running")
+    assert validate_origin(database,origin,"agent",workspace="a")==origin
+    with pytest.raises(ValueError):validate_origin(database,{**origin,"session_scope":"other"},"agent")
+    with pytest.raises(ValueError):validate_origin(database,origin,"commander")
+    with pytest.raises(ValueError):validate_origin(database,origin,"agent",workspace="b")
+    with database.get_connection() as conn:
+        row=json.loads(conn.execute("SELECT state_json FROM conversation_requests WHERE id='r'").fetchone()[0])
+        row["status"]="cancelled"
+        conn.execute("UPDATE conversation_requests SET state_json=? WHERE id='r'",(json.dumps(row),))
+    with pytest.raises(ValueError):validate_origin(database,origin,"agent")

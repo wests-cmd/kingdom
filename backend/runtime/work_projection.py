@@ -65,6 +65,8 @@ def load_rows(conn,kind,limit):
         return [],False,0
     if kind=="task":
         query="SELECT id,status,metadata_json,result_json,assigned_knight,created_at,updated_at FROM tasks ORDER BY updated_at DESC,id LIMIT ?"
+    elif kind=="request":
+        query="SELECT id,project_scope,session_scope,state_json FROM conversation_requests ORDER BY rowid DESC LIMIT ?"
     else:
         query=f"SELECT id,state_json FROM {table} ORDER BY rowid DESC LIMIT ?"
     saved=conn.execute(query,(limit+1,)).fetchall()
@@ -80,6 +82,8 @@ def load_rows(conn,kind,limit):
                 data=json.loads(item["state_json"])
                 if not isinstance(data,dict) or data.get("id")!=item["id"]:
                     raise ValueError("Identity mismatch")
+                if kind=="request" and any(not isinstance(data.get(k),str) or data.get(k)!=item[k] for k in ("project_scope","session_scope")):
+                    raise ValueError("Request scope mismatch")
             ident=safe_id(item["id"])
             if not ident:raise ValueError("Invalid retained identity")
             state=state_of(data.get("status"))
@@ -119,6 +123,7 @@ def project_work(database, *, project_scope=None, session_scope=None, limit=MAX_
     # Gather only retained forward links. A task must also identify its parent
     # in metadata. Historical tasks lacking a parent-side retained link remain
     # standalone; arbitrary metadata alone cannot hide work.
+    from backend.runtime.request_origin import request_origin
     candidates=defaultdict(set)
     issues=Counter()
     def link(parent,kind,ident,valid):
@@ -138,9 +143,11 @@ def project_work(database, *, project_scope=None, session_scope=None, limit=MAX_
                      mapping(child.get("metadata")).get("conversation_request_id")==row["id"]
                      and mapping(child.get("metadata")).get("project_scope")==data.get("project_scope"))
             if data.get("governed_mission_id"):
-                link(key,"mission",data["governed_mission_id"],lambda child:True)
+                link(key,"mission",data["governed_mission_id"],lambda child:
+                     child.get("request_origin")==request_origin(data) or (project_scope is None and "request_origin" not in child))
             if data.get("agent_session_id"):
-                link(key,"agent",data["agent_session_id"],lambda child:child.get("workspace")==data.get("project_scope"))
+                link(key,"agent",data["agent_session_id"],lambda child:child.get("workspace")==data.get("project_scope")
+                     and (child.get("request_origin")==request_origin(data) or (project_scope is None and "request_origin" not in child)))
         elif row["kind"]=="mission":
             for step,record in mapping(data.get("steps")).items():
                 ident=mapping(record).get("task_id")
@@ -169,7 +176,7 @@ def project_work(database, *, project_scope=None, session_scope=None, limit=MAX_
         parent=next(iter(parents))
         # When parent sources are truncated, an unobserved request could also
         # reference the same mission/agent. No scoped cross-reference is exposed.
-        if project_scope is not None and truncated:
+        if project_scope is not None and (truncated or invalid):
             issues[parent]+=1
             continue
         parent_of[child]=parent
@@ -185,12 +192,6 @@ def project_work(database, *, project_scope=None, session_scope=None, limit=MAX_
         roots=[key for key in roots if key[0]=="request"
                and rows[key]["_data"].get("project_scope")==project_scope
                and rows[key]["_data"].get("session_scope")==session_scope]
-        # Mission records have no reciprocal conversation identity or scope in
-        # this schema. Do not expose them in a scoped response until migration.
-        for key in roots:
-            withheld=[c for c in children[key] if c[0]=="mission"]
-            issues[key]+=len(withheld)
-            children[key]=[c for c in children[key] if c[0]!="mission"]
     items=[view(key) for key in sorted(roots,key=lambda k:(-(rows[k]["updated_at"] or 0),k))]
     counts=dict(Counter(item["category"] for item in items))
     return {"schema":"kingdom.work-projection.v1","scope":"conversation" if project_scope is not None else "owner",
