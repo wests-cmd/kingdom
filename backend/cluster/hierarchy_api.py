@@ -116,3 +116,18 @@ def release_status():
 @router.put('/releases/desired')
 def desired_release(request: DesiredRelease):
     return release_preferences.set(request.model_dump())
+
+
+# Presentation is local to this controller, including when group authority is remote.
+from backend.cluster.map_layout import MapLayouts, LayoutUpdate, LayoutConflict, View
+
+
+@router.get('/map-layout/{view}')
+def map_layout(view:View):
+    return MapLayouts(hierarchy.db).read(view)
+
+
+@router.put('/map-layout/{view}')
+def save_map_layout(view:View, request:LayoutUpdate):
+    try:return MapLayouts(hierarchy.db).save(view,request)
+    except LayoutConflict as error:raise HTTPException(409,str(error)) from error

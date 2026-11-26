@@ -1,7 +1,7 @@
 {
   "name": "kingdom-desktop",
   "private": true,
-  "version": "1.2.9",
+  "version": "1.2.11",
   "description": "Kingdom Native Desktop Application Shell",
   "homepage": "https://github.com/wests-cmd/kingdom",
   "author": {

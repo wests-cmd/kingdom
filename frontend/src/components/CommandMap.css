@@ -1,0 +1,14 @@
+.command-map{min-width:0;margin:16px 0;background:#111319;border:1px solid #3b414c;border-radius:12px;color:#e7eaf0;overflow:hidden}
+.command-map>header{padding:14px 16px}.command-map h3,.command-map h4{margin:0 0 8px}.command-map p{overflow-wrap:anywhere}
+.command-map-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:8px 12px;border-top:1px solid #333945}
+.command-map-toolbar button[aria-pressed=true]{border-color:#85a9d7;background:#253346}.command-map-toolbar label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.command-map-toolbar input{max-width:100%;min-width:0}
+.command-map-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(200px,260px);border-top:1px solid #333945}
+.command-map-scroll{min-width:0;overflow:auto;height:clamp(360px,62vh,760px);overscroll-behavior:contain;background:#111319}
+.command-map-scroll svg{display:block;max-width:none;flex:none;user-select:none;touch-action:pan-x pan-y}
+.command-map-scroll svg g[role=button]{cursor:pointer;outline:none;touch-action:none}
+.command-map-scroll svg g[role=button]:focus-visible>rect:first-child{stroke:#e7eaf0;stroke-width:3}
+.command-map-scroll svg text{pointer-events:none}.command-card-title{font-size:12px;font-weight:700;fill:#eef0f5}.command-card-detail{font-size:10px;fill:#c2c8d3}.command-frame-label{font-size:13px;font-weight:700;fill:#c2c8d3}
+.command-map-inspector{min-width:0;max-height:clamp(360px,62vh,760px);overflow:auto;padding:14px;border-left:1px solid #333945;background:#1b1e26}
+.command-map-inspector label{display:block;margin:10px 0}.command-map-inspector select,.command-map-inspector input{box-sizing:border-box;max-width:100%;width:100%}.command-map-inspector ul{padding-left:18px;overflow-wrap:anywhere}.command-map-inspector fieldset{min-width:0;border:1px solid #555e6d}.command-map-inspector button{white-space:normal;margin:4px 0}
+.command-map-note,.command-map-notice{font-size:12px;color:#c2c8d3;padding:0 12px}.command-map>details{padding:12px}
+@media(max-width:760px){.command-map-grid{grid-template-columns:minmax(0,1fr)}.command-map-inspector{border-left:0;border-top:1px solid #333945;max-height:none}.command-map-scroll{height:420px}}

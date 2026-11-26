@@ -1,6 +1,5 @@
 import React from 'react'
 import useLiveData from '../hooks/useLiveData'
-import CoordinationGraph from './CoordinationGraph'
 import SwarmControls from './SwarmControls'
 import {apprenticeLabel} from './common/presentation'
 import {jobStatus,peerVisibility,serviceScope,serviceStatus} from './common/fleetVisibility'
@@ -17,6 +16,7 @@ export default function ComputerTopology({hierarchy,advanced=false,onRefresh}){
   const id=node.node_id||node.id
   const report=hierarchy.inventory?.reports?.find(item=>item.kingdom_id===id)
   return {id,name:computerName(node.display_username,node.display_computer||node.hostname,id),state:node.node_state||'Not reported',...peerVisibility(node,report),
+   load:node.node_state==='CONNECTED'&&report?.state==='current'?node.connection_metadata?.load_metrics:null,grants:node.granted_capabilities,
    apprentices:(hierarchy.inventory?.remote_apprentices||[]).filter(item=>item.kingdom_id===id)}
  })
  const computers=[local,...peers]
@@ -33,5 +33,5 @@ export default function ComputerTopology({hierarchy,advanced=false,onRefresh}){
   <details><summary>Running and startup services {computer.services?.state==='observed'?`(${computer.services.services.length})`:''}</summary>{computer.services?.state==='observed'?<ul>{computer.services.services.map(item=><li key={item.id}>{item.name} · {serviceStatus(item)}{advanced?` · ${item.id}`:''}</li>)}</ul>:<p>Observation is {computer.services?.state||'not available'} on this computer.</p>}
   <p>{serviceScope(computer.services)}</p>{computer.services?.startup_state!=='observed'&&<p>Startup information is not available. Running does not mean startup is enabled.</p>}{computer.services?.truncated&&<p>Service list limited to 128 records.</p>}<p className="muted">Detection does not grant control or inventory every program. Starting, stopping or updating requires a separate reviewed management connection.</p></details>
   {advanced&&<p className="muted">Identity: {computer.id} · {computer.id==='local'?'local observation':'signed peer inventory; execution is verified separately'}</p>}
- </details>)}</div></details>{!!hierarchy.archived_knights?.length&&<details><summary>Archived Knights · {hierarchy.archived_knights.length}</summary><p>Offline Knights are hidden after {hierarchy.visibility?.offline_hours||168} hours. Pairing is retained; verified returning Knights reappear automatically.</p>{hierarchy.archived_knights.map(node=><p key={node.node_id}>🖥 {computerName(node.display_username,node.display_computer||node.hostname,node.node_id)} · {node.node_state||'Not reported'} · current work and services unavailable</p>)}</details>}<details><summary>Permissions and task priorities</summary><SwarmControls hierarchy={hierarchy}/></details><details><summary>Apprentice reporting lines</summary><CoordinationGraph graph={hierarchy.topology}/></details></section>
+ </details>)}</div></details>{!!hierarchy.archived_knights?.length&&<details><summary>Archived Knights · {hierarchy.archived_knights.length}</summary><p>Offline Knights are hidden after {hierarchy.visibility?.offline_hours||168} hours. Pairing is retained; verified returning Knights reappear automatically.</p>{hierarchy.archived_knights.map(node=><p key={node.node_id}>🖥 {computerName(node.display_username,node.display_computer||node.hostname,node.node_id)} · {node.node_state||'Not reported'} · current work and services unavailable</p>)}</details>}<details><summary>Permissions and task priorities</summary><SwarmControls hierarchy={hierarchy}/></details></section>
 }
