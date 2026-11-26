@@ -155,6 +155,11 @@ class RequestService:
         if body.get('desktop_window_title'):
             if route=='quick':raise ValueError('Desktop control requires the agent route')
             route='agent'
+        if body.get('screen_region') is not None:
+            from backend.runtime.screen_region import validate_region
+            validate_region(body['screen_region'])
+            if route!='quick' or body['model_profile']=='auto' or body['model_profile'].startswith('pool:') or body.get('fallback_profile') or body.get('allow_process'):
+                raise ValueError('Visual requests require one explicit vision model, text-only response and no fallback or process execution')
         if body.get('harness_id') and route != 'harness':
             raise ValueError('Harness selection requires the explicit harness route')
         if body['mode'] == 'harness':
@@ -169,7 +174,7 @@ class RequestService:
             old=conn.execute('SELECT state_json FROM conversation_requests WHERE session_scope=? AND project_scope=? AND idem=?',(body['session_scope'],body['project_scope'],body['idempotency_key'])).fetchone()
             if old:
                 existing=json.loads(old[0])
-                if any(existing.get(key,{'tool_sequence':[],'tool_protocol':'native','tool_paths':[],'harness_id':None,'fallback_profile':None}.get(key))!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
+                if any(existing.get(key,{'tool_sequence':[],'tool_protocol':'native','tool_paths':[],'harness_id':None,'fallback_profile':None,'screen_region':None}.get(key))!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
                 return existing
             if route == 'auto':
                 instant = resolve(body['prompt'], body['project_scope'], self.shortcuts)
@@ -191,6 +196,10 @@ class RequestService:
                     row=conn.execute('SELECT config_json FROM model_profiles WHERE id=?',(ident,)).fetchone()
                     if not row or json.loads(row[0]).get('disabled'):
                         raise ValueError('Both model profiles must be configured and enabled')
+            if body.get('screen_region') is not None:
+                row=conn.execute("SELECT config_json FROM model_profiles WHERE id=?",(body['model_profile'],)).fetchone()
+                if not row or json.loads(row[0]).get('vision') is not True or json.loads(row[0]).get('disabled'):
+                    raise ValueError('Choose an enabled vision-capable connection')
             state['route']=route
             conn.execute('INSERT INTO conversation_requests VALUES(?,?,?,?,?)',(state['id'],body['session_scope'],body['project_scope'],body['idempotency_key'],json.dumps(state)))
             conn.commit()
@@ -350,7 +359,11 @@ class RequestService:
                 status='completed' if agent['status']=='completed' else 'waiting_review'
                 return await asyncio.to_thread(self.update,ident,{'status':status,'answer':answer,'evidence':evidence},expected={'running'}) or await asyncio.to_thread(self.get,ident)
             else:
-                messages = await asyncio.to_thread(self.messages, state)
+                if state.get('screen_region'):
+                    from backend.runtime.screen_region import visual_messages
+                    messages=visual_messages(state['prompt'],state['screen_region'])
+                else:
+                    messages = await asyncio.to_thread(self.messages, state)
                 payload=await self.models.chat(state['model_profile'],{'messages':messages, 'stream':False})
                 from backend.runtime.agent_activity import AgentRejection
                 choice = payload['choices'][0]
