@@ -24,10 +24,12 @@ class RequestInput(BaseModel):
     session_scope:str=Field(min_length=1,max_length=100)
     project_scope:str=Field(default='projects/default',min_length=1,max_length=200)
     prompt:str=Field(min_length=1,max_length=24000)
-    mode:Literal['auto','quick','agent','harness']='auto'
+    mode:Literal['auto','quick','agent','harness','delegate']='auto'
     model_profile:str=Field(default='auto',min_length=1,max_length=100)
     allow_process:bool=False
     screen_region:str|None=Field(default=None,max_length=18000)
+    group_id:str|None=Field(default=None,min_length=1,max_length=128)
+    target_knight:str|None=Field(default=None,min_length=1,max_length=128)
     harness_id:str|None=Field(default=None,max_length=64,pattern=r'^[a-z][a-z0-9_-]{0,63}$')
     fallback_profile:str|None=Field(default=None,max_length=64,pattern=r'^[a-z][a-z0-9_-]{0,63}$')
     required_tools:list[Literal['workspace_read','workspace_list','workspace_write','process_run','desktop_observe','desktop_input']]=Field(default_factory=list,max_length=4)
