@@ -115,3 +115,30 @@ async def test_trial_model_stays_out_of_automatic_selection_but_can_be_explicitl
         assert calls == []
         await ModelService().chat('trial', {'messages': [{'role':'user','content':'test'}]})
         assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_measured_preference_applies_only_to_eligible_automatic_text_chat(profiles):
+    import time
+    from backend.models.assistant_benchmark import AssistantBenchmarks, SUITE
+    from backend.storage.db import db
+    with server() as (endpoint, calls):
+        slow=save(profiles,'slow',endpoint)
+        fast=save(profiles,'fast',endpoint)
+        disabled=save(profiles,'trial',endpoint,auto_select=False)
+        AssistantBenchmarks(db)
+        with db.get_connection() as conn:
+            for profile,latency in [(slow,1000),(fast,20),(disabled,1)]:
+                record={'profile':profile['id'],'revision':profile['updated_at'],'suite':SUITE,
+                        'passed':3,'total':3,'observed_at':time.time(),'latency_ms':latency}
+                conn.execute('INSERT INTO assistant_model_benchmarks VALUES(?,?)',(profile['id'],json.dumps(record)))
+            conn.commit()
+        service=ModelService()
+        request={'messages':[{'role':'user','content':'question'}],'_kingdom_prefer_measured':True}
+        result=await service.chat('auto',request)
+        assert result['kingdom_profile']=='fast'
+        assert 'synthetic text benchmark' in result['kingdom_selection']['reason']
+        explicit=await service.chat('slow',request)
+        assert explicit['kingdom_profile']=='slow'
+        assert (await service.generate('question',profile='slow'))['profile']=='slow'
+        assert all('_kingdom_prefer_measured' not in call for call in calls)

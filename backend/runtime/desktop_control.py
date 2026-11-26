@@ -26,7 +26,10 @@ def validate_input(params):
 
 def desktop_input(params):
     validate_input(params)
-    if os.name!='nt': raise RuntimeError('Native desktop input is currently supported only on Windows with an interactive desktop')
+    if os.name!='nt':
+        from backend.runtime.private_x11_input import available,execute
+        if available():return execute(params)
+        raise RuntimeError('Desktop input requires Windows or an explicitly enabled private X11 session')
     import ctypes
     from ctypes import wintypes
     user32=ctypes.windll.user32

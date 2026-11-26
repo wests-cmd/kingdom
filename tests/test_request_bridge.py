@@ -510,3 +510,132 @@ def test_unknown_slash_does_not_reach_agent_or_model(tmp_path):
     with pytest.raises(ValueError,match="Unknown instant"):
         service.create(dict(body(),prompt="/delete everything"))
     assert models.calls == agents.created == 0
+
+
+def test_learn_only_completed_instant_request_in_exact_scope(tmp_path):
+    service, models, agents = setup(tmp_path)
+    saved=service.create(dict(body(),prompt='/status'))
+    with pytest.raises(ValueError):
+        service.learn_shortcut(saved['id'],'chat','projects/a','focus')
+    asyncio.run(service.run(saved['id']))
+    with pytest.raises(ValueError):
+        service.learn_shortcut(saved['id'],'other','projects/a','focus')
+    assert service.learn_shortcut(saved['id'],'chat','projects/a','focus')['command']=='status'
+    next_request=service.create(dict(body(),idempotency_key='next',prompt='/focus'))
+    assert asyncio.run(service.run(next_request['id']))['status']=='completed'
+    assert models.calls==agents.created==0
+
+
+def _chat_profiles(service):
+    from backend.models.profiles import ModelProfiles
+    profiles=ModelProfiles(service.db)
+    for ident in ('primary','fallback'):
+        profiles.save(ident,{'provider':'ollama','endpoint':'http://127.0.0.1:11434',
+            'model':ident,'variant':'standard','vision':ident=='primary'})
+    return profiles
+
+
+def test_opt_in_incomplete_text_escalates_once(tmp_path):
+    service, models, agents=setup(tmp_path)
+    _chat_profiles(service)
+    calls=[]
+    async def chat(profile,request):
+        calls.append(profile)
+        assert not request.get('tools')
+        return {'choices':[{'message':{'content':'partial' if profile=='primary' else 'complete'},'finish_reason':'length' if profile=='primary' else 'stop'}]}
+    models.chat=chat
+    saved=service.create(dict(body(),mode='quick',model_profile='primary',fallback_profile='fallback',prompt='Explain a concept'))
+    result=asyncio.run(service.run(saved['id']))
+    assert calls==['primary','fallback'] and agents.created==0
+    assert result['answer']=='complete'
+    assert result['evidence'][0]['type']=='model_escalation'
+    assert result['evidence'][1]['profile']=='fallback'
+
+
+def test_transport_failure_never_escalates(tmp_path):
+    service,models,_=setup(tmp_path)
+    _chat_profiles(service)
+    calls=[]
+    async def chat(profile,request):
+        calls.append(profile)
+        raise PermissionError('not authorized')
+    models.chat=chat
+    saved=service.create(dict(body(),mode='quick',model_profile='primary',fallback_profile='fallback'))
+    with pytest.raises(PermissionError):asyncio.run(service.run(saved['id']))
+    assert calls==['primary']
+
+
+def test_explicit_screen_region_is_not_sent_to_other_provider(tmp_path):
+    import base64,io
+    from PIL import Image
+    service,models,agents=setup(tmp_path)
+    _chat_profiles(service)
+    raw=io.BytesIO()
+    Image.new('RGB',(80,80),'red').save(raw,format='JPEG')
+    crop='data:image/jpeg;base64,'+base64.b64encode(raw.getvalue()).decode()
+    calls=[]
+    async def chat(profile,request):
+        calls.append((profile,request))
+        return {'choices':[{'message':{'content':'Red area'},'finish_reason':'stop'}]}
+    models.chat=chat
+    data=dict(body(),mode='quick',model_profile='primary',screen_region=crop)
+    for changed in ({'model_profile':'fallback'},{'mode':'agent'},{'fallback_profile':'fallback'},
+                    {'screen_region':'https://example.com/private.jpg'}):
+        with pytest.raises(ValueError):service.create({**data,**changed})
+    result=asyncio.run(service.run(service.create(data)['id']))
+    assert result['answer']=='Red area' and agents.created==0
+    assert calls[0][0]=='primary'
+    assert calls[0][1]['messages'][0]['content'][1]['image_url']['url']==crop
+    assert 'tools' not in calls[0][1]
+
+
+def _harness_fixture(tmp_path,monkeypatch):
+    import sys
+    from backend.runtime.harnesses import HarnessService,HarnessConfig
+    service,models,agents=setup(tmp_path)
+    monkeypatch.setenv('KINGDOM_WORKSPACE',str(tmp_path/'workspace'))
+    service.engine.events=SimpleNamespace(publish=lambda *args:None)
+    from backend.runtime.tasks import TaskManager
+    from backend.storage.repository import TaskRepository
+    service.engine.tasks=TaskManager(TaskRepository(service.db))
+    service.engine.submit_task=service.engine.tasks.create
+    service.engine.cancel_task=service.engine.tasks.cancel
+    harness=HarnessService(service.engine,service.db)
+    harness.save('example',HarnessConfig(name='Example',argv=[sys.executable,'-c','print("ok")','{prompt}']))
+    return service,harness,models,agents
+
+
+def test_harness_chat_links_one_approved_task_and_collects_verified_exit(tmp_path,monkeypatch):
+    service,harness,models,agents=_harness_fixture(tmp_path,monkeypatch)
+    data=dict(body(),mode='harness',harness_id='example',allow_process=True,prompt='literal request')
+    saved=service.create(data)
+    result=asyncio.run(service.run(saved['id']))
+    ident=result['governed_task_id']
+    assert result['status']=='waiting_review'
+    assert asyncio.run(service.run(saved['id']))['governed_task_id']==ident
+    assert len(service.engine.tasks.list())==1
+    task=service.engine.tasks.repo.get(ident)
+    assert task['metadata']['tool']=='harness.run@1.0.0'
+    assert task['metadata']['conversation_request_id']==saved['id']
+    service.engine.tasks.transition_task(ident,'running')
+    service.engine.tasks.transition_task(ident,'completed',{'result':{'results':[{
+        'verification':{'state':'VERIFIED'},'outcome':{'tool':'harness.run@1.0.0','output':{'exit_code':0,'output':'fixture output'}}}]}})
+    completed=asyncio.run(service.run(saved['id']))
+    assert completed['status']=='completed' and completed['evidence'][0]['verified_execution']
+    assert models.calls==agents.created==0
+
+
+def test_harness_revision_drift_or_interrupted_admission_never_submits(tmp_path,monkeypatch):
+    import sys
+    from backend.runtime.harnesses import HarnessConfig
+    service,harness,_,_=_harness_fixture(tmp_path,monkeypatch)
+    data=dict(body(),mode='harness',harness_id='example',allow_process=True,prompt='literal')
+    saved=service.create(data)
+    harness.save('example',HarnessConfig(name='Changed',argv=[sys.executable,'-c','print("changed")','{prompt}']))
+    with pytest.raises(ValueError,match='changed'):
+        asyncio.run(service.run(saved['id']))
+    saved=service.create(dict(data,idempotency_key='new'))
+    service.update(saved['id'],{'status':'waiting_review','governed_submission_started':True})
+    result=asyncio.run(service.run(saved['id']))
+    assert result['status']=='waiting_review' and 'interrupted' in result['answer']
+    assert service.engine.tasks.list()==[]

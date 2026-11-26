@@ -176,8 +176,17 @@ class ModelService:
                           and 'codex' not in p['id'].casefold()]
             if not candidates:
                 raise ValueError('Configure a non-Codex chat model for planning')
+        measured=False
+        if automatic and request.get('_kingdom_prefer_measured') is True and not has_images and not request.get('tools') and not planner:
+            from backend.models.assistant_benchmark import AssistantBenchmarks, prefer_measured
+            ranked=prefer_measured(candidates,AssistantBenchmarks(db).list())
+            measured=ranked is not candidates
+            candidates=ranked
         async with capacity.acquire(candidates, server_profiles=configured) as selected:
             profile = profiles.get(selected['id'], credential=True)
+            if '_kingdom_profile_revision' in request and (
+                    profile.get('updated_at')!=request['_kingdom_profile_revision'] or profile.get('disabled')):
+                raise ValueError('The approved model connection changed; review a new request')
             import json
             if planner and ('codex' in profile['model'].casefold() or 'codex' in profile['id'].casefold()):
                 raise ValueError('Planner model changed; select a non-Codex chat connection')
@@ -217,6 +226,7 @@ class ModelService:
             if automatic:
                 from backend.models.selection import selection_reason
                 payload['kingdom_selection'] = selection_reason(profile)
+                if measured:payload['kingdom_selection']['reason']='Selected a reachable eligible profile with fresh passing synthetic text benchmark and lowest recorded latency; not a general quality ranking.'
                 from backend.models.decision_selectors import shadow_models
                 payload['kingdom_selection']['decision_selector'] = shadow_models(candidates)
             self._record(payload.get('usage') or {})

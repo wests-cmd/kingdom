@@ -68,14 +68,19 @@ def main():
         raise RuntimeError("Refusing root or any non-private display")
     prove_no_outbound_network()
 
-    select_private_window()
+    window=select_private_window()
+    command("xdotool","windowfocus","--sync",window)
     x, y = target_coordinates()
     # The test issues genuine XTEST mouse and keyboard events. The X server
     # and Tk fixture both live in the restricted container, not on the host.
     command("xdotool", "mousemove", "--sync", x, y)
     command("xdotool", "click", "1")
-    command("xdotool", "type", "--clearmodifiers", "--delay", "8", EXPECTED)
-    command("xdotool", "key", "Return")
+    from private_x11_input import observe,execute
+    title="Kingdom Private Desktop Proof"
+    selected=observe(title)
+    if selected['window_handle']!=int(window):raise RuntimeError("Private window identity differed")
+    execute({**selected,"action":"type_text","text":EXPECTED})
+    execute({**observe(title),"action":"key","key":"enter"})
 
     deadline = time.monotonic() + 8
     while time.monotonic() < deadline and not PROOF.exists():

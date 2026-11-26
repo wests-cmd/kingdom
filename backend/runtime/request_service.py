@@ -155,12 +155,36 @@ class RequestService:
         if body.get('desktop_window_title'):
             if route=='quick':raise ValueError('Desktop control requires the agent route')
             route='agent'
+        if body['mode']=='commander':
+            if route!='commander' or not body.get('group_id') or body.get('target_knight') or body.get('allow_process') or len(body['prompt'])>16000:
+                raise ValueError('Select a local group for a bounded Commander draft without process tools')
+        elif body.get('group_id') or body.get('target_knight') or body['mode']=='delegate':
+            if route!='delegate' or not body.get('group_id') or not body.get('target_knight') or body.get('allow_process') or len(body['prompt'])>16000:
+                raise ValueError('Choose a group and a member Knight for bounded text analysis, without process tools')
+        if body.get('guide_region') and not body.get('screen_region'):
+            raise ValueError('Guidance requires a reviewed crop')
+        if body.get('screen_region') is not None:
+            from backend.runtime.screen_region import validate_region
+            validate_region(body['screen_region'])
+            if route!='quick' or body['model_profile']=='auto' or body['model_profile'].startswith('pool:') or body.get('fallback_profile') or body.get('allow_process'):
+                raise ValueError('Visual requests require one explicit vision model, text-only response and no fallback or process execution')
+        if body.get('harness_id') and route != 'harness':
+            raise ValueError('Harness selection requires the explicit harness route')
+        if body['mode'] == 'harness':
+            if route != 'harness' or not body.get('harness_id') or not body.get('allow_process'):
+                raise ValueError('Choose a harness and explicitly enable process work without agent tool stages')
+            if len(body['prompt']) > 4000 or not body['prompt'].strip():
+                raise ValueError('Harness requests require 1–4000 characters')
+        if body.get('prefer_benchmarked') and (route!='quick' or body['model_profile']!='auto' or body.get('screen_region') or body.get('fallback_profile') or body.get('allow_process')):
+            raise ValueError('Measured routing is available for automatic text-only questions')
+        if body.get('fallback_profile') and (route != 'quick' or body['model_profile'] in {'auto',body['fallback_profile']} or body['model_profile'].startswith('pool:')):
+            raise ValueError('Choose distinct explicit primary and fallback profiles in text-only mode')
         with self.db.get_connection() as conn:
             conn.execute('BEGIN IMMEDIATE')
             old=conn.execute('SELECT state_json FROM conversation_requests WHERE session_scope=? AND project_scope=? AND idem=?',(body['session_scope'],body['project_scope'],body['idempotency_key'])).fetchone()
             if old:
                 existing=json.loads(old[0])
-                if any(existing.get(key,{'tool_sequence':[],'tool_protocol':'native','tool_paths':[]}.get(key))!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
+                if any(existing.get(key,{'tool_sequence':[],'tool_protocol':'native','tool_paths':[],'harness_id':None,'fallback_profile':None,'screen_region':None,'group_id':None,'target_knight':None,'prefer_benchmarked':False,'guide_region':False}.get(key))!=value for key,value in body.items()): raise ValueError('Idempotency key already belongs to another request')
                 return existing
             if route == 'auto':
                 instant = resolve(body['prompt'], body['project_scope'], self.shortcuts)
@@ -168,6 +192,29 @@ class RequestService:
                 elif priority_question(text): route = 'priorities'
                 elif re.match(r'^(?:please\s+)?(?:inspect|implement|edit|modify|fix|refactor|build|run tests|test the|create a file|write a file)\b', text): route='agent'
                 else: route='quick'
+            if route == 'harness':
+                # Read using this transaction rather than creating tables while holding a writer lock.
+                if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='harness_profiles'").fetchone():
+                    raise ValueError('Harness connection not found')
+                row=conn.execute('SELECT config_json FROM harness_profiles WHERE id=?',(body['harness_id'],)).fetchone()
+                if not row: raise ValueError('Harness connection not found')
+                state['harness_revision']=json.loads(row[0])['revision']
+            if body.get('fallback_profile'):
+                state['model_profile_revisions']={}
+                rows=conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='model_profiles'").fetchone()
+                if not rows: raise ValueError('Configure both model profiles first')
+                for ident in (body['model_profile'],body['fallback_profile']):
+                    row=conn.execute('SELECT config_json FROM model_profiles WHERE id=?',(ident,)).fetchone()
+                    if not row or json.loads(row[0]).get('disabled'):
+                        raise ValueError('Both model profiles must be configured and enabled')
+                    state['model_profile_revisions'][ident]=json.loads(row[0])['updated_at']
+            if body.get('screen_region') is not None:
+                if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='model_profiles'").fetchone():
+                    raise ValueError('Choose an enabled vision-capable connection')
+                row=conn.execute("SELECT config_json FROM model_profiles WHERE id=?",(body['model_profile'],)).fetchone()
+                if not row or json.loads(row[0]).get('vision') is not True or json.loads(row[0]).get('disabled'):
+                    raise ValueError('Choose an enabled vision-capable connection')
+                state['model_profile_revisions']={body['model_profile']:json.loads(row[0])['updated_at']}
             state['route']=route
             conn.execute('INSERT INTO conversation_requests VALUES(?,?,?,?,?)',(state['id'],body['session_scope'],body['project_scope'],body['idempotency_key'],json.dumps(state)))
             conn.commit()
@@ -183,6 +230,15 @@ class RequestService:
     def list(self, session_scope, project_scope):
         with self.db.get_connection() as conn:
             return [json.loads(row[0]) for row in conn.execute('SELECT state_json FROM conversation_requests WHERE session_scope=? AND project_scope=? ORDER BY rowid DESC LIMIT 100',(session_scope,project_scope))]
+
+    def learn_shortcut(self, ident, session, project, name):
+        state=self.get(ident)
+        expected={'time':'controller_clock','status':'runtime_status','priorities':'project_tasks',
+                  'work':'conversation_work','help':'instant_command_catalog','harnesses':'harness_catalog'}
+        if (state['status']!='completed' or state['session_scope']!=session or state['project_scope']!=project
+                or state['route'] not in expected or not any(e.get('type')==expected[state['route']] for e in state['evidence'])):
+            raise ValueError('Only evidence-backed instant commands can be learned')
+        return self.shortcuts.save(project,name,state['route'])
 
     def priority_snapshot(self, project_scope):
         """Read exact-scope saved records; never initialize or advance executors."""
@@ -253,6 +309,82 @@ class RequestService:
                 names=await asyncio.to_thread(configured_names)
                 answer=('Configured harness connections: '+', '.join(names)+'. Configuration is not proof of availability or authorization.') if names else 'No harness connections configured. Use Tools & model lab to connect a supported CLI.'
                 evidence=[{'type':'harness_catalog','ids':names,'verified_execution':False}]
+            elif route=='commander':
+                mission_id=state.get('governed_mission_id')
+                if not mission_id:
+                    if state.get('governed_submission_started'):
+                        return await asyncio.to_thread(self.update,ident,{'status':'waiting_review','answer':'Commander draft interrupted; inspect retained mission drafts before retrying.'},expected={'running'}) or await asyncio.to_thread(self.get,ident)
+                    admitted=await asyncio.to_thread(self.update,ident,{'governed_submission_started':True},expected={'running'})
+                    if admitted is None:return await asyncio.to_thread(self.get,ident)
+                    from backend.runtime.commander import draft
+                    mission=await draft(state['prompt'],state['model_profile'],state['group_id'],self.models,self.engine.missions)
+                    mission_id=mission['id']
+                    linked=await asyncio.to_thread(self.update,ident,{'governed_mission_id':mission_id},expected={'running'})
+                    if linked is None:
+                        await asyncio.to_thread(self.engine.missions.cancel,mission_id)
+                        return await asyncio.to_thread(self.get,ident)
+                mission=await asyncio.to_thread(self.engine.missions.get,mission_id)
+                status='completed' if mission['status']=='completed' else 'waiting_review'
+                answer='Commander mission '+mission['status']+'. Review its exact assignments and approval under Missions. Completion requires controller-verified results.'
+                evidence=[{'type':'commander_mission','id':mission_id,'version':mission['version'],
+                    'status':mission['status'],'plan':mission['plan'],'group_binding':mission.get('group_binding'),
+                    'report':mission.get('report',[]),'verified_execution':status=='completed'}]
+                return await asyncio.to_thread(self.update,ident,{'status':status,'answer':answer,'evidence':evidence},expected={'running'}) or await asyncio.to_thread(self.get,ident)
+            elif route in {'harness','delegate'}:
+                from backend.runtime.harnesses import HarnessService
+                task_id=state.get('governed_task_id')
+                if not task_id:
+                    # Persist admission intent before submitting a process task.
+                    # A crash in this interval is uncertain; never submit again.
+                    if state.get('governed_submission_started'):
+                        return await asyncio.to_thread(self.update,ident,{
+                            'status':'waiting_review','answer':'Job submission interrupted; inspect task records for this request before retrying.'},expected={'running'}) or await asyncio.to_thread(self.get,ident)
+                    admitted=await asyncio.to_thread(self.update,ident,{'governed_submission_started':True},expected={'running'})
+                    if admitted is None:return await asyncio.to_thread(self.get,ident)
+                    if route=='delegate':
+                        from backend.cluster.hierarchy_api import hierarchy
+                        # This is the existing local group authority only. A shared
+                        # organization must be resolved by its own controller.
+                        from backend.cluster.shared_groups import configured
+                        if configured().authority():
+                            raise ValueError('Shared group delegation requires its authority controller')
+                        await asyncio.to_thread(hierarchy.authorize_assignment,'owner',state['group_id'],state['target_knight'])
+                        task=await asyncio.to_thread(self.engine.submit_task,state['prompt'],metadata={
+                            'actor':'owner','tool':'text.analyze@1.0.0','capability':'compute',
+                            'execution_target':'remote','assigned_knight':state['target_knight'],
+                            'group_id':state['group_id'],'project_scope':state['project_scope'],
+                            'conversation_request_id':ident,'tool_parameters':{'text':state['prompt']}})
+                    else:
+                        task=await asyncio.to_thread(HarnessService(self.engine,self.db).submit,
+                            state['harness_id'],state['prompt'],state['project_scope'],
+                            expected_revision=state['harness_revision'],request_id=ident)
+                    task_id=task['id']
+                    linked=await asyncio.to_thread(self.update,ident,{'governed_task_id':task_id},expected={'running'})
+                    if linked is None:
+                        await asyncio.to_thread(self.engine.cancel_task,task_id)
+                        return await asyncio.to_thread(self.get,ident)
+                task=await asyncio.to_thread(self.engine.tasks.repo.get,task_id)
+                status='waiting_review'
+                answer='Governed job saved. Inspect its task and approval status; Continue reads its retained result without submitting another job.'
+                evidence=[{'type':'delegated_task' if route=='delegate' else 'harness_task','id':task_id,'status':task['status'] if task else 'missing','verified_execution':False}]
+                if task and task['status'].lower() in {'completed','succeeded'}:
+                    retained=task.get('result') or {}
+                    if route=='delegate' and retained.get('verification',{}).get('state')=='VERIFIED' and retained.get('executed_by')==state['target_knight']:
+                        status='completed'
+                        answer='Controller-verified remote analysis: '+json.dumps(retained.get('output',{}))[:16000]
+                        evidence[0]['verified_execution']=True
+                    results=retained.get('results',[])
+                    if len(results)==1 and results[0].get('verification',{}).get('state')=='VERIFIED':
+                        outcome=results[0].get('outcome',{})
+                        output=outcome.get('output',{})
+                        if route=='harness' and outcome.get('tool')=='harness.run@1.0.0' and output.get('exit_code')==0:
+                            status='completed'
+                            answer='Harness process completed; changes require independent review.\n'+str(output.get('structured',{}).get('answer',output.get('output','')))[:16000]
+                            evidence[0]['verified_execution']=True
+                            if output.get('structured'):
+                                evidence.append({'type':'harness_proposals','proposals':output['structured']['proposals'],
+                                    'events':output['structured']['events'],'verified_execution':False})
+                return await asyncio.to_thread(self.update,ident,{'status':status,'answer':answer,'evidence':evidence},expected={'running'}) or await asyncio.to_thread(self.get,ident)
             elif route=='agent':
                 if not state['agent_session_id']:
                     objective = state['prompt']
@@ -285,14 +417,41 @@ class RequestService:
                 status='completed' if agent['status']=='completed' else 'waiting_review'
                 return await asyncio.to_thread(self.update,ident,{'status':status,'answer':answer,'evidence':evidence},expected={'running'}) or await asyncio.to_thread(self.get,ident)
             else:
-                messages = await asyncio.to_thread(self.messages, state)
-                payload=await self.models.chat(state['model_profile'],{'messages':messages, 'stream':False})
+                if state.get('screen_region'):
+                    from backend.runtime.screen_region import visual_messages,guide_messages
+                    messages=(guide_messages if state.get('guide_region') else visual_messages)(state['prompt'],state['screen_region'])
+                else:
+                    messages = await asyncio.to_thread(self.messages, state)
+                options={'messages':messages,'stream':False}
+                if state.get('prefer_benchmarked'):options['_kingdom_prefer_measured']=True
+                if state.get('model_profile_revisions'):
+                    options['_kingdom_profile_revision']=state['model_profile_revisions'][state['model_profile']]
+                payload=await self.models.chat(state['model_profile'],options)
                 from backend.runtime.agent_activity import AgentRejection
                 choice = payload['choices'][0]
                 answer = choice['message'].get('content')
-                if choice.get('finish_reason') == 'length' or not isinstance(answer, str) or not answer.strip():
+                incomplete=choice.get('finish_reason') == 'length' or not isinstance(answer, str) or not answer.strip()
+                if incomplete and state.get('fallback_profile'):
+                    primary=state['model_profile']
+                    fallback=state['fallback_profile']
+                    if (await asyncio.to_thread(self.get,ident))['status']!='running':
+                        return await asyncio.to_thread(self.get,ident)
+                    messages=await asyncio.to_thread(self.messages,{**state,'model_profile':fallback})
+                    recorded=await asyncio.to_thread(self.update,ident,{'model_escalation_attempt':{'from':primary,'to':fallback,'reason':'incomplete_text_response'}},expected={'running'})
+                    if recorded is None:return await asyncio.to_thread(self.get,ident)
+                    payload=await self.models.chat(fallback,{'messages':messages,'stream':False,'_kingdom_profile_revision':state['model_profile_revisions'][fallback]})
+                    choice=payload['choices'][0]
+                    answer=choice['message'].get('content')
+                    incomplete=choice.get('finish_reason')=='length' or not isinstance(answer,str) or not answer.strip()
+                    evidence.append({'type':'model_escalation','from':primary,'to':fallback,'reason':'incomplete_text_response'})
+                if incomplete:
                     raise AgentRejection('model_output_incomplete')
-                evidence=[{'type':'model_response','profile':payload.get('kingdom_profile',state['model_profile']),'model':payload.get('model'),'usage':payload.get('usage',{}),'verified_execution':False}]
+                if state.get('guide_region'):
+                    from backend.runtime.screen_region import validate_guide
+                    guide=validate_guide(answer)
+                    answer=guide['answer']
+                    evidence.append({'type':'visual_guidance','annotations':guide['annotations'],'verified_execution':False})
+                evidence.append({'type':'model_response','profile':payload.get('kingdom_profile',state.get('fallback_profile') if any(item['type']=='model_escalation' for item in evidence) else state['model_profile']),'model':payload.get('model'),'usage':payload.get('usage',{}),'verified_execution':False})
             return await asyncio.to_thread(self.update,ident,{'status':'completed','answer':answer,'evidence':evidence},expected={'running'}) or await asyncio.to_thread(self.get,ident)
         except Exception as error:
             # Provider exception messages can contain credentials or request bodies.
@@ -304,10 +463,12 @@ class RequestService:
                           else 'Request timed out.' if isinstance(error, TimeoutError)
                           else f'Request failed ({error_class}).')
             details = {'error_code': error.code} if isinstance(error, AgentRejection) else {}
-            await asyncio.to_thread(self.update,ident,{'status':'failed','answer':'Request failed; no automatic model substitution or replay occurred.','error_class':error_class,'error':diagnostic, **details},expected={'running'})
+            await asyncio.to_thread(self.update,ident,{'status':'failed','answer':'Request failed; inspect the saved checkpoint before starting new work.','error_class':error_class,'error':diagnostic, **details},expected={'running'})
             raise
 
     def cancel(self, ident):
         state=self.update(ident,{'status':'cancelled'},expected={'queued','running','waiting_review','ready'})
         if state and state.get('agent_session_id'):self.agents.cancel(state['agent_session_id'])
+        if state and state.get('governed_task_id'):self.engine.cancel_task(state['governed_task_id'])
+        if state and state.get('governed_mission_id'):self.engine.missions.cancel(state['governed_mission_id'])
         return state or self.get(ident)

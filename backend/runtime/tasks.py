@@ -149,12 +149,37 @@ class TaskManager:
         changed["version"] = task.get("version", 1) + 1
         if updates:
             changed.update(updates)
+            # An explicit release/reassignment must update both routing fields.
+            # Never retain a previous worker in metadata after clearing the task.
+            if "assigned_knight" in updates:
+                changed["metadata"] = {**changed.get("metadata", {}),
+                                       "assigned_knight": updates["assigned_knight"]}
 
         self.repo.save(changed, expected_version=task["version"])
         self._tasks[task_id] = changed
         if changed["status"].lower() == "queued" and task_id not in self._queue:
             self._queue.append(task_id)
         return deepcopy(changed)
+
+    @synchronized
+    def assign_queued_group_task(self, task_id, expected_version, group_id, target):
+        """CAS a durable queued task, never rewind a claimed or cancelled task."""
+        task = self.repo.get(task_id)
+        if (not task or task["status"].lower() != "queued" or task["version"] != expected_version
+                or task.get("cancellation_requested") or not group_id
+                or task.get("metadata", {}).get("group_id") != group_id
+                or task.get("metadata", {}).get("tool") not in {"text.analyze@1.0.0", "code.python.analyze@1.0.0"}):
+            raise ValueError("Queued group task changed; refresh before assignment")
+        changed = deepcopy(task)
+        changed["assigned_knight"] = target
+        changed["metadata"] = {**task["metadata"], "assigned_knight": target, "execution_target": "remote"}
+        changed["version"] = task["version"] + 1
+        self.repo.save(changed, expected_version=expected_version)
+        saved = self.repo.get(task_id)
+        self._tasks[task_id] = saved
+        if task_id not in self._queue:
+            self._queue.append(task_id)
+        return deepcopy(saved)
 
     @synchronized
     def claim_next(self) -> dict[str, Any] | None:
@@ -187,9 +212,14 @@ class TaskManager:
         return deepcopy(claimed)
 
     @synchronized
-    def claim_remote_atomically(self, task_id, node_id, capability, leases):
+    def claim_remote_atomically(self, task_id, node_id, capability, leases, expected_version=None):
         task = self.repo.get(task_id)
         if not task:
+            return None
+        if expected_version is not None and task['version'] != expected_version:
+            return None
+        assigned=task.get('assigned_knight') or task.get('metadata',{}).get('assigned_knight')
+        if assigned and assigned != node_id:
             return None
         lease = leases.issue_and_claim(task_id, node_id, capability, task["version"])
         if not lease:

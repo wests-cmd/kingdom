@@ -368,9 +368,17 @@ class RuntimeEngine:
 
     def dispatch_remote_task(self, task_id, node_id, capability, leases):
         with self.dispatch_lock:
-            task = self.tasks.get(task_id)
+            task = self.tasks.repo.get(task_id)
             if self.execution_policy.get()["level"] == 0 or not task or task["status"].lower() != "queued":
                 return None
+            meta=task.get('metadata',{})
+            target=task.get('assigned_knight') or meta.get('assigned_knight')
+            if target and target!=node_id:
+                return None
+            if meta.get('group_id'):
+                from backend.cluster.hierarchy_api import hierarchy
+                try:hierarchy.authorize_assignment('owner',meta['group_id'],node_id)
+                except PermissionError:return None
             from backend.cluster.node_registry import node_registry
             from backend.cluster.power_policy import power_budget
             node=node_registry.get_node(node_id)
@@ -393,7 +401,7 @@ class RuntimeEngine:
                         {"metadata": {**task["metadata"], "approval_id": auth["approval_id"]}})
                     self.events.publish("task.waiting_approval", waiting)
                 return None
-            return self.tasks.claim_remote_atomically(task_id, node_id, capability, leases)
+            return self.tasks.claim_remote_atomically(task_id, node_id, capability, leases, expected_version=task['version'])
 
     def recover_remote_tasks(self):
         from backend.cluster.task_leasing import task_lease_manager
@@ -410,8 +418,13 @@ class RuntimeEngine:
                     with self.dispatch_lock:
                         current = self.tasks.get(task['id'])
                         if current and current['status'] == 'queued':
+                            current_meta=current.get('metadata',{})
+                            if (not current_meta.get('offload') or current_meta.get('group_id')
+                                    or current_meta.get('execution_target')!='remote'
+                                    or current.get('assigned_knight')!=task.get('assigned_knight')):
+                                continue
                             recovered = self.tasks.transition_task(task['id'], 'queued', {'assigned_knight': None,
-                                'metadata': {**meta, 'execution_target': 'local', 'offload_reason': 'Offload computer unavailable before dispatch; retained locally'}})
+                                'metadata': {**current_meta, 'assigned_knight':None, 'execution_target': 'local', 'offload_reason': 'Offload computer unavailable before dispatch; retained locally'}})
                             self.events.publish('task.offload_fallback', recovered)
         for task in self.tasks.list("leased"):
             node = node_registry.get_node(task.get("assigned_knight"))
@@ -430,7 +443,7 @@ class RuntimeEngine:
                     leases.revoke_lease(task['id'])
                     recovered = self.tasks.transition_task(task['id'], 'RECOVERY_REQUIRED',
                         {'error': 'Remote execution was interrupted; retained evidence requires review before retrying side effects.'})
-                    if current.get('metadata', {}).get('tool') in {'text.analyze@1.0.0', 'code.python.analyze@1.0.0'}:
+                    if not current.get('metadata',{}).get('group_id') and current.get('metadata', {}).get('tool') in {'text.analyze@1.0.0', 'code.python.analyze@1.0.0'}:
                         recovered = self.tasks.transition_task(task['id'], 'queued',
                             {'assigned_knight': None, 'lease_id': None,
                              'error': 'Remote analysis lease unavailable; idempotent analysis safely requeued'})
