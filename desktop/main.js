@@ -3,7 +3,7 @@
  * Manages native window creation, guided first-run setup, local FastAPI backend process lifecycle, and IPC bridge.
  */
 
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { startBackend, stopBackend, waitForBackendReady, getOwnerToken } = require('./launcher');
@@ -13,6 +13,7 @@ let mainWindow = null;
 let setupWindow = null;
 const {BackgroundLifecycle} = require('./background');
 let background = null;
+let quickAssistant = null;
 let openingWindow = false;
 
 async function showMainWindow() {
@@ -155,6 +156,7 @@ function setupIpcHandlers() {
       startBackend(PROFILE_PATH);
 
       if (validated.gui) {
+        quickAssistant?.register();
         await createWindow();
       }
 
@@ -229,9 +231,14 @@ if (app) {
   app.whenReady().then(() => {
     if (!primaryInstance) return;
     if (!smokeReport) {
+      const {QuickAssistant} = require('./quick-assistant');
+      quickAssistant = new QuickAssistant({BrowserWindow, globalShortcut,
+        allowed: () => Boolean(loadSavedProfile()?.gui && !setupWindow),
+        ready: waitForBackendReady,
+        origin: () => `http://127.0.0.1:${process.env.PORT || 8000}`});
       background = new BackgroundLifecycle({app, Tray, Menu,
         icon: path.join(app.isPackaged ? process.resourcesPath : __dirname, 'branding', 'kingdom-icon.png'),
-        showWindow: showMainWindow, stopBackend});
+        showWindow: showMainWindow, showQuick: () => quickAssistant.open(), stopBackend});
       background.start();
     }
     setupIpcHandlers();
@@ -243,6 +250,7 @@ if (app) {
       startBackend(PROFILE_PATH);
 
       if (savedProfile.gui) {
+        quickAssistant?.register();
         createWindow();
       } else {
         console.log('[Kingdom Desktop] Running in headless mode (GUI disabled in profile).');
@@ -290,6 +298,7 @@ if (app) {
   });
   let quitting = false;
   app.on('before-quit', (event) => {
+    quickAssistant?.stop();
     if (background) { void background.beforeQuit(event); return; }
     if (quitting) return;
     event.preventDefault();
