@@ -155,7 +155,10 @@ class RequestService:
         if body.get('desktop_window_title'):
             if route=='quick':raise ValueError('Desktop control requires the agent route')
             route='agent'
-        if body.get('group_id') or body.get('target_knight') or body['mode']=='delegate':
+        if body['mode']=='commander':
+            if route!='commander' or not body.get('group_id') or body.get('target_knight') or body.get('allow_process') or len(body['prompt'])>16000:
+                raise ValueError('Select a local group for a bounded Commander draft without process tools')
+        elif body.get('group_id') or body.get('target_knight') or body['mode']=='delegate':
             if route!='delegate' or not body.get('group_id') or not body.get('target_knight') or body.get('allow_process') or len(body['prompt'])>16000:
                 raise ValueError('Choose a group and a member Knight for bounded text analysis, without process tools')
         if body.get('guide_region') and not body.get('screen_region'):
@@ -306,6 +309,27 @@ class RequestService:
                 names=await asyncio.to_thread(configured_names)
                 answer=('Configured harness connections: '+', '.join(names)+'. Configuration is not proof of availability or authorization.') if names else 'No harness connections configured. Use Tools & model lab to connect a supported CLI.'
                 evidence=[{'type':'harness_catalog','ids':names,'verified_execution':False}]
+            elif route=='commander':
+                mission_id=state.get('governed_mission_id')
+                if not mission_id:
+                    if state.get('governed_submission_started'):
+                        return await asyncio.to_thread(self.update,ident,{'status':'waiting_review','answer':'Commander draft interrupted; inspect retained mission drafts before retrying.'},expected={'running'}) or await asyncio.to_thread(self.get,ident)
+                    admitted=await asyncio.to_thread(self.update,ident,{'governed_submission_started':True},expected={'running'})
+                    if admitted is None:return await asyncio.to_thread(self.get,ident)
+                    from backend.runtime.commander import draft
+                    mission=await draft(state['prompt'],state['model_profile'],state['group_id'],self.models,self.engine.missions)
+                    mission_id=mission['id']
+                    linked=await asyncio.to_thread(self.update,ident,{'governed_mission_id':mission_id},expected={'running'})
+                    if linked is None:
+                        await asyncio.to_thread(self.engine.missions.cancel,mission_id)
+                        return await asyncio.to_thread(self.get,ident)
+                mission=await asyncio.to_thread(self.engine.missions.get,mission_id)
+                status='completed' if mission['status']=='completed' else 'waiting_review'
+                answer='Commander mission '+mission['status']+'. Review its exact assignments and approval under Missions. Completion requires controller-verified results.'
+                evidence=[{'type':'commander_mission','id':mission_id,'version':mission['version'],
+                    'status':mission['status'],'plan':mission['plan'],'group_binding':mission.get('group_binding'),
+                    'report':mission.get('report',[]),'verified_execution':status=='completed'}]
+                return await asyncio.to_thread(self.update,ident,{'status':status,'answer':answer,'evidence':evidence},expected={'running'}) or await asyncio.to_thread(self.get,ident)
             elif route in {'harness','delegate'}:
                 from backend.runtime.harnesses import HarnessService
                 task_id=state.get('governed_task_id')
@@ -446,4 +470,5 @@ class RequestService:
         state=self.update(ident,{'status':'cancelled'},expected={'queued','running','waiting_review','ready'})
         if state and state.get('agent_session_id'):self.agents.cancel(state['agent_session_id'])
         if state and state.get('governed_task_id'):self.engine.cancel_task(state['governed_task_id'])
+        if state and state.get('governed_mission_id'):self.engine.missions.cancel(state['governed_mission_id'])
         return state or self.get(ident)
