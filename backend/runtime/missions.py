@@ -136,6 +136,17 @@ class MissionService:
         self.save(state); self.engine.events.publish('mission.planned', {'id': state['id'], 'steps': len(plan.steps)})
         return state
 
+    def replay_candidate(self, ident):
+        from backend.runtime.learned_missions import candidate
+        with self.lock:
+            source=self.get(ident)
+            if not source.get('learned_candidate') or source.get('group_id'):
+                raise ValueError('No eligible learned workflow')
+            learned=candidate(source,self.engine.tasks.repo)
+            if not learned or learned!=source['learned_candidate']:
+                raise ValueError('Retained workflow evidence changed')
+            return self.create(MissionPlan.model_validate(learned['plan']))
+
     def revise(self, ident, plan, version):
         with self.lock:
             state = self.get(ident)
@@ -334,6 +345,10 @@ class MissionService:
                 else: active += 1
             if len(complete) == len(state['plan']['steps']):
                 state.update(status='completed', completed_at=time.time(), completion_scope='Planned operations verified within their retained acceptance contracts.', report=[{'step': step['title'], 'why': step['acceptance'], 'task_id': state['steps'][step['id']].get('task_id'),'external_receipt':state['steps'][step['id']].get('external_receipt')} for step in state['plan']['steps']])
+                from backend.runtime.learned_missions import candidate
+                if not state.get('group_id'):
+                    learned=candidate(state,self.engine.tasks.repo)
+                    if learned:state['learned_candidate']=learned
                 self.save(state); self.engine.events.publish('mission.completed', {'id': ident}); return state
             for raw in state['plan']['steps']:
                 step = MissionStep.model_validate(raw)
