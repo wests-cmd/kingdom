@@ -18,7 +18,8 @@ export default function ScreenRegion({onRegion,disabled=false}){
    const picked=e.target.files?.[0];e.target.value='';if(!picked)return
    if(picked.size>10000000||!['image/png','image/jpeg','image/webp'].includes(picked.type)){setNotice('Choose a PNG, JPEG or WebP up to 10 MB.');return}
    const serial=++generation.current
-   try{const img=await createImageBitmap(picked);if(serial===generation.current){if(img.width*img.height>40000000)throw Error('Image too large');show(img,img.width,img.height)}img.close()}catch{setNotice('Could not open the selected image.')}
+   let img
+   try{img=await createImageBitmap(picked);if(serial===generation.current){if(img.width*img.height>40000000)throw Error('Image too large');show(img,img.width,img.height)}}catch{if(serial===generation.current)setNotice('Could not open the selected image.')}finally{img?.close()}
  }
  async function capture(){
    if(!navigator.mediaDevices?.getDisplayMedia){setNotice('Screen capture is unavailable here. Choose a screenshot file instead.');return}
