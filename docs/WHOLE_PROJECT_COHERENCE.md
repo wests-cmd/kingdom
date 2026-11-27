@@ -30,3 +30,7 @@ The baseline has 1,113 tracked blobs, 315 backend files, 154 frontend files, 230
 ## Acceptance campaign
 
 One supported clean machine installs from published artifact; owner authenticates, configures a real model and submits a measurable objective. Prove task/approval/lease lineage, tool effect, independent receipt and UI refresh across all supported front doors. Connect a second approved Knight; test overload, connection loss, reconnect, controller/worker reboot, duplicate requests, stale leases, revocation, emergency stop, corrupted receipt and failed update/rollback. Test knowledge upload/retrieval and scoped skills across clients. Run a bounded self-improvement task against an isolated candidate and prove independent rejection of weakened tests and protected-policy edits. Record exact immutable revisions, artifact hashes, commands, actual outcomes, environments and remaining limitations. No signed package or real physical/model acceptance is inferred from CI.
+
+### Client coherence slice
+
+The existing desktop realtime client now owns at most one socket and retry timer, disposes both on authentication lifecycle cleanup, ignores obsolete callbacks and isolates event subscribers. On successful attachment the UI triggers the existing shared data refresh to reconcile durable snapshots. This is reconnect reconciliation, not guaranteed event delivery or persistent external agent-session support. Existing HTTP authorization and event bus remain authoritative; tests cover reconnect, stale callbacks, duplicate connections, cleanup and observer errors.
