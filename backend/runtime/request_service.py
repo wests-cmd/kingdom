@@ -254,23 +254,74 @@ class RequestService:
                 work = [json.loads(row[0]) for row in rows]
         return tasks, work
 
-    def update(self, ident, change, expected=None):
+    def update(self, ident, change, expected=None, *, expected_updated_at=None):
         with self.db.get_connection() as conn:
             conn.execute('BEGIN IMMEDIATE')
             row=conn.execute('SELECT state_json FROM conversation_requests WHERE id=?',(ident,)).fetchone()
             if not row: raise KeyError(ident)
             state=json.loads(row[0])
             if expected is not None and state['status'] not in expected: return None
+            if expected_updated_at is not None and state['updated_at']!=expected_updated_at:return None
             state.update(change,updated_at=time.time())
             conn.execute('UPDATE conversation_requests SET state_json=? WHERE id=?',(json.dumps(state),ident))
             conn.commit()
         self._event(state)
         return state
 
-    async def run(self, ident):
+    def begin_child_admission(self, state):
+        """Claim one durable child admission using the exact running checkpoint.
+
+        This is a lineage checkpoint, not an execution grant. Existing child
+        services still validate authority, capability and resource constraints.
+        A retained admission intent is never a license to submit again.
+        """
+        from backend.runtime.request_recovery import CHILDREN
+        route = state['route']
+        if route not in CHILDREN or state['status'] != 'running':
+            raise ValueError('A running child-producing request is required')
+        _, field = CHILDREN[route]
+        if state.get(field):
+            raise ValueError('Existing child must be continued, not admitted again')
+        if state.get('governed_submission_started'):
+            self.update(state['id'], {
+                'status': 'waiting_review',
+                'answer': 'Work admission interrupted; inspect retained work before retrying.',
+            }, expected={'running'}, expected_updated_at=state['updated_at'])
+            return None
+        return self.update(state['id'], {'governed_submission_started': True},
+                           expected={'running'}, expected_updated_at=state['updated_at'])
+
+    def record_request_failure(self, ident, diagnostic):
+        """Preserve an uncertain admission even when the controller stays up."""
+        from backend.runtime.request_recovery import CHILDREN, interrupted_admission_patch
+        state = self.get(ident)
+        if state["status"] != "running":
+            return state
+        change = {"status": "failed",
+                  "answer": "Request failed; inspect the saved checkpoint before starting new work.",
+                  **diagnostic}
+        route = state["route"]
+        if route in CHILDREN and state.get("governed_submission_started"):
+            _, field = CHILDREN[route]
+            if not state.get(field):
+                with self.db.get_connection() as conn:
+                    change.update(interrupted_admission_patch(conn, state))
+        return self.update(ident, change, expected={"running"},
+                           expected_updated_at=state["updated_at"])
+
+    async def run(self, ident, *, resume_recovered=False):
         saved=await asyncio.to_thread(self.get,ident)
+        if saved.get('recovery_hold'):
+            if not resume_recovered:return saved
+            if saved.get('recovery_result')!='linked':raise ValueError('No unique retained child; do not replay interrupted work')
+            from backend.runtime.request_recovery import find_child
+            with self.db.get_connection() as conn:
+                result,field,child=find_child(conn,saved)
+            if result!='linked' or saved.get(field)!=child:raise ValueError('Retained linkage changed; review the original job')
+        elif resume_recovered:
+            raise ValueError('No recovered request awaiting review')
         if saved['status'] in {'completed','cancelled','failed','running'}: return saved
-        state=await asyncio.to_thread(self.update,ident,{'status':'running'},expected={'queued','waiting_review','ready'})
+        state=await asyncio.to_thread(self.update,ident,{'status':'running',**({'recovery_hold':False} if resume_recovered else {})},expected={'queued','waiting_review','ready'},expected_updated_at=saved['updated_at'])
         if state is None:return await asyncio.to_thread(self.get,ident)
         try:
             route=state['route']
@@ -312,12 +363,12 @@ class RequestService:
             elif route=='commander':
                 mission_id=state.get('governed_mission_id')
                 if not mission_id:
-                    if state.get('governed_submission_started'):
-                        return await asyncio.to_thread(self.update,ident,{'status':'waiting_review','answer':'Commander draft interrupted; inspect retained mission drafts before retrying.'},expected={'running'}) or await asyncio.to_thread(self.get,ident)
-                    admitted=await asyncio.to_thread(self.update,ident,{'governed_submission_started':True},expected={'running'})
+                    admitted=await asyncio.to_thread(self.begin_child_admission,state)
                     if admitted is None:return await asyncio.to_thread(self.get,ident)
+                    state=admitted
                     from backend.runtime.commander import draft
-                    mission=await draft(state['prompt'],state['model_profile'],state['group_id'],self.models,self.engine.missions)
+                    from backend.runtime.request_origin import request_origin
+                    mission=await draft(state['prompt'],state['model_profile'],state['group_id'],self.models,self.engine.missions,origin=request_origin(state))
                     mission_id=mission['id']
                     linked=await asyncio.to_thread(self.update,ident,{'governed_mission_id':mission_id},expected={'running'})
                     if linked is None:
@@ -334,13 +385,9 @@ class RequestService:
                 from backend.runtime.harnesses import HarnessService
                 task_id=state.get('governed_task_id')
                 if not task_id:
-                    # Persist admission intent before submitting a process task.
-                    # A crash in this interval is uncertain; never submit again.
-                    if state.get('governed_submission_started'):
-                        return await asyncio.to_thread(self.update,ident,{
-                            'status':'waiting_review','answer':'Job submission interrupted; inspect task records for this request before retrying.'},expected={'running'}) or await asyncio.to_thread(self.get,ident)
-                    admitted=await asyncio.to_thread(self.update,ident,{'governed_submission_started':True},expected={'running'})
+                    admitted=await asyncio.to_thread(self.begin_child_admission,state)
                     if admitted is None:return await asyncio.to_thread(self.get,ident)
+                    state=admitted
                     if route=='delegate':
                         from backend.cluster.hierarchy_api import hierarchy
                         # This is the existing local group authority only. A shared
@@ -353,11 +400,12 @@ class RequestService:
                             'actor':'owner','tool':'text.analyze@1.0.0','capability':'compute',
                             'execution_target':'remote','assigned_knight':state['target_knight'],
                             'group_id':state['group_id'],'project_scope':state['project_scope'],
-                            'conversation_request_id':ident,'tool_parameters':{'text':state['prompt']}})
+                            'conversation_request_id':ident,'request_origin':{'request_id':ident,'project_scope':state['project_scope'],'session_scope':state['session_scope']},'tool_parameters':{'text':state['prompt']}})
                     else:
                         task=await asyncio.to_thread(HarnessService(self.engine,self.db).submit,
                             state['harness_id'],state['prompt'],state['project_scope'],
-                            expected_revision=state['harness_revision'],request_id=ident)
+                            expected_revision=state['harness_revision'],request_id=ident,
+                            origin={'request_id':ident,'project_scope':state['project_scope'],'session_scope':state['session_scope']})
                     task_id=task['id']
                     linked=await asyncio.to_thread(self.update,ident,{'governed_task_id':task_id},expected={'running'})
                     if linked is None:
@@ -387,6 +435,9 @@ class RequestService:
                 return await asyncio.to_thread(self.update,ident,{'status':status,'answer':answer,'evidence':evidence},expected={'running'}) or await asyncio.to_thread(self.get,ident)
             elif route=='agent':
                 if not state['agent_session_id']:
+                    admitted=await asyncio.to_thread(self.begin_child_admission,state)
+                    if admitted is None:return await asyncio.to_thread(self.get,ident)
+                    state=admitted
                     objective = state['prompt']
                     if state.get('review_instructions'):
                         objective += '\n\nReview requirements: ' + state['review_instructions']
@@ -402,7 +453,8 @@ class RequestService:
                     context = await asyncio.to_thread(self.agent_conversation_context, state)
                     if context:
                         desktop_options['conversation_context'] = context
-                    agent=await asyncio.to_thread(self.agents.create,objective,state['model_profile'],workspace=state['project_scope'],allow_process=state['allow_process'],use_owner_memory=False,required_tools=required_tools,**desktop_options)
+                    from backend.runtime.request_origin import request_origin
+                    agent=await asyncio.to_thread(self.agents.create,objective,state['model_profile'],workspace=state['project_scope'],allow_process=state['allow_process'],use_owner_memory=False,required_tools=required_tools,origin=request_origin(state),**desktop_options)
                     state=await asyncio.to_thread(self.update,ident,{'agent_session_id':agent['id']},expected={'running'})
                     if state is None:
                         await asyncio.to_thread(self.agents.cancel,agent['id'])
@@ -463,7 +515,8 @@ class RequestService:
                           else 'Request timed out.' if isinstance(error, TimeoutError)
                           else f'Request failed ({error_class}).')
             details = {'error_code': error.code} if isinstance(error, AgentRejection) else {}
-            await asyncio.to_thread(self.update,ident,{'status':'failed','answer':'Request failed; inspect the saved checkpoint before starting new work.','error_class':error_class,'error':diagnostic, **details},expected={'running'})
+            await asyncio.to_thread(self.record_request_failure, ident,
+                                    {'error_class':error_class,'error':diagnostic, **details})
             raise
 
     def cancel(self, ident):

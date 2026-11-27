@@ -19,6 +19,8 @@ The [repository README](../README.md) provides one-click installer downloads and
 
 ## Develop and integrate
 
+- [Unified work projection](UNIFIED_WORK_PROJECTION.md): bounded owner-only work snapshot and migration boundary.
+
 - [Architecture](ARCHITECTURE.md) and [development](DEVELOPMENT.md).
 - [Adaptive cluster design](ADAPTIVE_CLUSTER_CORE.md) and [coordination workspace](COORDINATION_WORKSPACE.md).
 - [Portable skills](PORTABLE_SKILLS.md), [Discord skill-map boundary](DISCORD_SKILLMAPS.md), [optional integrations](OPTIONAL_INTEGRATION_REVIEW.md).
@@ -27,6 +29,8 @@ The [repository README](../README.md) provides one-click installer downloads and
 - [Teams and access](SWARM_TEAMS_AND_ACCESS.md), [work visibility](WORK_VISIBILITY.md).
 
 ## Verify and release
+
+- [Permanent model-size acceptance](MODEL_MATRIX.md) and [v1.3.0 redesign](V1_3_REDESIGN.md).
 
 - [Continuous completion directive](KINGDOM_CONTINUOUS_COMPLETION.md) and [evidence ledger](completion-evidence.json): prioritized multi-workstream repairs, approval boundaries, proof and next-task handoffs.
 - [Current status](PROJECT_STATUS.md): source/release scope and remaining acceptance.

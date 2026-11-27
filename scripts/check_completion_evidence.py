@@ -168,11 +168,19 @@ def validate(ledger: object) -> list[str]:
                          if item_by_id.get(ident, {}).get("status") != "VERIFIED")
         if pending:
             errors.append("security-ready claimed with unverified independent gates: " + ", ".join(pending))
-    if classification == "public-ready":
+    # Security-ready is stronger than public-ready, not an alternative route
+    # around outstanding release-critical work.
+    for ident, dependencies in deps.items():
+        if item_by_id[ident].get("status") == "VERIFIED":
+            unresolved = sorted(dep for dep in dependencies
+                                if dep in item_by_id and item_by_id[dep].get("status") != "VERIFIED")
+            if unresolved:
+                errors.append(f"{ident}: VERIFIED with unresolved dependencies: " + ", ".join(unresolved))
+    if classification in {"public-ready", "security-ready"}:
         pending = sorted(ident for ident, item in item_by_id.items()
                          if item.get("priority") in {"P0", "P1"} and item.get("status") != "VERIFIED")
         if pending:
-            errors.append("public-ready claimed with unresolved P0/P1 work: " + ", ".join(pending))
+            errors.append(f"{classification} claimed with unresolved P0/P1 work: " + ", ".join(pending))
     return errors
 
 

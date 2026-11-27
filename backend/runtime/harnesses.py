@@ -63,7 +63,7 @@ class HarnessService:
         self.engine.events.publish('harness.saved', {'id': ident, 'revision': data['revision']})
         return {'id': ident, **data}
 
-    def submit(self, ident, prompt, cwd='.', *, expected_revision=None, request_id=None):
+    def submit(self, ident, prompt, cwd='.', *, expected_revision=None, request_id=None, origin=None):
         from backend.runtime.computer_tools import workspace_path
         profile = self.get(ident)
         if not profile: raise ValueError('Harness connection not found')
@@ -72,13 +72,18 @@ class HarnessService:
         if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 4000 or '\x00' in prompt:
             raise ValueError('Describe the job in 1–4000 characters')
         config = validate_config(HarnessConfig.model_validate({key: value for key, value in profile.items() if key not in {'id', 'revision'}}))
+        if origin is not None:
+            from backend.runtime.request_origin import validate_origin
+            origin=validate_origin(self.db,origin,'harness',workspace=cwd)
+            if origin['request_id']!=request_id:raise ValueError('Harness request identity mismatch')
         work = workspace_path(cwd, create_root=False)
         argv = [prompt if arg == '{prompt}' else str(work) if arg == '{workspace}' else arg for arg in config.argv]
         return self.engine.submit_task(prompt, metadata={'actor': 'owner', 'tool': 'harness.run@1.0.0',
             'harness_id': ident, 'harness_revision': profile['revision'],
             'tool_parameters': {'argv': argv, 'cwd': cwd, 'timeout_seconds': config.timeout_seconds, 'environment': config.environment, 'output_protocol': config.output_protocol},
             'required_capabilities': ['process.execute'], 'source': 'owner_harness_connection',
-            **({'project_scope': cwd, 'conversation_request_id': request_id} if request_id else {})})
+            **({'project_scope': cwd, 'conversation_request_id': request_id} if request_id else {}),
+            **({'request_origin':origin} if origin is not None else {})})
 
 def run_harness(params):
     from backend.runtime.computer_tools import run_process

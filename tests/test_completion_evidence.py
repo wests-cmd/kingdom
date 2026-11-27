@@ -136,3 +136,19 @@ def test_agent_handoff_points_to_directive():
     assert "docs/KINGDOM_CONTINUOUS_COMPLETION.md" in agents
     assert "docs/completion-evidence.json" in agents
     assert "NEVER STOP. NEVER GIVE UP. NEVER CONCLUDE THAT A TASK IS IMPOSSIBLE." in agents
+
+
+def test_security_ready_cannot_bypass_public_release_requirements(ledger):
+    for row in ledger["items"]:
+        if row["id"].startswith("SEC-"):
+            row.update(status="VERIFIED", evidence=[_valid_proof()])
+    ledger["release_classification"] = "security-ready"
+    assert any("security-ready claimed with unresolved P0/P1 work" in e for e in validate(ledger))
+
+
+def test_verified_item_requires_verified_dependencies(ledger):
+    runtime = _get(ledger, "RUNTIME-01")
+    runtime.update(status="VERIFIED", evidence=[_valid_proof()])
+    assert any("RUNTIME-01: VERIFIED with unresolved dependencies: CORE-01" in e for e in validate(ledger))
+    _get(ledger, "CORE-01").update(status="VERIFIED", evidence=[_valid_proof()])
+    assert not validate(ledger)

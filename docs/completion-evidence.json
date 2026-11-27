@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "as_of": "2026-11-22",
+  "as_of": "2026-11-27",
   "release_classification": "source-candidate",
   "description": "Open source-level workstreams and independent installed security gates. No row is certified solely by source tests.",
   "items": [
@@ -244,6 +244,144 @@
       "dependencies": [
         "DB-01",
         "REL-01"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "COHERENCE-01",
+      "area": "whole-project-coherence",
+      "title": "Unified objective admission and execution",
+      "priority": "P0",
+      "status": "IN_PROGRESS",
+      "source": "https://github.com/wests-cmd/kingdom/pull/200",
+      "acceptance": "All conversation, agent, mission, harness, schedule, API, mobile and external-client work uses durable scoped identity, same authority and recoverable task lifecycle; concurrent retry and restart preserve receipts.",
+      "dependencies": [
+        "CORE-01"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "COHERENCE-02",
+      "area": "whole-project-coherence",
+      "title": "Effect-time authority and isolated execution",
+      "priority": "P0",
+      "status": "IN_PROGRESS",
+      "source": "https://github.com/wests-cmd/kingdom/pull/200",
+      "acceptance": "Negative integration tests bind exact actor, task, operation, capability, policy revision, host, lease and revocation to effects; no adapter or agent can elevate authority.",
+      "dependencies": [
+        "COHERENCE-01",
+        "SEC-03",
+        "SEC-04",
+        "SEC-05",
+        "SEC-06"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "COHERENCE-03",
+      "area": "whole-project-coherence",
+      "title": "Commander outcome contracts and verification",
+      "priority": "P1",
+      "status": "IN_PROGRESS",
+      "source": "https://github.com/wests-cmd/kingdom/pull/200",
+      "acceptance": "Current versus desired state, reviewed success and anti-criteria, failure evidence, independent result tests and no stale-plan completion.",
+      "dependencies": [
+        "COHERENCE-01"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "COHERENCE-04",
+      "area": "whole-project-coherence",
+      "title": "Common model, MCP, API and harness qualification",
+      "priority": "P1",
+      "status": "IN_PROGRESS",
+      "source": "https://github.com/wests-cmd/kingdom/pull/200",
+      "acceptance": "Real small, medium and large model evidence and adapter capability tests; measured routing, authorized fallback, no implicit tool permission.",
+      "dependencies": [
+        "COHERENCE-01",
+        "COHERENCE-02"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "COHERENCE-05",
+      "area": "whole-project-coherence",
+      "title": "Resource admission and persistent agent recovery",
+      "priority": "P1",
+      "status": "IN_PROGRESS",
+      "source": "https://github.com/wests-cmd/kingdom/pull/200",
+      "acceptance": "Bounded shared CPU/RAM/disk/network budget, one-heavy-job default, reconnect/resync, durable checkpoints and actual multi-host fault recovery.",
+      "dependencies": [
+        "COHERENCE-01",
+        "COHERENCE-02",
+        "RUNTIME-01",
+        "MESH-01"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "COHERENCE-06",
+      "area": "whole-project-coherence",
+      "title": "Knowledge, memory and skill lifecycle",
+      "priority": "P1",
+      "status": "IN_PROGRESS",
+      "source": "https://github.com/wests-cmd/kingdom/pull/200",
+      "acceptance": "Scoped upload, provenance, revision, retrieval, correction, quarantine, revocation, sync and export demonstrated across clients and Knights.",
+      "dependencies": [
+        "COHERENCE-02"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "COHERENCE-07",
+      "area": "whole-project-coherence",
+      "title": "Independent self-improvement and promotion",
+      "priority": "P1",
+      "status": "IN_PROGRESS",
+      "source": "https://github.com/wests-cmd/kingdom/pull/200",
+      "acceptance": "Research reuse first, baseline measurement, bounded isolated change, independent tests, exact revision review, promotion and rollback retaining security authority.",
+      "dependencies": [
+        "COHERENCE-02",
+        "COHERENCE-03",
+        "COHERENCE-04",
+        "COHERENCE-05",
+        "COHERENCE-06",
+        "SEC-08"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "COHERENCE-08",
+      "area": "whole-project-coherence",
+      "title": "Consistent desktop, mobile and Centipede client contracts",
+      "priority": "P1",
+      "status": "IN_PROGRESS",
+      "source": "https://github.com/wests-cmd/kingdom/pull/200",
+      "acceptance": "Authenticated end-to-end tasks, approvals, status, errors, event loss/resync, accessibility and no obsolete routes across supported clients; versions negotiated.",
+      "dependencies": [
+        "COHERENCE-01",
+        "COHERENCE-02",
+        "COHERENCE-05"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "COHERENCE-09",
+      "area": "whole-project-coherence",
+      "title": "Integrated installation, upgrade and release evidence",
+      "priority": "P1",
+      "status": "IN_PROGRESS",
+      "source": "https://github.com/wests-cmd/kingdom/pull/200",
+      "acceptance": "Clean install, first task, cross-device pairing, revocation, backup/recovery, signed update and rollback on supported physical platforms; exact artifacts and real model receipts.",
+      "dependencies": [
+        "REL-01",
+        "REL-02",
+        "PERF-01",
+        "DOC-01",
+        "COHERENCE-04",
+        "COHERENCE-07",
+        "COHERENCE-08"
       ],
       "evidence": []
     }

@@ -7,7 +7,14 @@ class TaskRepository:
     def __init__(self, database=None):
         self.db = database or db
 
-    def save(self, task, expected_version=None):
+    def save(self, task, expected_version=None, *, create_only=False):
+        """Insert new tasks without overwriting retained execution state.
+
+        Legacy updates retain their version check; admission uses the atomic
+        create-only branch and resolves any conflict from the authoritative DB.
+        """
+        if create_only and expected_version is not None:
+            raise ValueError("Creation cannot specify an expected version")
         task_id = task["id"]
         now = time.time()
         input_json = json.dumps(task.get("input", {}))
@@ -17,7 +24,7 @@ class TaskRepository:
 
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            insert_sql = """
             INSERT INTO tasks (
                 id, execution_id, prompt, type, status, input_json, metadata_json,
                 assigned_knight, attempt, max_attempts, started_at, completed_at,
@@ -25,6 +32,8 @@ class TaskRepository:
                 fencing_token, idempotency_key, created_at, updated_at
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """
+            update_sql = """
             ON CONFLICT(id) DO UPDATE SET
                 execution_id=excluded.execution_id,
                 prompt=excluded.prompt,
@@ -46,7 +55,8 @@ class TaskRepository:
                 idempotency_key=excluded.idempotency_key,
                 updated_at=excluded.updated_at
             WHERE ? IS NULL OR tasks.version = ?
-            """, (
+            """
+            values = (
                 task_id,
                 task.get("execution_id"),
                 task.get("prompt"),
@@ -67,8 +77,14 @@ class TaskRepository:
                 task.get("fencing_token", 0),
                 task.get("idempotency_key"),
                 created_at_val,
-                now, expected_version, expected_version
-            ))
+                now,
+            )
+            if create_only:
+                cursor.execute(insert_sql + " ON CONFLICT(id) DO NOTHING", values)
+                inserted = cursor.rowcount == 1
+                conn.commit()
+                return inserted
+            cursor.execute(insert_sql + update_sql, (*values, expected_version, expected_version))
             if cursor.rowcount != 1:
                 raise ValueError("Task state changed concurrently; stale write rejected")
             conn.commit()

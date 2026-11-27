@@ -169,6 +169,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -184,6 +185,23 @@ jobs:
           python scripts/release_artifacts.py verify --version "$RELEASE_VERSION" --commit '${{ github.sha }}'
           cd release_staging
           sha256sum -c SHA256SUMS
+      - name: Require exact-main live model evidence for v1.3.0 onward
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ github.sha }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if python -c 'import os,sys; sys.exit(0 if tuple(map(int,os.environ["RELEASE_VERSION"].split(".")[:2])) >= (1,3) else 1)'; then
+            gh api --method GET "repos/$GH_REPO/actions/workflows/model-matrix-evidence.yml/runs" -f head_sha="$RELEASE_COMMIT" -f event=workflow_dispatch -f status=success > model-evidence-runs.json
+            RUN_ID=$(python -c 'import json,os; rows=json.load(open("model-evidence-runs.json"))["workflow_runs"]; print(next((r["id"] for r in rows if r["head_sha"]==os.environ["RELEASE_COMMIT"] and r["head_branch"]=="main" and r["conclusion"]=="success"),""))')
+            if [ -z "$RUN_ID" ]; then
+              echo "Missing exact-source live small/medium/large model evidence; publication held."
+              exit 1
+            fi
+            gh run download "$RUN_ID" --repo "$GH_REPO" --name kingdom-live-model-matrix --dir live-model-evidence
+            python scripts/model_matrix.py verify live-model-evidence/small.json live-model-evidence/medium.json live-model-evidence/large.json
+          fi
       - name: Create draft, verify uploaded bytes, and publish
         env:
           GH_TOKEN: ${{ github.token }}

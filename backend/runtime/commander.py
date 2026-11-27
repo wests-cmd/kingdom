@@ -36,7 +36,7 @@ def validate_group_plan(plan,authority):
     return plan
 
 
-async def draft(objective,profile,group_id,models,missions):
+async def draft(objective,profile,group_id,models,missions,*,origin=None):
     authority=binding(group_id)
     prompt=('Draft a MissionPlan JSON with 2–8 bounded literal analysis steps for the objective. '
             'Every step must be text_check or python_check and have one computer_id from the supplied member list. '
@@ -52,4 +52,4 @@ async def draft(objective,profile,group_id,models,missions):
     plan.objective=objective
     validate_group_plan(plan,authority)
     if binding(group_id)!=authority:raise ValueError('Group authority changed during planning')
-    return missions.create(plan,model_profile=profile,group_binding=authority)
+    return missions.create(plan,model_profile=profile,group_binding=authority,**({'origin':origin} if origin is not None else {}))

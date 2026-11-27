@@ -29,6 +29,7 @@ import {AppearanceProvider} from './components/common/AppearanceProvider'
 import Logs from "./pages/Logs"
 import ConnectDevice from "./pages/ConnectDevice"
 import { realtime } from "./websocket"
+import { REFRESH_EVENT } from "./common/periodicRefresh"
 import api from "./api"
 import { initializeSession, setAccessCode } from "./session"
 import "./styles/app.css"
@@ -89,9 +90,13 @@ function OwnerApp({quick=false}) {
 
   useEffect(() => {
     if (!authorized) return
+    const unsubscribe = realtime.onStatusChange(status => {
+      setIsConnected(status)
+      // Events are hints; reload durable state after every successful attachment.
+      if (status) window.dispatchEvent(new Event(REFRESH_EVENT))
+    })
     realtime.connect()
-    const unsubscribe = realtime.onStatusChange(status => setIsConnected(status))
-    return () => unsubscribe()
+    return () => { unsubscribe(); realtime.disconnect() }
   }, [authorized])
 
   const renderPage = () => {

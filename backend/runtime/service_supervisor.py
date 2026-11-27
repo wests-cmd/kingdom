@@ -12,12 +12,13 @@ from typing import Any
 
 
 class RuntimeServiceSupervisor:
-    def __init__(self, engine: Any, runners: Mapping[str, Any], *, shutdown_extra=()):
+    def __init__(self, engine: Any, runners: Mapping[str, Any], *, shutdown_extra=(), startup_reconcile=None):
         if not runners or len(set(runners)) != len(runners):
             raise ValueError("Supply distinct named runtime services")
         self.engine = engine
         self.runners = dict(runners)
         self.shutdown_extra = tuple(shutdown_extra)
+        self.startup_reconcile = startup_reconcile
         self._started: list[tuple[str, Any]] = []
         self._lock = asyncio.Lock()
         self.state = "stopped"
@@ -55,6 +56,8 @@ class RuntimeServiceSupervisor:
             self.last_error_type = None
             self.cleanup_errors = []
             try:
+                if self.startup_reconcile is not None:
+                    await asyncio.to_thread(self.startup_reconcile)
                 if await asyncio.to_thread(self.engine.autostart_requested):
                     await self.engine.start(persist=False)
                 for name, runner in self.runners.items():

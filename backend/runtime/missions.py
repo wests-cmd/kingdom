@@ -128,11 +128,14 @@ class MissionService:
         with self.db.get_connection() as conn:
             conn.execute('INSERT INTO missions VALUES(?,?) ON CONFLICT(id) DO UPDATE SET state_json=excluded.state_json', (state['id'], json.dumps(state))); conn.commit()
 
-    def create(self, plan, attachment_ids=None, model_profile=None, *, group_binding=None):
+    def create(self, plan, attachment_ids=None, model_profile=None, *, group_binding=None, origin=None):
         validate_plan(plan)
         state = {'id': uuid4().hex, 'version': 1, 'status': 'draft', 'plan': plan.model_dump(),
                  'attachment_ids': attachment_ids or [], 'model_profile': model_profile,
                  'created_at': time.time(), 'steps': {}, 'report': [], 'approved_version': None}
+        if origin is not None:
+            from backend.runtime.request_origin import validate_origin
+            state['request_origin']=validate_origin(self.db,origin,'commander')
         if group_binding is not None:
             from backend.runtime.commander import binding,validate_group_plan
             if binding(group_binding['group_id'])!=group_binding:raise ValueError('Group authority changed')

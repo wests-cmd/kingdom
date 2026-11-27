@@ -1,0 +1,14 @@
+# Unified work projection (first v1.3.0 runtime slice)
+
+GET /work/overview is owner-authenticated and read-only. It reads the latest 100 records per existing request, mission, agent-session and task repository in one SQLite WAL snapshot. No new database table, worker, scheduler, approval or state transition is introduced.
+
+Root work records preserve their source status and include child records only for retained forward references, with matching task metadata or agent workspace where available. Conflicting references, missing child records and unknown statuses are visible rather than inferred as successful. Unlinked historical tasks remain standalone. Counts are counts of root records within the bounded snapshot, not totals for the whole installation. When a source is truncated or malformed the response explicitly indicates incomplete evidence.
+
+Supply both project_scope and session_scope for an exact conversation-only projection. It excludes independent work and other conversations. New Commander and agent jobs retain reciprocal request lineage validated against the running request and exact project/conversation columns. Legacy one-way mission and agent links are visible only in the owner-wide projection. Scoped links are withheld when inventory is truncated or malformed. Lineage is observational only, not approval or authority. The endpoint never returns prompt text, provider responses, model secrets, attachments, tool arguments, raw results or approval credentials. An owner global snapshot is not a delegated Knight view.
+
+A completed source record is recorded completion. A retained controller receipt is identified as a receipt shape, not a new independent execution or physical proof. Future migration should use one durable admission identity to remove the remaining ambiguous associations and project actual independent verification evidence.
+
+The desktop first consumes this endpoint as a bounded operational view; existing task detail, approvals, recovery and dispatch stay authoritative. This is the first observation slice, not the entire lifecycle migration.
+
+## Interrupted admission recovery
+At controller startup, before the scheduler and scheduled request runners, bounded transactions reconcile interrupted requests against existing durable children. A unique matching child with reciprocal lineage is attached; absent, conflicting, legacy-unbound and duplicate children remain held. Existing task/mission/agent statuses, approvals, assignments and leases are not altered. Automatic request runners cannot continue a recovery-held request. The authenticated **Continue recovered linked work** action rechecks the exact retained child and uses the existing run path; it does not create replacement jobs. A request without a confirmed child cannot use that action. This is controller-startup recovery, not proof of physical restart or multi-controller failover.
