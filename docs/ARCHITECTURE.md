@@ -58,3 +58,7 @@ in [project status](PROJECT_STATUS.md) and [shipping gates](CLUSTER_SHIPPING_CHE
 
 See [Discord boundary](DISCORD_SKILLMAPS.md), [portable skills](PORTABLE_SKILLS.md),
 [device setup](device-connections.md) and [workspace/peers](WORKSPACE_AND_PEER_KINGDOMS.md).
+
+## Whole-project migration
+
+The [coherence programme](WHOLE_PROJECT_COHERENCE.md) extends the existing completion ledger across all runtime, intelligence, integration, fleet, knowledge, client and release boundaries. It is a target and acceptance plan, not installed proof.
