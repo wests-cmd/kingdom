@@ -9,6 +9,12 @@ function WorkRecord({item}){
  <small className="muted"> · {item.id}</small>
  {item.evidence==='retained_controller_receipt'&&<p className="muted">Retained controller receipt; inspect the original evidence to confirm its scope.</p>}
  {item.evidence==='recorded_only'&&<p className="muted">Recorded completion is not independent proof of the requested outcome.</p>}
+ {item.acceptance_progress&&<p className="muted">
+ {item.acceptance_progress.retained_verified} of {item.acceptance_progress.declared} planned steps have retained verified status for the approved revision.
+ {' '}{item.acceptance_progress.attention} need attention; {item.acceptance_progress.pending} pending.
+ {!item.acceptance_progress.current_revision_approved&&' Current revision is not approved.'}
+ {' '}Inspect original acceptance evidence; this count is not independent certification.
+ </p>}
  {item.unresolved_links>0&&<p role="status">Linked records unavailable or ambiguous ({item.unresolved_links}). Review the original work.</p>}
  {item.children?.length>0&&<ul>{item.children.map(child=><WorkRecord key={child.kind+':'+child.id} item={child}/>)}</ul>}
  </li>

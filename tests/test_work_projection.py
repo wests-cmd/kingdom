@@ -163,3 +163,26 @@ def test_public_task_admission_rejects_internal_lineage(field,value):
             create_task(TaskRequest(prompt="ordinary work",metadata={field:value}))
         assert exc.value.status_code==400
         submit.assert_not_called()
+
+
+def test_declared_mission_progress_is_not_completion_proof(database):
+    save(database,"mission","m",status="completed",version=3,approved_version=3,
+         plan={"steps":[{"id":"a","acceptance":"PRIVATE-CRITERIA"},{"id":"b"},{"id":"c"}]},
+         steps={"a":{"status":"verified"},"b":{"status":"waiting_external_review"},"extra":{"status":"verified"}})
+    item=project_work(database)["items"][0]
+    assert item["acceptance_progress"]=={"declared":3,"current_revision_approved":True,"retained_verified":1,"attention":1,"pending":1}
+    assert item["evidence"]=="recorded_only"
+    assert "PRIVATE-CRITERIA" not in json.dumps(item)
+
+
+@pytest.mark.parametrize("approved", [None, 2, True])
+def test_stale_approval_does_not_count_as_verified(database, approved):
+    save(database,"mission","m",version=3,approved_version=approved,plan={"steps":[{"id":"a"}]},steps={"a":{"status":"verified"}})
+    progress=project_work(database)["items"][0]["acceptance_progress"]
+    assert progress["retained_verified"]==0 and progress["attention"]==1
+    assert progress["current_revision_approved"] is False
+
+
+def test_duplicate_criteria_have_no_progress_claim(database):
+    save(database,"mission","m",version=1,approved_version=1,plan={"steps":[{"id":"a"},{"id":"a"}]},steps={"a":{"status":"verified"}})
+    assert "acceptance_progress" not in project_work(database)["items"][0]

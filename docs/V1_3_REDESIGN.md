@@ -37,3 +37,8 @@ Direct public task admission rejects both internal request-origin metadata and s
 - Autonomous self-building: the proposal guard now rejects malformed truthy authorization flags, unsafe Windows path aliases, case-insensitive duplicates, and protected trust-policy paths. The guard still does not run jobs or prove independent authorization; integration with the existing governed work pipeline remains necessary.
 
 All staged changes require actual regression and release checks before integration acceptance.
+
+
+### LifeOS and Herdr-inspired revision
+
+References: [LifeOS ISA](https://github.com/danielmiessler/LifeOS/blob/main/LifeOS/install/skills/ISA/SKILL.md), [LifeOS Upgrade](https://github.com/danielmiessler/LifeOS/blob/main/LifeOS/install/skills/Upgrade/SKILL.md), [Herdr concepts](https://herdr.dev/tui/docs/concepts/) and [Herdr socket API](https://herdr.dev/tui/docs/socket-api/). No upstream code or mandatory dependencies imported. Existing work projection and desktop overview now expose declared mission progress, distinguishing retained verified step state for the approved revision from pending and attention. No criteria text or independent certification claim is exposed. Next revise existing Commander/mission outcome contracts and work-programme improvement evidence, then harness session identity, observed activity and reconnect/resync. Preserve task authority and scheduler; external session backends remain optional. CI evidence required.

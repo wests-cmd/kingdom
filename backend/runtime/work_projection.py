@@ -57,6 +57,28 @@ def receipt_kind(row):
     return "recorded_only"
 
 
+def mission_progress(data):
+    """Count retained step states, not independently certified outcomes."""
+    declared = mapping(data.get("plan")).get("steps")
+    if not isinstance(declared, list) or not declared or len(declared) > 100:
+        return None
+    ids = [safe_id(mapping(step).get("id")) for step in declared]
+    if None in ids or len(set(ids)) != len(ids):
+        return None
+    version = data.get("version")
+    approved = type(version) is int and version > 0 and type(data.get("approved_version")) is int and data["approved_version"] == version
+    counts = {"retained_verified": 0, "attention": 0, "pending": 0}
+    for ident in ids:
+        state = mapping(mapping(data.get("steps")).get(ident)).get("status")
+        if state == "verified" and approved:
+            counts["retained_verified"] += 1
+        elif isinstance(state, str) and state in {"failed", "blocked", "needs_review", "waiting_external_review", "recovery_required", "denied", "cancelled", "verified"}:
+            counts["attention"] += 1
+        else:
+            counts["pending"] += 1
+    return {"declared": len(ids), "current_revision_approved": approved, **counts}
+
+
 def load_rows(conn,kind,limit):
     table=SOURCES[kind]  # fixed internal allowlist, never user input
     if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(table,)).fetchone():
@@ -91,6 +113,10 @@ def load_rows(conn,kind,limit):
                  "updated_at":safe_time(data.get("updated_at")) or safe_time(data.get("created_at")),
                  "_data":data}
             row["evidence"]=receipt_kind(row)
+            if kind=="mission":
+                progress=mission_progress(data)
+                if progress is not None:
+                    row["acceptance_progress"]=progress
             if kind=="request":
                 route=data.get("route")
                 row["route"]=route if isinstance(route,str) and route in ROUTES else "unknown"
